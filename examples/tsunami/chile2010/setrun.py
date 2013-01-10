@@ -324,7 +324,7 @@ def setrun(claw_pkg='geoclaw'):
 
     # == setgauges.data values ==
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
-    rundata.gaugedata.add_gauge([32412, -86.392, -17.975, 0., 1.e10])
+    rundata.gaugedata.gauges.append([32412, -86.392, -17.975, 0., 1.e10])
 
     return rundata
     # end of function setrun
@@ -379,8 +379,8 @@ def setgeo(rundata):
 
 
     # == setqinit.data values ==
-    geodata.qinit_type = 0
-    geodata.qinitfiles = []
+    rundata.qinitdata.qinit_type = 0
+    rundata.qinitdata.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
     #   [minlev, maxlev, fname]
 
@@ -389,11 +389,6 @@ def setgeo(rundata):
     # for fixed grids append lines of the form
     # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
     #  ioutarrivaltimes,ioutsurfacemax]
-    
-    # == Multilayer ==
-    geodata.num_layers = 1
-    geodata.rho = 1.0
-    geodata.richardson_tolerance = 0.95
 
     return rundata
     # end of function setgeo

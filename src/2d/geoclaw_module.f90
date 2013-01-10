@@ -79,10 +79,6 @@ contains
         read(unit,*) grav
         read(unit,*) earth_radius
         read(unit,*) coordinate_system
-        read(unit,*)
-!       !read(unit,*) num_layers
-!       !allocate(rho(num_layers),eta_init(num_layers),dry_tolerance(num_layers))
-!       !read(unit,*) rho
         read(unit,*) eta_init
         read(unit,*)
         read(unit,*) coriolis_forcing
