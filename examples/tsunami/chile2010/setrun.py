@@ -356,7 +356,7 @@ def setgeo(rundata):
     geodata.coriolis_forcing = True
 
     # == Algorithm and Initial Conditions ==
-    geodata.eta_init = 0.0
+    geodata.sea_level = 0.0
     geodata.dry_tolerance = 1.e-3
     geodata.wave_tolerance = 1.e-1
     geodata.deep_depth = 1e2
@@ -401,4 +401,3 @@ if __name__ == '__main__':
     import sys
     rundata = setrun(*sys.argv[1:])
     rundata.write()
-
