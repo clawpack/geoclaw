@@ -82,7 +82,7 @@ SOURCES = \
   $(AMRLIB)/prefilp_new.f90 \
   $(AMRLIB)/trimbd_new.f \
   $(AMRLIB)/bound_new.f \
-  $(AMRLIB)/intfil_new.f \
+  $(AMRLIB)/intfil_new.f90 \
   $(GEOLIB)/bc2amr.f \
   $(GEOLIB)/update.f \
   $(GEOLIB)/setaux.f90 \
