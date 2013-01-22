@@ -9,11 +9,15 @@ subroutine setaux(maxmx,maxmy,mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
 !        aux(2,i,j) = area ratio (capacity function -- set mcapa = 2)
 !        aux(3,i,j) = length ratio for edge
 !     
-!     aux(4,i,j) = 
-!     aux(5,i,j) = 
+!     aux(4,i,j) = seems to allow for variable friction
+!     ripped out 5:4+num_layers   for multi-layer  - only one layer code for
+!     tsunamis
+!
 
 
-    use geoclaw_module, only: coordinate_system,earth_radius,pi
+    use geoclaw_module, only: coordinate_system, earth_radius, deg2rad
+    use geoclaw_module, only: eta_init, friction_index
+    use geoclaw_module, only: wet_manning_coefficient, dry_manning_coefficient
     use amr_module, only: mcapa
     use topo_module
     
@@ -26,7 +30,7 @@ subroutine setaux(maxmx,maxmy,mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
     
     ! Locals
     integer :: i,j,m
-    real(kind=8) :: x,y,xm,ym,xp,yp,deg2rad,topo_integral
+    real(kind=8) :: x,y,xm,ym,xp,yp,topo_integral
     character(len=*), parameter :: aux_format = "(2i4,4d15.3)"
     
     ! Lat-Long coordinate system in use, check input variables
@@ -43,14 +47,16 @@ subroutine setaux(maxmx,maxmy,mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
     aux(1,:,:) = 0.d0 ! Bathymetry
     aux(2,:,:) = 1.d0 ! Grid cell area
     aux(3,:,:) = 1.d0 ! Length ratio for edge
+    aux(friction_index,:,:) = 0.d0 ! Manning's-N friction coefficeint
     
     ! Set analytical bathymetry here if requested
     if (topo_type > 0) then
-        forall (i=1-mbc:my+mbc,j=1-mbc:my+mbc)
+        forall (i=1-mbc:mx+mbc,j=1-mbc:my+mbc)
             aux(1,i,j) = analytic_topography(xlow + (i - 0.5d0) * dx,ylow + (j - 0.5d0) * dy)
         end forall
     endif
     
+    ! Set bathymetry
     do j=1-mbc,my+mbc
         ym = ylow + (j - 1.d0) * dy
         y = ylow + (j - 0.5d0) * dy
@@ -62,7 +68,6 @@ subroutine setaux(maxmx,maxmy,mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
             
             ! Set lat-long cell info
             if (coordinate_system == 2) then
-                deg2rad = pi / 180.d0
                 aux(2,i,j) = deg2rad * earth_radius**2 * (sin(yp * deg2rad) - sin(ym * deg2rad)) / dy
                 aux(3,i,j) = ym * deg2rad
             endif
@@ -79,15 +84,23 @@ subroutine setaux(maxmx,maxmy,mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
             endif
         enddo
     enddo
-    
-    ! Output bathymetry for debugging
+
+    ! Set friction coefficient based on initial wet/dry interfaces
+    forall(i=1-mbc:mx+mbc, j=1-mbc:my+mbc, eta_init - aux(1,i,j) < 0.d0)
+        aux(friction_index,i,j) = wet_manning_coefficient
+    end forall
+    forall(i=1-mbc:mx+mbc, j=1-mbc:my+mbc, eta_init - aux(1,i,j) >= 0.d0)
+        aux(friction_index,i,j) = dry_manning_coefficient
+    end forall
+
+    ! Output for debugging
     if (.false.) then
         open(23, file='fort.aux',status='unknown',form='formatted')
         print *,'Writing out aux arrays'
         print *,' '
         do j=1,my
             do i=1,mx
-                write(23,aux_format) i,j,(aux(m,i,j),m=1,maux)
+                write(23,*) i,j,(aux(m,i,j),m=1,maux)
             enddo
         enddo
         close(23)

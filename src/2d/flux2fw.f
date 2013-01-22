@@ -4,7 +4,8 @@ c     =====================================================
       subroutine flux2(ixy,maxm,meqn,maux,mbc,mx,
      &                 q1d,dtdx1d,aux1,aux2,aux3,
      &                 faddm,faddp,gaddm,gaddp,cfl1d,fwave,s,
-     &                 amdq,apdq,cqxx,bmasdq,bpasdq,rpn2,rpt2)
+     &                 amdq,apdq,rpn2,rpt2)
+c     &                 amdq,apdq,cqxx,bmasdq,bpasdq,rpn2,rpt2)
 c     =====================================================
 c
 c     # clawpack routine ...  modified for AMRCLAW
@@ -79,8 +80,10 @@ c     The only change is in loop 40
 c     to revert to the original version, set relimit = .false.
 c---------------------last modified 1/04/05-----------------------------
 
-      use geoclaw_module
-      use amr_module
+      use amr_module, only: fwave_method => fwave, mwaves, method
+      use amr_module, only: mthlim
+      use geoclaw_module, only: coordinate_system, earth_radius, deg2rad
+
       implicit double precision (a-h,o-z)
 
       external rpn2, rpt2
@@ -107,6 +110,7 @@ c
 
 
 
+      pi = 4.d0*datan(1.d0)    ! delete after testing and returning to deg2rad
       relimit = .false.
 c
       limit = .false.
@@ -132,7 +136,7 @@ c
 c     # solve Riemann problem at each interface and compute Godunov updates
 c     ---------------------------------------------------------------------
 c
-      call rpn2(ixy,maxm,meqn,mwaves,mbc,mx,q1d,q1d,
+      call rpn2(ixy,maxm,meqn,maux,mwaves,mbc,mx,q1d,q1d,
      &          aux2,aux2,fwave,s,amdq,apdq)
 c
 c   # Set fadd for the donor-cell upwind method (Godunov)
@@ -140,8 +144,10 @@ c   # Set fadd for the donor-cell upwind method (Godunov)
       if (ixy.eq.2) mu=3
       do 40 i=1-mbc+1,mx+mbc-1
          if (coordinate_system.eq.2) then
+!     	  if (ixy.eq.1) dxdc=earth_radius*deg2rad
       	  if (ixy.eq.1) dxdc=earth_radius*pi/180.d0
-	        if (ixy.eq.2) dxdc=earth_radius*pi*cos(aux2(3,i))/180.d0
+!	        if (ixy.eq.2) dxdc=earth_radius*cos(aux2(3,i))*deg2rad
+                if (ixy.eq.2) dxdc=earth_radius*pi*cos(aux2(3,i))/180.d0
 	      else
 	       dxdc=1.d0
 	      endif
@@ -215,7 +221,7 @@ c      --------------------------------------------
 c
 c
 c     # split the left-going flux difference into down-going and up-going:
-      call rpt2(ixy,maxm,meqn,mwaves,mbc,mx,
+      call rpt2(ixy,maxm,meqn,maux,mwaves,mbc,mx,
      &          q1d,q1d,aux1,aux2,aux3,
      &          1,amdq,bmasdq,bpasdq)
 c
@@ -232,7 +238,7 @@ c
   160          continue
 c
 c     # split the right-going flux difference into down-going and up-going:
-      call rpt2(ixy,maxm,meqn,mwaves,mbc,mx,
+      call rpt2(ixy,maxm,meqn,maux,mwaves,mbc,mx,
      &          q1d,q1d,aux1,aux2,aux3,
      &          2,apdq,bmasdq,bpasdq)
 c

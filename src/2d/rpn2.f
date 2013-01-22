@@ -1,5 +1,5 @@
 c======================================================================
-      subroutine rpn2(ixy,maxm,meqn,mwaves,mbc,mx,ql,qr,auxl,auxr,
+      subroutine rpn2(ixy,maxm,meqn,maux,mwaves,mbc,mx,ql,qr,auxl,auxr,
      &                  fwave,s,amdq,apdq)
 c======================================================================
 c
@@ -33,14 +33,14 @@ c
 !           David George, Vancouver WA, Feb. 2009                           !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-      use geoclaw_module, only: grav,dry_tolerance,earth_radius,pi
+      use geoclaw_module, only: g => grav, dry_tolerance
+      use geoclaw_module, only: earth_radius, deg2rad
       use amr_module, only: mcapa
+
       implicit none
-      integer maux  ! should be passed in or put into a module
-      parameter (maux=3)
 
       !input
-      integer maxm,meqn,mwaves,mbc,mx,ixy
+      integer maxm,meqn,maux,mwaves,mbc,mx,ixy
 
       double precision  fwave(meqn, mwaves, 1-mbc:maxm+mbc)
       double precision  s(mwaves, 1-mbc:maxm+mbc)
@@ -51,10 +51,9 @@ c
       double precision  auxl(maux,1-mbc:maxm+mbc)
       double precision  auxr(maux,1-mbc:maxm+mbc)
 
-      double precision drytol,g
-
       !local only
       integer m,i,mw,maxiter,mu,nv
+      real(kind=8) :: drytol
       double precision wall(3)
       double precision fw(3,3)
       double precision sw(3)
@@ -64,14 +63,11 @@ c
       double precision s1m,s2m
       double precision hstar,hstartest,hstarHLL,sLtest,sRtest
       double precision tw,dxdc
+      double precision pi
 
       logical rare1,rare2
 
-!     used from module instead:
-!     common /cmcapa/  mcapa
-
-      g=grav
-      drytol=dry_tolerance(1)
+      drytol=dry_tolerance
 
       !loop through Riemann problems at each grid cell
       do i=2-mbc,mx+mbc
@@ -85,9 +81,9 @@ c
          !Initialize Riemann problem for grid interface
          do mw=1,mwaves
               s(mw,i)=0.d0
-              do m=1,meqn
-                 fwave(m,mw,i)=0.d0
-              enddo
+                 fwave(1,mw,i)=0.d0
+                 fwave(2,mw,i)=0.d0
+                 fwave(3,mw,i)=0.d0
          enddo
 
 c        !set normal direction
@@ -101,32 +97,33 @@ c        !set normal direction
 
          !zero (small) negative values if they exist
          if (qr(1,i-1).lt.0.d0) then
-            do m=1,meqn
-               qr(m,i-1)=0.d0
-            enddo
+               qr(1,i-1)=0.d0
+               qr(2,i-1)=0.d0
+               qr(3,i-1)=0.d0
          endif
 
          if (ql(1,i).lt.0.d0) then
-            do m=1,meqn
-               ql(m,i)=0.d0
-            enddo
+               ql(1,i)=0.d0
+               ql(2,i)=0.d0
+               ql(3,i)=0.d0
          endif
 
          !skip problem if in a completely dry area
-         if (qr(1,i-1).le.drytol.and.ql(1,i).le.drytol) then
+         if (qr(1,i-1)  <= drytol .and.
+     &       ql(1,i)  <= drytol) then
             go to 30
          endif
 
          !Riemann problem variables
-         hL = qr(1,i-1)
-         hR = ql(1,i)
-         huL = qr(mu,i-1)
-         huR = ql(mu,i)
+         hL = qr(1,i-1) 
+         hR = ql(1,i) 
+         huL = qr(mu,i-1) 
+         huR = ql(mu,i) 
          bL = auxr(1,i-1)
          bR = auxl(1,i)
 
-         hvL=qr(nv,i-1)
-         hvR=ql(nv,i)
+         hvL=qr(nv,i-1) 
+         hvR=ql(nv,i) 
 
          !check for wet/dry boundary
          if (hR.gt.drytol) then
@@ -224,9 +221,9 @@ c     &      bL,bR,uL,uR,vL,vR,phiL,phiR,sE1,sE2,drytol,g,sw,fw)
 c        !eliminate ghost fluxes for wall
          do mw=1,3
             sw(mw)=sw(mw)*wall(mw)
-            do m=1,meqn
-               fw(m,mw)=fw(m,mw)*wall(mw)
-            enddo
+               fw(1,mw)=fw(1,mw)*wall(mw) 
+               fw(2,mw)=fw(2,mw)*wall(mw) 
+               fw(3,mw)=fw(3,mw)*wall(mw)
          enddo
 
          do mw=1,mwaves
@@ -234,6 +231,8 @@ c        !eliminate ghost fluxes for wall
             fwave(1,mw,i)=fw(1,mw)
             fwave(mu,mw,i)=fw(2,mw)
             fwave(nv,mw,i)=fw(3,mw)
+!            write(51,515) sw(mw),fw(1,mw),fw(2,mw),fw(3,mw)
+!515         format("++sw",4e25.16)
          enddo
 
  30      continue
@@ -242,12 +241,15 @@ c        !eliminate ghost fluxes for wall
 
 c==========Capacity for mapping from latitude longitude to physical space====
 
+        pi = 4.d0*datan(1.d0)
         if (mcapa.gt.0) then
          do i=2-mbc,mx+mbc
           if (ixy.eq.1) then
-             dxdc=(earth_radius*pi/180.d0)
+!             dxdc=(earth_radius*deg2rad)
+             dxdc=(earth_radius*pi/180.d0) 
           else
-             dxdc=earth_radius*pi*cos(auxl(3,i))/180.d0
+!             dxdc=earth_radius*cos(auxl(3,i))*deg2rad
+             dxdc=earth_radius*pi*cos(auxl(3,i))/180.d0 
           endif
 
           do mw=1,mwaves
@@ -256,9 +258,9 @@ c               # shouldn't happen unless h > 10 km!
 c                write(6,*) 'speed > 316: i,mw,s(mw,i): ',i,mw,s(mw,i)
 c                endif
 	           s(mw,i)=dxdc*s(mw,i)
-             do m=1,meqn
-               fwave(m,mw,i)=dxdc*fwave(m,mw,i)
-             enddo
+               fwave(1,mw,i)=dxdc*fwave(1,mw,i)
+               fwave(2,mw,i)=dxdc*fwave(2,mw,i)
+               fwave(3,mw,i)=dxdc*fwave(3,mw,i)
           enddo
          enddo
         endif
@@ -267,22 +269,41 @@ c===============================================================================
 
 
 c============= compute fluctuations=============================================
-         do i=1-mbc,mx+mbc
-            do m=1,meqn
-               amdq(m,i)=0.0d0
-               apdq(m,i)=0.0d0
+         do i=2-mbc,mx+mbc
+               amdq(1,i)=0.0d0
+               apdq(1,i)=0.0d0
+               amdq(2,i)=0.0d0
+               apdq(2,i)=0.0d0
+               amdq(3,i)=0.0d0
+               apdq(3,i)=0.0d0
                do  mw=1,mwaves
                   if (s(mw,i).lt.0.d0) then
-                     amdq(m,i)=amdq(m,i) + fwave(m,mw,i)
+                     amdq(1,i)=amdq(1,i) + fwave(1,mw,i)
+                     amdq(2,i)=amdq(2,i) + fwave(2,mw,i)
+                     amdq(3,i)=amdq(3,i) + fwave(3,mw,i)
                   elseif (s(mw,i).gt.0.d0) then
-                     apdq(m,i)=apdq(m,i) + fwave(m,mw,i)
+                     apdq(1,i)=apdq(1,i) + fwave(1,mw,i)
+                     apdq(2,i)=apdq(2,i) + fwave(2,mw,i)
+                     apdq(3,i)=apdq(3,i) + fwave(3,mw,i)
                   else
-	            amdq(m,i) = amdq(m,i) + .5d0*fwave(m,mw,i)
-	            apdq(m,i) = apdq(m,i) + .5d0*fwave(m,mw,i)
+	            amdq(1,i) = amdq(1,i) + .5d0*fwave(1,mw,i)
+	            apdq(1,i) = apdq(1,i) + .5d0*fwave(1,mw,i)
+	            amdq(2,i) = amdq(2,i) + .5d0*fwave(2,mw,i)
+	            apdq(2,i) = apdq(2,i) + .5d0*fwave(2,mw,i)
+	            amdq(3,i) = amdq(3,i) + .5d0*fwave(3,mw,i)
+	            apdq(3,i) = apdq(3,i) + .5d0*fwave(3,mw,i)
                   endif
                enddo
-            enddo
          enddo
+
+!--       do i=2-mbc,mx+mbc
+!--            do m=1,meqn
+!--                write(51,151) m,i,amdq(m,i),apdq(m,i)
+!--                write(51,152) fwave(m,1,i),fwave(m,2,i),fwave(m,3,i)
+!--151             format("++3 ampdq ",2i4,2e25.15)
+!--152             format("++3 fwave ",8x,3e25.15)
+!--            enddo
+!--        enddo
 
 
       return
