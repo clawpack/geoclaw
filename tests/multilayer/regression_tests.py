@@ -15,11 +15,6 @@ import numpy
 import clawpack.geoclaw.tests as tests
 import clawpack.geoclaw.topotools as topotools
 
-# Rotation transformations
-def transform_c2p(x,y,x0,y0,theta):
-    return ((x+x0)*numpy.cos(theta) - (y+y0)*numpy.sin(theta),
-            (x+x0)*numpy.sin(theta) + (y+y0)*numpy.cos(theta))
-
 def transform_p2c(x,y,x0,y0,theta):
     return ( x*numpy.cos(theta) + y*numpy.sin(theta) - x0,
             -x*numpy.sin(theta) + y*numpy.cos(theta) - y0)
@@ -33,48 +28,37 @@ def bathy_step(x, y, location=0.15, angle=0.0, left=-1.0, right=-0.2):
 
 class MultilayerTest(tests.GeoClawTest):
 
-    r"""Multilayer plane-wave regression test for GeoClaw"""
+    r"""Multilayer plane-wave regression test for GeoClaw
+
+    initial condition angle = numpy.pi / 4.0
+    bathy_angle = numpy.pi / 8.0
+
+    """
 
     def setUp(self):
 
         super(MultilayerTest, self).setUp()
 
         # Make topography
-        topo_func = lambda x, y: bathy_step(x, y, location=0.15, angle=0.0, 
+        topo_func = lambda x, y: bathy_step(x, y, location=0.15, 
+                                                  angle=numpy.pi / 8.0, 
                                                   left=-1.0, right=-0.2)
         topo = topotools.Topography(topo_func=topo_func)
-        topo.x = numpy.linspace(-1.0, 2.0, 150)
-        topo.y = numpy.linspace(-1.0, 2.0, 150)
+        topo.x = numpy.linspace(-1.16, 2.16, 166)
+        topo.y = numpy.linspace(-1.16, 2.16, 166)
         topo.write(os.path.join(self.temp_path, "jump_topo.topotype2"))
     
 
     def runTest(self, save=False):
 
-        # Run code
-        super(MultilayerTest, self).runTest()
+        # Load and write data, change init-condition's starting angle
+        self.load_rundata()
+        self.rundata.qinit_data.angle = numpy.pi / 4.0
+        self.write_rundata_objects()
 
-        # Get gauge data
-        data = numpy.loadtxt(os.path.join(self.temp_path, 'fort.gauge'))
-        import pdb; pdb.set_trace()
-        data_sum = [data[:,2].sum(), data[:,3].sum()]
-
-        # Get (and save) regression comparison data
-        regression_data_file = os.path.join(self.test_path, "regression_data.txt")
-        if save:
-            numpy.savetxt(regression_data_file, data)
-        regression_data = numpy.loadtxt(regression_data_file)
-        regression_sum = [regression_data[:,2].sum(), regression_data[:,3].sum()]
-        # regression_sum = regression_data
-
-        # Compare data
-        tolerance = 1e-14
-        assert numpy.allclose(data_sum, regression_sum, tolerance), \
-                "\n data: %s, \n expected: %s" % (data_sum, regression_sum)
-        assert numpy.allclose(data, regression_data, tolerance), \
-                "Full gauge match failed."
-
-        # If we have gotten here then we do not need to copy the run results
-        self.success = True
+        # Run code and check
+        self.run_code()
+        self.check_gauges(save=save)
 
 
 
