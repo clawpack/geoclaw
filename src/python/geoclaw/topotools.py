@@ -466,9 +466,9 @@ class Topography(object):
         """
 
         super(Topography, self).__init__()
-
         self.path = path
         self.topo_func = topo_func
+        self.topo_type = None
         if self.path is None:
             # We are going to generate the topography via the provided
             # topo_func function
@@ -484,8 +484,8 @@ class Topography(object):
             else:
                 # Try to look at suffix for type
                 extension = os.path.splitext(path)[1][1:]
-                if extension[:2] == "tt":
-                    self.topo_type = int(extension[2])
+                if extension[:-1] in ["tt", "topotype"]:
+                    self.topo_type = int(extension[-1])
                 elif extension == 'xyz':
                     self.topo_type = 1
                 elif extension == 'asc':
@@ -768,7 +768,7 @@ class Topography(object):
         data.
 
         """
-
+        
         # Determine topo type if not specified
         if topo_type is None:
             if self.topo_type is not None:
@@ -776,8 +776,8 @@ class Topography(object):
             else:
                 # Try to look at suffix for type
                 extension = os.path.splitext(path)[1][1:]
-                if extension[:2] == "tt" or extension[:2] == 'topotype':
-                    topo_type = int(extension[2])
+                if extension[:-1] in ["tt", 'topotype']:
+                    topo_type = int(extension[-1])
                 elif extension == 'xyz':
                     topo_type = 1
                 else:

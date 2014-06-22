@@ -18,6 +18,8 @@ import tarfile
 import time
 import glob
 
+import numpy
+
 # Clean library files whenever this module is used
 if os.environ.has_key("CLAW"):
     CLAW = os.environ["CLAW"]
@@ -199,7 +201,7 @@ class GeoClawTest(unittest.TestCase):
         self.stderr.flush()
 
 
-    def runTest(self):
+    def runTest(self, save=False, indices=(2, 3)):
         r"""Basic run test functionality
 
         Note that this stub really only runs the code and performs no tests.
@@ -213,9 +215,40 @@ class GeoClawTest(unittest.TestCase):
         # Run code
         self.run_code()
 
+        # Perform tests
+        self.check_gauges(save=save, indices=(2, 3))
 
-    def check_gauge_sum(self, indices=(1, 2)):
-        pass
+
+    def check_gauges(self, save=False, indices=(2, 3)):
+        r"""Basic test to assert gauge equality
+
+        """
+
+        # Get gauge data
+        data = numpy.loadtxt(os.path.join(self.temp_path, 'fort.gauge'))
+        data_sum = []
+        for index in indices:
+            data_sum.append(data[:, index].sum())
+
+        # Get (and save) regression comparison data
+        regression_data_file = os.path.join(self.test_path, "regression_data.txt")
+        if save:
+            numpy.savetxt(regression_data_file, data)
+        regression_data = numpy.loadtxt(regression_data_file)
+        regression_sum = []
+        for index in indices:
+            regression_sum.append(regression_data[:, index].sum())
+        # regression_sum = regression_data
+
+        # Compare data
+        tolerance = 1e-14
+        assert numpy.allclose(data_sum, regression_sum, tolerance), \
+                "\n data: %s, \n expected: %s" % (data_sum, regression_sum)
+        assert numpy.allclose(data, regression_data, tolerance), \
+                "Full gauge match failed."
+
+        # If we have gotten here then we do not need to copy the run results
+        self.success = True
 
 
     def tearDown(self):
