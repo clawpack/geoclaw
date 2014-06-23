@@ -974,8 +974,8 @@ class Topography(object):
            found in *scipy.interpolate.griddata*.  Default is *nearest*.
          - *delta_limit* (float) - Limit of finest horizontal resolution, 
            default is 20 meters.
-         - *no_data_value* (float) - Value to use if no data was found to fill in a 
-           missing value, ignored if `method = 'nearest'`. Default is `-9999`.
+         - *no_data_value* (float) - If a fill topography value is set to this 
+           value then this point is masked. Default is `-9999`.
          - *buffer_length* (float) - Buffer around bounding box, only applicable
            when *extent* is None.  Default is *100.0* meters.
          - *proximity_radius* (float) - Radius every unstructured data point
@@ -1007,8 +1007,8 @@ class Topography(object):
                     delta_degrees)
         N = ( numpy.ceil((extent[1] - extent[0]) / delta),
               numpy.ceil((extent[3] - extent[2]) / delta) )
-        assert numpy.all(N[:] < numpy.ones((2)) * resolution_limit), \
-               ValueError("Calculated resolution too high, N=%s!" % str(N))
+        if numpy.all(N[:] < numpy.ones((2)) * resolution_limit):
+            raise ValueError("Calculated resolution too high, N=%s!" % str(N))
         self._X, self._Y = numpy.meshgrid( 
                                      numpy.linspace(extent[0], extent[1], N[0]),
                                      numpy.linspace(extent[2], extent[3], N[1]))
@@ -1045,9 +1045,12 @@ class Topography(object):
                                                          + (self.y - y_fill[i])**2)
                                                      < proximity_radius_deg)
 
-                x_fill_masked = numpy.ma.masked_where(all_mask, x_fill)
-                y_fill_masked = numpy.ma.masked_where(all_mask, y_fill)
-                z_fill_masked = numpy.ma.masked_where(all_mask, z_fill)    
+                # x_fill_masked = numpy.ma.masked_where(all_mask, x_fill)
+                # y_fill_masked = numpy.ma.masked_where(all_mask, y_fill)
+                # z_fill_masked = numpy.ma.masked_where(all_mask, z_fill)    
+                x_fill_masked = x_fill.take(all_mask)
+                y_fill_masked = y_fill.take(all_mask)
+                z_fill_masked = z_fill.take(all_mask)
 
                 # Add the fill bathymetry to points and values
                 fill_points = numpy.column_stack((x_fill_masked, y_fill_masked))
@@ -1083,9 +1086,12 @@ class Topography(object):
                                                            + (self.y - Y_fill[i,j])**2)
                                                      < proximity_radius_deg)
 
-                X_fill_masked = numpy.ma.masked_where(all_mask, X_fill)
-                Y_fill_masked = numpy.ma.masked_where(all_mask, Y_fill)
-                Z_fill_masked = numpy.ma.masked_where(all_mask, Z_fill)    
+                # X_fill_masked = numpy.ma.masked_where(all_mask, X_fill)
+                # Y_fill_masked = numpy.ma.masked_where(all_mask, Y_fill)
+                # Z_fill_masked = numpy.ma.masked_where(all_mask, Z_fill)
+                X_fill_masked = X_fill.take(all_mask)
+                Y_fill_masked = Y_fill.take(all_mask)
+                Z_fill_masked = Z_fill.take(all_mask)   
 
                 # Add the fill bathymetry to points and values
                 fill_points = numpy.column_stack((X_fill_masked.compressed(),
