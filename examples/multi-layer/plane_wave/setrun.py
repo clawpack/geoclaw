@@ -8,7 +8,7 @@ that will be read in by the Fortran code.
 
 import numpy as numpy
 
-import clawpack.geoclaw.multilayer as multilayer
+import clawpack.geoclaw.multilayer.data as multilayer
 import clawpack.geoclaw.surge.data as surge
 import clawpack.geoclaw.topotools as tt
 
@@ -49,7 +49,7 @@ def setrun(claw_pkg='geoclaw'):
     #------------------------------------------------------------------
     rundata = setgeo(rundata)
 
-    rundata.add_data(multilayer.data.MultilayerData(), 'multilayer_data')
+    rundata.add_data(multilayer.MultilayerData(), 'multilayer_data')
     set_multilayer(rundata)
     rundata.add_data(surge.FrictionData(),'frictiondata')
     set_friction(rundata)
@@ -419,7 +419,7 @@ def setgeo(rundata):
 
     # == setqinit.data values ==
     # Use multilayer qinit data object
-    rundata.replace_data('qinit_data', multilayer.data.QinitMultilayerData())
+    rundata.replace_data('qinit_data', multilayer.QinitMultilayerData())
     rundata.qinit_data.qinit_type = 6
     rundata.qinit_data.epsilon = 0.02
     rundata.qinit_data.angle = 0.0
