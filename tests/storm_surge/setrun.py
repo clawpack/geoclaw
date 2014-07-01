@@ -12,7 +12,7 @@ import datetime
 
 import numpy as np
 
-import clawpack.geoclaw.surge as surge
+import clawpack.geoclaw.surge.data as surge
 
 # Need to adjust the date a bit due to weirdness with leap year (I think)
 ike_landfall = datetime.datetime(2008,9,13 - 1,7) - datetime.datetime(2008,1,1,0)
@@ -125,8 +125,11 @@ def setrun(claw_pkg='geoclaw'):
     if clawdata.output_style==1:
         # Output nout frames at equally spaced times up to tfinal:
         # clawdata.tfinal = days2seconds(date2days('2008091400'))
-        clawdata.tfinal = days2seconds(ike_landfall.days + 0.75) + ike_landfall.seconds
-        recurrence = 24
+        # Full test
+        # clawdata.tfinal = days2seconds(ike_landfall.days + 0.75) + ike_landfall.seconds
+        # Short test - Do 12 hours of simulation
+        clawdata.tfinal = days2seconds(ike_landfall.days - 2.75) + ike_landfall.seconds
+        recurrence = 2
         clawdata.num_output_times = int((clawdata.tfinal - clawdata.t0) 
                                             * recurrence / (60**2 * 24))
 
@@ -343,6 +346,11 @@ def setrun(claw_pkg='geoclaw'):
     #------------------------------------------------------------------
     rundata = setgeo(rundata)
 
+    rundata.add_data(surge.SurgeData(),'stormdata')
+    set_storm(rundata)
+    rundata.add_data(surge.FrictionData(),'frictiondata')
+    set_friction(rundata)
+
     return rundata
     # end of function setrun
     # ----------------------
@@ -439,7 +447,7 @@ def set_storm(rundata):
     data.landfall = days2seconds(ike_landfall.days) + ike_landfall.seconds
 
     # Storm type 2 - Idealized storm track
-    data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),'ike.storm'))
+    data.storm_file = 'ike.storm'
 
     return data
 
@@ -473,10 +481,5 @@ if __name__ == '__main__':
         rundata = setrun(sys.argv[1])
     else:
         rundata = setrun()
-
-    rundata.add_data(surge.data.SurgeData(),'stormdata')
-    set_storm(rundata)
-    rundata.add_data(surge.data.FrictionData(),'frictiondata')
-    set_friction(rundata)
 
     rundata.write()

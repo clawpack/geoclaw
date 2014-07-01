@@ -92,7 +92,7 @@ def dist_meters2latlong(dx, dy, latitude=0.0):
 
     """
 
-    dxd = dx / (Rearth * np.cos(latitude * DEG2RAD)) * RAD2DEG
+    dxd = dx / (Rearth * numpy.cos(latitude * DEG2RAD)) * RAD2DEG
     dyd = dy * RAD2DEG / Rearth
 
     return dxd, dyd
@@ -820,9 +820,9 @@ class Topography(object):
                 # Write out bathy data
                 if topo_type == 2:
                     if masked_Z:
-                        Z_filled = self.Z.filled()
+                        Z_filled = numpy.flipud(self.Z.filled())
                     else:
-                        Z_filled = self.Z
+                        Z_filled = numpy.flipud(self.Z)
                     for i in xrange(self.Z.shape[0]):
                         for j in xrange(self.Z.shape[1]):
                             outfile.write("%22.15e\n" % Z_filled[i,j])
@@ -832,7 +832,7 @@ class Topography(object):
                     if masked_Z:
                         Z_flipped = numpy.flipud(self.Z.filled())
                     else:
-                        Z_flipped = self.Z
+                        Z_flipped = numpy.flipud(self.Z)
                     for i in xrange(self.Z.shape[0]):
                         for j in xrange(self.Z.shape[1]):
                             outfile.write("%22.15e   " % (Z_flipped[i,j]))
@@ -849,7 +849,6 @@ class Topography(object):
         r"""Plot the topography."""
 
         import matplotlib.pyplot as plt
-        import matplotlib.colors as colors
         import clawpack.visclaw.colormaps as colormaps
 
         # Create axes if needed
@@ -873,14 +872,14 @@ class Topography(object):
 
         # Create color map
         if cmap is None:
-            land_cmap = topo_cmap = colormaps.make_colormap({ 0.0:[0.1,0.4,0.0],
+            land_cmap = colormaps.make_colormap({ 0.0:[0.1,0.4,0.0],
                                                  0.25:[0.0,1.0,0.0],
                                                   0.5:[0.8,1.0,0.5],
                                                   1.0:[0.8,0.5,0.2]})
             sea_cmap = plt.get_cmap('Blues_r')
             cmap = colormaps.add_colormaps((land_cmap, sea_cmap), 
-                                           break_location=1.0 - depth_extent[1] 
-                                       / abs(depth_extent[1] - depth_extent[0]))
+                                           data_limits=depth_extent,
+                                           data_break=0.0)
 
         # Plot data
         if contours is not None:
@@ -893,8 +892,7 @@ class Topography(object):
             plot = axes.imshow(self.Z, vmin=depth_extent[0], 
                                        vmax=depth_extent[1],
                                        extent=region_extent, 
-                                       cmap=cmap, 
-                                       norm=color_norm,
+                                       cmap=cmap,
                                        origin='lower')
         cbar = plt.colorbar(plot, ax=axes)
         cbar.set_label("Depth (m)")
@@ -953,10 +951,10 @@ class Topography(object):
 
         # Convert meter inputs to degrees
         mean_latitude = numpy.mean(self.y)
-        buffer_degrees = topotools.dist_meters2latlong(buffer_length, 0.0, mean_latitude)[0]
-        delta_degrees = topotools.dist_meters2latlong(delta_limit, 0.0, mean_latitude)[0]
+        buffer_degrees = dist_meters2latlong(buffer_length, 0.0, mean_latitude)[0]
+        delta_degrees = dist_meters2latlong(delta_limit, 0.0, mean_latitude)[0]
         if proximity_radius > 0.0:
-            proximity_radius_deg = topotools.dist_meters2latlong(proximity_radius, 0.0,
+            proximity_radius_deg = dist_meters2latlong(proximity_radius, 0.0,
                                                         mean_latitude)[0]
             
         # Calculate new grid coordinates
