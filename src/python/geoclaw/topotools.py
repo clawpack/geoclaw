@@ -484,7 +484,6 @@ class Topography(object):
         """
 
         super(Topography, self).__init__()
-
         self.path = path
         self.topo_func = topo_func
         self.topo_type = topo_type
@@ -682,6 +681,9 @@ class Topography(object):
                 self._y = numpy.array(points[:,1])
                 self._z = numpy.array(values)
 
+                if mask:
+                    self._z = numpy.ma.masked_values(self._z, self.no_data_value, copy=False)
+
             else:
                 self._x = data[:,0]
                 self._y = data[:,1]
@@ -808,7 +810,7 @@ class Topography(object):
         data.
 
         """
-
+        
         # Determine topo type if not specified
         if topo_type is None:
             if self.topo_type is not None:
@@ -816,8 +818,8 @@ class Topography(object):
             else:
                 # Try to look at suffix for type
                 extension = os.path.splitext(path)[1][1:]
-                if extension[:2] == "tt" or extension[:2] == 'topotype':
-                    topo_type = int(extension[2])
+                if extension[:-1] in ["tt", 'topotype']:
+                    topo_type = int(extension[-1])
                 elif extension == 'xyz':
                     topo_type = 1
                 else:
@@ -890,8 +892,20 @@ class Topography(object):
 
 
     def plot(self, axes=None, region_extent=None, contours=None, 
-             coastlines=True, limits=None, cmap=None, fig_kwargs={}):
-        r"""Plot the topography."""
+             coastlines=True, limits=None, cmap=None, add_colorbar=True, 
+             fig_kwargs={}):
+        r"""Plot the topography.
+
+        :Input:
+         - *axes* (matplotlib.pyplot.axes) - 
+         - *region_extent* (tuple) - 
+         - *contours* (list) - 
+         - *coastlines* (bool) - 
+         - *limits* (list) - 
+         - *cmap* (matplotlib.colors.Colormap) - 
+         - *fig_kawargs* (dict) - 
+
+        """
 
         import matplotlib.pyplot as plt
         import clawpack.visclaw.colormaps as colormaps
@@ -906,8 +920,12 @@ class Topography(object):
 
         # Generate limits if need be
         if region_extent is None:
-            region_extent = ( numpy.min(self.X), numpy.max(self.X),
-                              numpy.min(self.Y), numpy.max(self.Y) )
+            if self.unstructured:
+                region_extent = ( numpy.min(self.x), numpy.max(self.x),
+                                  numpy.min(self.y), numpy.max(self.y))
+            else:
+                region_extent = ( numpy.min(self.X), numpy.max(self.X),
+                                  numpy.min(self.Y), numpy.max(self.Y) )
         mean_lat = 0.5 * (region_extent[3] - region_extent[2])
         axes.set_aspect(1.0 / numpy.cos(numpy.pi / 180.0 * mean_lat))
         if limits is None:
@@ -915,7 +933,7 @@ class Topography(object):
         else:
             topo_extent = limits
 
-        # Create color map
+        # Create color map - assume shore is at z = 0.0
         if cmap is None:
             land_cmap = colormaps.make_colormap({ 0.0:[0.1,0.4,0.0],
                                                  0.25:[0.0,1.0,0.0],
@@ -944,7 +962,7 @@ class Topography(object):
         # levels = range(0,int(-numpy.min(Z)),500)
 
         # Plot coastlines
-        if coastlines:
+        if coastlines and not self.unstructured:
             axes.contour(self.X, self.Y, self.Z, levels=[0.0],colors='r')
 
         axes.set_xlim(region_extent[0:2])
@@ -953,7 +971,8 @@ class Topography(object):
         return axes
 
 
-    def interp_unstructured(self, X_fill, Y_fill, Z_fill, extent=None,
+
+    def interp_unstructured(self, fill_topo, extent=None,
                                    method='nearest', delta_limit=20.0, 
                                    no_data_value=-9999, buffer_length=100.0,
                                    proximity_radius=100.0, 
@@ -980,8 +999,8 @@ class Topography(object):
            found in *scipy.interpolate.griddata*.  Default is *nearest*.
          - *delta_limit* (float) - Limit of finest horizontal resolution, 
            default is 20 meters.
-         - *no_data_value* (float) - Value to use if no data was found to fill in a 
-           missing value, ignored if `method = 'nearest'`. Default is `-9999`.
+         - *no_data_value* (float) - If a fill topography value is set to this 
+           value then this point is masked. Default is `-9999`.
          - *buffer_length* (float) - Buffer around bounding box, only applicable
            when *extent* is None.  Default is *100.0* meters.
          - *proximity_radius* (float) - Radius every unstructured data point
@@ -1013,46 +1032,100 @@ class Topography(object):
                     delta_degrees)
         N = ( numpy.ceil((extent[1] - extent[0]) / delta),
               numpy.ceil((extent[3] - extent[2]) / delta) )
-        assert numpy.all(N[:] < numpy.ones((2)) * resolution_limit), \
-               ValueError("Calculated resolution too high, N=%s!" % str(N))
+        if numpy.all(N[:] < numpy.ones((2)) * resolution_limit):
+            raise ValueError("Calculated resolution too high, N=%s!" % str(N))
         self._X, self._Y = numpy.meshgrid( 
                                      numpy.linspace(extent[0], extent[1], N[0]),
                                      numpy.linspace(extent[2], extent[3], N[1]))
 
-        # Create extent mask
-        extent_mask = extent[0] > X_fill
-        extent_mask = numpy.logical_or(extent_mask,extent[1] < X_fill)
-        extent_mask = numpy.logical_or(extent_mask,extent[2] > Y_fill)
-        extent_mask = numpy.logical_or(extent_mask,extent[3] < Y_fill)
-        
-        # Create fill no-data value mask
-        no_data_mask = numpy.logical_or(extent_mask, Z_fill == no_data_value)
+        # Add the unstructured points to the data
+        points = numpy.array([self.x, self.y]).transpose()
+        values = self.z
 
-        all_mask = numpy.logical_or(extent_mask, no_data_mask)
+        # Mask fill topography and flatten the arrays if needed
+        if not isinstance(fill_topo, list):
+            fill_topo = list(fill_topo)
+        for topo in fill_topo:
+            if topo.unstructured:
+                x_fill = topo.x
+                y_fill = topo.y
+                z_fill = topo.z
 
-        # Create proximity mask
-        if proximity_radius > 0.0:
-        
-            indices = (~all_mask).nonzero()
-            for n in xrange(indices[0].shape[0]):
-                i = indices[0][n]
-                j = indices[1][n]
-                all_mask[i,j] = numpy.any(numpy.sqrt((self.x - X_fill[i,j])**2 
-                                                   + (self.y - Y_fill[i,j])**2)
-                                             < proximity_radius_deg)
+                extent_mask = extent[0] > x_fill
+                extent_mask = numpy.logical_or(extent_mask,extent[1] < x_fill)
+                extent_mask = numpy.logical_or(extent_mask,extent[2] > y_fill)
+                extent_mask = numpy.logical_or(extent_mask,extent[3] < y_fill)
+                
+                # Create fill no-data value mask
+                no_data_mask = numpy.logical_or(extent_mask, z_fill == no_data_value)
 
-        X_fill_masked = numpy.ma.masked_where(all_mask, X_fill)
-        Y_fill_masked = numpy.ma.masked_where(all_mask, Y_fill)
-        Z_fill_masked = numpy.ma.masked_where(all_mask, Z_fill)    
+                all_mask = numpy.logical_or(extent_mask, no_data_mask)
 
-        # Stick both the input data and fill data into arrays
-        fill_points = numpy.column_stack((X_fill_masked.compressed(),
-                                          Y_fill_masked.compressed()))
-        points = numpy.concatenate((numpy.array([self.x, self.y]).transpose(), 
-                                    fill_points))
-        values = numpy.concatenate((self.z, Z_fill_masked.compressed()))
+                # Create proximity mask
+                if proximity_radius > 0.0:
+                    indices = (~all_mask).nonzero()
+                    for n in xrange(indices[0].shape[0]):
+                        i = indices[0][n]
+                        all_mask[i] = numpy.any(numpy.sqrt((self.x - x_fill[i])**2 
+                                                         + (self.y - y_fill[i])**2)
+                                                     < proximity_radius_deg)
 
-        # Use nearest-neighbor interpolation
+                # x_fill_masked = numpy.ma.masked_where(all_mask, x_fill)
+                # y_fill_masked = numpy.ma.masked_where(all_mask, y_fill)
+                # z_fill_masked = numpy.ma.masked_where(all_mask, z_fill)    
+                x_fill_masked = x_fill.take(all_mask)
+                y_fill_masked = y_fill.take(all_mask)
+                z_fill_masked = z_fill.take(all_mask)
+
+                # Add the fill bathymetry to points and values
+                fill_points = numpy.column_stack((x_fill_masked, y_fill_masked))
+
+                points = numpy.concatenate((fill_points, points))
+                values = numpy.concatenate((z_fill_masked, values))
+
+            else:
+                # Structured fill data
+                X_fill = topo.X
+                Y_fill = topo.Y
+                Z_fill = topo.Z
+
+                # Create extent mask
+                extent_mask = extent[0] > X_fill
+                extent_mask = numpy.logical_or(extent_mask,extent[1] < X_fill)
+                extent_mask = numpy.logical_or(extent_mask,extent[2] > Y_fill)
+                extent_mask = numpy.logical_or(extent_mask,extent[3] < Y_fill)
+                
+                # Create fill no-data value mask
+                no_data_mask = numpy.logical_or(extent_mask, Z_fill == no_data_value)
+
+                all_mask = numpy.logical_or(extent_mask, no_data_mask)
+
+                # Create proximity mask
+                if proximity_radius > 0.0:
+                
+                    indices = (~all_mask).nonzero()
+                    for n in xrange(indices[0].shape[0]):
+                        i = indices[0][n]
+                        j = indices[1][n]
+                        all_mask[i,j] = numpy.any(numpy.sqrt((self.x - X_fill[i,j])**2 
+                                                           + (self.y - Y_fill[i,j])**2)
+                                                     < proximity_radius_deg)
+
+                # X_fill_masked = numpy.ma.masked_where(all_mask, X_fill)
+                # Y_fill_masked = numpy.ma.masked_where(all_mask, Y_fill)
+                # Z_fill_masked = numpy.ma.masked_where(all_mask, Z_fill)
+                X_fill_masked = X_fill.take(all_mask)
+                Y_fill_masked = Y_fill.take(all_mask)
+                Z_fill_masked = Z_fill.take(all_mask)   
+
+                # Add the fill bathymetry to points and values
+                fill_points = numpy.column_stack((X_fill_masked.compressed(),
+                                                  Y_fill_masked.compressed()))
+
+                points = numpy.concatenate((fill_points, points))
+                values = numpy.concatenate((Z_fill_masked.compressed(), values))
+
+        # Use specified interpolation
         self._Z = interpolate.griddata(points, values, (self.X, self.Y), 
                                                                   method=method)
 

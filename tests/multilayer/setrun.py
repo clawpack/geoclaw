@@ -143,8 +143,8 @@ def setrun(claw_pkg='geoclaw'):
 
     elif clawdata.output_style == 3:
         # Output every iout timesteps with a total of ntot time steps:
-        clawdata.output_step_interval = 1
-        clawdata.total_steps = 10
+        clawdata.output_step_interval = 10
+        clawdata.total_steps = 100
         clawdata.output_t0 = True
         
 
@@ -410,7 +410,7 @@ def setgeo(rundata):
     topo_data = rundata.topo_data
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([2, 1, 5, 0.0, 1e10, 'topo.tt2'])
+    topo_data.topofiles.append([2, 1, 5, 0.0, 1e10, 'jump_topo.topotype2'])
     
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
