@@ -984,27 +984,33 @@ class Topography(object):
         return axes
 
 
-    def interp_unstructured(self, X_fill, Y_fill, Z_fill, extent=None,
+    def interp_unstructured(self, fill_topo, extent=None,
                                    method='nearest', delta_limit=20.0, 
                                    no_data_value=-9999, buffer_length=100.0,
                                    proximity_radius=100.0, 
                                    resolution_limit=2000):
         r"""Interpolate unstructured data on to regular grid.
 
-        Function to interpolate the unstructured data in the topo object onto a 
-        structured grid.  Utilized a bounding box plus a buffer of size 
-        *buffer_length* (meters) containing all data unless *extent* is not 
-        None.  Then uses the fill data provided (*X_fill*, *Y_fill* and 
-        *Z_fill*) to fill in the gaps in the unstructured data.  By default this
-        is done by masking the fill data with the extents, the value 
-        *no_data_value* and if *proximity_radius* (meters) is not 0, by a radius
-        of *proximity_radius* from all grid points in the object.  Stores the 
+        Function to interpolate the unstructured data in the topo object onto a
+        structured grid.  Utilizes a bounding box plus a buffer of size 
+        *buffer_length* (meters) containing all data unless *extent is not None*
+        is *True*.  Then uses the fill topography *fill_topo* to fill in the
+        gaps in the unstructured data.  By default this is done by masking the 
+        fill data with the extents, the value *no_data_value* and if 
+        *proximity_radius* (meters) is not 0, by a radius of *proximity_radius* 
+        from all grid points in the object.  Stores the 
         result in the *self.X*, *self.Y* and *self.Z* object attributes.  The
         resolution of the final grid is determined by calculating the minimum
         distance between all *x* and *y* data with a hard lower limit of 
         *delta_limit* (meters).
 
+        Note that the function *scipy.interpolate.griddata* does not respect
+        masks so a call to *numpy.ma.MaskedArray.compressed()* must be made to 
+        remove the masked data.
+
         :Input:
+         - *fill_topo* (list) - List of Topography objects to use as fill data
+           in the projection.
          - *extent* (tuple) - A tuple defining the rectangle of the sub-section.  
            Must be in the form (x lower,x upper,y lower, y upper).
          - *method* (string) - Method used for interpolation, valid methods are
@@ -1019,7 +1025,9 @@ class Topography(object):
            used to mask the fill data with.  Default is *100.0* meters.
          - *resolution_limit* (int) - Limit the number of grid points in a
            single dimension.  Raises a *ValueError* if the limit is violated.
-           Default value is 
+           Default value is ``2000''.
+
+        Sets this object's *unstructured* attribute to *False* if successful.
 
         """
 
