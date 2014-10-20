@@ -1,22 +1,36 @@
 module qinit_module
 
+    use amr_module, only: rinfinity
+
     implicit none
     save
     
     ! Type of q initialization
     integer, public :: qinit_type
     
-    ! Type of perturbation to add
-    integer, private :: wave_family
-    real(kind=8), private :: init_location(2),epsilon
-    real(kind=8), private :: angle,sigma
+    ! Work array
+    real(kind=8), private, allocatable :: qinit(:)
+
+    ! Geometry
+    real(kind=8) :: x_low_qinit
+    real(kind=8) :: y_low_qinit
+    real(kind=8) :: t_low_qinit
+    real(kind=8) :: x_hi_qinit
+    real(kind=8) :: y_hi_qinit
+    real(kind=8) :: t_hi_qinit
+    real(kind=8) :: dx_qinit
+    real(kind=8) :: dy_qinit
     
+    integer, private :: mx_qinit
+    integer, private :: my_qinit
+    integer :: min_level_qinit
+    integer :: max_level_qinit
+
 contains
 
     subroutine add_perturbation(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     
-        use geoclaw_module, only: num_layers,eta_init,rho,pi
-        use geoclaw_module, only: g => grav
+        use multilayer_module, only: num_layers, eta_init, rho
     
         implicit none
     
@@ -26,83 +40,56 @@ contains
         real(kind=8), intent(inout) :: q(meqn,1-mbc:mx+mbc,1-mbc:my+mbc)
         real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
         
-        ! Locals
-        integer :: i,j
-        real(kind=8) :: x,y,xmid,m,x_c,y_c
-        real(kind=8) :: eigen_vector(6),gamma,lambda,alpha,h_1,h_2,deta,r
+        ! Local
+        integer :: i, j, layer_index
+        real(kind=8) :: ximc,xim,x,xip,xipc,yjmc,yjm,y,yjp,yjpc,dq
         
-        if (num_layers > 2) then
-            print *,"Adding perturbations only supported for num_layers == 2."
-            stop
-        endif
-        
-        r = rho(0) / rho(1)
-        
-        do i=1,mx
-            x = xlower + (i - 0.5d0) * dx
-            do j=1,my
-                y = ylower + (j - 0.5d0) * dy
-                
-                ! Test perturbations - these only work in the x-direction
-                if (qinit_type == 1 .or. qinit_type == 2) then
-                    ! Calculate wave family for perturbation
-                    gamma = aux(8,i,j) / aux(7,i,j)
-                    select case(wave_family)
-                        case(1) ! Shallow water, left-going
-                            alpha = 0.5d0 * (gamma - 1.d0 + sqrt((gamma-1.d0)**2+4.d0*r*gamma))
-                            lambda = -sqrt(g*aux(7,i,j)*(1.d0+alpha))
-                        case(2) ! Internal wave, left-going
-                            alpha = 0.5d0 * (gamma - 1.d0 - sqrt((gamma-1.d0)**2+4.d0*r*gamma))
-                            lambda = -sqrt(g*aux(7,i,j)*(1.d0+alpha))
-                        case(3) ! Internal wave, right-going
-                            alpha = 0.5d0 * (gamma - 1.d0 - sqrt((gamma-1.d0)**2+4.d0*r*gamma))
-                            lambda = sqrt(g*aux(7,i,j)*(1.d0+alpha))
-                        case(4) ! Shallow water, right-going
-                            alpha = 0.5d0 * (gamma - 1.d0 + sqrt((gamma-1.d0)**2+4.d0*r*gamma))
-                            lambda = sqrt(g*aux(7,i,j)*(1.d0+alpha))
-                    end select
-                    eigen_vector = [1.d0,lambda,0.d0,alpha,lambda*alpha,0.d0]
+        ! Topography integral function
+        real(kind=8) :: topointegral
 
-                    if (qinit_type == 1) then
-                        ! Add perturbation
-                        if ((x < init_location(1)).and.(wave_family >= 3)) then
-                            q(1:3,i,j) = q(1:3,i,j) + rho(1) * epsilon * eigen_vector(1:3)
-                            q(4:6,i,j) = q(4:6,i,j) + rho(2) * epsilon * eigen_vector(4:6)
-                        else if ((x > init_location(1)).and.(wave_family < 3)) then
-                            q(1:2,i,j) = q(1:2,i,j) + rho(1) * epsilon * eigen_vector(1:2)
-                            q(4:5,i,j) = q(4:5,i,j) + rho(2) * epsilon * eigen_vector(4:5)
+        if (qinit_type > 0) then
+            do i=1-mbc,mx+mbc
+                x = xlower + (i-0.5d0)*dx
+                xim = x - 0.5d0*dx
+                xip = x + 0.5d0*dx
+                do j=1-mbc,my+mbc
+                    y = ylower + (j-0.5d0)*dy
+                    yjm = y - 0.5d0*dy
+                    yjp = y + 0.5d0*dy
+
+                    ! Check to see if we are in the qinit region at this grid point
+                    if ((xip > x_low_qinit).and.(xim < x_hi_qinit).and.  &
+                        (yjp > y_low_qinit).and.(yjm < y_hi_qinit)) then
+
+                        xipc=min(xip,x_hi_qinit)
+                        ximc=max(xim,x_low_qinit)
+
+                        yjpc=min(yjp,y_hi_qinit)
+                        yjmc=max(yjm,y_low_qinit)
+
+                        dq = topointegral(ximc,xipc,yjmc,yjpc,x_low_qinit, &
+                                          y_low_qinit,dx_qinit,dy_qinit,mx_qinit, &
+                                          my_qinit,qinit,1)
+                        dq = dq / ((xipc-ximc)*(yjpc-yjmc)*aux(2,i,j))
+
+                        if (qinit_type <= 3 * num_layers) then 
+                            if (aux(1,i,j) <= eta_init(qinit_type)) then
+                                q(qinit_type,i,j) = q(qinit_type,i,j) + dq
+                            endif
+                        else if (qinit_type > 3 * num_layers .and.             &
+                                 qinit_type <= 4 * num_layers) then
+                            layer_index = qinit_type - 3 * num_layers
+                            q(layer_index, i, j) = q(layer_index, i, j)        &
+                                                         + dq * rho(layer_index)
+                            ! modify layer above to accomodate this perturbation
+                            if (layer_index > 1) then
+                                stop "Not implemented yet"
+                            end if
                         endif
-                    ! Gaussian wave along a direction on requested wave family
-                    else if (qinit_type == 2) then
-                        ! Transform back to computational coordinates
-                        x_c = x * cos(angle) + y * sin(angle) - init_location(1)
-                        deta = epsilon * exp(-(x_c/sigma)**2)
-                        q(1,i,j) = q(1,i,j) + rho(1) * deta
-                        q(4,i,j) = q(4,i,j) + rho(2) * alpha * deta
                     endif
-                ! Symmetric gaussian hump
-                else if (qinit_type == 3) then
-                    deta = epsilon * exp(-((x-init_location(1))/sigma)**2)  &
-                                   * exp(-((y-init_location(2))/sigma)**2)
-                    q(1,i,j) = q(1,i,j) + rho(1) * deta
-                ! Shelf conditions from AN paper
-                else if (qinit_type == 4) then
-                    alpha = 0.d0
-                    xmid = 0.5d0*(-180.e3 - 80.e3)
-                    if ((x > -130.e3).and.(x < -80.e3)) then
-                        deta = epsilon * sin((x-xmid)*pi/(-80.e3-xmid))
-                        q(4,i,j) = q(4,i,j) + rho(2) * alpha * deta
-                        q(1,i,j) = q(1,i,j) + rho(1) * deta * (1.d0 - alpha)
-                    endif
-                ! Inundation test
-                else if (qinit_type == 5) then
-                    x_c = (x - init_location(1)) * cos(angle) &
-                        + (y - init_location(2)) * sin(angle)
-                    deta = epsilon * exp(-(x_c/sigma)**2)
-                    q(1,i,j) = q(1,i,j) + rho(1) * deta
-                endif
+                enddo
             enddo
-        enddo
+        endif
         
     end subroutine add_perturbation
 
@@ -128,7 +115,7 @@ contains
         if (present(fname)) then
             call opendatafile(unit,fname)
         else
-            call opendatafile(unit,"setqinit.data")
+            call opendatafile(unit,"qinit.data")
         endif
         
         read(unit,"(i1)") qinit_type
@@ -138,24 +125,99 @@ contains
             print *,'  qinit_type = 0, no perturbation'
             return
         endif
+        read(unit,*) qinit_fname
+        read(unit,"(2i2)") min_level_qinit, max_level_qinit
+
+        write(GEO_PARM_UNIT,*) '   min_level, max_level, qinit_fname:'
+        write(GEO_PARM_UNIT,*)  min_level_qinit, max_level_qinit, qinit_fname
         
-        if (qinit_type > 0) then
-            read(unit,*) epsilon
-            if (qinit_type <= 2 .or. qinit_type == 5) then  
-                read(unit,*) init_location
-                read(unit,*) wave_family
-                if(qinit_type == 2 .or. qinit_type == 5) then
-                    read(unit,*) angle
-                    read(unit,*) sigma
-                endif
-            else if (qinit_type == 3) then
-                read(unit,*) init_location
-                read(unit,*) sigma
-            endif
+        call read_qinit(qinit_fname)
+    
+    end subroutine set_qinit
+
+        
+    ! currently only supports one file type:
+    ! x,y,z values, one per line in standard order from NW corner to SE
+    ! z is perturbation from standard depth h,hu,hv set in qinit_geo,
+    ! if iqinit = 1,2, or 3 respectively.
+    ! if iqinit = 4, the z column corresponds to the definition of the 
+    ! surface elevation eta. The depth is then set as q(i,j,1)=max(eta-b,0)
+    subroutine read_qinit(fname)
+    
+        use geoclaw_module, only: GEO_PARM_UNIT
+        
+        implicit none
+        
+        ! Subroutine arguments
+        character(len=150) :: fname
+        
+        ! Data file opening
+        integer, parameter :: unit = 19
+        integer :: i,num_points,status
+        double precision :: x,y
+        
+        print *,'  '
+        print *,'Reading qinit data from file  ', fname
+        print *,'  '
+
+        write(GEO_PARM_UNIT,*) '  '
+        write(GEO_PARM_UNIT,*) 'Reading qinit data from'
+        write(GEO_PARM_UNIT,*) fname
+        write(GEO_PARM_UNIT,*) '  '
+        
+        open(unit=unit, file=fname, iostat=status, status="unknown", &
+             form='formatted',action="read")
+        if ( status /= 0 ) then
+            print *,"Error opening file", fname
+            stop
         endif
         
+        ! Initialize counters
+        num_points = 0
+        mx_qinit = 0
+        
+        ! Read in first values, determines x_low and y_hi
+        read(unit,*) x_low_qinit,y_hi_qinit
+        num_points = num_points + 1
+        mx_qinit = mx_qinit + 1
+        
+        ! Sweep through first row figuring out mx
+        y = y_hi_qinit
+        do while (y_hi_qinit == y)
+            read(unit,*) x,y
+            num_points = num_points + 1
+            mx_qinit = mx_qinit + 1
+        enddo
+        ! We over count by one in the above loop
+        mx_qinit = mx_qinit - 1
+        
+        ! Continue to count the rest of the lines
+        do
+            read(unit,*,iostat=status) x,y
+            if (status /= 0) exit
+            num_points = num_points + 1
+        enddo
+        if (status > 0) then
+            print *,"ERROR:  Error reading qinit file ",fname
+            stop
+        endif
+        
+        ! Extract rest of geometry
+        x_hi_qinit = x
+        y_low_qinit = y
+        my_qinit = num_points / mx_qinit
+        dx_qinit = (x_hi_qinit - x_low_qinit) / (mx_qinit-1)
+        dy_qinit = (y_hi_qinit - y_low_qinit) / (my_qinit-1)
+        
+        rewind(unit)
+        allocate(qinit(num_points))
+        
+        ! Read and store the data this time
+        do i=1,num_points
+            read(unit,*) x,y,qinit(i)
+        enddo
         close(unit)
         
-    end subroutine set_qinit
+    end subroutine read_qinit
 
 end module qinit_module

@@ -7,8 +7,6 @@ Plotting routines for storm surge simulations with GeoClaw
     Kyle Mandli (2012-10-23) Initial version
 """
 # ==============================================================================
-#          Copyright (C) Kyle T. Mandli <kyle@ices.utexas.edu>
-#
 #  Distributed under the terms of the Berkeley Software Distribution (BSD) 
 #  license
 #                     http://www.opensource.org/licenses/
@@ -18,7 +16,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 
-from clawpack.visclaw import colormaps, geoplot, gaugetools
+import clawpack.visclaw.colormaps as colormaps
+import clawpack.visclaw.gaugetools as gaugetools
+
+import clawpack.geoclaw.geoplot as geoplot
 
 # Default location of storm fields in aux array output
 # Note that selective output can move these around, when importing the module
@@ -292,7 +293,7 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
         if bounds is None:
             plotitem.contour_levels = [-2.5,-1.5,-0.5,0.5,1.5,2.5]
 
-        plotitem.plot_var = geoplot.surface
+        plotitem.plot_var = geoplot.surface_or_depth
         # plotitem.contour_nlevels = 21
         # plotitem.contour_min = -2.0
         # plotitem.contour_max = 2.0
@@ -306,7 +307,7 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
 
     elif plot_type == 'contourf':
         plotitem = plotaxes.new_plotitem(name='surface', plot_type='2d_contourf')
-        plotitem.plot_var = geoplot.surface
+        plotitem.plot_var = geoplot.surface_or_depth
         if bounds is not None:
             contours = numpy.linspace(bounds[0],bounds[1],11)
             plotitem.contour_levels = contours
