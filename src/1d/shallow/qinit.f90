@@ -7,6 +7,9 @@ subroutine qinit(meqn,mbc,mx,xlower,dx,q,maux,aux)
     !  copy this to an application directory and
     !  loop over all grid cells to set values of q(1:meqn, 1:mx).
 
+    !use geoclaw_module, only: dry_tolerance !uncomment if needed
+    !use geoclaw_module, only: grav  !uncomment if needed
+
     implicit none
 
     integer, intent(in) :: meqn,mbc,mx,maux

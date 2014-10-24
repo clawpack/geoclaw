@@ -5,6 +5,9 @@ subroutine b4step1(mbc,mx,meqn,q,xlower,dx,t,dt,maux,aux)
 
     ! this version checks for negative depths and outputs gauge information
 
+    use gauges_module
+    use geoclaw_module, only: dry_tolerance
+
     implicit none
     integer, intent(in) :: mbc,mx,meqn,maux
     real(kind=8), intent(in) :: xlower,dx,t,dt
@@ -16,8 +19,8 @@ subroutine b4step1(mbc,mx,meqn,q,xlower,dx,t,dt,maux,aux)
     real(kind=8) mvars
 
       do i=1-mbc,maxmx+mbc
-         if (q(1,i)<=drytolerance) then
-            q(1,i) = max(q(1,i),drytolerance)
+         if (q(1,i)<=dry_tolerance) then
+            q(1,i) = max(q(1,i),dry_tolerance)
             do m=2,meqn
                q(m,i)=0.d0
             enddo
