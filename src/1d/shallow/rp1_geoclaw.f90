@@ -31,6 +31,7 @@ subroutine rp1(maxmx,meqn,mwaves,maux,mbc,mx,ql,qr,auxl,auxr,fwave,s,amdq,apdq)
 !
 !        to call other point-wise Riemann solvers alter the call on line 177
 
+    use geoclaw_module, only: dry_tolerance, grav
 
     implicit none
 
@@ -47,19 +48,14 @@ subroutine rp1(maxmx,meqn,mwaves,maux,mbc,mx,ql,qr,auxl,auxr,fwave,s,amdq,apdq)
 
     !Local
     integer :: m,i,mw,maxiter
-    double precision :: drytol,g
     double precision :: hR,hL,huR,huL,uR,uL,hvR,hvL,vR,vL,phiR,phiL
     double precision :: bR,bL,sL,sR,sRoe1,sRoe2,sE1,sE2,uhat,chat
     double precision :: hstartest,hstarHLL,sLtest,sRtest
     double precision :: wall(2), fw(3,3)
-
-    !Common blocks
-    double precision :: grav,drytolerance
-
-    common /geo/ grav,drytolerance
+    double precision :: g,drytol
 
     g=grav
-    drytol=drytolerance
+    drytol=dry_tolerance
 
     !loop through Riemann problems at each grid cell
       do i=2-mbc,mx+mbc

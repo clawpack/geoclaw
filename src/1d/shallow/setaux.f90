@@ -10,6 +10,9 @@ subroutine setaux(mbc,mx,xlower,dx,maux,aux)
     ! this version simply sets b(x) = 0.0 ...for specific problems
     !   copy to an application directory
 
+    !use geoclaw_module, only: dry_tolerance !uncomment if needed
+    !use geoclaw_module, only: grav  !uncomment if needed
+
     implicit none
     integer, intent(in) :: mbc,mx,maux
     real(kind=8), intent(in) :: xlower,dx

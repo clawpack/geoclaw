@@ -6,6 +6,10 @@ subroutine src1(meqn,mbc,mx,xlower,dx,q,maux,aux,t,dt)
     !
     ! This default version integrates manning friction or other friction terms if present
 
+
+    use geoclaw_module, only: dry_tolerance, grav, ifrictiontype, frictioncoeff
+
+
     implicit none
     integer, intent(in) :: mbc,mx,meqn,maux
     real(kind=8), intent(in) :: xlower,dx,t,dt
@@ -21,7 +25,7 @@ subroutine src1(meqn,mbc,mx,xlower,dx,q,maux,aux,t,dt)
       ! integrate source term based on Manning formula
       if (ifrictiontype.eq.1) then
         do i=1,mx
-            if (q(1,i)<=drytolerance) then
+            if (q(1,i)<=dry_tolerance) then
                q(2,i) = 0.0
             else
                gamma= dsqrt(q(2,1)**2)*(grav*frictioncoeff**2)/(q(1,i)**(7.0/3.0))
