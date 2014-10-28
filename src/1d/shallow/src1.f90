@@ -7,7 +7,7 @@ subroutine src1(meqn,mbc,mx,xlower,dx,q,maux,aux,t,dt)
     ! This default version integrates manning friction or other friction terms if present
 
 
-    use geoclaw_module, only: dry_tolerance, grav
+    use geoclaw_module, only: dry_tolerance, grav, DEG2RAD
     use geoclaw_module, only: ifrictiontype => friction_forcing
     use geoclaw_module, only: frictioncoeff => friction_coefficient
 
@@ -31,6 +31,16 @@ subroutine src1(meqn,mbc,mx,xlower,dx,q,maux,aux,t,dt)
          else
             gamma= dsqrt(q(2,i)**2)*(grav*frictioncoeff**2)/(q(1,i)**(7.0/3.0))
             q(2,i)= q(2,i)/(1.d0 + dt*gamma)
+        endif
+      enddo
+    elseif (ifrictiontype.eq.2) then
+      do i=1,mx
+         if (q(1,i)<=dry_tolerance) then
+            q(2,i) = 0.0
+         else
+            gamma= q(1,i)*grav*dtan(frictioncoeff*DEG2RAD)
+            gamma = max(0.d0, abs(q(2,i)) - abs(gamma))
+            q(2,i) = sign(gamma, q(2,i))
         endif
       enddo
     endif

@@ -69,6 +69,8 @@ class GeoClawData1D(clawpack.clawutil.data.ClawData):
         elif isinstance(self.friction_forcing,str):
             if self.friction_forcing in ['Manning','manning','MANNING']:
                 friction = 1
+            elif self.friction_forcing in ['Coulomb','coulomb','COULOMB']:
+                friction = 2
             else:
                 friction = 0
         self.friction_forcing = friction
