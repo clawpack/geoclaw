@@ -67,7 +67,7 @@ c            # into matlab... reset tiny values to zero:
              if (dabs(q(m,i)) .lt. 1d-99) q(m,i) = 0.d0
              enddo
 
-          write(50,1005) (q(m,i), m=1,meqn), q(1,i) + aux(m,i)
+          write(50,1005) (q(m,i), m=1,meqn), q(1,i) + aux(1,i)
  1005     format(4e16.8)
 c
  10       continue

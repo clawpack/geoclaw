@@ -35,6 +35,7 @@ contains
 
          !locals
          character*25 :: file_name
+         real(kind=8) :: ygarbage
          integer :: iunit = 127
          integer :: mvars,l
          logical :: found_file
@@ -53,7 +54,7 @@ contains
             allocate(igauge(mgauges),xgauge(mgauges))
             allocate(t0gauge(mgauges),tFgauge(mgauges))
             do l = 1, mgauges
-               read(iunit,*) igauge(l),xgauge(l),t0gauge(l),tFgauge(l)
+               read(iunit,*) igauge(l),xgauge(l),ygarbage,t0gauge(l),tFgauge(l)
             enddo
             close(iunit)
             open(unit=OUTGAUGEUNIT,file='fort.gauge',status='unknown',form='formatted')

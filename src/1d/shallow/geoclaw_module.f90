@@ -29,9 +29,8 @@ module geoclaw_module
     integer :: coordinate_system
 
     ! Forcing
-
-    logical :: friction_forcing ! Friction forcing will be applied
-    real(kind=8) :: friction_depth, friction_coefficient
+    ! friction
+    real(kind=8) :: friction_depth, friction_coefficient, friction_forcing
 
     ! Method parameters
     real(kind=8) :: dry_tolerance
@@ -73,6 +72,7 @@ contains
         read(unit,*) sea_level
         read(unit,*) friction_forcing
         read(unit,*) friction_coefficient
+        read(unit,*) friction_depth
         read(unit,*) dry_tolerance
 
         close(unit)
@@ -83,7 +83,7 @@ contains
         write(GEO_PARM_UNIT,*) '   sea_level:',sea_level
         write(GEO_PARM_UNIT,*) '   friction_forcing:',friction_forcing
         write(GEO_PARM_UNIT,*) '   friction_coefficient:', friction_coefficient
-        write(GEO_PARM_UNIT,*) '   friction_depth:',friction_dept
+        write(GEO_PARM_UNIT,*) '   friction_depth:',friction_depth
         write(GEO_PARM_UNIT,*) '   dry_tolerance:',dry_tolerance
 
     end subroutine set_geo
