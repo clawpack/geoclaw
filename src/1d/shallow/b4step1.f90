@@ -15,12 +15,11 @@ subroutine b4step1(mbc,mx,meqn,q,xlower,dx,t,dt,maux,aux)
     real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc)
 
     !local variables
-    integer, i
-    real(kind=8) mvars
+    integer :: i,ig,j,m,mvars
 
-      do i=1-mbc,maxmx+mbc
+      do i=1-mbc,mx+mbc
          if (q(1,i)<=dry_tolerance) then
-            q(1,i) = max(q(1,i),dry_tolerance)
+            q(1,i) = max(q(1,i),0.0)
             do m=2,meqn
                q(m,i)=0.d0
             enddo

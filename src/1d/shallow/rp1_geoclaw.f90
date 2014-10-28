@@ -51,7 +51,7 @@ subroutine rp1(maxmx,meqn,mwaves,maux,mbc,mx,ql,qr,auxl,auxr,fwave,s,amdq,apdq)
     double precision :: hR,hL,huR,huL,uR,uL,hvR,hvL,vR,vL,phiR,phiL
     double precision :: bR,bL,sL,sR,sRoe1,sRoe2,sE1,sE2,uhat,chat
     double precision :: hstartest,hstarHLL,sLtest,sRtest
-    double precision :: wall(2), fw(3,3)
+    double precision :: wall(2), fw(3,3), sw(3)
     double precision :: g,drytol
 
     g=grav
@@ -74,16 +74,6 @@ subroutine rp1(maxmx,meqn,mwaves,maux,mbc,mx,ql,qr,auxl,auxr,fwave,s,amdq,apdq)
               enddo
          enddo
 
-         !zero (small) negative values if they exist
-         if (qr(1,i-1).lt.0.d0) then
-            qr(1,i-1)=0.d0
-            qr(2,i-1)=0.d0
-         endif
-
-         if (ql(i,1).lt.0.d0) then
-            ql(1,i)=0.d0
-            ql(2,i)=0.d0
-         endif
 
          !skip problem if in a completely dry area
          if (qr(1,i-1).le.drytol.and.ql(1,i).le.drytol) then
@@ -171,19 +161,29 @@ subroutine rp1(maxmx,meqn,mwaves,maux,mbc,mx,ql,qr,auxl,auxr,fwave,s,amdq,apdq)
 
          maxiter = 1
 
-         call riemann_ssqfwave(maxiter,meqn+1,mwaves+1,hL,hR,huL,huR, &
-         &  hvL,hvR,bL,bR,uL,uR,vL,vR,phiL,phiR,sE1,sE2,drytol,g,fw)
+         call riemann_aug_JCP(maxiter,3,3,hL,hR,huL, &
+     &  huR,hvL,hvR,bL,bR,uL,uR,vL,vR,phiL,phiR,sE1,sE2,drytol,g,sw,fw)
+
+!         call riemann_ssqfwave(maxiter,meqn+1,mwaves+1,hL,hR,huL,huR, &
+!         &  hvL,hvR,bL,bR,uL,uR,vL,vR,phiL,phiR,sE1,sE2,drytol,g,sw,fw)
 
 !         call riemann_fwave(meqn+1,mwaves+1,hL,hR,huL,huR,hvL,hvR, &
-!           &   bL,bR,uL,uR,vL,vR,phiL,phiR,sE1,sE2,drytol,g,fw)
+!           &   bL,bR,uL,uR,vL,vR,phiL,phiR,sE1,sE2,drytol,g,sw,fw)
 
-         s(i,1) = sE1*wall(1)
-         s(i,2) = sE2*wall(2)
+         s(1,i) = sw(1)*wall(1)
+         s(2,i) = sw(3)*wall(2)
 
          do m=1,meqn
             fwave(m,1,i)=fw(m,1)*wall(1)
             fwave(m,2,i)=fw(m,3)*wall(2)
+            if (sw(2)>0.0) then
+               fwave(m,2,i) = fwave(m,2,i) + fw(m,2)*wall(2)
+            else
+               fwave(m,1,i) = fwave(m,1,i) + fw(m,2)*wall(1)
+            endif
          enddo
+
+
 
 
  30      continue
