@@ -68,12 +68,9 @@ c     # solid wall (assumes 2'nd component is velocity or momentum in x):
          do m=1,meqn
             q(m,1-ibc) = q(m,ibc)
          end do
+c        # negate the normal velocity:
          q(2,1-ibc) = -q(2,ibc)
       end do
-c     # negate the normal velocity:
-      do 136 ibc=1,mbc
-            q(1-ibc,2) = -q(ibc,2)
-  136    continue
       go to 199
 
   199 continue
@@ -118,6 +115,7 @@ c     # solid wall (assumes 2'nd component is velocity or momentum in x):
          do m=1,meqn
             q(m,mx+ibc) = q(m,mx+1-ibc)
          end do
+c        # negate the normal velocity:
          q(2,mx+ibc) = -q(2,mx+1-ibc)
       end do
       go to 299
