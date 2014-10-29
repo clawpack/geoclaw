@@ -39,7 +39,7 @@ subroutine src1(meqn,mbc,mx,xlower,dx,q,maux,aux,t,dt)
             q(2,i) = 0.0
          else
             gamma= q(1,i)*grav*dtan(frictioncoeff*DEG2RAD)
-            gamma = max(0.d0, abs(q(2,i)) - abs(gamma))
+            gamma = max(0.d0, abs(q(2,i)) - dt*abs(gamma))
             q(2,i) = sign(gamma, q(2,i))
         endif
       enddo
