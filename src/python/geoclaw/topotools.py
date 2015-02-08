@@ -390,7 +390,9 @@ class Topography(object):
                     raise ValueError("Grid spacing delta not constant, ",
                                      "%s != %s." % (begin_delta, end_delta))
                        
-                self._delta = numpy.round(begin_delta[0], 15) 
+                dx = numpy.round(begin_delta[0], 15) 
+                dy = numpy.round(begin_delta[1], 15) 
+                self._delta = [dx, dy]
         return self._delta
 
 
@@ -494,7 +496,7 @@ class Topography(object):
                 if abs(self.topo_type) == 1:
                     # Reading this topo_type should produce the X and Y arrays
                     self.read(mask=mask)
-                elif abs(self.topo_type) in [2,3]:
+                elif abs(self.topo_type) in [2,3,4,5]:
                     if self._x is None or self._y is None:
                         # Try to read the data to get these, may not have been done yet
                         self.read(mask=mask)
@@ -617,9 +619,12 @@ class Topography(object):
                 self._x = data[:N[1],0]
                 self._y = data[::N[1],1]
                 self._Z = numpy.flipud(data[:,2].reshape(N))
-                self._delta = self.X[0,1] - self.X[0,0]
+                dx = (self._x.max() - self._x.min()) / (N[0]-1.)
+                dy = (self._y.max() - self._y.min()) / (N[1]-1.)
+                self._delta = [dx, dy]
+                # should include check that x,y equally spaced?
 
-            elif abs(self.topo_type) in [2,3]:
+            elif abs(self.topo_type) in [2,3,4,5]:
                 # Get header information
                 N = self.read_header()  # note this also sets self._extent
                 self._x = numpy.linspace(self.extent[0], self.extent[1], N[0])
@@ -632,6 +637,13 @@ class Topography(object):
                 elif abs(self.topo_type) == 3:
                     # Data is read in starting at the top right corner
                     self._Z = numpy.flipud(numpy.loadtxt(self.path, skiprows=6))
+                elif abs(self.topo_type) == 4:
+                    # Data is read in as a single column, reshape it
+                    self._Z = numpy.loadtxt(self.path, skiprows=7).reshape(N[1],N[0])
+                    self._Z = numpy.flipud(self._Z)
+                elif abs(self.topo_type) == 5:
+                    # Data is read in starting at the top right corner
+                    self._Z = numpy.flipud(numpy.loadtxt(self.path, skiprows=7))
         
                 if mask:
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
@@ -681,12 +693,12 @@ class Topography(object):
 
         """
 
-        if abs(self.topo_type) in [2,3]:
+        if abs(self.topo_type) in [2,3,4,5]:
 
             # Default values to track errors
             num_cells = [numpy.nan,numpy.nan]
             self._extent = [numpy.nan,numpy.nan,numpy.nan,numpy.nan]
-            self._delta = numpy.nan
+            #self._delta = numpy.nan
 
             with open(self.path, 'r') as topo_file:
                 # Check to see if we need to flip the header values
@@ -703,11 +715,18 @@ class Topography(object):
                 num_cells[1] = int(topo_file.readline().split()[value_index])
                 self._extent[0] = float(topo_file.readline().split()[value_index])
                 self._extent[2] = float(topo_file.readline().split()[value_index])
-                self._delta = float(topo_file.readline().split()[value_index])
+                if abs(self.topo_type) in [2,3]:
+                    cellsize = float(topo_file.readline().split()[value_index])
+                    dx = dy = cellsize
+                elif abs(self.topo_type) in [4,5]:
+                    dx = float(topo_file.readline().split()[value_index])
+                    dy = float(topo_file.readline().split()[value_index])
+                self._delta = [dx, dy]
+
                 self.no_data_value = float(topo_file.readline().split()[value_index])
                 
-                self._extent[1] = self._extent[0] + (num_cells[0]-1)*self.delta
-                self._extent[3] = self._extent[2] + (num_cells[1]-1)*self.delta
+                self._extent[1] = self._extent[0] + (num_cells[0]-1)*dx
+                self._extent[3] = self._extent[2] + (num_cells[1]-1)*dy
 
         else:
             raise IOError("Cannot read header for topo_type %s" % self.topo_type)
