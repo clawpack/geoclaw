@@ -784,13 +784,22 @@ class Topography(object):
                     for (i, longitude) in enumerate(self.x):
                         outfile.write("%s %s %s\n" % (longitude, latitude, self.Z[j,i]))
 
-            elif topo_type == 2 or topo_type == 3:
+            elif topo_type in [2,3,4,5]:
+                dx = self.delta[0]
+                dy = self.delta[1]
+                if (topo_type in [2,3]) and (abs(dx-dy)/dx > 1e-4):
+                    msg = "dx = %14.7e, dy = %14.7e are not equal\n" % (dx,dy) + \
+                          " Consider using topo_type 4 or 5"
+                    raise ValueError(msg)
+
                 # Write out header
                 outfile.write('%6i                              ncols\n' % self.Z.shape[1])
                 outfile.write('%6i                              nrows\n' % self.Z.shape[0])
                 outfile.write('%22.15e              xlower\n' % self.extent[0])
                 outfile.write('%22.15e              ylower\n' % self.extent[2])
-                outfile.write('%22.15e              cellsize\n' % self.delta)
+                outfile.write('%22.15e              cellsize\n' % dx)
+                if topo_type in [4,5]:
+                    outfile.write('%22.15e              cellsize\n' % dy)
                 outfile.write('%10i                          nodata_value\n' % no_data_value)
 
                 masked_Z = isinstance(self.Z, numpy.ma.MaskedArray)
