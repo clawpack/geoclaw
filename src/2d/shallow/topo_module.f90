@@ -483,6 +483,42 @@ contains
                         enddo
                 end select
 
+            ! ================================================================
+            ! ASCII file with header containing dx and dy, followed by z data
+            ! (progressing from upper left corner across rows, then down)
+            ! one value per line if topo_type=4 or
+            ! mx values per line if topo_type=5
+            ! ================================================================
+            case(4:5)
+                ! Read header
+                do i=1,6
+                    read(iunit,*)
+                enddo
+                read(iunit,*) no_data_value
+
+                ! Read in data
+                missing = 0
+                select case(abs(topo_type))
+                    case(4)
+                        do i=1,mx*my
+                            read(iunit,*) topo(i)
+                            if (topo(i) == no_data_value) then
+                                missing = missing + 1
+                                topo(i) = topo_missing
+                            endif
+                        enddo
+                    case(5)
+                        do j=1,my
+                            read(iunit,*) (topo((j-1)*mx + i),i=1,mx)
+                            do i=1,mx
+                                if (topo((j-1)*mx + i) == no_data_value) then
+                                    missing = missing + 1
+                                    topo((j-1)*mx + i) = topo_missing
+                                endif
+                            enddo
+                        enddo
+                end select
+
                 ! Write a warning if we found and missing values
                 if (missing > 0)  then
                     print *, '   WARNING...some missing data values this file'
@@ -537,7 +573,7 @@ contains
     !
     !  :Input:
     !   - fname - (char) Name of file
-    !   - topo_type - (int) Type of topography file (-3 < topo_type < 3)
+    !   - topo_type - (int) Type of topography file (-5 < topo_type < 5)
     !
     !  :Output:
     !   - mx,my - (int) Number of grid points
@@ -619,6 +655,17 @@ contains
                 read(iunit,*) dx
                 read(iunit,*) nodata_value
                 dy = dx
+                xhi = xll + (mx-1)*dx
+                yhi = yll + (my-1)*dy
+
+            case(4:5)
+                read(iunit,*) mx
+                read(iunit,*) my
+                read(iunit,*) xll
+                read(iunit,*) yll
+                read(iunit,*) dx
+                read(iunit,*) dy
+                read(iunit,*) nodata_value
                 xhi = xll + (mx-1)*dx
                 yhi = yll + (my-1)*dy
 

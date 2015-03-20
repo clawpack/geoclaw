@@ -16,21 +16,74 @@ def most2tt3(fname, fname2=None):
     mn = f[0].split()
     ncols = int(mn[0])
     nrows = int(mn[1])
+
     xll = float(f[1]) 
-    dx = float(f[2]) - xll
+    xup = float(f[ncols])
+    #dx = float(f[2]) - xll
+    dx = (xup - xll) / (ncols-1.)
     xll = xll - 360.
+
     yll = float(f[nrows+ncols])
-    dy =  float(f[nrows+ncols-1]) - yll
+    yup = float(f[ncols+1])
+    #dy =  float(f[nrows+ncols-1]) - yll
+    dy =  (yup - yll) / (nrows - 1.)
     if abs(dx-dy) > 1.e-6:
         print '*** WARNING: dx = ',dx,'  dy = ',dy
+        yoffset = abs(yll + (nrows-1)*dx - yup) * 111e3
+        print '*** This may cause offset in topography by  %s meters' % yoffset
+        print '*** Consider using most2tt5'
     cellsize = dx
 
+    # x = array([float(j) for j in f[1:ncols+1]])
+    # y = array([float(j) for j in f[ncols+1:nrows+ncols+1]])
+
     if fname2 is None:
-        fname2 = os.path.splitext(fname)[0] + '.asc'
+        fname2 = os.path.splitext(fname)[0] + '.tt3'
 
     f2 = open(fname2,'w')
     f2.write('%s ncols\n%s nrows\n%s xll\n%s yll\n%s cellsize\n99999 nodata_value\n' \
           % (ncols,nrows,xll,yll,cellsize))
+    f2.writelines(f[nrows+ncols+1:])
+    f2.close()
+    print "Created ",fname2
+
+def most2tt5(fname, fname2=None):
+    """
+    Converts MOST topo file to tt5 format.
+    """
+    from numpy import array, diff
+    f = open(fname).readlines()
+    mn = f[0].split()
+    ncols = int(mn[0])
+    nrows = int(mn[1])
+
+    xll = float(f[1]) 
+    xup = float(f[ncols])
+    dx = (xup - xll) / (ncols-1.)
+    xll = xll - 360.
+
+    yll = float(f[nrows+ncols])
+    yup = float(f[ncols+1])
+    dy =  (yup - yll) / (nrows - 1.)
+    print 'dx = ',dx,'  dy = ',dy
+
+    x = array([float(j) for j in f[1:ncols+1]]) - 360.
+    ddx = diff(x).max() - diff(x).min()
+    if abs(ddx)/dx > 1e-3:
+        print "*** Warning, dx not constant, ddx = ",ddx
+        print "*** Data may not be equally spaced in x"
+    y = array([float(j) for j in f[ncols+1:nrows+ncols+1]])
+    ddy = diff(y).max() - diff(y).min()
+    if abs(ddy)/dy > 1e-3:
+        print "*** Warning, dy not constant, ddy = ",ddy
+        print "*** Data may not be equally spaced in y"
+
+    if fname2 is None:
+        fname2 = os.path.splitext(fname)[0] + '.tt5'
+
+    f2 = open(fname2,'w')
+    f2.write('%s ncols\n%s nrows\n%s xll\n%s yll\n%s dx\n%s dy\n99999 nodata_value\n' \
+          % (ncols,nrows,xll,yll,dx,dy))
     f2.writelines(f[nrows+ncols+1:])
     f2.close()
     print "Created ",fname2
