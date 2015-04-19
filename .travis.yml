@@ -36,7 +36,7 @@ before_script:
 script:
   - cd $CLAW/geoclaw
   - nosetests -sv
-  - if [ -d *_output ] ; then for failed_test_path in *_output ; do ls $failed_test_path ; done ; fi
+  - if [ -d *_output ] ; then echo $CLAW ; fi
   - if [ -d *_output ] ; then for failed_test_path in *_output ; do cat $failed_test_path/run_output.txt ; cat $failed_test_path/error_output.txt ; done ; fi
   
 notifications:
