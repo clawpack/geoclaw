@@ -112,6 +112,15 @@ def test_against_old():
     Compare bowl.tt1 to bowl_old.tt1
     """
 
+    # This test requires matplotlib for the legacy topofile2griddate so skip if
+    # matplotlib is not available (like on Travis)
+    try:
+        import matplotlib
+    except ImportError as ie:
+        print "Skipping test against old topotools due to missing matplotlib" +
+              " module."
+        return True
+
     import old_topotools
 
     nxpoints = 5
