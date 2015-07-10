@@ -116,9 +116,8 @@ def test_against_old():
     # matplotlib is not available (like on Travis)
     try:
         import matplotlib
-    except ImportError as ie:
-        print "Skipping test against old topotools due to missing matplotlib" +
-              " module."
+    except ImportError:
+        print "Skipping test against old topotools due to missing matplotlib."
         return True
 
     import old_topotools
