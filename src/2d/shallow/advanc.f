@@ -3,6 +3,7 @@ c --------------------------------------------------------------
 c
       subroutine advanc (level,nvar,dtlevnew,vtime,naux)
 c
+      use amr_module, only: tvollCPU
       use amr_module
       use fixedgrids_module
       use topo_module, only: topo_finalized
