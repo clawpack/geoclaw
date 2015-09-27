@@ -99,7 +99,6 @@ c         make coarsened enlarged patch for conservative fixup
           call bc2amr(alloc(loctmp),alloc(loctx),nrow,ncol,nvar,naux,
      .                hxc,hyc,level,time,
      .                xl,xr,yb,yt,
-     .                xlower,ylower,xupper,yupper,
      .                xperdom,yperdom,spheredom)
           call cstore(alloc(loctmp),nrow,ncol,nvar,
      .                alloc(ist+nvar*lenbc),lenbc,naux,alloc(loctx),

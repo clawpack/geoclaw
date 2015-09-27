@@ -123,6 +123,6 @@ subroutine bound(time,nvar,ng,valbig,mitot,mjtot,mptr,aux,naux)
        write(34,*) '+++ in bound, spheredom = ',spheredom
 
   call bc2amr(valbig,aux,mitot,mjtot,nvar,naux,hx,hy,level,time,xloWithGhost,xhiWithGHost, &
-       yloWithGhost,yhiWithGhost,xlower,ylower,xupper,yupper,xperdom,yperdom,spheredom)
+       yloWithGhost,yhiWithGhost,xperdom,yperdom,spheredom)
 
 end subroutine bound
