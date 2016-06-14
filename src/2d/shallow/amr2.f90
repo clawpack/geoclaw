@@ -459,6 +459,7 @@ program amr2
         ! Call user routine to set up problem parameters:
         call setprob()
 
+        
         ! Non-user defined setup routine
         call set_geo()                    ! sets basic parameters g and coord system
         call set_refinement()             ! sets refinement control parameters
@@ -471,6 +472,7 @@ program amr2
         call set_regions()                ! Set refinement regions
         call set_gauges(rest, nvar)       ! Set gauge output
         call set_fgmax()
+        call set_storm()
 
     else
 
@@ -480,7 +482,7 @@ program amr2
 
         ! Call user routine to set up problem parameters:
         call setprob()
-
+ 
         ! Non-user defined setup routine
         call set_geo()                    ! sets basic parameters g and coord system
         call set_refinement()             ! sets refinement control parameters
@@ -493,6 +495,7 @@ program amr2
         call set_regions()                ! Set refinement regions
         call set_gauges(rest, nvar)       ! Set gauge output
         call set_fgmax()
+        call set_storm()
 
         cflmax = 0.d0   ! otherwise use previously heckpointed val
 
