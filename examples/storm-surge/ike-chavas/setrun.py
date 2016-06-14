@@ -433,7 +433,7 @@ def setgeo(rundata):
     data.R_refine = [60.0e3,40e3,20e3]  # m
     
     # Storm parameters
-    data.storm_type = 1 # Type of storm
+    data.storm_type = 4 # Type of storm
     data.landfall = days2seconds(ike_landfall.days) + ike_landfall.seconds
 
     # Storm type 2 - Idealized storm track
