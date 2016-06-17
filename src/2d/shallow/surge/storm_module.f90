@@ -13,6 +13,7 @@ module storm_module
     use holland_storm_module, only: holland_storm_type
     use constant_storm_module, only: constant_storm_type
     use stommel_storm_module, only: stommel_storm_type
+    use explicit_storm_module, only: explicit_storm_type
 
     implicit none
 
@@ -49,6 +50,7 @@ module storm_module
     type(holland_storm_type), save :: holland_storm
     type(constant_storm_type), save :: constant_storm
     type(stommel_storm_type), save :: stommel_storm
+    type(explicit_storm_type), save :: explicit_storm
 
     ! Store physics here for ease of use
     ! WARNING:  If these do not agree with the storm data objects things will break!
@@ -77,6 +79,7 @@ contains
         use holland_storm_module, only: set_holland_storm
         use constant_storm_module, only: set_constant_storm
         use stommel_storm_module, only: set_stommel_storm
+        use explicit_storm_module, only: set_explicit_storm
 
         use geoclaw_module, only: pi
 
@@ -96,6 +99,10 @@ contains
         else
             call opendatafile(unit,'surge.data')
         endif
+
+        ! Set some parameters
+        wind_index = 5
+        pressure_index = 7
         
         ! Read in parameters
         ! Physics
@@ -119,29 +126,20 @@ contains
         end select
         read(unit,*) pressure_forcing
         read(unit,*)
-
-        ! Set some parameters
-        read(unit, '(i2)') wind_index
-        read(unit, '(i2)') pressure_index
-        read(unit, *)
+        
+        ! Set drag law function pointer
+!         ! Source term algorithm parameters
+!         read(unit,*) wind_tolerance
+!         read(unit,*) pressure_tolerance
+!         read(unit,*)
         
         ! AMR parameters
         read(unit,'(a)') line
-        if (line(1:1) == "F") then
-            allocate(wind_refine(1))
-            wind_refine(1) = huge(1.d0)
-        else
-            allocate(wind_refine(get_value_count(line)))
-            read(line,*) (wind_refine(i),i=1,size(wind_refine,1))
-        end if
+        allocate(wind_refine(get_value_count(line)))
+        read(line,*) (wind_refine(i),i=1,size(wind_refine,1))
         read(unit,'(a)') line
-        if (line(1:1) == "F") then
-            allocate(R_refine(1))
-            R_refine(1) = -huge(1.d0)
-        else
-            allocate(R_refine(get_value_count(line)))
-            read(line,*) (R_refine(i),i=1,size(R_refine,1))
-        end if
+        allocate(R_refine(get_value_count(line)))
+        read(line,*) (R_refine(i),i=1,size(R_refine,1))
         read(unit,*)
         
         ! Storm Setup 
@@ -183,6 +181,9 @@ contains
         else if (storm_type == 3) then
             ! Stommel wind field
             call set_stommel_storm(storm_file_path,stommel_storm,log_unit)
+        else if (storm_type == 4) then
+            ! Explicit wind field
+            call set_explicit_storm(storm_file_path,explicit_storm,log_unit)
         else
             print *,"Invalid storm type ",storm_type," provided."
             stop
@@ -379,6 +380,7 @@ contains
         use holland_storm_module, only: set_holland_storm_fields
         use constant_storm_module, only: set_constant_storm_fields
         use stommel_storm_module, only: set_stommel_storm_fields
+        use explicit_storm_module, only: set_explicit_storm_fields
 
         implicit none
 
@@ -402,6 +404,10 @@ contains
                 call set_stommel_storm_fields(maux,mbc,mx,my, &
                                     xlower,ylower,dx,dy,t,aux, wind_index, &
                                     pressure_index, stommel_storm)
+            case(4)
+                call set_explicit_storm_fields(maux,mbc,mx,my, &
+                                    xlower,ylower,dx,dy,t,aux, wind_index, &
+                                    pressure_index, explicit_storm)
         end select
 
     end subroutine set_storm_fields
