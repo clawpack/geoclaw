@@ -119,7 +119,7 @@ contains
         open(unit=l_file,file=storm_data_path,status='old', &
                 action='read',iostat=io_status)
         if (io_status /= 0) then
-            print "(a,i2)", "Error opening latitudes data file. status = ", io_status
+            print *, "Error opening latitudes data file. status = ", io_status
             stop 
         endif            
 
@@ -170,7 +170,7 @@ contains
         open(unit=l_file,file=storm_data_path,status='old', &
                 action='read',iostat=io_status)
         if (io_status /= 0) then
-            print "(a,i2)", "Error opening longitudes data file. status = ", io_status
+            print *, "Error opening longitudes data file. status = ", io_status
             stop 
         endif            
         ! Read in longitude coords. Just need first line.
@@ -180,14 +180,21 @@ contains
         ! This is used to speed up searching for correct storm data
         storm%last_storm_index = 0
 
-        ! Read in the first two storm data snapshots
+        ! Read in the first storm data snapshot
         call read_explicit_storm(storm,t0)
-        call read_explicit_storm(storm,t0)
-        ! storm%last_storm_index will be 2
+        ! storm%last_storm_index will be 1
 
-        if (t0 < storm%t_prev) then
-            print *,t0,storm%t_prev
-            stop "Simulation start time preceeds storm data."
+        if (t0 < storm%t_next) then
+            print *, "Simulation start time preceeds storm data. Using clear skies."
+            print *, t0, storm%t_prev
+            storm%t_prev = t0
+            storm%u_prev = 0
+            storm%v_prev = 0
+            storm%p_prev = storm%ambient_pressure
+        else
+            ! Read in the second storm data snapshot
+            call read_explicit_storm(storm,t0)
+            ! storm%last_storm_index will be 2
         endif
 
     end subroutine set_explicit_storm
@@ -288,31 +295,33 @@ contains
         open(unit=datafile,file=data_path,status='old', &
                 action='read',iostat=iostatus)
         if (iostatus /= 0) then
-            print "(a,i2)", "Error opening data file: ",data_path
-            print "(a,i2)", "Status = ", iostatus
+            print *, "Error opening data file: ",data_path
+            print *, "Status = ", iostatus
             stop 
         endif            
         ! Advance to the next time step to be read in
         ! Skip entries based on total number previously read
         do k = 1, last_storm_index
             do j = 1, num_rows
-                read(datafile, *)
+                read(datafile, *, iostat=iostatus)
                 ! Exit loop if we ran into an error or we reached the end of the file
                 if (iostatus /= 0) then
-                    print "(a,i2)", "Unexpected end-of-file reading ",data_path
-                    print "(a,i2)", "Status = ", iostatus
-                    exit
+                    print *, "Unexpected end-of-file reading ",data_path
+                    print *, "Status = ", iostatus
+                    timestamp = -1
+                    return
                 endif
             enddo
         enddo
         ! Read in next time snapshot 
         do j = 1, num_rows
-            read(datafile, *) timestamp, storm_array(:,j) 
+            read(datafile, *, iostat=iostatus) timestamp, storm_array(:,j) 
             ! Exit loop if we ran into an error or we reached the end of the file
             if (iostatus /= 0) then
-                print "(a,i2)", "Unexpected end-of-file reading ",data_path
-                print "(a,i2)", "Status = ", iostatus
-                exit
+                print *, "Unexpected end-of-file reading ",data_path
+                print *, "Status = ", iostatus
+                timestamp = -1
+                return
             endif
         enddo
         close(datafile) 
@@ -352,30 +361,41 @@ contains
         ! This should probably be changed in the future.
 
         ! Read the u-velocity file
-        !
         data_path = trim(storm%data_path_root) // "u10.dat"
         call read_explicit_storm_file(data_path,storm%u_next,storm%num_rows,storm%last_storm_index,timestamp)
+        ! Error handling: set to clear skies if file ended
+        if (timestamp == -1) then
+            storm%u_next = 0
+            storm%v_next = 0
+            storm%p_next = storm%ambient_pressure
+            storm%t_next = 2.0e0*storm%t_next
+        else
+            ! Save timestamp (sec) of next snapshot
+            storm%t_next = timestamp
+        endif
 
         ! Read v-velocity file
-        !
         data_path = trim(storm%data_path_root) // "v10.dat"
         call read_explicit_storm_file(data_path,storm%v_next,storm%num_rows,storm%last_storm_index,timestamp)
+        ! Error handling: set to clear skies if file ended
+        if (timestamp == -1) then
+            storm%v_next = 0
+        endif
 
         ! Read pressure file
-        !
         data_path = trim(storm%data_path_root) // "pmsl.dat"
         call read_explicit_storm_file(data_path,storm%p_next,storm%num_rows,storm%last_storm_index,timestamp)
-
-        ! Convert pressure units: mbar to Pa
-        storm%p_next = storm%p_next * 1.0e2
-
-        ! Save timestamp (sec) of next snapshot
-        storm%t_next = timestamp
+        ! Error handling: set to clear skies if file ended
+        if (timestamp == -1) then
+            storm%p_next = storm%ambient_pressure
+        else
+            ! Convert pressure units: mbar to Pa
+            storm%p_next = storm%p_next * 1.0e2
+        endif
 
         ! Update number of storm snapshots read in
         storm%last_storm_index = storm%last_storm_index + 1
         if (DEBUG) print *, "last_storm_index=", storm%last_storm_index
-
 
     end subroutine read_explicit_storm
 
@@ -488,7 +508,7 @@ contains
             ! update all storm data, including value of t_next
                 if (DEBUG) print *,"loading new storm snapshot ","t=",t,"t_next=",storm%t_next
                 call read_explicit_storm(storm,t)
-                ! TODO: simulation should keep running even if storm data ends
+                ! If storm data ends, the final storm state is used.
             enddo
             !$OMP END CRITICAL (READ_STORM)
         endif
