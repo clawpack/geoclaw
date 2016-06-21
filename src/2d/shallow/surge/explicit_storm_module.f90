@@ -3,6 +3,14 @@
 !
 ! Module contains routines for returning wind and pressure field based on
 ! specified values in data files.
+!
+! The data files are expected to be of the form:
+! *lat.dat
+! *lon.dat
+! *u10.dat
+! *v10.dat
+! *pmsl.dat
+! where * is specified in setrun.py or empty by default.
 ! 
 ! ==============================================================================
 module explicit_storm_module
@@ -104,7 +112,7 @@ contains
         if (present(storm_data_path_root)) then
             storm%data_path_root = storm_data_path_root
         else
-            storm%data_path_root = './t1330-case0550-'
+            storm%data_path_root = './'
         endif
         storm_data_path = trim(storm%data_path_root) // "lat.dat"
         print *,'Reading latitudes data file ',storm_data_path
@@ -135,7 +143,6 @@ contains
         end do
         rewind(l_file) ! closed later
         storm%num_rows = num_rows
-        !if (DEBUG) print *, "numrows=",num_rows,"numcols=",num_cols
 
         ! save lat & lon coords, times, and u/v/p fields
         allocate(storm%lat(num_rows))
@@ -310,7 +317,6 @@ contains
         enddo
         close(datafile) 
 
-        !print *, "Timestamp: ",timestamp
         timestamp = ymdh_to_seconds(timestamp)
 
     end subroutine read_explicit_storm_file
@@ -500,7 +506,6 @@ contains
                         (storm%t_next-storm%t_prev)
                 storm%p = (storm%p_prev*(storm%t_next-t) + storm%p_next*(t-storm%t_prev)) / &
                         (storm%t_next-storm%t_prev)
-                !if (DEBUG) print *, storm%t_prev, t, storm%t_next
             endif
             !$OMP END CRITICAL (INTERP_STORM)
         endif
