@@ -97,6 +97,7 @@ contains
         !   number of longitude coords (nx)
         ! We don't need number of time snapshots (nt)
         !   since we will load snapshots only as needed
+        ! The datafiles for lat & lon contain nx*ny values
         ! The datafiles for u, v, p contain nx*ny*nt values
 
         ! Open latitudes data file
@@ -385,14 +386,26 @@ contains
         real(kind=8), intent(in) :: lat
         type(explicit_storm_type), intent(in) :: storm
 
-        ! Since latitude data isn't regularly spaced,
-        !  iterate through until we find the first
-        !  smaller value
-        do i=1,storm%num_rows-1
-            !if (storm%lat(i) < lat) exit
-            if ((storm%lat(i+1) > lat ) .and. (lat > storm%lat(i))) exit
-        enddo
-        ! TODO improve index search; add failure condition
+        ! Local storage
+        real(kind=8) :: dy
+
+        ! Out-of-bound conditions:
+        !  no error messages generated to optimize performace
+        !  (pure function specification)
+        if (lat < storm%lat(1)) then
+            i = 1
+            !print *, "Warning: latitude ", lat, " out of bounds. Using ", &
+                !storm%lat(1), " instead."
+        else if (lat > storm%lat(storm%num_rows)) then
+            i = storm%num_rows
+            !print *, "Warning: latitude ", lat, " out of bounds. Using ", &
+                !storm%lat(storm%num_rows), " instead."
+        else
+            ! Find spacing between latitude values
+            dy = (storm%lat(storm%num_rows) - storm%lat(1)) / storm%num_rows
+            ! Determine index based on spacing
+            i = 1 + (lat - storm%lat(1)) / dy
+        endif
 
     end function get_lat_index
 
@@ -409,14 +422,26 @@ contains
         real(kind=8), intent(in) :: lon
         type(explicit_storm_type), intent(in) :: storm
 
-        ! Since longitude data isn't regularly spaced,
-        !  iterate through until we find the first
-        !  smaller value
-        do i=1,storm%num_cols
-            !if (storm%lon(i) < lon) exit
-            if ((storm%lon(i+1) > lon ) .and. (lon > storm%lon(i))) exit
-        enddo
-        ! TODO improve index search; add failure condition
+        ! Local storage
+        real(kind=8) :: dx
+
+        ! Out-of-bound conditions:
+        !  no error messages generated to optimize performace
+        !  (pure function specification)
+        if (lon < storm%lon(1)) then
+            i = 1
+            !print *, "Warning: Longitude ", lon, " out of bounds. Using ", &
+                !storm%lon(1), " instead."
+        else if (lon > storm%lon(storm%num_cols)) then
+            i = storm%num_cols
+            !print *, "Warning: Longitude ", lon, " out of bounds. Using ", &
+                !storm%lon(storm%num_cols), " instead."
+        else
+            ! Find spacing between longitude values
+            dx = (storm%lon(storm%num_cols) - storm%lon(1)) / storm%num_cols
+            ! Determine index based on spacing
+            i = 1 + (lon - storm%lon(1)) / dx
+        endif
 
     end function get_lon_index
 
@@ -432,7 +457,6 @@ contains
         ! Time of the wind field requested
         integer, intent(in) :: maux,mbc,mx,my
         real(kind=8), intent(in) :: xlower,ylower,dx,dy,t
-        !real(kind=8), intent(in) :: wind_xlower,wind_ylower,wind_dx,wind_dy
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
