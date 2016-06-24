@@ -73,7 +73,7 @@ def setplot(plotdata):
     track = surge.track_data(os.path.join(plotdata.outdir,'fort.track'))
 
     # Calculate landfall time, off by a day, maybe leap year issue?
-    landfall_dt = datetime.datetime(2008,9,13,7) - datetime.datetime(2008,1,1,0)
+    landfall_dt = datetime.datetime(2016,6,20-1,0) - datetime.datetime(2016,1,1,0)
     landfall = (landfall_dt.days - 1.0) * 24.0 * 60**2 + landfall_dt.seconds
 
     # Set afteraxes function

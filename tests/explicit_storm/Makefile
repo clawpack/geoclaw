@@ -20,7 +20,8 @@ SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
-FFLAGS ?=
+FFLAGS ?= -O2 -fopenmp
+#FFLAGS ?=
 
 # ---------------------------------
 # List of sources for this program:
@@ -43,7 +44,7 @@ MODULES = \
  $(GEOLIB)/surge/holland_storm_module.f90 \
  $(GEOLIB)/surge/constant_storm_module.f90 \
  $(GEOLIB)/surge/stommel_storm_module.f90 \
- $(GEOLIB)/surge/explicit_storm_module.f90 \
+ $(GEOLIB)/surge/wrf_storm_module.f90 \
  $(GEOLIB)/surge/storm_module.f90 \
  $(GEOLIB)/friction_module.f90 \
  $(GEOLIB)/fgmax_module.f90
@@ -179,10 +180,8 @@ include $(CLAWMAKE)
 # Construct the topography data
 .PHONY: topo all
 
-test-bathy.asc:
+topo: make_storm.py
 	python make_storm.py
-
-topo: test-bathy.asc
 
 -all:
 	$(MAKE) topo

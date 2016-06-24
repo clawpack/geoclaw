@@ -1,10 +1,13 @@
 ! ==============================================================================
-! explicit_storm_module 
+! wrf_storm_module 
 !
-! Module contains routines for returning wind and pressure field based on
-! specified values in data files.
+! Module contains routines for returning wind and
+! pressure fields based on data files from WRF output.
 !
-! The data files are expected to be of the form:
+! Both NetCDF and ASCII files will be supported.
+! TODO: Add NetCDF support.
+!
+! The ASCII data files are expected to be of the form:
 ! *lat.dat
 ! *lon.dat
 ! *u10.dat
@@ -13,14 +16,14 @@
 ! where * is specified in setrun.py or empty by default.
 ! 
 ! ==============================================================================
-module explicit_storm_module
+module wrf_storm_module
 
     implicit none
     save
 
-    ! Explicit storm type definition
+    ! WRF storm type definition
     ! Specified wind & pressure field 
-    type explicit_storm_type
+    type wrf_storm_type
         ! Size of spatial grids,
         !  corresponds to lengths of lat/lon arrays
         integer :: num_rows
@@ -63,7 +66,7 @@ module explicit_storm_module
         ! Store the storm data file for repeated reading
         character(len=90) :: data_path_root
 
-    end type explicit_storm_type
+    end type wrf_storm_type
 
     ! Internal tracking variables for storm
     logical, private :: DEBUG = .true. 
@@ -71,10 +74,10 @@ module explicit_storm_module
 
 contains
 
-    ! Setup routine for the explicit model
+    ! Setup routine for the WRF storm odel
     ! Open data files, get parameters, allocate memory,
     !  and read in first two time snapshots of storm data
-    subroutine set_explicit_storm(storm_data_path_root, storm, log_unit)
+    subroutine set_wrf_storm(storm_data_path_root, storm, log_unit)
 
         use geoclaw_module, only: coordinate_system
         use amr_module, only: t0
@@ -83,7 +86,7 @@ contains
 
         ! Subroutine I/O
         character(len=*), optional :: storm_data_path_root
-        type(explicit_storm_type), intent(in out) :: storm
+        type(wrf_storm_type), intent(in out) :: storm
         integer, intent(in) :: log_unit
 
         ! Local storage
@@ -181,7 +184,7 @@ contains
         storm%last_storm_index = 0
 
         ! Read in the first storm data snapshot
-        call read_explicit_storm(storm,t0)
+        call read_wrf_storm(storm,t0)
         ! storm%last_storm_index will be 1
 
         if (t0 < storm%t_next) then
@@ -193,11 +196,11 @@ contains
             storm%p_prev = storm%ambient_pressure
         else
             ! Read in the second storm data snapshot
-            call read_explicit_storm(storm,t0)
+            call read_wrf_storm(storm,t0)
             ! storm%last_storm_index will be 2
         endif
 
-    end subroutine set_explicit_storm
+    end subroutine set_wrf_storm
 
 
     ! ==========================================================================
@@ -272,11 +275,11 @@ contains
     end function ymdh_to_seconds
 
     ! ==========================================================================
-    !  read_explicit_storm_data_file()
+    !  read_wrf_storm_data_file()
     !    Opens storm data file and reads next storm entry
     !    Currently only for ASCII file
     ! ==========================================================================
-    subroutine read_explicit_storm_file(data_path,storm_array,num_rows,last_storm_index,timestamp)
+    subroutine read_wrf_storm_file(data_path,storm_array,num_rows,last_storm_index,timestamp)
 
         implicit none
 
@@ -328,20 +331,20 @@ contains
 
         timestamp = ymdh_to_seconds(timestamp)
 
-    end subroutine read_explicit_storm_file
+    end subroutine read_wrf_storm_file
 
     ! ==========================================================================
-    !  read_explicit_storm_data()
+    !  read_wrf_storm_data()
     !    Reads storm fields for next time snapshot
     !    Currently only for ASCII files
     ! ==========================================================================
 
-    subroutine read_explicit_storm(storm,t)
+    subroutine read_wrf_storm(storm,t)
 
         implicit none
 
         ! Subroutine I/O
-        type(explicit_storm_type), intent(in out) :: storm
+        type(wrf_storm_type), intent(in out) :: storm
         real(kind=8), intent(in) :: t
 
         ! Local storage
@@ -362,13 +365,11 @@ contains
 
         ! Read the u-velocity file
         data_path = trim(storm%data_path_root) // "u10.dat"
-        call read_explicit_storm_file(data_path,storm%u_next,storm%num_rows,storm%last_storm_index,timestamp)
+        call read_wrf_storm_file(data_path,storm%u_next,storm%num_rows,storm%last_storm_index,timestamp)
         ! Error handling: set to clear skies if file ended
         if (timestamp == -1) then
             storm%u_next = 0
-            storm%v_next = 0
-            storm%p_next = storm%ambient_pressure
-            storm%t_next = 2.0e0*storm%t_next
+            storm%t_next = storm%t_next + 10*24*60*60
         else
             ! Save timestamp (sec) of next snapshot
             storm%t_next = timestamp
@@ -376,7 +377,7 @@ contains
 
         ! Read v-velocity file
         data_path = trim(storm%data_path_root) // "v10.dat"
-        call read_explicit_storm_file(data_path,storm%v_next,storm%num_rows,storm%last_storm_index,timestamp)
+        call read_wrf_storm_file(data_path,storm%v_next,storm%num_rows,storm%last_storm_index,timestamp)
         ! Error handling: set to clear skies if file ended
         if (timestamp == -1) then
             storm%v_next = 0
@@ -384,7 +385,7 @@ contains
 
         ! Read pressure file
         data_path = trim(storm%data_path_root) // "pmsl.dat"
-        call read_explicit_storm_file(data_path,storm%p_next,storm%num_rows,storm%last_storm_index,timestamp)
+        call read_wrf_storm_file(data_path,storm%p_next,storm%num_rows,storm%last_storm_index,timestamp)
         ! Error handling: set to clear skies if file ended
         if (timestamp == -1) then
             storm%p_next = storm%ambient_pressure
@@ -397,7 +398,7 @@ contains
         storm%last_storm_index = storm%last_storm_index + 1
         if (DEBUG) print *, "last_storm_index=", storm%last_storm_index
 
-    end subroutine read_explicit_storm
+    end subroutine read_wrf_storm
 
     ! ==========================================================================
     !  integer pure get_lat_index(lat)
@@ -410,7 +411,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: lat
-        type(explicit_storm_type), intent(in) :: storm
+        type(wrf_storm_type), intent(in) :: storm
 
         ! Local storage
         real(kind=8) :: dy
@@ -446,7 +447,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: lon
-        type(explicit_storm_type), intent(in) :: storm
+        type(wrf_storm_type), intent(in) :: storm
 
         ! Local storage
         real(kind=8) :: dx
@@ -472,9 +473,9 @@ contains
     end function get_lon_index
 
     ! ==========================================================================
-    !  set_explicit_storm_fields()
+    !  set_wrf_storm_fields()
     ! ==========================================================================
-    subroutine set_explicit_storm_fields(maux,mbc,mx,my,xlower, &
+    subroutine set_wrf_storm_fields(maux,mbc,mx,my,xlower, &
                                     ylower,dx,dy,t,aux, wind_index, &
                                     pressure_index, storm)
 
@@ -486,7 +487,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(explicit_storm_type), intent(in out) :: storm
+        type(wrf_storm_type), intent(in out) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -507,7 +508,7 @@ contains
             do while (t > storm%t_next)
             ! update all storm data, including value of t_next
                 if (DEBUG) print *,"loading new storm snapshot ","t=",t,"t_next=",storm%t_next
-                call read_explicit_storm(storm,t)
+                call read_wrf_storm(storm,t)
                 ! If storm data ends, the final storm state is used.
             enddo
             !$OMP END CRITICAL (READ_STORM)
@@ -515,8 +516,10 @@ contains
         
         ! Interpolate storm data in time
         ! t_prev <= t <= t_next
+        ! Note that this might not be the best approach:
+        !  intensity is smoothed out between intervals
+        !  so intermediate values may appear less intense
         if (t > storm%t) then
-            ! Bring interpolated storm data up to speed
             !$OMP CRITICAL (INTERP_STORM)
             if (t > storm%t) then
                 storm%t = t
@@ -533,7 +536,7 @@ contains
         ! Set fields
         ! Determine lat/long of each cell in layer,
         !  determine corresponding storm cell indices
-        !  (unfortunately the lat/lons aren't evenly spaced),
+        !  (or nearest cell index if out-of-bound)
         !  then get value of corresponding storm data cell.
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
@@ -549,7 +552,7 @@ contains
             enddo
         enddo
 
-    end subroutine set_explicit_storm_fields
+    end subroutine set_wrf_storm_fields
 
-end module explicit_storm_module
+end module wrf_storm_module
 
