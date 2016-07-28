@@ -116,7 +116,7 @@ contains
 
                 ! Temporary setting here, need input method
                 allocate(gauges(i)%q_out_vars(4))
-                gauges(i)%q_out_vars = [1]
+                gauges(i)%q_out_vars = [1, 2, 3]
                 allocate(gauges(i)%aux_out_vars(0))
                 ! gauges(i)%aux_out_vars = []
                 gauges(i)%num_out_vars = size(gauges(i)%q_out_vars, 1) +   &
