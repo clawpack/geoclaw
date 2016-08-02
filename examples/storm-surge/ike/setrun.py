@@ -338,6 +338,9 @@ def setrun(claw_pkg='geoclaw'):
     rundata.gaugedata.gauges.append([2, -94.71, 29.28, rundata.clawdata.t0, rundata.clawdata.tfinal])
     rundata.gaugedata.gauges.append([3, -94.39, 29.49, rundata.clawdata.t0, rundata.clawdata.tfinal])
     rundata.gaugedata.gauges.append([4, -94.13, 29.58, rundata.clawdata.t0, rundata.clawdata.tfinal])
+    rundata.gaugedata.output_format = {1:"16d8"}
+    rundata.gaugedata.q_out_fields = {1:[3], 2:[0]}
+    rundata.gaugedata.aux_out_fields = [5, 6, 7]
 
     #------------------------------------------------------------------
     # GeoClaw specific parameters:
