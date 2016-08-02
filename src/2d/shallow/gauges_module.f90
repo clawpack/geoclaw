@@ -56,7 +56,8 @@ module gauges_module
         real(kind=8) :: x, y, t_start, t_end
 
         ! Output settings
-        character(len=10) :: format
+        integer :: file_format
+        character(len=10) :: display_format
         integer, allocatable :: q_out_vars(:)
         integer, allocatable :: aux_out_vars(:)
         integer :: num_out_vars
@@ -81,6 +82,7 @@ contains
     subroutine set_gauges(restart, nvar, fname)
 
         use amr_module, only: maxgr
+        use utility_module, only: get_value_count, parse_values
 
         implicit none
 
@@ -90,8 +92,10 @@ contains
         integer, intent(in) :: nvar
 
         ! Locals
-        integer :: i, ipos, idigit, inum
+        integer :: i, ipos, idigit, inum, n, num_fields
         integer, parameter :: iunit = 7
+        character(len=128) :: line, column_label
+        real(kind=8) :: values(10)
 
         if (.not.module_setup) then
             ! Open file
@@ -104,56 +108,107 @@ contains
             read(iunit,*) num_gauges
 
             allocate(gauges(num_gauges))
-
             allocate(mbestsrc(num_gauges), mbestorder(num_gauges))
-            mbestsrc = 0
             allocate(mbestg1(maxgr), mbestg2(maxgr))
             
+            mbestsrc = 0
+
+            ! Original gauge information
             do i=1,num_gauges
                 read(iunit,*) gauges(i)%gauge_num, gauges(i)%x, gauges(i)%y, &
                               gauges(i)%t_start,gauges(i)%t_end
                 gauges(i)%buffer_index = 1
+            enddo
 
-                ! Temporary setting here, need input method
-                allocate(gauges(i)%q_out_vars(4))
-                gauges(i)%q_out_vars = [1, 2, 3]
-                allocate(gauges(i)%aux_out_vars(0))
-                ! gauges(i)%aux_out_vars = []
+            ! Read in output formats
+            read(iunit, *)
+            read(iunit, *) (gauges(i)%file_format, i=1, num_gauges)
+            read(iunit, *) (gauges(i)%display_format, i=1, num_gauges)
+
+            ! Read in q fields
+            read(iunit, *)
+            do i=1, num_gauges
+                read(iunit, "(a)") line
+                call parse_values(line, num_fields, values)
+                if (int(values(1)) == -1) then
+                    ! Output all q values
+                    num_fields = nvar
+                    do n=1, nvar
+                        values(n) = n
+                    end do
+                else if (int(values(1)) == 0) then
+                    ! Output no q values
+                    num_fields = 0
+                end if
+                allocate(gauges(i)%q_out_vars(num_fields))
+                do n=1, num_fields
+                    gauges(i)%q_out_vars(n) = int(values(n))
+                end do
+            end do
+
+            ! Read in aux fields
+            read(iunit, *)
+            do i=1, num_gauges
+                read(iunit, "(a)") line
+                call parse_values(line, num_fields, values)
+                if (int(values(1)) == 0) then
+                    ! Output no aux values
+                    num_fields = 0
+                end if
+                allocate(gauges(i)%aux_out_vars(num_fields))
+                do n=1, num_fields
+                    gauges(i)%aux_out_vars(n) = int(values(n))
+                end do
+
+                ! Also count number of total vars here
                 gauges(i)%num_out_vars = size(gauges(i)%q_out_vars, 1) +   &
                                          size(gauges(i)%aux_out_vars, 1)
-                allocate(gauges(i)%data(gauges(i)%num_out_vars + 2, MAX_BUFFER))
 
-                gauges(i)%format = "e15.6"
-            enddo
+                ! Allocate data buffer - time + num_out_vars + eta
+                allocate(gauges(i)%data(gauges(i)%num_out_vars + 2, MAX_BUFFER))
+            end do
 
             close(iunit)
             
-            ! initialize for starters
-
+            ! Create gauge output file names
             do i = 1, num_gauges
-               gauges(i)%file_name = 'gaugexxxxx.txt'
-               inum = gauges(i)%gauge_num
-               do ipos = 10,6,-1              ! do this to replace the xxxxx in the name
-                  idigit = mod(inum,10)
-                  gauges(i)%file_name(ipos:ipos) = char(ichar('0') + idigit)
-                  inum = inum / 10
-               end do
+                gauges(i)%file_name = 'gaugexxxxx.txt'
+                inum = gauges(i)%gauge_num
+                do ipos = 10,6,-1              ! do this to replace the xxxxx in the name
+                    idigit = mod(inum,10)
+                    gauges(i)%file_name(ipos:ipos) = char(ichar('0') + idigit)
+                    inum = inum / 10
+                end do
 
-    !          status unknown since might be a restart run. maybe need to test and rewind?
-               if (restart) then
-                  open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name, status='old',        &
+                ! status unknown since might be a restart run. maybe need to test and rewind?
+                if (restart) then
+                    open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name, status='old',        &
+                         position='append', form='formatted')
+                else
+                    open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name, status='unknown',        &
                        position='append', form='formatted')
-               else
-                  open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name, status='unknown',        &
-                       position='append', form='formatted')
-                  rewind OUTGAUGEUNIT
-                  write(OUTGAUGEUNIT, 100) gauges(i)%gauge_num, gauges(i)%x, gauges(i)%y, gauges(i)%num_out_vars + 1
- 100              format("# gauge_id= ",i5," location=( ",1e15.7," ",1e15.7," ) num_eqn= ",i2)
-                  write(OUTGAUGEUNIT, 101)
- 101              format("# Columns: level time q_vars eta aux_vars")
-               endif
+                    rewind OUTGAUGEUNIT
+                    write(OUTGAUGEUNIT, 100) gauges(i)%gauge_num, gauges(i)%x, gauges(i)%y, gauges(i)%num_out_vars + 1
+ 100                format("# gauge_id= ",i5," location=( ",1e15.7," ",1e15.7," ) num_eqn= ",i2)
+                    ! write(OUTGAUGEUNIT, 101) 
 
-               close(OUTGAUGEUNIT)
+                    if (allocated(gauges(i)%q_out_vars)) then
+                        write(column_label, "(A22, i2, A15, i2, A14)")         &
+                                              "('# level, time, q[', ",        &
+                                              size(gauges(i)%q_out_vars, 1),   &
+                                              "i2, '], aux[', ",               &
+                                              size(gauges(i)%aux_out_vars, 1), &
+                                              "i2, '], eta')"
+
+                    write(OUTGAUGEUNIT, column_label) 
+                    (gauges(i)%q_out_vars(n), n=1, size(gauges(i)%q_out_vars, 1)),  &
+                                                      (gauges(i)%aux_out_vars(n), n=1, size(gauges(i)%aux_out_vars, 1))
+
+                    ! column_labels = , ,"], aux[", ,"])"
+ ! 101                format("# Columns: level time q_vars", , " eta aux_vars")
+                endif
+
+                close(OUTGAUGEUNIT)
 
             end do
 
@@ -279,17 +334,19 @@ contains
   
         implicit none
   
+        ! Input
         real(kind=8), intent(in) ::  q(nvar,mitot,mjtot)
         real(kind=8), intent(in) ::  aux(naux,mitot,mjtot)
         real(kind=8), intent(in) ::  xlow,ylow
         integer, intent(in) ::  nvar,mitot,mjtot,naux,mptr
   
         ! local variables:
-        real(kind=8) :: var(maxvar)
+        integer, parameter :: MAX_VARS = 20
+        real(kind=8) :: var(MAX_VARS), h_interp
         real(kind=8) :: xcent,ycent,xoff,yoff,tgrid,hx,hy
         integer :: level,i,j,ioff,joff,iindex,jindex,ivar, ii,i1,i2
         real(kind=8) :: h(4),drytol2,topo,eta
-        integer :: icell,jcell, index
+        integer :: icell,jcell, index, q_index, aux_index
         integer :: q_var_start, q_var_end, aux_var_start, aux_var_end
   
 !       write(*,*) '+++ in print_gauges with num_gauges, mptr = ',num_gauges,mptr
@@ -378,33 +435,43 @@ contains
                 
                 icell = int(1.d0 + (gauges(ii)%x - xlow) / hx)
                 jcell = int(1.d0 + (gauges(ii)%y - ylow) / hy)
-                ! Loop through the q output first
+                ! Loop through the q and aux 
+                h_interp = h(1)
                 do ivar=q_var_start, q_var_end
                     var(ivar) = q(gauges(ii)%q_out_vars(ivar),icell,jcell) 
                 enddo
-                ! Now do the aux output
                 do ivar=aux_var_start, aux_var_end
-                    var(ivar) = aux(gauges(ii)%aux_out_vars(ivar - q_var_end), icell , jcell)
+                    var(ivar) = aux(gauges(ii)%aux_out_vars(ivar - q_var_end), &
+                                    icell , jcell)
                 end do
 
                 ! This is the bottom layer and we should figure out the
                 ! topography
                 topo = aux(1, icell, jcell)
             else
+                ! Explicitly do depth as we need it below for eta
+                h_interp = (1.d0 - xoff) * (1.d0 - yoff) &
+                               * q(1,iindex,jindex)  &
+                         + xoff*(1.d0 - yoff) * q(1,iindex+1,jindex)  &
+                         + (1.d0 - xoff) * yoff * q(1,iindex,jindex+1)  &
+                         + xoff * yoff * q(1,iindex+1,jindex+1)
+
                 ! Linear interpolation between four cells
                 do ivar=q_var_start, q_var_end
+                    q_index = gauges(ii)%q_out_vars(ivar)
                     var(ivar) = (1.d0 - xoff) * (1.d0 - yoff) &
-                               * q(gauges(ii)%q_out_vars(ivar),iindex,jindex)  &
-                    + xoff*(1.d0 - yoff) * q(gauges(ii)%q_out_vars(ivar),iindex+1,jindex)  &
-                    + (1.d0 - xoff) * yoff * q(gauges(ii)%q_out_vars(ivar),iindex,jindex+1)  &
-                    + xoff * yoff * q(gauges(ii)%q_out_vars(ivar),iindex+1,jindex+1)
+                               * q(q_index,iindex,jindex)  &
+                    + xoff*(1.d0 - yoff) * q(q_index,iindex+1,jindex)  &
+                    + (1.d0 - xoff) * yoff * q(q_index,iindex,jindex+1)  &
+                    + xoff * yoff * q(q_index,iindex+1,jindex+1)
                 end do
                 do ivar=aux_var_start, aux_var_end
+                    aux_index = gauges(ii)%aux_out_vars(ivar - q_var_end)
                     var(ivar) = (1.d0 - xoff) * (1.d0 - yoff) &
-                               * aux(gauges(ii)%aux_out_vars(ivar - q_var_end),iindex,jindex)  &
-                    + xoff*(1.d0 - yoff) * aux(gauges(ii)%aux_out_vars(ivar - q_var_end),iindex+1,jindex)  &
-                    + (1.d0 - xoff) * yoff * aux(gauges(ii)%aux_out_vars(ivar - q_var_end),iindex,jindex+1)  &
-                    + xoff * yoff * aux(gauges(ii)%aux_out_vars(ivar - q_var_end),iindex+1,jindex+1)
+                               * aux(aux_index,iindex,jindex)  &
+                    + xoff*(1.d0 - yoff) * aux(aux_index,iindex+1,jindex)  &
+                    + (1.d0 - xoff) * yoff * aux(aux_index,iindex,jindex+1)  &
+                    + xoff * yoff * aux(aux_index,iindex+1,jindex+1)
                 end do
                 topo = (1.d0 - xoff) * (1.d0 - yoff)  &
                         * aux(1,iindex,jindex)  &
@@ -414,7 +481,7 @@ contains
             endif
 
             ! Extract surfaces
-            eta = var(1) + topo
+            eta = h_interp + topo
 
             ! Zero out tiny values to prevent later problems reading data,
             ! as done in valout.f
@@ -428,13 +495,10 @@ contains
      
             gauges(ii)%level(index) = level
             gauges(ii)%data(1,index) = tgrid
-            do j = q_var_start, q_var_end
+            do j = q_var_start, aux_var_end
                 gauges(ii)%data(1 + j, index) = var(j)
             end do
             gauges(ii)%data(gauges(ii)%num_out_vars + 2, index) = eta
-            do j = aux_var_start + 1, aux_var_end + 1
-                gauges(ii)%data(1 + j, index) = var(j - 1)
-            end do
             
             gauges(ii)%buffer_index = index + 1
             if (gauges(ii)%buffer_index > MAX_BUFFER) then
@@ -459,28 +523,36 @@ contains
         integer :: omp_get_thread_num, mythread
         character(len=32) :: out_format
 
-        ! Construct output format based on number of output variables and request format
-        write(out_format, "(A7, i2, A6, A1)") "(i5.2,",         &
-               gauges(gauge_num)%num_out_vars + 2, gauges(gauge_num)%format, ")"
-
         ! Open unit dependent on thread number
         mythread = 0
 !$      mythread = omp_get_thread_num()
         myunit = OUTGAUGEUNIT + mythread
-        open(unit=myunit, file=gauges(gauge_num)%file_name, status='old', &
-                          position='append', form='formatted')
-      
-        ! Loop through gauge's buffer writing out all available data.  Also
-        ! reset buffer_index back to beginning of buffer since we are emptying
-        ! the buffer here
-        do j = 1, gauges(gauge_num)%buffer_index - 1
-            write(myunit, out_format) gauges(gauge_num)%level(j),    &
-                (gauges(gauge_num)%data(k, j), k=1, gauges(gauge_num)%num_out_vars + 2)
-        end do
-        gauges(gauge_num)%buffer_index = 1                        
 
-        ! close file
-        close(myunit)
+        ! ASCII output
+        if (gauges(gauge_num)%file_format == 1) then
+            ! Construct output format based on number of output variables and
+            ! request format
+            write(out_format, "(A7, i2, A6, A1)") "(i5.2,",         &
+               gauges(gauge_num)%num_out_vars + 2, gauges(gauge_num)%display_format, ")"
+
+            open(unit=myunit, file=gauges(gauge_num)%file_name, status='old', &
+                              position='append', form='formatted')
+          
+            ! Loop through gauge's buffer writing out all available data.  Also
+            ! reset buffer_index back to beginning of buffer since we are emptying
+            ! the buffer here
+            do j = 1, gauges(gauge_num)%buffer_index - 1
+                write(myunit, out_format) gauges(gauge_num)%level(j),    &
+                    (gauges(gauge_num)%data(k, j), k=1, gauges(gauge_num)%num_out_vars + 2)
+            end do
+            gauges(gauge_num)%buffer_index = 1                        
+
+            ! close file
+            close(myunit)
+        else
+            print *, "Unhandled file format ", gauges(gauge_num)%file_format
+            stop
+        end if
 
     end subroutine print_gauges_and_reset_nextLoc
 
