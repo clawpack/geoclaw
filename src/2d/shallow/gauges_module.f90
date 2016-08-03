@@ -58,8 +58,8 @@ module gauges_module
         ! Output settings
         integer :: file_format
         character(len=10) :: display_format
-        integer, allocatable :: q_out_vars(:)
-        integer, allocatable :: aux_out_vars(:)
+        logical, allocatable :: q_out_vars(:)
+        logical, allocatable :: aux_out_vars(:)
         integer :: num_out_vars
 
         ! Data buffers - data holds output and time
@@ -82,7 +82,7 @@ contains
     subroutine set_gauges(restart, nvar, fname)
 
         use amr_module, only: maxgr
-        use utility_module, only: get_value_count, parse_values
+        use utility_module, only: get_value_count_alt, parse_values
 
         implicit none
 
@@ -92,9 +92,11 @@ contains
         integer, intent(in) :: nvar
 
         ! Locals
-        integer :: i, ipos, idigit, inum, n, num_fields
+        integer :: i, ipos, idigit, inum, n, num_fields, index
         integer, parameter :: iunit = 7
-        character(len=128) :: line, column_label
+        character(len=128) :: line
+        character(len=4) temp_string
+        character(len=20) :: q_column, aux_column
         real(kind=8) :: values(10)
 
         if (.not.module_setup) then
@@ -129,43 +131,65 @@ contains
             read(iunit, *)
             do i=1, num_gauges
                 read(iunit, "(a)") line
-                call parse_values(line, num_fields, values)
-                if (int(values(1)) == -1) then
-                    ! Output all q values
-                    num_fields = nvar
-                    do n=1, nvar
-                        values(n) = n
-                    end do
-                else if (int(values(1)) == 0) then
-                    ! Output no q values
-                    num_fields = 0
-                end if
+                num_fields = get_value_count_alt(line)
                 allocate(gauges(i)%q_out_vars(num_fields))
-                do n=1, num_fields
-                    gauges(i)%q_out_vars(n) = int(values(n))
+                read(line, *) gauges(i)%q_out_vars
+                
+                gauges(i)%num_out_vars = 0
+                do n=1, size(gauges(i)%q_out_vars, 1)
+                    if (gauges(i)%q_out_vars(n)) then
+                        gauges(i)%num_out_vars = gauges(i)%num_out_vars + 1
+                    end if  
                 end do
+
+                ! call parse_values(line, num_fields, values)
+                ! if (int(values(1)) == -1) then
+                !     ! Output all q values
+                !     num_fields = nvar
+                !     do n=1, nvar
+                !         values(n) = n
+                !     end do
+                ! else if (int(values(1)) == 0) then
+                !     ! Output no q values
+                !     num_fields = 0
+                ! end if
+                ! allocate(gauges(i)%q_out_vars(num_fields))
+                ! do n=1, num_fields
+                !     gauges(i)%q_out_vars(n) = int(values(n))
+                ! end do
             end do
 
             ! Read in aux fields
             read(iunit, *)
             do i=1, num_gauges
                 read(iunit, "(a)") line
-                call parse_values(line, num_fields, values)
-                if (int(values(1)) == 0) then
-                    ! Output no aux values
-                    num_fields = 0
-                end if
+                num_fields = get_value_count_alt(line)
                 allocate(gauges(i)%aux_out_vars(num_fields))
-                do n=1, num_fields
-                    gauges(i)%aux_out_vars(n) = int(values(n))
+                read(line, *) gauges(i)%aux_out_vars
+
+                do n=1, size(gauges(i)%aux_out_vars, 1)
+                    if (gauges(i)%aux_out_vars(n)) then
+                        gauges(i)%num_out_vars = gauges(i)%num_out_vars + 1
+                    end if  
                 end do
 
+                ! call parse_values(line, num_fields, values)
+                ! if (int(values(1)) == 0) then
+                !     ! Output no aux values
+                !     num_fields = 0
+                ! end if
+                ! allocate(gauges(i)%aux_out_vars(num_fields))
+                ! do n=1, num_fields
+                !     gauges(i)%aux_out_vars(n) = int(values(n))
+                ! end do
+
                 ! Also count number of total vars here
-                gauges(i)%num_out_vars = size(gauges(i)%q_out_vars, 1) +   &
-                                         size(gauges(i)%aux_out_vars, 1)
+                ! gauges(i)%num_out_vars = size(gauges(i)%q_out_vars, 1) +   &
+                !                          size(gauges(i)%aux_out_vars, 1)
 
                 ! Allocate data buffer - time + num_out_vars + eta
                 allocate(gauges(i)%data(gauges(i)%num_out_vars + 2, MAX_BUFFER))
+                print *, "data size ", i, ": (", gauges(i)%num_out_vars + 2, ", ", MAX_BUFFER, ")"
             end do
 
             close(iunit)
@@ -192,20 +216,30 @@ contains
  100                format("# gauge_id= ",i5," location=( ",1e15.7," ",1e15.7," ) num_eqn= ",i2)
                     ! write(OUTGAUGEUNIT, 101) 
 
-                    if (allocated(gauges(i)%q_out_vars)) then
-                        write(column_label, "(A22, i2, A15, i2, A14)")         &
-                                              "('# level, time, q[', ",        &
-                                              size(gauges(i)%q_out_vars, 1),   &
-                                              "i2, '], aux[', ",               &
-                                              size(gauges(i)%aux_out_vars, 1), &
-                                              "i2, '], eta')"
+                    ! Construct column labels
+                    index = 0
+                    q_column = "["
+                    do n=1, size(gauges(i)%q_out_vars, 1)
+                        if (gauges(i)%q_out_vars(n)) then
+                            write(q_column(3 * index + 2:4 + 3 * index), "(i3)") n
+                            index = index + 1
+                        end if  
+                    end do
+                    q_column(3 * index + 2:4 + 3 * index) = "]"
 
-                    write(OUTGAUGEUNIT, column_label) 
-                    (gauges(i)%q_out_vars(n), n=1, size(gauges(i)%q_out_vars, 1)),  &
-                                                      (gauges(i)%aux_out_vars(n), n=1, size(gauges(i)%aux_out_vars, 1))
+                    aux_column = "["
+                    index = 0
+                    do n=1, size(gauges(i)%aux_out_vars, 1)
+                        if (gauges(i)%aux_out_vars(n)) then
+                            write(aux_column(3 * index + 2:4 + 3 * index), "(i3)") n
+                            index = index + 1
+                        end if  
+                    end do
+                    aux_column(3 * index + 2:4 + 3 * index) = "]"
 
-                    ! column_labels = , ,"], aux[", ,"])"
- ! 101                format("# Columns: level time q_vars", , " eta aux_vars")
+                    write(OUTGAUGEUNIT, *) "# level, time, q",             &
+                                           trim(q_column), ", aux",       &
+                                           trim(aux_column), ", eta"
                 endif
 
                 close(OUTGAUGEUNIT)
@@ -346,8 +380,8 @@ contains
         real(kind=8) :: xcent,ycent,xoff,yoff,tgrid,hx,hy
         integer :: level,i,j,ioff,joff,iindex,jindex,ivar, ii,i1,i2
         real(kind=8) :: h(4),drytol2,topo,eta
-        integer :: icell,jcell, index, q_index, aux_index
-        integer :: q_var_start, q_var_end, aux_var_start, aux_var_end
+        integer :: icell,jcell, index
+        integer :: var_index
   
 !       write(*,*) '+++ in print_gauges with num_gauges, mptr = ',num_gauges,mptr
   
@@ -419,11 +453,6 @@ contains
             h(2) = q(1, iindex + 1, jindex) 
             h(3) = q(1, iindex,     jindex + 1)
             h(4) = q(1, iindex + 1, jindex + 1) 
-            
-            q_var_start = 1
-            q_var_end = size(gauges(ii)%q_out_vars, 1)
-            aux_var_start = q_var_end + 1
-            aux_var_end = gauges(ii)%num_out_vars
 
             if ((h(1) < drytol2) .or.  &
                 (h(2) < drytol2) .or.  &
@@ -435,50 +464,75 @@ contains
                 
                 icell = int(1.d0 + (gauges(ii)%x - xlow) / hx)
                 jcell = int(1.d0 + (gauges(ii)%y - ylow) / hy)
+                
                 ! Loop through the q and aux 
-                h_interp = h(1)
-                do ivar=q_var_start, q_var_end
-                    var(ivar) = q(gauges(ii)%q_out_vars(ivar),icell,jcell) 
+                h_interp = q(1, icell, jcell)
+                var_index = 0
+                do ivar=1, size(gauges(ii)%q_out_vars, 1)
+                    if (gauges(ii)%q_out_vars(ivar)) then
+                        var_index = var_index + 1
+                        var(var_index) = q(ivar, icell, jcell) 
+                    end if
                 enddo
-                do ivar=aux_var_start, aux_var_end
-                    var(ivar) = aux(gauges(ii)%aux_out_vars(ivar - q_var_end), &
-                                    icell , jcell)
+                do ivar=1, size(gauges(ii)%aux_out_vars, 1)
+                    if (gauges(ii)%aux_out_vars(ivar)) then
+                        var_index = var_index + 1
+                        var(var_index) = aux(ivar, icell , jcell)
+                    end if
                 end do
 
                 ! This is the bottom layer and we should figure out the
                 ! topography
                 topo = aux(1, icell, jcell)
             else
-                ! Explicitly do depth as we need it below for eta
-                h_interp = (1.d0 - xoff) * (1.d0 - yoff) &
-                               * q(1,iindex,jindex)  &
-                         + xoff*(1.d0 - yoff) * q(1,iindex+1,jindex)  &
-                         + (1.d0 - xoff) * yoff * q(1,iindex,jindex+1)  &
-                         + xoff * yoff * q(1,iindex+1,jindex+1)
-
+                var_index = 0
                 ! Linear interpolation between four cells
-                do ivar=q_var_start, q_var_end
-                    q_index = gauges(ii)%q_out_vars(ivar)
-                    var(ivar) = (1.d0 - xoff) * (1.d0 - yoff) &
-                               * q(q_index,iindex,jindex)  &
-                    + xoff*(1.d0 - yoff) * q(q_index,iindex+1,jindex)  &
-                    + (1.d0 - xoff) * yoff * q(q_index,iindex,jindex+1)  &
-                    + xoff * yoff * q(q_index,iindex+1,jindex+1)
+                do ivar=1, size(gauges(ii)%q_out_vars, 1)
+                    if (gauges(ii)%q_out_vars(ivar)) then
+                        var_index = var_index + 1
+                        var(var_index) = (1.d0 - xoff) * (1.d0 - yoff) &
+                                          * q(ivar,iindex,jindex)  &
+                          + xoff*(1.d0 - yoff) * q(ivar,iindex+1,jindex)  &
+                          + (1.d0 - xoff) * yoff * q(ivar,iindex,jindex+1)  &
+                          + xoff * yoff * q(ivar,iindex+1,jindex+1)
+                    end if
                 end do
-                do ivar=aux_var_start, aux_var_end
-                    aux_index = gauges(ii)%aux_out_vars(ivar - q_var_end)
-                    var(ivar) = (1.d0 - xoff) * (1.d0 - yoff) &
-                               * aux(aux_index,iindex,jindex)  &
-                    + xoff*(1.d0 - yoff) * aux(aux_index,iindex+1,jindex)  &
-                    + (1.d0 - xoff) * yoff * aux(aux_index,iindex,jindex+1)  &
-                    + xoff * yoff * aux(aux_index,iindex+1,jindex+1)
+                do ivar=1, size(gauges(ii)%aux_out_vars, 1)
+                    if (gauges(ii)%aux_out_vars(ivar)) then
+                        var_index = var_index + 1
+                        var(var_index) = (1.d0 - xoff) * (1.d0 - yoff) &
+                               * aux(ivar,iindex,jindex)  &
+                        + xoff*(1.d0 - yoff) * aux(ivar,iindex+1,jindex)  &
+                        + (1.d0 - xoff) * yoff * aux(ivar,iindex,jindex+1)  &
+                        + xoff * yoff * aux(ivar,iindex+1,jindex+1)
+                    end if
                 end do
                 topo = (1.d0 - xoff) * (1.d0 - yoff)  &
                         * aux(1,iindex,jindex)  &
                      + xoff * (1.d0 - yoff) * aux(1,iindex+1,jindex)  &
                      + (1.d0 - xoff) * yoff * aux(1,iindex,jindex+1)  &
                      + xoff * yoff * aux(1,iindex+1,jindex+1)
+
+                ! Explicitly do depth in case the depth is not computed above
+                if (.not. gauges(ii)%q_out_vars(1)) then
+                    h_interp = (1.d0 - xoff) * (1.d0 - yoff) &
+                               * q(1,iindex,jindex)  &
+                         + xoff*(1.d0 - yoff) * q(1,iindex+1,jindex)  &
+                         + (1.d0 - xoff) * yoff * q(1,iindex,jindex+1)  &
+                         + xoff * yoff * q(1,iindex+1,jindex+1)
+                else
+                    h_interp = var(1)
+                end if
+                
             endif
+
+            ! Check to make sure we grabbed all the values
+            if (gauges(ii)%num_out_vars /= var_index) then
+                print *, gauges(ii)%num_out_vars, var_index
+                print *, gauges(ii)%q_out_vars
+                print *, gauges(ii)%aux_out_vars
+                stop "Somehow we did not grab all the values we wanted..."
+            end if
 
             ! Extract surfaces
             eta = h_interp + topo
@@ -495,7 +549,7 @@ contains
      
             gauges(ii)%level(index) = level
             gauges(ii)%data(1,index) = tgrid
-            do j = q_var_start, aux_var_end
+            do j = 1, gauges(ii)%num_out_vars
                 gauges(ii)%data(1 + j, index) = var(j)
             end do
             gauges(ii)%data(gauges(ii)%num_out_vars + 2, index) = eta
