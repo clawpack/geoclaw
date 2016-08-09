@@ -54,6 +54,35 @@ module storm_module
     type(stommel_storm_type), save :: stommel_storm
     type(explicit_storm_type), save :: explicit_storm
 
+    ! Function pointers to location and direction functions
+    abstract interface
+        function storm_location(t) result(location)
+            implicit none
+            real(kind=8), intent(in) :: t
+            real(kind=8) :: location(2)
+        end function storm_location
+    end interface
+
+    abstract interface
+        real(kind=8) function storm_direction(t) result(theta)
+            implicit none
+            real(kind=8), intent(in) :: t
+        end function storm_direction
+    end interface
+
+    abstract interface
+        subroutine set_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,t,aux)
+            implicit none
+            integer, intent(in) :: maux, mbc, mx, my
+            real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
+            real(kind=8), intent(in out) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
+        end subroutine set_storm_fields
+    end interface
+
+    procedure (storm_location), pointer :: location
+    procedure (storm_direction), pointer :: direction
+    procedure (set_storm_fields), pointer :: set_fields
+
     ! Store physics here for ease of use
     ! WARNING:  If these do not agree with the storm data objects things will break!
     real(kind=8) :: rho_air, ambient_pressure
@@ -81,10 +110,17 @@ contains
 
         use utility_module, only: get_value_count
 
-        use holland_storm_module, only: set_holland_storm
-        use constant_storm_module, only: set_constant_storm
-        use stommel_storm_module, only: set_stommel_storm
-        use explicit_storm_module, only: set_explicit_storm
+        use holland_storm_module, only: holland_storm_location
+        use holland_storm_module, only: holland_storm_direction
+        use holland_storm_module, only: set_holland_storm_fields
+
+        use constant_storm_module, only: constant_storm_location
+        use constant_storm_module, only: constant_storm_direction
+        use constant_storm_module, only: set_constant_storm_fields
+
+        use wrf_storm_module, only: wrf_storm_location
+        use wrf_storm_module, only: wrf_storm_direction
+        use wrf_storm_module, only: set_wrf_storm
 
         use geoclaw_module, only: pi
 
@@ -180,20 +216,37 @@ contains
             write(log_unit,*) "Storm Type = ", storm_type
             write(log_unit,*) "  file = ", storm_file_path
 
-            ! Read in hurricane track data from file
-            if (storm_type == 0) then
-                ! No storm will be used
-            else if (storm_type == 1) then
-                ! Track file with Holland reconstruction
-                call set_holland_storm(storm_file_path,holland_storm,log_unit)
-                ! Set rho_air and ambient pressure in storms
-            else if (storm_type == 2) then
-                ! constant track and holland reconstruction
-                call set_constant_storm(storm_file_path,constant_storm,log_unit)
-                ! Set rho_air and ambient pressure in storms
-            else if (storm_type == 3) then
-                ! Stommel wind field
-                call set_stommel_storm(storm_file_path,stommel_storm,log_unit)
+            ! Read in hurricane track data from file and set appropriate
+            ! function pointers
+            select case(storm_type)
+                case(0)
+                    ! No storm will be used
+                    location => empty_storm_location
+                    direction => empty_storm_direction
+                    set_fields => set_empty_storm_fields
+
+                case(1)
+                    ! Track file with Holland reconstruction
+                    call set_holland_storm(storm_file_path, holland_storm,    &
+                                                log_unit)
+                    location => holland_storm_location
+                    direction => holland_storm_direction
+                    set_fields => set_holland_storm_fields
+
+                case(2)
+                    ! constant track and holland reconstruction
+                    call set_constant_storm(storm_file_path, constant_storm,  &
+                                                log_unit)
+                    location => constant_storm_location
+                    direction => constant_storm_direction
+                    set_fields => set_constant_storm_fields
+
+                case(3)
+                    ! WRF input data
+                    call set_wrf_storm(storm_file_path, wrf_storm, log_unit)
+                    location => holland_storm_location ! *** IS THIS RIGHT?
+                    direction => holland_storm_direction
+                    set_fields => set_wrf_storm_fields
             else
                 print *,"Invalid storm type ",storm_type," provided."
                 stop
@@ -330,16 +383,28 @@ contains
         wind_drag = 0.d0
     end function no_wind_drag
 
+    ! ==========================================================================
+    ! Output storm location into track file
+    subroutine output_storm_location(t)
 
+        implicit none
+
+        real(kind=8), intent(in) :: t
+        
+        ! We open this here so that the file flushes and writes to disk
+        open(unit=track_unit,file="fort.track",action="write",position='append')
+
+        write(track_unit,"(4e26.16)") t, location(t), direction(t)
+        
+        close(track_unit)
+
+    end subroutine output_storm_location
 
     ! ==========================================================================
-    ! Wrapper functions for all storm types
-    function storm_location(t) result(location)
+    ! Blank storm info functions - only used when no storm type is set
+    function empty_storm_location(t) result(location)
 
         use amr_module, only: rinfinity
-
-        use holland_storm_module, only: holland_storm_location
-        use constant_storm_module, only: constant_storm_location
 
         implicit none
 
@@ -349,20 +414,11 @@ contains
         ! Output
         real(kind=8) :: location(2)
 
-        select case(storm_type)
-            case(0)
-                location = [rinfinity,rinfinity]
-            case(1)
-                location = holland_storm_location(t,holland_storm)
-            case(2)
-                location = constant_storm_location(t,constant_storm)
-            case(3)
-                location = [rinfinity,rinfinity]
-        end select
+        location = [rinfinity,rinfinity]
 
-    end function storm_location
+    end function empty_storm_location
 
-    real(kind=8) function storm_direction(t) result(theta)
+    real(kind=8) function empty_storm_direction(t) result(theta)
         
         use amr_module, only: rinfinity
         use holland_storm_module, only: holland_storm_direction
@@ -373,27 +429,11 @@ contains
         ! Input
         real(kind=8), intent(in) :: t
 
-        select case(storm_type)
-            case(0)
-                theta = rinfinity
-            case(1)
-                theta = holland_storm_direction(t,holland_storm)
-            case(2)
-                theta = constant_storm_direction(t,constant_storm)
-            case(3)
-                theta = rinfinity
-        end select
+        theta = rinfinity
 
-    end function storm_direction
+    end function empty_storm_direction
 
-
-    subroutine set_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,&
-                                t,aux)
-
-        use holland_storm_module, only: set_holland_storm_fields
-        use constant_storm_module, only: set_constant_storm_fields
-        use stommel_storm_module, only: set_stommel_storm_fields
-        use explicit_storm_module, only: set_explicit_storm_fields
+    subroutine set_empty_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,t,aux)
 
         implicit none
 
@@ -402,42 +442,6 @@ contains
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
         real(kind=8), intent(in out) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
 
-        select case(storm_type)
-            case(0)
-                continue
-            case(1)
-                call set_holland_storm_fields(maux,mbc,mx,my, &
-                                    xlower,ylower,dx,dy,t,aux, wind_index, &
-                                    pressure_index, holland_storm)
-            case(2)
-                call set_constant_storm_fields(maux,mbc,mx,my, &
-                                    xlower,ylower,dx,dy,t,aux, wind_index, &
-                                    pressure_index, constant_storm)
-            case(3)
-                call set_stommel_storm_fields(maux,mbc,mx,my, &
-                                    xlower,ylower,dx,dy,t,aux, wind_index, &
-                                    pressure_index, stommel_storm)
-            case(4)
-                call set_explicit_storm_fields(maux,mbc,mx,my, &
-                                    xlower,ylower,dx,dy,t,aux, wind_index, &
-                                    pressure_index, explicit_storm)
-        end select
-
-    end subroutine set_storm_fields
-
-    subroutine output_storm_location(t)
-
-        implicit none
-
-        real(kind=8), intent(in) :: t
-        
-        ! We open this here so that the file flushes and writes to disk
-        open(unit=track_unit,file="fort.track",action="write",position='append')
-
-        write(track_unit,"(4e26.16)") t,storm_location(t),storm_direction(t)
-        
-        close(track_unit)
-
-    end subroutine output_storm_location
+    end subroutine set_empty_storm_fields
 
 end module storm_module

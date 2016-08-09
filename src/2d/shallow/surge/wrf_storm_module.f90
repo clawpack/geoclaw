@@ -100,7 +100,7 @@ contains
 
         ! Storm type only works on lat-long coordinate systems
         if (coordinate_system /= 2) then
-            stop "explicit storm type does only works on lat-long coordinates."
+            stop "explicit storm type only works on lat-long coordinates."
         endif
 
         ! We need to count two things:
