@@ -334,7 +334,7 @@ c                   adjust time steps for this and finer levels
                      call check(ncycle,time,nvar,naux)
                      if (num_gauges .gt. 0) then
                         do ii = 1, num_gauges
-                           call print_gauges_and_reset_nextLoc(ii, nvar)
+                           call print_gauges_and_reset_nextLoc(ii)
                         end do
                      endif
                      stop
@@ -400,7 +400,7 @@ c             ! use same alg. as when setting refinement when first make new fin
                 dumpchk = .true.
                if (num_gauges .gt. 0) then
                   do ii = 1, num_gauges
-                     call print_gauges_and_reset_nextLoc(ii, nvar)
+                     call print_gauges_and_reset_nextLoc(ii)
                   end do
                endif
        endif
@@ -410,7 +410,7 @@ c             ! use same alg. as when setting refinement when first make new fin
          if (printout) call outtre(mstart,.true.,nvar,naux)
          if (num_gauges .gt. 0) then
             do ii = 1, num_gauges
-               call print_gauges_and_reset_nextLoc(ii, nvar)
+               call print_gauges_and_reset_nextLoc(ii)
             end do
          endif
        endif
@@ -444,7 +444,7 @@ c
            if (printout) call outtre(mstart,.true.,nvar,naux)
            if (num_gauges .gt. 0) then
               do ii = 1, num_gauges
-                 call print_gauges_and_reset_nextLoc(ii, nvar)
+                 call print_gauges_and_reset_nextLoc(ii)
               end do
            endif
       endif
@@ -460,7 +460,7 @@ c
       endif
       if (num_gauges .gt. 0) then
          do ii = 1, num_gauges
-            call print_gauges_and_reset_nextLoc(ii, nvar)
+            call print_gauges_and_reset_nextLoc(ii)
          end do
       endif
 

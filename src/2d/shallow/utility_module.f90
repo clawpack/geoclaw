@@ -10,7 +10,7 @@ module utility_module
 contains
 
     ! Returns number of arguments in list, assumes arbitrary number of white 
-    ! space as delimiter
+    ! space as delimiter and cuts off the "=:"
     integer function get_value_count(line) result(count)
 
         implicit none
@@ -38,6 +38,35 @@ contains
 
     end function get_value_count
 
+    ! Returns number of arguments in list, assumes arbitrary number of white 
+    ! space as delimiter, assumes only that there are values counted on the line
+    integer function get_value_count_alt(line) result(count)
+
+        implicit none
+
+        character(len=*), intent(in) :: line
+
+        character(len=200) :: search_buffer
+        integer :: i
+        logical :: found
+
+        count = 1
+
+        search_buffer = line
+
+        do i=1,len_trim(search_buffer)
+            if (search_buffer(i:i) == " ") then
+                if (.not. found) then
+                    found = .true.
+                    count = count + 1
+                endif
+            else
+                found = .false.
+            endif
+        enddo
+
+    end function get_value_count_alt
+
     ! Converts seconds to days truncating at the second decimal place
     real(kind=8) pure function convert2days(seconds) result(days)
         
@@ -47,7 +76,6 @@ contains
         days = real(int(seconds * 1.d2 / 8.64d4) / 1.d2, kind=8)
 
     end function convert2days
-
 
     !======================================
     subroutine parse_values(str, n, values)
