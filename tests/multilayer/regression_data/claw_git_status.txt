@@ -1,0 +1,96 @@
+Clawpack Git Status 
+Diffs can be found in /Users/mandli/src/clawpack/geoclaw/tests/multilayer/regression_data/claw_git_diffs.txt
+
+Sun, 02 Oct 2016 11:09:21 EDT
+$CLAW = /Users/mandli/src/clawpack
+$FC = not set
+
+
+===========
+classic
+===========
+/Users/mandli/src/clawpack/classic
+
+--- last commit ---
+05d030e Merge pull request #73 from mandli/new-test-location
+
+--- branch and status ---
+## new-test-location...clawpack/master
+
+
+===========
+amrclaw
+===========
+/Users/mandli/src/clawpack/amrclaw
+
+--- last commit ---
+cab6449 Merge pull request #174 from rjleveque/test_merge_fixProperNesting
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+clawutil
+===========
+/Users/mandli/src/clawpack/clawutil
+
+--- last commit ---
+01f5580 Add git status
+
+--- branch and status ---
+## gauge-test-update...clawpack/master [ahead 4]
+
+
+===========
+pyclaw
+===========
+/Users/mandli/src/clawpack/pyclaw
+
+--- last commit ---
+314fd93 Merge pull request #541 from mandli/add-new-gauges
+
+--- branch and status ---
+## gauge-doc-additions...clawpack/master
+MM src/pyclaw/gauges.py
+
+
+===========
+visclaw
+===========
+/Users/mandli/src/clawpack/visclaw
+
+--- last commit ---
+72ee0db Merge pull request #187 from rjleveque/remove_ioff
+
+--- branch and status ---
+## master...mandli/master [ahead 52]
+
+
+===========
+riemann
+===========
+/Users/mandli/src/clawpack/riemann
+
+--- last commit ---
+038973f Merge pull request #1 from mandli/geoclaw_riemann_utils_update
+
+--- branch and status ---
+## geoclaw_riemann_utils_update...rjl/geoclaw_riemann_utils_update
+
+
+===========
+geoclaw
+===========
+/Users/mandli/src/clawpack/geoclaw
+
+--- last commit ---
+6005a3b Update bowl-slosh regression data
+
+--- branch and status ---
+## update-regression-data...clawpack/master [ahead 1]
+ M tests/multilayer/regression_data/gauge00000.txt
+ M tests/multilayer/regression_data/gauge00001.txt
+ M tests/multilayer/regression_data/gauge00002.txt
+ M tests/multilayer/regression_data/gauge00003.txt
+ M tests/multilayer/regression_data/gauge00004.txt
