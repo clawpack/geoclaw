@@ -1,4 +1,5 @@
 #get the directory of this makefile
+CLASSIC:=$(CLAW)/classic/src/
 AMRLIB:=$(CLAW)/amrclaw/src/2d
 GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
 
@@ -10,7 +11,7 @@ COMMON_MODULES += \
 
 #list of common sources needed for geoclaw codes (subset of amr dependencies)
 COMMON_MODULES += \
- $(GEOLIB)/utility_module.f90 \
+ $(CLASSIC)/utility_module.f90 \
  $(GEOLIB)/geoclaw_module.f90 \
  $(GEOLIB)/gauges_module.f90 \
  $(GEOLIB)/topo_module.f90 \
