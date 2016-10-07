@@ -43,7 +43,7 @@ module gauges_module
     integer, parameter :: OUTGAUGEUNIT = 89
     integer :: num_gauges
 
-    integer, parameter :: MAX_BUFFER = 10
+    integer, parameter :: MAX_BUFFER = 1000
 
     ! Gauge data types
     type gauge_type
@@ -141,22 +141,6 @@ contains
                         gauges(i)%num_out_vars = gauges(i)%num_out_vars + 1
                     end if  
                 end do
-
-                ! call parse_values(line, num_fields, values)
-                ! if (int(values(1)) == -1) then
-                !     ! Output all q values
-                !     num_fields = nvar
-                !     do n=1, nvar
-                !         values(n) = n
-                !     end do
-                ! else if (int(values(1)) == 0) then
-                !     ! Output no q values
-                !     num_fields = 0
-                ! end if
-                ! allocate(gauges(i)%q_out_vars(num_fields))
-                ! do n=1, num_fields
-                !     gauges(i)%q_out_vars(n) = int(values(n))
-                ! end do
             end do
 
             ! Read in aux fields
@@ -172,20 +156,6 @@ contains
                         gauges(i)%num_out_vars = gauges(i)%num_out_vars + 1
                     end if  
                 end do
-
-                ! call parse_values(line, num_fields, values)
-                ! if (int(values(1)) == 0) then
-                !     ! Output no aux values
-                !     num_fields = 0
-                ! end if
-                ! allocate(gauges(i)%aux_out_vars(num_fields))
-                ! do n=1, num_fields
-                !     gauges(i)%aux_out_vars(n) = int(values(n))
-                ! end do
-
-                ! Also count number of total vars here
-                ! gauges(i)%num_out_vars = size(gauges(i)%q_out_vars, 1) +   &
-                !                          size(gauges(i)%aux_out_vars, 1)
 
                 ! Allocate data buffer - time + num_out_vars + eta
                 allocate(gauges(i)%data(gauges(i)%num_out_vars + 2, MAX_BUFFER))
@@ -255,7 +225,7 @@ contains
 !
 ! --------------------------------------------------------------------
 !
-      subroutine setbestsrc()
+    subroutine setbestsrc()
 !
 !     Called every time grids change, to set the best source grid patch
 !     for each gauge, i.e. the finest level patch that includes the gauge.
@@ -264,10 +234,10 @@ contains
 !     grid may have disappeared, we still have to look starting
 !     at coarsest level 1.
 !
-      use amr_module
-      implicit none
+        use amr_module
+        implicit none
 
-      integer :: lev, mptr, i, k1, ki
+        integer :: lev, mptr, i, k1, ki
 
 !
 ! ##  set source grid for each loc from coarsest level to finest.
