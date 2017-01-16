@@ -177,18 +177,27 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                     eta = q(1,i,j) + aux(1,i,j)
 
                     ! Check wave criteria
-                    if (abs(eta - sea_level) > wave_tolerance) then
-                        ! Check to see if we are near shore
-                        if (q(1,i,j) < deep_depth) then
-                            amrflags(i,j) = DOFLAG
-                            cycle x_loop
-                        ! Check if we are allowed to flag in deep water
-                        ! anyway
-                        else if (level < max_level_deep) then
+		    !New method - level specific wave tolerance!
+		    do m=1,min(size(wave_tolerance),mxnest)
+                        if (abs(eta - sea_level) > wave_tolerance(m) .and. level <= m) then
                             amrflags(i,j) = DOFLAG
                             cycle x_loop
                         endif
-                    endif
+                    enddo
+		    
+		    !Old method!
+                    !if (abs(eta - sea_level) > wave_tolerance) then
+                    !    ! Check to see if we are near shore
+                    !    if (q(1,i,j) < deep_depth) then
+                    !        amrflags(i,j) = DOFLAG
+                    !        cycle x_loop
+                    !    ! Check if we are allowed to flag in deep water
+                    !    ! anyway
+                    !    else if (level < max_level_deep) then
+                    !        amrflags(i,j) = DOFLAG
+                    !        cycle x_loop
+                    !    endif
+                    !endif
 
                     ! Check speed criteria, note that it might be useful to
                     ! also have a per layer criteria since this is not

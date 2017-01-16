@@ -11,7 +11,7 @@ module refinement_module
     ! ========================================================================
     !  Refinement Criteria
     ! ========================================================================
-    real(kind=8) :: wave_tolerance
+    real(kind=8), allocatable :: wave_tolerance(:)
     real(kind=8), allocatable :: speed_tolerance(:)
     real(kind=8) :: deep_depth
     integer :: max_level_deep
@@ -59,7 +59,9 @@ contains
             endif
 
             ! Basic criteria
-            read(unit,*) wave_tolerance
+	    read(unit,'(a)') line
+            allocate(wave_tolerance(get_value_count(line)))
+            read(line,*) wave_tolerance
             read(unit,'(a)') line
             allocate(speed_tolerance(get_value_count(line)))
             read(line,*) speed_tolerance
