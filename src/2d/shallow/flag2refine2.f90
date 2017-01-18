@@ -177,7 +177,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                     eta = q(1,i,j) + aux(1,i,j)
 
                     ! Check wave criteria
-		    !New method - level specific wave tolerance
+		    ! New method - level specific wave tolerance
                     do m=1,min(size(wave_tolerance),mxnest)
                         if (abs(eta - sea_level) > wave_tolerance(m) .and. level <= m) then
                             ! Check to see if we are near shore
@@ -192,7 +192,8 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                             endif
                         endif
                     enddo
-		    
+		    ! Check if wave tolerance array size is smaller than max level
+		    ! then refine with the last wave tolerance value for the rest of the levels
 		    if (size(wave_tolerance) < mxnest-1) then
                         if (abs(eta - sea_level) > wave_tolerance(size(wave_tolerance)) .and. level > size(wave_tolerance)) then
                             ! Check to see if we are near shore
