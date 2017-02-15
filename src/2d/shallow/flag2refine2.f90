@@ -61,7 +61,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
 
     ! Generic locals
     integer :: i,j,m
-    real(kind=8) :: x_c,y_c,x_low,y_low,x_hi,y_hi
+    real(kind=8) :: x_c,y_c,x_low,y_low,x_hi,y_hi,mth_level_wave_tolerance, mth_level_speed_tolerance
     real(kind=8) :: speed, eta, ds
 
     ! Storm specific variables
@@ -175,12 +175,22 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
 
                 if (q(1,i,j) > dry_tolerance) then
                     eta = q(1,i,j) + aux(1,i,j)
-
+		   
                     ! Check wave criteria
+
 		    ! New method - level specific wave tolerance
-                    do m=1,min(size(wave_tolerance),mxnest)
-                        if (abs(eta - sea_level) > wave_tolerance(m) .and. level <= m) then
+                    do m=1,mxnest
+                        if (m > size(wave_tolerance)) then
+                            mth_level_wave_tolerance = wave_tolerance(size(wave_tolerance))
+                        else
+                            mth_level_wave_tolerance = wave_tolerance(m)
+                        endif
+
+		    	if (abs(eta - sea_level) > mth_level_wave_tolerance .and. level <= m) then
                             ! Check to see if we are near shore
+		    	    Print *, "Level is ", level
+		    	    Print *, "Wave tolerance is ", mth_level_wave_tolerance
+			    
                             if (q(1,i,j) < deep_depth) then
                                 amrflags(i,j) = DOFLAG
                                 cycle x_loop
@@ -192,29 +202,19 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                             endif
                         endif
                     enddo
-		    ! Check if wave tolerance array size is smaller than max level
-		    ! then refine with the last wave tolerance value for the rest of the levels
-		    if (size(wave_tolerance) < mxnest-1) then
-                        if (abs(eta - sea_level) > wave_tolerance(size(wave_tolerance)) .and. level > size(wave_tolerance)) then
-                            ! Check to see if we are near shore
-                            if (q(1,i,j) < deep_depth) then
-                                amrflags(i,j) = DOFLAG
-                                cycle x_loop
-                            ! Check if we are allowed to flag in deep water
-                            ! anyway
-                            else if (level < max_level_deep) then
-                                amrflags(i,j) = DOFLAG
-                                cycle x_loop
-                            endif
-                        endif
-                    endif
 
                     ! Check speed criteria, note that it might be useful to
                     ! also have a per layer criteria since this is not
                     ! gradient based
                     speed = sqrt(q(2,i,j)**2 + q(3,i,j)**2) / q(1,i,j)
-                    do m=1,min(size(speed_tolerance),mxnest)
-                        if (speed > speed_tolerance(m) .and. level <= m) then
+                    do m=1,mxnest
+                        if (m > size(speed_tolerance)) then
+                            mth_level_speed_tolerance = speed_tolerance(size(speed_tolerance))
+                        else
+                            mth_level_speed_tolerance = speed_tolerance(m)
+                        endif
+
+                        if (speed > mth_level_speed_tolerance .and. level <= m) then
                             amrflags(i,j) = DOFLAG
                             cycle x_loop
                         endif
