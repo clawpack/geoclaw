@@ -1,0 +1,94 @@
+Clawpack Git Status 
+Diffs can be found in /Users/mandli/src/clawpack/geoclaw/tests/netcdf_topo/regression_data/claw_git_diffs.txt
+
+Sun, 12 Feb 2017 16:44:13 EST
+$CLAW = /Users/mandli/src/clawpack
+$FC = gfortran
+
+
+===========
+classic
+===========
+/Users/mandli/src/clawpack/classic
+
+--- last commit ---
+d6e4f9e Merge pull request #75 from mandli/add-utility-module
+
+--- branch and status ---
+## master...clawpack/master [behind 8]
+ M examples/acoustics_1d_example1/Makefile
+ M examples/acoustics_1d_example1/qinit.f90
+
+
+===========
+amrclaw
+===========
+/Users/mandli/src/clawpack/amrclaw
+
+--- last commit ---
+a2e4058 Merge pull request #186 from mandli/expand-gauge-header
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+clawutil
+===========
+/Users/mandli/src/clawpack/clawutil
+
+--- last commit ---
+374096f Merge pull request #116 from rjleveque/whichclaw
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+pyclaw
+===========
+/Users/mandli/src/clawpack/pyclaw
+
+--- last commit ---
+47ffd4b Merge pull request #563 from ketch/working_conda_build
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+visclaw
+===========
+/Users/mandli/src/clawpack/visclaw
+
+--- last commit ---
+2cb717e Merge pull request #194 from rjleveque/move_notebook
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+riemann
+===========
+/Users/mandli/src/clawpack/riemann
+
+--- last commit ---
+8ff40ca Merge pull request #115 from clawpack/python3
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+geoclaw
+===========
+/Users/mandli/src/clawpack/geoclaw
+
+--- last commit ---
+8ae859f Merge pull request #239 from rjleveque/fgmax_interpolate0
+
+--- branch and status ---
+## fix-netcdf-topo-test...clawpack/master
+ M tests/netcdf_topo/Makefile
+ M tests/netcdf_topo/regression_data/gauge00001.txt
