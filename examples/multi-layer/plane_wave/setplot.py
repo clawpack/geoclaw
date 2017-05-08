@@ -123,9 +123,13 @@ def setplot(plotdata=None,  bathy_location=0.15,  bathy_angle=0.0,
     # ========================================================================
     # Axis limits
     #xlimits = [amrdata.xlower,amrdata.xupper]
-    xlimits = [-0.5,0.5]
+    # xlimits = [-0.5,0.5]    # plotting the domain
+    xlimits = [-1.5, 2.5]         # ploting extra space to see edges more clearly
+
     #ylimits = [amrdata.ylower,amrdata.yupper]
-    ylimits = [-0.5,0.5]
+    # ylimits = [-0.5,0.5]    # plotting the domain
+    ylimits = [-1.5, 2.5]        # ploting extra space to see edges more clearly
+    
     eta = [multilayer_data.eta[0],multilayer_data.eta[1]]
     top_surface_limits = [eta[0]-0.03,eta[0]+0.03]
     internal_surface_limits = [eta[1]-0.015,eta[1]+0.015]
@@ -519,6 +523,26 @@ def setplot(plotdata=None,  bathy_location=0.15,  bathy_angle=0.0,
     plotitem.amr_celledges_show = 0
     plotitem.amr_patchedges_show = 0
     plotitem.show = True
+
+    # ========================================================================
+    #  Grid Cells
+    # ========================================================================
+    
+    # Figure for grid cells
+    plotfigure = plotdata.new_plotfigure(name='cells', figno=2)
+
+    # Set up for axes in this figure:
+    plotaxes = plotfigure.new_plotaxes()
+    plotaxes.xlimits = xlimits
+    plotaxes.ylimits = ylimits
+    plotaxes.title = 'Grid patches'
+    plotaxes.scaled = True
+
+    # Set up for item on these axes:
+    plotitem = plotaxes.new_plotitem(plot_type='2d_patch')
+    plotitem.amr_patch_bgcolor = ['#ffeeee', '#eeeeff', '#eeffee']
+    plotitem.amr_celledges_show = [0,0,0]
+    plotitem.amr_patchedges_show = [1,1,1]
     
     # ========================================================================
     #  Vorticity Plot
