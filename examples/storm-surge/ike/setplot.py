@@ -100,7 +100,7 @@ def setplot(plotdata=None):
 
     # Calculate landfall time, off by a day, maybe leap year issue?
     landfall_dt = datetime.datetime(2008,9,13,7) - datetime.datetime(2008,1,1,0)
-    landfall = (landfall_dt.days - 1.0) * 24.0 * 60**2 + landfall_dt.seconds
+    landfall = (landfall_dt.days) * 24.0 * 60**2 + landfall_dt.seconds
 
     # Set afteraxes function
     surge_afteraxes = lambda cd: surgeplot.surge_afteraxes(cd,

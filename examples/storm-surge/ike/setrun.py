@@ -15,7 +15,7 @@ import datetime
 import numpy as np
 
 # Need to adjust the date a bit due to weirdness with leap year (I think)
-ike_landfall = datetime.datetime(2008,9,13 - 1,7) - datetime.datetime(2008,1,1,0)
+ike_landfall = datetime.datetime(2008,9,13,7) - datetime.datetime(2008,1,1,0)
 
 #                           days   s/hour    hours/day            
 days2seconds = lambda days: days * 60.0**2 * 24.0
@@ -252,7 +252,7 @@ def setrun(claw_pkg='geoclaw'):
     # Specify when checkpoint files should be created that can be
     # used to restart a computation.
 
-    clawdata.checkpt_style = 0
+    clawdata.checkpt_style = 0 
 
     if clawdata.checkpt_style == 0:
         # Do not checkpoint at all
