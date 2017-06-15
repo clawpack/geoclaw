@@ -76,11 +76,11 @@ class track_data(object):
 # Gauge functions
 # ==========================================================================
 def gauge_locations(current_data,gaugenos='all'):
-    plt.hold(True)
+    #plt.hold(True)
     gaugetools.plot_gauge_locations(current_data.plotdata, \
                                     gaugenos=gaugenos, format_string='kx', 
                                     add_labels=True, xoffset=0.02, yoffset=0.02)
-    plt.hold(False)
+    #plt.hold(False)
 
 def gaugetopo(current_data):
     q = current_data.q
@@ -119,11 +119,12 @@ def add_zeroline(current_data):
 #  Generic helper functions
 # ==========================================================================
 def bathy_ref_lines(current_data):
-    plt.hold(True)
+#    #plt.hold(True)
     y = [amrdata.ylower,amrdata.yupper]
     for ref_line in ref_lines:
         plt.plot([ref_line,ref_line],y,'y--')
-    plt.hold(False)
+        #plt.hold(True)
+    #plt.hold(False)
 
 
 # ========================================================================
@@ -144,11 +145,11 @@ def days_figure_title(current_data, land_fall=0.0):
 def surge_afteraxes(current_data, track, land_fall=0.0, plot_direction=False):
     x,y,theta = eye_location(current_data,track)
     if x is not None and y is not None:
-        plt.hold(True)
+        #plt.hold(True)
         plt.plot(x,y,'rD',markersize=2)
         if plot_direction:
             plt.quiver(x, y, np.cos(theta), np.sin(theta))
-        plt.hold(False)
+        #plt.hold(False)
     days_figure_title(current_data,land_fall)
 
 def friction(cd):
@@ -159,12 +160,12 @@ def storm_wind(current_data):
         t = current_data.t
         u = wind_x(cd)
         v = wind_y(cd)
-        plt.hold(True)
+        #plt.hold(True)
         Q = plt.quiver(current_data.x[::3,::3],current_data.y[::3,::3],
                     u[::3,::3],v[::3,::3])
         # plt.quiverkey(Q,0.5,0.5,50,r'$50 \frac{m}{s}$',labelpos='W',
         #                 fontproperties={'weight':'bold'})
-        plt.hold(False)
+        #plt.hold(False)
 
 def wind_x(cd):
     return cd.aux[wind_field,:,:]
@@ -184,13 +185,13 @@ def pressure_gradient_y(cd):
     return cd.aux[pressure_field+2,:,:]
     
 def wind_contours(current_data):
-    plt.hold(True)
+    #plt.hold(True)
     w = wind_speed(current_data)
     max_w = np.max(np.max(w))
     levels = [0.0,0.25*max_w,0.5*max_w,0.75*max_w,max_w*0.999]
     C = plt.contour(current_data.x,current_data.y,w,levels)
     plt.clabel(C,inline=1)
-    plt.hold(False)
+    #plt.hold(False)
 
 
 # ========================================================================
@@ -229,13 +230,13 @@ def water_quiver(current_data):
     u = water_u(current_data)
     v = water_v(current_data)
         
-    plt.hold(True)
+    #plt.hold(True)
     Q = plt.quiver(current_data.x[::2,::2],current_data.y[::2,::2],
                     u[::2,::2],v[::2,::2])
     max_speed = np.max(np.sqrt(u**2+v**2))
     label = r"%s m/s" % str(np.ceil(0.5*max_speed))
     plt.quiverkey(Q,0.15,0.95,0.5*max_speed,label,labelpos='W')
-    plt.hold(False)
+    #plt.hold(False)
 
 
 # ========================================================================
