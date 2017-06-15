@@ -93,10 +93,10 @@ def setplot(plotdata=None,  bathy_location=0.15,  bathy_angle=0.0,
     def contour_afteraxes(current_data):
         # gauge_locations(current_data)
         # m_to_km_labels()
-        plt.hold(True)
+        #plt.hold(True)
         pos = -80.0 * (23e3 / 180) + 500e3 - 5e3
         plt.plot([pos,pos],[-300e3,300e3],'b',[pos-5e3,pos-5e3],[-300e3,300e3],'y')
-        plt.hold(False)
+        #plt.hold(False)
         wind_contours(current_data)
         bathy_ref_lines(current_data)
         
@@ -104,20 +104,20 @@ def setplot(plotdata=None,  bathy_location=0.15,  bathy_angle=0.0,
         pass
         
     def bathy_ref_lines(current_data):
-        plt.hold(True)
+        #plt.hold(True)
         for ref_line in ref_lines:
             x1 = ref_line[0][0]
             y1 = ref_line[0][1]
             x2 = ref_line[1][0]
             y2 =  ref_line[1][1]
             plt.plot([x1,x2],[y1,y2],'y--',linewidth=1)
-        plt.hold(False)
+        #plt.hold(False)
         
     def gauge_locations(current_data,gaugenos='all'):
-        plt.hold(True)
+        #plt.hold(True)
         gaugetools.plot_gauge_locations(current_data.plotdata, \
              gaugenos=gaugenos, format_string='kx', add_labels=True)
-        plt.hold(False)
+        #plt.hold(False)
 
 
     # ========================================================================
