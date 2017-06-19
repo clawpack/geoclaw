@@ -47,17 +47,11 @@ def setplot(plotdata=None):
     # Load storm track
     track = surgeplot.track_data(os.path.join(plotdata.outdir, 'fort.track'))
 
-<<<<<<< HEAD
-    # Calculate landfall time, off by a day, maybe leap year issue?
-    landfall_dt = datetime.datetime(2008,9,13,7) - datetime.datetime(2008,1,1,0)
-    landfall = (landfall_dt.days) * 24.0 * 60**2 + landfall_dt.seconds
-=======
     # Calculate landfall time
     # Landfall for Ike in Houston was September 13th, at 7 UTC
     landfall_dt = datetime.datetime(2008, 9, 13, 7) - \
                   datetime.datetime(2008, 1, 1,  0)
     landfall = landfall_dt.days * 24.0 * 60**2 + landfall_dt.seconds
->>>>>>> upstream/master
 
     # Set afteraxes function
     def surge_afteraxes(cd):

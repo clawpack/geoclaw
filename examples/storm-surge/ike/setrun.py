@@ -14,15 +14,10 @@ import datetime
 
 import numpy as np
 
-<<<<<<< HEAD
-# Need to adjust the date a bit due to weirdness with leap year (I think)
-ike_landfall = datetime.datetime(2008,9,13,7) - datetime.datetime(2008,1,1,0)
-=======
 # Calculate landfall time
 # Landfall for Ike in Houston was September 13th, at ~ 7:00:00 UTC
 landfall = datetime.datetime(2008, 9, 13, 7) - \
            datetime.datetime(2008, 1, 1, 0)
->>>>>>> upstream/master
 
 # Time Conversions
 def days2seconds(days):
