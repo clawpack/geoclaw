@@ -52,6 +52,21 @@ def setplot(plotdata=None):
              gaugenos='all', format_string='ko', add_labels=True)
     
 
+    # To add title with time format hours:minutes:seconds...
+
+    def title_hours(current_data):
+        from pylab import title, mod
+        t = current_data.t
+        hours = int(t/3600.)
+        tmin = mod(t,3600.)
+        min = int(tmin/60.)
+        tsec = mod(tmin,60.)
+        sec = int(mod(tmin,60.))
+        timestr = '%s:%s:%s' % (hours,str(min).zfill(2),str(sec).zfill(2))
+        title('%s after earthquake' % timestr)
+
+
+
     #-----------------------------------------
     # Figure for surface
     #-----------------------------------------
@@ -63,18 +78,13 @@ def setplot(plotdata=None):
     plotaxes.scaled = True
 
     def fixup(current_data):
-        import pylab
         addgauges(current_data)
-        t = current_data.t
-        t = t / 3600.  # hours
-        pylab.title('Surface at %4.2f hours' % t, fontsize=20)
-        pylab.xticks(fontsize=15)
-        pylab.yticks(fontsize=15)
+        title_hours(current_data)
+
     plotaxes.afteraxes = fixup
 
     # Water
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
-    #plotitem.plot_var = geoplot.surface
     plotitem.plot_var = geoplot.surface_or_depth
     plotitem.pcolor_cmap = geoplot.tsunami_colormap
     plotitem.pcolor_cmin = -0.2
