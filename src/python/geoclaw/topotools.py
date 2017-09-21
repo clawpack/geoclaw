@@ -692,6 +692,11 @@ class Topography(object):
                     self._Z = nc_file.variables[z_var][::stride[0], 
                                                        ::stride[1]]
 
+                elif abs(self.topo_type) == 5:
+                    # GeoTIFF format
+                    from osgeo import gdal
+                    
+
                 if mask:
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
                     
