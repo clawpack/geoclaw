@@ -695,7 +695,13 @@ class Topography(object):
                 elif abs(self.topo_type) == 5:
                     # GeoTIFF format
                     from osgeo import gdal
-                    
+
+                    topo_file = gdal.Open(path, gdal.GA_ReadOnly)
+                    self._Z = topo_file.GetRasterBand(1).ReadAsArray()
+                    upper[0] = lower[0] + delta[0] * topo.shape[1]
+                    upper[1] = lower[1] + delta[1] * topo.shape[0]
+                    self._x = numpy.arange(lower[0], upper[0], delta[0])
+                    self._y = numpy.arange(lower[1], upper[1], delta[1])[:-1]
 
                 if mask:
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
