@@ -517,6 +517,9 @@ class Topography(object):
                         self.read(mask=mask)
                     # Generate arrays
                     self._X, self._Y = numpy.meshgrid(self._x, self._y)
+                elif abs(self.topo_type) in [4, 5]:
+                    # Generate arrays
+                    self._X, self._Y = numpy.meshgrid(self._x, self._y)
                 else:
                     raise ValueError("Unrecognized topo_type: %s" % self.topo_type)
 
@@ -692,19 +695,25 @@ class Topography(object):
                     self._Z = nc_file.variables[z_var][::stride[0], 
                                                        ::stride[1]]
 
-                elif abs(self.topo_type) == 5:
-                    # GeoTIFF format
-                    from osgeo import gdal
-
-                    topo_file = gdal.Open(path, gdal.GA_ReadOnly)
-                    self._Z = topo_file.GetRasterBand(1).ReadAsArray()
-                    upper[0] = lower[0] + delta[0] * topo.shape[1]
-                    upper[1] = lower[1] + delta[1] * topo.shape[0]
-                    self._x = numpy.arange(lower[0], upper[0], delta[0])
-                    self._y = numpy.arange(lower[1], upper[1], delta[1])[:-1]
-
                 if mask:
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
+
+            elif abs(self.topo_type) == 5:
+                # GeoTIFF format
+                from osgeo import gdal
+
+                topo_file = gdal.Open(self.path, gdal.GA_ReadOnly)
+                self._Z = topo_file.GetRasterBand(1).ReadAsArray()
+                lower = [0, 0]
+                upper = [0, 0]
+                delta = [0, 0]
+                lower[0], delta[0], dxdy, lower[1], dydx, delta[1] = topo_file.GetGeoTransform()
+                upper[0] = lower[0] + delta[0] * self._Z.shape[1]
+                upper[1] = lower[1] + delta[1] * self._Z.shape[0]
+                self._x = numpy.linspace(lower[0], upper[0], 
+                                      int((upper[0] - lower[0]) / delta[0]))
+                self._y = numpy.linspace(lower[1], upper[1], 
+                                      int((upper[1] - lower[1]) / delta[1]))
                     
             else:
                 raise IOError("Unrecognized topo_type: %s" % self.topo_type)
@@ -751,7 +760,7 @@ class Topography(object):
 
         """
 
-        if abs(self.topo_type) in [2,3]:
+        if abs(self.topo_type) in [2, 3]:
 
             # Default values to track errors
             num_cells = [numpy.nan,numpy.nan]
