@@ -428,6 +428,58 @@ def plot_kahului():
     print("Created ",fname)
 
 
+def test_geotiff():
+    r""""Test reading GeoTIFF data"""
+
+    temp_path = tempfile.mkdtemp()
+
+    try:
+        # Fetch comparison data
+        # url = "".join(('https://raw.githubusercontent.com/rjleveque/geoclaw/',
+        #                '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/',
+        #                'geoclaw/tests/kahului_sample_1s.tt2'))
+        # clawpack.clawutil.data.get_remote_file(url, output_dir=temp_path,
+        #                                             force=True)
+        
+        # # Paths
+        # local_path = os.path.join(temp_path, os.path.basename(url))
+        # nc_path = os.path.join(temp_path, "test.nc")
+
+        # # Write out NetCDF version of file
+        # ascii_topo = topotools.Topography(path=local_path)
+        # ascii_topo.read()
+        # ascii_topo.write(nc_path, topo_type=4, Z_format="%22.15e")
+
+        # # Read back in NetCDF file
+        # nc_topo = topotools.Topography(path=nc_path)
+        # nc_topo.read()
+
+        # # Compare arrays - use tolerance based on 30 arcsecond accuracy
+        # assert numpy.allclose(ascii_topo.x, nc_topo.x), \
+        #             "Flat x-arrays did not match."
+        # assert numpy.allclose(ascii_topo.y, nc_topo.y), \
+        #             "Flat y-arrays did not match."
+        # assert numpy.allclose(ascii_topo.Z, nc_topo.Z), \
+        #             "Flat y-arrays did not match."
+
+    except AssertionError as e:
+        shutil.copytree(temp_path, os.path.join(os.getcwd()),
+            'test_read_geotiff')
+        raise e
+
+    except ImportError as e:
+        raise nose.SkipTest("Skipping test as GDAL support was not found.")
+
+    # except RuntimeError as e:
+    #     raise nose.SkipTest("NetCDF topography test skipped due to " +
+    #                         "runtime failure.")
+    except URLError:
+        raise nose.SkipTest("Could not fetch remote file, skipping test.")
+    
+    finally:
+        shutil.rmtree(temp_path)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         if "plot" in sys.argv[1].lower():
