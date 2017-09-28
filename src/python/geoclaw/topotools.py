@@ -988,6 +988,12 @@ class Topography(object):
 
                 elevation.no_data_value = self.no_data_value
 
+        elif topo_type == 5:
+            # Write out GeoTIFF
+            from osgeo import gdal
+
+            driver = gdal.GetDriverByName("GTiff")
+            raise NotImplementedError("Writing out GeoTIFF topography is not yet supported.")
 
         else:
             raise NotImplemented("Output type %s not implemented." % topo_type)
