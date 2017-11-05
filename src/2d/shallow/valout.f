@@ -22,6 +22,7 @@ c     # set outaux = .true. to also output the aux arrays to fort.a<iframe>
       real(kind=8), allocatable :: qeta(:)
 
       integer :: clock_start, clock_finish, clock_rate
+      integer :: timeTick_sofar, tick_clock_sofar
 
       iadd(ivar,i,j)  = loc + ivar - 1 + nvar*((j-1)*mitot+i-1)
       iaddaux(iaux,i,j) = locaux + iaux-1 + naux*(i-1) +
@@ -281,6 +282,33 @@ c     # Print meqn = nvar+1 because eta added.
      &       i6,'                 ndim'/,
      &       i6,'                 nghost'/,/)
 c
+
+c     ! Output timing statistics so far:
+      write(matunit2, *) 'Timing statistics so far'
+      write(matunit2, *) ' '
+      write(matunit2, *) 'CPU time on all threads:'
+
+      call cpu_time(tick_cpu_sofar)
+      timeTickCPU_sofar = tick_cpu_sofar ! - tick_cpu_start
+      write(matunit2, 1101) timeTickCPU_sofar
+ 1101 format('          ', 2e16.6)
+
+      write(matunit2, *) ' '
+      write(matunit2, *) 
+     &  'level         wall time      CPU time     cells updated'
+
+c     call system_clock(tick_clock_sofar,clock_rate)
+c     timeTick_sofar = tick_clock_sofar - tick_clock_start
+c     twall = real(timeTick_sofar,kind=8) / real(clock_rate,kind=8)
+c     !!! tick_clock_start is local to tick!!!
+      
+      do level=1,mxnest
+         twall = real(tvoll(level),kind=8) / real(clock_rate,kind=8)
+         write(matunit2, 1102) level, twall, 
+     &         tvollCPU(level), rvoll(level)
+ 1102    format(i4, '      ',3e16.6)
+         enddo
+      
 
       write(6,601) matlabu,time
   601 format('AMRCLAW: Frame ',i4,
