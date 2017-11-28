@@ -7,6 +7,7 @@ function setplot is called to set the plot parameters.
     
 """ 
 
+from __future__ import absolute_import
 import numpy
 a = 1.
 sigma = 0.5
@@ -15,7 +16,7 @@ grav = 9.81
 omega = numpy.sqrt(2.*grav*h0) / a 
 
 #--------------------------
-def setplot(plotdata):
+def setplot(plotdata=None):
 #--------------------------
     
     """ 
@@ -27,6 +28,11 @@ def setplot(plotdata):
 
 
     from clawpack.visclaw import colormaps, geoplot
+
+    if plotdata is None:
+        from clawpack.visclaw.data import ClawPlotData
+        plotdata = ClawPlotData()
+
 
     plotdata.clearfigures()  # clear any old figures,axes,items data
 
@@ -95,10 +101,9 @@ def setplot(plotdata):
     plotaxes.ylimits = [-0.15,0.3]
     plotaxes.title = 'Cross section at y=0'
     def plot_topo_xsec(current_data):
-        from pylab import plot, hold, cos,sin,where,legend,nan
+        from pylab import plot, cos,sin,where,legend,nan
         t = current_data.t
 
-        hold(True)
         x = linspace(-2,2,201)
         y = 0.
         B = h0*(x**2 + y**2)/a**2 - h0
@@ -110,7 +115,6 @@ def setplot(plotdata):
         ## plot([0],[-1],'bo',label="Level 2")  # but will produced desired legend
         plot([0],[-1],'bo',label="Computed")  ## need to fix plotstyle
         legend()
-        hold(False)
     plotaxes.afteraxes = plot_topo_xsec
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
@@ -170,6 +174,7 @@ def setplot(plotdata):
     plotdata.latex_figsperline = 2           # layout of plots
     plotdata.latex_framesperline = 1         # layout of plots
     plotdata.latex_makepdf = False           # also run pdflatex?
+    plotdata.parallel = True                 # make multiple frame png's at once
 
     return plotdata
 

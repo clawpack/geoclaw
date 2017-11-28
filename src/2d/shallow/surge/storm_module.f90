@@ -61,6 +61,9 @@ module storm_module
     ! Wind drag maximum limit
     real(kind=8), parameter :: WIND_DRAG_LIMIT = 2.d-3
 
+    ! Display times in days relative to landfall
+    logical :: display_landfall_time = .false.
+
 contains
     ! ========================================================================
     !   subroutine set_storm(data_file)
@@ -103,12 +106,6 @@ contains
             else
                 call opendatafile(unit,'surge.data')
             endif
-            
-            ! Read in parameters
-            ! Physics
-            ! TODO: These are currently set directly in the types, should change!
-            read(unit,"(1d16.8)") rho_air
-            read(unit,"(1d16.8)") ambient_pressure
 
             ! Forcing terms
             read(unit,*) wind_forcing
@@ -152,18 +149,15 @@ contains
             read(unit,*)
             
             ! Storm Setup 
-            read(unit,"(i1)") storm_type
-            read(unit,"(d16.8)") landfall
-            read(unit,*) storm_file_path
+            read(unit, "(i1)") storm_type
+            read(unit, "(d16.8)") landfall
+            read(unit, *) display_landfall_time
+            read(unit, *) storm_file_path
             
             close(unit)
 
             ! Print log messages
             open(unit=log_unit, file="fort.surge", status="unknown", action="write")
-            
-            write(log_unit,"(a,1d16.8)") "rho_air =          ",rho_air
-            write(log_unit,"(a,1d16.8)") "ambient_pressure = ",ambient_pressure
-            write(log_unit,*) ""
 
     !         write(log_unit,"(a,1d16.8)") "wind_tolerance =     ", wind_tolerance
     !         write(log_unit,"(a,1d16.8)") "pressure_tolerance = ", pressure_tolerance
@@ -436,7 +430,7 @@ contains
         ! We open this here so that the file flushes and writes to disk
         open(unit=track_unit,file="fort.track",action="write",position='append')
 
-        write(track_unit,"(4e26.16)") t,storm_location(t),storm_direction(t)
+        write(track_unit, "(4e26.16)") t, storm_location(t), storm_direction(t)
         
         close(track_unit)
 

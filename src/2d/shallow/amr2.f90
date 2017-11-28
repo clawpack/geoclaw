@@ -81,9 +81,9 @@ program amr2
     use amr_module, only: lfine, lentot, iregridcount, avenumgrids
     use amr_module, only: tvoll, tvollCPU, rvoll, rvol, mstart, possk, ibuff
     use amr_module, only: timeRegridding,timeUpdating, timeValout
-    use amr_module, only: timeBound,timeStepgrid, timeFlagger,timeBufnst,timeFilvalTot
-    use amr_module, only: timeBoundCPU,timeStepGridCPU,timeSetauxCPU,timeRegriddingCPU
-    use amr_module, only: timeSetaux, timeSetauxCPU, timeValoutCPU
+    use amr_module, only: timeBound,timeStepgrid, timeFlagger,timeBufnst
+    use amr_module, only: timeBoundCPU,timeStepGridCPU,timeRegriddingCPU
+    use amr_module, only: timeValoutCPU,timeTick,timeTickCPU
     use amr_module, only: kcheck, iorder, lendim, lenmax
 
     use amr_module, only: dprint, eprint, edebug, gprint, nprint, pprint
@@ -116,7 +116,7 @@ program amr2
 
     ! Timing variables
     integer :: clock_start, clock_finish, clock_rate, ttotal
-    real(kind=8) :: cpu_start, cpu_finish, ttotalcpu
+    real(kind=8) :: ttotalcpu
 
     ! Common block variables
     real(kind=8) :: dxmin, dymin
@@ -449,6 +449,8 @@ program amr2
         open(outunit, file=outfile, status='unknown', position='append', &
                       form='formatted')
 
+        ! moved upt before restrt or won't properly initialize 
+        call set_fgmax()   
         call restrt(nsteps,time,nvar,naux)
         nstart  = nsteps
         tstart_thisrun = time
@@ -469,10 +471,9 @@ program amr2
         call set_fixed_grids()            ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
         call set_multilayer()             ! Set multilayer SWE parameters
+        call set_storm()                  ! Set storm parameters
         call set_regions()                ! Set refinement regions
-        call set_gauges(rest, nvar)       ! Set gauge output
-        call set_fgmax()
-        call set_storm()
+        call set_gauges(rest, nvar, naux) ! Set gauge output
 
     else
 
@@ -492,8 +493,9 @@ program amr2
         call set_fixed_grids()            ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
         call set_multilayer()             ! Set multilayer SWE parameters
+        call set_storm()                  ! Set storm parameters
         call set_regions()                ! Set refinement regions
-        call set_gauges(rest, nvar)       ! Set gauge output
+        call set_gauges(rest, nvar, naux) ! Set gauge output
         call set_fgmax()
         call set_storm()
 
@@ -595,8 +597,9 @@ program amr2
     call conck(1,nvar,naux,time,rest)
 
     ! Timing
+    ! moved inside tick, so timers can be checkpoint for
+    ! possible restart
     call system_clock(clock_start,clock_rate)
-    call cpu_time(cpu_start)
 
     if (output_t0) then
         call valout(1,lfine,time,nvar,naux)
@@ -619,7 +622,6 @@ program amr2
     
 
     call system_clock(clock_finish,clock_rate)
-    call cpu_time(cpu_finish)
     
     !output timing data
     write(*,*)
@@ -702,11 +704,11 @@ program amr2
     !Total Time
     format_string="('Total time:   ',1f15.3,'        ',1f15.3,'  ')"
     write(outunit,format_string) &
-            real(clock_finish - clock_start,kind=8) / real(clock_rate,kind=8), &
-            cpu_finish-cpu_start
+            real(timeTick,kind=8) / real(clock_rate,kind=8), &
+            timeTickCPU         
     write(*,format_string) &
-            real(clock_finish - clock_start,kind=8) / real(clock_rate,kind=8), &
-            cpu_finish-cpu_start
+            real(timeTick,kind=8) / real(clock_rate,kind=8), &
+            timeTickCPU         
     
     format_string="('Using',i3,' thread(s)')"
     write(outunit,format_string) maxthreads
@@ -721,6 +723,10 @@ program amr2
     write(outunit,"('Note: The CPU times are summed over all threads.')")
     write(*,"('      Total time includes more than the subroutines listed above')")
     write(outunit,"('      Total time includes more than the subroutines listed above')")
+    if (rest) then
+      write(*,"('      Times for restart runs are cumulative')")
+      write(outunit,"('      Times for restart runs are cumulative')")
+    endif
     
     
     !end of timing data
@@ -776,13 +782,6 @@ program amr2
     !format_string = "('   Total gfixup     time  (clock)   ',1f16.8,' s')"
     !write(outunit,format_string)  real(timeGrdfit2,kind=8) / real(clock_rate,kind=8)
     !write(*,format_string) real(timeGrdfit2,kind=8) / real(clock_rate,kind=8)
-    !format_string = "('      Total filval (wall) time      ',1f16.8,' s')"
-    !write(outunit,format_string)  real(timeFilvalTot,kind=8) / real(clock_rate,kind=8)
-    !write(*,format_string) real(timeFilvalTot,kind=8) / real(clock_rate,kind=8)
-
-    !format_string = "('          Total filval (all cores) time     ',1f16.8,' s')"
-    !write(outunit,format_string)  real(timeFilval,kind=8) / real(clock_rate,kind=8)
-    !write(*,format_string) real(timeFilval,kind=8) / real(clock_rate,kind=8)
 
     !write(*,*)
     !format_string = "('Total setaux (all cores) time:',1f16.8,' s')"

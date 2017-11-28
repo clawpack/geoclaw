@@ -22,6 +22,8 @@ Classes representing parameters for GeoClaw runs
  - LAT2METER factor to convert degrees in latitude to meters
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import numpy
 import clawpack.clawutil.data
@@ -46,6 +48,9 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
 
         # GeoClaw physics parameters
         self.add_attribute('gravity',9.8)
+        self.add_attribute('rho', 1025.0)  # Density of water kg/m^3
+        self.add_attribute('rho_air',1.15) # Density of air kg/m^3
+        self.add_attribute('ambient_pressure', 101.3e3) # Nominal atmos pressure
         self.add_attribute('earth_radius',Rearth)
         self.add_attribute('coordinate_system',1)
         self.add_attribute('coriolis_forcing',True)
@@ -64,8 +69,13 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
 
         self.open_data_file('geoclaw.data',data_source)
 
-        self.data_write('gravity')
-        self.data_write('earth_radius')
+        self.data_write('gravity', 
+                               description="(gravitational acceleration m/s^2)")
+        self.data_write('rho', description="(Density of water kg/m^3)")
+        self.data_write('rho_air',description="(Density of air kg/m^3)")
+        self.data_write('ambient_pressure',
+                                description="(Nominal atmospheric pressure Pa)")
+        self.data_write('earth_radius', description="(Radius of the earth m)")
         self.data_write('coordinate_system')
         self.data_write('sea_level')
         self.data_write()
@@ -256,7 +266,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
     def read(self, path, force=False):
         r"""Read a dtopography data file."""
 
-        print self.dtopofiles
+        print(self.dtopofiles)
 
         with open(os.path.abspath(path), 'r') as data_file:
 
@@ -329,10 +339,6 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     def __init__(self):
         super(SurgeData,self).__init__()
 
-        # Physics parameters
-        self.add_attribute('rho_air',1.15) # Density of air
-        self.add_attribute('ambient_pressure',101.3e3) # Nominal atmos pressure
-
         # Source term controls
         self.add_attribute('wind_forcing',False)
         self.add_attribute('drag_law',1)
@@ -349,6 +355,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         # Storm parameters
         self.add_attribute("storm_type",0) # Type of storm
         self.add_attribute("landfall",0.0)
+        self.add_attribute("display_landfall_time", False)
 
         # Storm type 1 - Read in file track
         self.add_attribute("storm_file",'./storm.data')
@@ -375,10 +382,6 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         # print "Creating data file %s" % out_file
         self.open_data_file(out_file,data_source)
 
-        self.data_write('rho_air',description="(Density of air)")
-        self.data_write('ambient_pressure',description="(Nominal atmospheric pressure)")
-        self.data_write()
-        
         self.data_write('wind_forcing',description='(Wind source term used)')
         self.data_write('drag_law',description='(Type of drag law to use)')
         self.data_write('pressure_forcing',description="(Pressure source term used)")
@@ -406,6 +409,8 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         
         self.data_write("storm_type",description='(Storm specification type)')
         self.data_write('landfall',description="(Landfall time of storm)")
+        self.data_write("display_landfall_time", description='(Display time relative to landfall)')
+
         self.data_write('storm_file',description="(Location of storm data)")
 
         if self.storm_type == 0 or self.storm_type == 1 or self.storm_type == 4:
@@ -489,9 +494,8 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
         super(MultilayerData, self).__init__()
 
         # Physics parameters
-        self.add_attribute('num_layers',2)
-        self.add_attribute('rho',[1025.0,1028.0])
-        self.add_attribute('eta',[0.0,-200.0])
+        self.add_attribute('num_layers',1)
+        self.add_attribute('eta',[0.0,-20.0])
         
         # Algorithm parameters
         self.add_attribute('eigen_method',4)
@@ -509,7 +513,6 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
         self.open_data_file(out_file, datasource)
         
         self.data_write('num_layers', description='(Number of layers)')
-        self.data_write('rho',description='(Densities of layers)')
         self.data_write('eta',description='(Initial top surface of each layer)')
         self.data_write(None)
         self.data_write('check_richardson',description="(Check Richardson number)")

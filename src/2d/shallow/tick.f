@@ -12,12 +12,16 @@ c
       use gauges_module, only: setbestsrc, num_gauges
       use gauges_module, only: print_gauges_and_reset_nextLoc
 
+      use storm_module, only: landfall, display_landfall_time
+
 
       implicit double precision (a-h,o-z)
 
       logical vtime,dumpout/.false./,dumpchk/.false./,rest,dump_final
       dimension dtnew(maxlv), ntogo(maxlv), tlevel(maxlv)
       integer clock_start, clock_finish, clock_rate
+      integer tick_clock_start, tick_clock_finish, tick_clock_rate
+      character(len=128) :: time_format
       real(kind=8) cpu_start,cpu_finish
 
 c
@@ -47,6 +51,9 @@ c          each step) to keep track of when that level should
 c          have its error estimated and finer levels should be regridded.
 c ::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 c
+      call system_clock(tick_clock_start,tick_clock_rate)
+      call cpu_time(tick_cpu_start)
+
 
       ncycle         = nstart
       call setbestsrc()     ! need at very start of run, including restart
@@ -124,12 +131,12 @@ c        write(*,*)" old possk is ", possk(1)
          if (.false.) then  
             write(*,122) diffdt,outtime  ! notify of change
  122        format(" Adjusting timestep by ",e10.3,
-     .             " to hit output time of ",e12.6)
+     .             " to hit output time of ",e13.6)
 c           write(*,*)" new possk is ", possk(1)
             if (diffdt .lt. 0.) then ! new step is slightly larger
               pctIncrease = -100.*diffdt/oldposs   ! minus sign to make whole expr. positive
               write(*,123) pctIncrease
- 123          format(" New step is ",e8.2," % larger.",
+ 123          format(" New step is ",e9.2," % larger.",
      .               "  Should still be stable")
               endif
             endif
@@ -257,19 +264,22 @@ c
 
           call advanc(level,nvar,dtlevnew,vtime,naux)
 
-c         # rjl modified 6/17/05 to print out *after* advanc and print cfl
-c         # rjl & mjb changed to cfl_level, 3/17/10
-
+c Output time info
           timenew = tlevel(level)+possk(level)
+          time_format = "(' AMRCLAW: level ',i2,'  CFL = ',e8.3," //
+     &                  "'  dt = ',e10.4,  '  final t = ',e12.6)"
+          if (display_landfall_time) then
+            timenew = (timenew - landfall) / (3.6d3 * 24d0)
+            time_format = "(' AMRCLAW: level ',i2,'  CFL = ',e8.3," //
+     &                  "'  dt = ',e10.4,  '  final t = ', f5.2)"
+          end if
           if (tprint) then
-              write(outunit,100)level,cfl_level,possk(level),timenew
-              endif
+              write(outunit, time_format) level, cfl_level, 
+     &                                    possk(level), timenew
+          endif
           if (method(4).ge.level) then
-              write(6,100)level,cfl_level,possk(level),timenew
-              endif
-100       format(' AMRCLAW: level ',i2,'  CFL = ',e8.3,
-     &           '  dt = ',e10.4,  '  final t = ',e12.6)
-
+              print time_format, level, cfl_level, possk(level), timenew
+          endif
 
 c        # to debug individual grid updates...
 c        call valout(level,level,time,nvar,naux)
@@ -328,7 +338,7 @@ c                   adjust time steps for this and finer levels
                      call check(ncycle,time,nvar,naux)
                      if (num_gauges .gt. 0) then
                         do ii = 1, num_gauges
-                           call print_gauges_and_reset_nextLoc(ii, nvar)
+                           call print_gauges_and_reset_nextLoc(ii)
                         end do
                      endif
                      stop
@@ -394,7 +404,7 @@ c             ! use same alg. as when setting refinement when first make new fin
                 dumpchk = .true.
                if (num_gauges .gt. 0) then
                   do ii = 1, num_gauges
-                     call print_gauges_and_reset_nextLoc(ii, nvar)
+                     call print_gauges_and_reset_nextLoc(ii)
                   end do
                endif
        endif
@@ -404,7 +414,7 @@ c             ! use same alg. as when setting refinement when first make new fin
          if (printout) call outtre(mstart,.true.,nvar,naux)
          if (num_gauges .gt. 0) then
             do ii = 1, num_gauges
-               call print_gauges_and_reset_nextLoc(ii, nvar)
+               call print_gauges_and_reset_nextLoc(ii)
             end do
          endif
        endif
@@ -438,7 +448,7 @@ c
            if (printout) call outtre(mstart,.true.,nvar,naux)
            if (num_gauges .gt. 0) then
               do ii = 1, num_gauges
-                 call print_gauges_and_reset_nextLoc(ii, nvar)
+                 call print_gauges_and_reset_nextLoc(ii)
               end do
            endif
       endif
@@ -446,7 +456,14 @@ c
 c  # checkpoint everything for possible future restart
 c  # (unless we just did it based on dumpchk)
 c
+      call system_clock(tick_clock_finish,tick_clock_rate)
+      call cpu_time(tick_cpu_finish)
+      timeTick = timeTick + tick_clock_finish - tick_clock_start 
+      timeTickCPU = timeTickCPU + tick_cpu_finish - tick_cpu_start 
 
+
+c  # checkpoint everything for possible future restart
+c  # (unless we just did it based on dumpchk)
 c
       if (checkpt_style .ne. 0) then  ! want a chckpt
          ! check if just did it so dont do it twice
@@ -454,7 +471,7 @@ c
       endif
       if (num_gauges .gt. 0) then
          do ii = 1, num_gauges
-            call print_gauges_and_reset_nextLoc(ii, nvar)
+            call print_gauges_and_reset_nextLoc(ii)
          end do
       endif
 

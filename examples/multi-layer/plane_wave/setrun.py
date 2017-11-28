@@ -6,6 +6,8 @@ that will be read in by the Fortran code.
 
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 import numpy as numpy
 
 import clawpack.geoclaw.data
@@ -152,8 +154,6 @@ def setrun(claw_pkg='geoclaw'):
 
 
     # Restart from checkpoint file of a previous run?
-    # Note: If restarting, you must also change the Makefile to set:
-    #    RESTART = True
     # If restarting, t0 above should be from original run, and the
     # restart_file 'fort.chkNNNNN' specified below should be in 
     # the OUTDIR indicated in Makefile.
@@ -421,13 +421,14 @@ def setgeo(rundata):
     try:
         geo_data = rundata.geo_data
     except:
-        print "*** Error, this rundata has no geo_data attribute"
+        print("*** Error, this rundata has no geo_data attribute")
         raise AttributeError("Missing geo_data attribute")
        
     # == Physics ==
     geo_data.gravity = 9.81
     geo_data.coordinate_system = 1
     geo_data.earth_radius = 6367.5e3
+    geo_data.rho = [922.5, 1025.0]
 
     # == Forcing Options
     geo_data.coriolis_forcing = False
@@ -451,12 +452,11 @@ def setgeo(rundata):
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
     topo_data.topofiles.append([2, 1, 5, 0.0, 1e10, 'topo.tt2'])
-    
+
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
-    # for moving topography, append lines of the form :   (<= 1 allowed for now!)
+    # for moving topography, append lines of the form : (<= 1 allowed for now!)
     #   [topotype, minlevel,maxlevel,fname]
-
 
     return rundata
     # end of function setgeo
@@ -469,15 +469,12 @@ def set_multilayer(rundata):
 
     # Physics parameters
     data.num_layers = 2
-    data.rho = [0.9,1.0]
-    data.eta = [0.0,-0.6]
-    
+    data.eta = [0.0, -0.6]
+
     # Algorithm parameters
     data.eigen_method = 2
     data.inundation_method = 2
     data.richardson_tolerance = 0.95
-    # data.wave_tolerance = [0.1,0.1]
-    # data.dry_limit = True
 
     rundata.replace_data('qinit_data', QinitMultilayerData())
     rundata.qinit_data.qinit_type = 6
@@ -485,41 +482,40 @@ def set_multilayer(rundata):
     rundata.qinit_data.angle = 0.0
     rundata.qinit_data.sigma = 0.02
     rundata.qinit_data.wave_family = 4
-    rundata.qinit_data.init_location = [-0.1,0.0]
+    rundata.qinit_data.init_location = [-0.1, 0.0]
 
     return rundata
 
 
 def bathy_step(x, y, location=0.15, angle=0.0, left=-1.0, right=-0.2):
-    x_c,y_c = transform_p2c(x, y, location, 0.0, angle)
-    return ((x_c <= 0.0) * left 
-          + (x_c >  0.0) * right)
+    x_c, y_c = transform_p2c(x, y, location, 0.0, angle)
+    return ((x_c <= 0.0) * left +
+            (x_c > 0.0) * right)
 
 
 def write_topo_file(run_data, out_file, **kwargs):
-
     # Make topography
     topo_func = lambda x, y: bathy_step(x, y, **kwargs)
     topo = tt.Topography(topo_func=topo_func)
-    topo.x = numpy.linspace(run_data.clawdata.lower[0], 
-                            run_data.clawdata.upper[0], 
+    topo.x = numpy.linspace(run_data.clawdata.lower[0],
+                            run_data.clawdata.upper[0],
                             run_data.clawdata.num_cells[0] + 8)
-    topo.y = numpy.linspace(run_data.clawdata.lower[1], 
-                            run_data.clawdata.upper[1], 
+    topo.y = numpy.linspace(run_data.clawdata.lower[1],
+                            run_data.clawdata.upper[1],
                             run_data.clawdata.num_cells[1] + 8)
     topo.write(out_file)
 
     # Write out simple bathy geometry file for communication to the plotting
     with open("./bathy_geometry.data", 'w') as bathy_geometry_file:
-        if kwargs.has_key("location"):
+        if "location" in kwargs:
             location = kwargs['location']
         else:
             location = 0.15
-        if kwargs.has_key("angle"):
+        if "angle" in kwargs:
             angle = kwargs['angle']
         else:
             angle = 0.0
-        bathy_geometry_file.write("%s\n%s" % (location, angle) )
+        bathy_geometry_file.write("%s\n%s" % (location, angle))
 
 
 if __name__ == '__main__':

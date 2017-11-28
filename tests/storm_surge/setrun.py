@@ -7,6 +7,8 @@ that will be read in by the Fortran code.
 
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import datetime
 
@@ -364,13 +366,16 @@ def setgeo(rundata):
     try:
         geo_data = rundata.geo_data
     except:
-        print "*** Error, this rundata has no geo_data attribute"
+        print("*** Error, this rundata has no geo_data attribute")
         raise AttributeError("Missing geo_data attribute")
        
     # == Physics ==
     geo_data.gravity = 9.81
     geo_data.coordinate_system = 2
     geo_data.earth_radius = 6367.5e3
+    geo_data.rho = 1025.0
+    geo_data.rho_air = 1.15
+    geo_data.ambient_pressure = 101.3e3 # Nominal atmos pressure
 
     # == Forcing Options
     geo_data.coriolis_forcing = True
@@ -426,10 +431,6 @@ def set_storm(rundata):
 
     data = rundata.stormdata
 
-    # Physics parameters
-    data.rho_air = 1.15
-    data.ambient_pressure = 101.3e3 # Nominal atmos pressure
-
     # Source term controls - These are currently not respected
     data.wind_forcing = True
     data.drag_law = 1
@@ -442,6 +443,7 @@ def set_storm(rundata):
     # Storm parameters
     data.storm_type = 1 # Type of storm
     data.landfall = days2seconds(ike_landfall.days) + ike_landfall.seconds
+    data.display_landfall_time = True
 
     # Storm type 2 - Idealized storm track
     data.storm_file = 'ike.storm'
