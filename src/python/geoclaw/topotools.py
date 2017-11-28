@@ -703,7 +703,7 @@ class Topography(object):
                 from osgeo import gdal
 
                 topo_file = gdal.Open(self.path, gdal.GA_ReadOnly)
-                self._Z = topo_file.GetRasterBand(1).ReadAsArray()
+                self._Z = numpy.flipud(topo_file.GetRasterBand(1).ReadAsArray())
                 lower = [0, 0]
                 upper = [0, 0]
                 delta = [0, 0]
