@@ -145,7 +145,7 @@ c
 c   # Set fadd for the donor-cell upwind method (Godunov)
       if (ixy.eq.1) mu=2
       if (ixy.eq.2) mu=3
-      !DIR$ SIMD PRIVATE(dxdc)
+      !$OMP SIMD PRIVATE(dxdc)
       do 40 i=1-mbc+1,mx+mbc-1
          if (coordinate_system.eq.2) then
               if (ixy.eq.1) then
@@ -171,7 +171,7 @@ c
 c     # compute maximum wave speed for checking Courant number:
       cfl1d = 0.d0
       do 50 mw=1,mwaves
-         !DIR$ SIMD
+         !$OMP SIMD
          do 50 i=1,mx+1
 c          # if s>0 use dtdx1d(i) to compute CFL,
 c          # if s<0 use dtdx1d(i-1) to compute CFL:
@@ -188,7 +188,7 @@ c
 c     # apply limiter to fwaves:
       if (limit) call limiter(maxm,meqn,mwaves,mbc,mx,fwave,s,mthlim)
 c
-      !DIR$ SIMD
+      !$OMP SIMD
       do 120 i = 1, mx+1
 c
 c        # For correction terms below, need average of dtdx in cell
@@ -216,7 +216,7 @@ c
 c
        if (method(2).gt.1 .and. method(3).eq.2) then
 c         # incorporate cqxx into amdq and apdq so that it is split also.
-          !DIR$ SIMD
+          !$OMP SIMD
           do 150 i = 1, mx+1
              do 150 m=1,meqn
                 amdq(i,m) = amdq(i,m) + cqxx(i,m)
@@ -235,7 +235,7 @@ c     # split the left-going flux difference into down-going and up-going:
      &          amdq,bmasdq,bpasdq)
 c
 c     # modify flux below and above by B^- A^- Delta q and  B^+ A^- Delta q:
-      !DIR$ SIMD PRIVATE(gupdate)
+      !$OMP SIMD PRIVATE(gupdate)
       do 160 i = 1, mx+1
          do 160 m=1,meqn
                gupdate = 0.5d0*dtdx1d(i-1) * bmasdq(i,m)
@@ -253,7 +253,7 @@ c     # split the right-going flux difference into down-going and up-going:
      &          apdq,bmasdq,bpasdq)
 c
 c     # modify flux below and above by B^- A^+ Delta q and  B^+ A^+ Delta q:
-      !DIR$ SIMD PRIVATE(gupdate)
+      !$OMP SIMD PRIVATE(gupdate)
       do 180 i = 1, mx+1
           do 180 m=1,meqn
                gupdate = 0.5d0*dtdx1d(i-1) * bmasdq(i,m)
