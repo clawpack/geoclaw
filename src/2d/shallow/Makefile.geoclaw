@@ -149,3 +149,4 @@ COMMON_SOURCES += \
   $(GEOLIB)/fgmax_finalize.f90 \
   $(GEOLIB)/check.f \
   $(GEOLIB)/restrt.f \
+  $(GEOLIB)/set_sea_level.f90 \

@@ -20,6 +20,7 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
     use amr_module, only: NEEDS_TO_BE_SET
 
     use geoclaw_module, only: sea_level, dry_tolerance
+    use geoclaw_module, only: variable_sea_level
     use topo_module, only: topo_finalized
 
     implicit none
@@ -52,6 +53,7 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
     integer(kind=1) :: flaguse(ihi-ilo+1, jhi-jlo+1)
 
     real(kind=8) :: eta1old, eta2old
+    real(kind=8) :: vsea_level_c
 
     ! Scratch arrays for interpolation
     logical :: fine_flag(nvar, ihi-ilo+2,jhi-jlo + 2)
@@ -80,6 +82,7 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
     ! the +2 is to expand on coarse grid to enclose fine
     real(kind=8) :: valcrse((ihi-ilo+3) * (jhi-jlo+3) * nvar)   ! NB this is a 1D array 
     real(kind=8) :: auxcrse((ihi-ilo+3) * (jhi-jlo+3) * naux)  
+    real(kind=8) :: vseac((ihi-ilo+3) * (jhi-jlo+3))
  
 
     mx_patch = ihi-ilo + 1 ! nrowp
@@ -216,14 +219,21 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
         fine_mass = 0.d0
         slope = 0.d0
 
+        if (variable_sea_level) then
+            call set_sea_level(nghost_patch, mx_coarse, my_coarse,  &
+                 xlow_coarse, ylow_coarse,dx_coarse,dy_coarse,t,vseac)
+          endif
+          
         ! Calculate surface elevation eta using dry limiting
+        vsea_level_c = sea_level  ! if not variable_sea_level
         do j_coarse = 1, my_coarse
             do i_coarse = 1, mx_coarse
                 h = valcrse(ivalc(1,i_coarse,j_coarse))
                 b = auxcrse(iauxc(i_coarse,j_coarse))
-
                 if (h < dry_tolerance) then
-                    eta_coarse(i_coarse,j_coarse) = sea_level
+                    if (variable_sea_level) &
+                        vsea_level_c = vseac(ivseac(i_coarse,j_coarse))
+                    eta_coarse(i_coarse,j_coarse) = vsea_level_c
                 else
                     eta_coarse(i_coarse,j_coarse) = h + b
                 endif
@@ -448,6 +458,13 @@ contains
         integer, intent(in) :: i,j
         iauxc = 1 + naux*(i-1) + naux*mx_coarse*(j-1)
     end function iauxc
+
+    ! Index into vseac:
+    integer pure function ivseac(i,j)
+        implicit none
+        integer, intent(in) :: i,j
+        ivseac = 1 + (i-1) + mx_coarse*(j-1)
+    end function ivseac
 
     ! logical for checking if this patch sticks outside of the domain
     logical pure function sticksout(iplo,iphi,jplo,jphi)

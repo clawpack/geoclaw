@@ -46,6 +46,9 @@ module geoclaw_module
     ! Method parameters    
     real(kind=8) :: dry_tolerance
 
+    ! Flag to use set_sea_level function:
+    logical :: variable_sea_level
+
 contains
 
     ! ========================================================================
@@ -94,6 +97,7 @@ contains
             read(unit,*) earth_radius
             read(unit,*) coordinate_system
             read(unit,*) sea_level
+            read(unit,*) variable_sea_level
             read(unit,*)
             read(unit,*) coriolis_forcing
             if (coordinate_system == 1 .and. coriolis_forcing) then

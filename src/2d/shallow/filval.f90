@@ -21,8 +21,8 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
 
     use topo_module, only: aux_finalized
     use geoclaw_module, only: dry_tolerance, sea_level
+    use geoclaw_module, only: variable_sea_level
     use refinement_module, only: varRefTime
-    use topo_module, only: aux_finalized
 
     implicit none
 
@@ -49,6 +49,7 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
     real(kind=8) setflags(mitot,mjtot),maxauxdif
     integer :: jm, im, nm
     logical :: sticksoutxfine, sticksoutyfine,sticksoutxcrse,sticksoutycrse
+    real(kind=8) :: vseac(mic,mjc) ! for variable sea_level
 
     ! External function definitions
     real(kind=8) :: get_max_speed
@@ -155,6 +156,12 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
     ! before interpolating:
     !-----------------------------
 
+    if (variable_sea_level) then
+        call set_sea_level(0,mic,mjc,xl,yb,dx_coarse,dy_coarse,time,vseac)
+      else
+        vseac = sea_level  ! same value everywhere
+      endif
+
     ! Prepare slopes - use min-mod limiters
     do j=2, mjc-1
         do i=2, mic-1
@@ -163,7 +170,7 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
             do ii=-1,1
                 coarseval(2+ii) = valc(1,i+ii,j)  + auxc(1,i+ii,j)
                 if (valc(1,i+ii,j)  <= dry_tolerance) then
-                    coarseval(2+ii)=sea_level
+                    coarseval(2+ii) = vseac(i+ii,j)
                 end if
             end do
             s1p = coarseval(3) - coarseval(2)
@@ -175,7 +182,7 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
             do jj=-1,1
                 coarseval(2+jj) = valc(1,i,j+jj) + auxc(1,i,j+jj)
                 if (valc(1,i,j+jj) <= dry_tolerance) then
-                    coarseval(2+jj)=sea_level
+                    coarseval(2+jj) = vseac(i,j+jj)
                 end if
             end do
             s1p = coarseval(3) - coarseval(2)

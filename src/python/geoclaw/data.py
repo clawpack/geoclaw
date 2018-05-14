@@ -63,6 +63,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dry_tolerance',1e-3)
         self.add_attribute('friction_depth',1.0e6)
         self.add_attribute('sea_level',0.0)
+        self.add_attribute('variable_sea_level',False)
 
 
     def write(self,data_source='setrun.py'):
@@ -78,6 +79,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write('earth_radius', description="(Radius of the earth m)")
         self.data_write('coordinate_system')
         self.data_write('sea_level')
+        self.data_write('variable_sea_level')
         self.data_write()
 
         # Forcing terms
