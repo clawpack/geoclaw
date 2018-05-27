@@ -14,8 +14,8 @@
 !  It works for qinit, topo, and aux data types.
 ! ============================================================================
 !  Module contains a few utilities for integrating.
-!  Defines a raster set data type. A single raster_set is a set of DEMs 
-!  that define a particular field (eg. topo, component of q or aux)
+!  Defines a raster set data type. A single raster_set is a set of 
+!  rasters/DEMs that define a particular field (eg. topo, component of q or aux)
 ! ============================================================================
 module integrate_module
 
