@@ -20,13 +20,10 @@
 ! ============================================================================
 module integrate_module
 
-    
     implicit none
 
-    
     type raster_data_type
-        ! data for a set of rasters/DEMs for initializing grids (topo, qinit, aux)
-        ! Work array for all data for a particular field for all t
+        ! data for a single raster/DEM for initializing grids (topo, qinit, aux)
         real(kind=8), allocatable :: data(:,:)
 
         !raster data 
@@ -49,18 +46,18 @@ module integrate_module
         integer, allocatable :: raster_IDs(:)
         integer, allocatable :: raster_resolution_order(:)
 
-        integer, :: num_raster_sets
+        integer, :: num_rasters
         integer, :: iq, iaux, ifieldID
         logical :: finalized ! for all raster grids in collection
     end type raster_collection_type
 
 contains
 
-    subroutine cellrasterintegrate(cellint,xim,xcell,xip,yjm,ycell,
-     &           yjp,raster_collection)
+
+    !------------------------------------------------------------------------------------
+    subroutine cellrasterintegrate(cellint,xim,xcell,xip,yjm,ycell,yjp,raster_collection)
 
         implicit none
-
         ! input
         real(kind=8), intent(in) :: xim,xcell,xip,yjm,ycell,yjp
         type(raster_collection_type), intent(in) :: raster_collection
@@ -94,7 +91,7 @@ contains
         ! if so we are done...if not use recursive strategy for grids 
         !as coarse or coarser than first finest intersection 
 
-        mrasters = raster_collection%num_raster_sets
+        mrasters = raster_collection%num_rasters
         do m = 1,mrasters
             !look at raster files, from fine to coarse
             rasternum = raster_collection%raster_resolution_order(m))
@@ -109,21 +106,174 @@ contains
                     cellint = cellint + rasterintegral(xmlo,xmhi,ymlo,ymhi,raster_data,im)
                     return
                 else
-                    go to 222
+                    exit
                 endif
             endif
         enddo
 
-
- 222  continue
-
       ! this grid cell intersects only raster set m and perhaps coarser:
+      ! consider only rasters > m in resolution order
       call rectintegral(xim,xip,yjm,yjp,m,cellint,raster_collection)
 
       return
       end
 
     end subroutine cellgridintegrate
+
+    !----------------------------------------------------------------------------
+    recursive subroutine topoarea(x1,x2,y1,y2,m,area,raster_collection)
+
+    ! Compute the area of overlap of rasters with the rectangle (x1,x2) x (y1,y2)
+    ! using rasters indexed numrasters down to m. (coarse to fine).
+
+    ! The main call to this subroutine has corners of a physical domain for
+    ! the rectangle and m = 1 in order to compute the area of overlap of
+    ! domain by all topo arrays.  Used to check inputs and insure topo
+    ! covers domain.
+
+    ! The recursive strategy is to first compute the area using only rasters
+    ! numrasters to m + 1, 
+    ! and then apply corrections due to adding raster m.
+     
+    ! Corrections are needed if the new raster array intersects the grid cell.
+    ! Let the intersection be (x1m,x2m) x (y1m,y2m).
+    ! Two corrections are needed, first to subtract out the area over
+    ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
+    ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
+    ! and then adding in the area over this same region using 
+    ! topo array mtopoorder(m).
+
+    ! Based on the recursive routine rectintegral that integrates
+    ! topo over grid cells using a similar strategy.
+
+    implicit none
+
+    ! arguments
+    real (kind=8), intent(in) :: x1,x2,y1,y2
+    integer, intent(in) :: m
+    real (kind=8), intent(out) :: area
+
+    type(raster_collection_type), intent(in) :: raster_collection
+
+    ! local
+    real(kind=8) :: xmlo,xmhi,ymlo,ymhi,x1m,x2m,y1m,y2m,area1,area2,area_m
+    integer :: indicator  
+
+    mrasters = raster_collection%num_rasters
+    rasternum = raster_collection%raster_resolution_order(m)
+    raster_data = raster_collection(rasternum)
+
+    if (m == mrasters) then
+        ! innermost step of recursion reaches this point.
+        ! only using coarsest topo grid -- compute directly...
+        call intersection(indicator,area,xmlo,xmhi,ymlo,ymhi,x1,x2,y1,y2,raster_data)
+    else
+        ! recursive call to compute area using one fewer topo grids:
+        call topoarea(x1,x2,y1,y2,m+1,area1,raster_collection)
+
+        ! region of intersection of cell with new topo grid:
+        call intersection(indicator,area_m,x1m,x2m,y1m,y2m,x1,x2,y1,y2,raster_data)
+             
+        if (area_m > 0) then
+        
+            ! correction to subtract out from previous set of topo grids:
+            call topoarea(x1m,x2m,y1m,y2m,m+1,area2,raster_collection)
+    
+            ! adjust integral due to corrections for new topo grid:
+            area = area1 - area2 + area_m
+        else
+            area = area1
+        endif
+    endif
+
+end subroutine topoarea
+
+
+recursive subroutine rectintegral(x1,x2,y1,y2,m,integral,raster_collection)
+
+    ! Compute the integral of topo over the rectangle (x1,x2) x (y1,y2)
+    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
+    ! (coarse to fine).
+
+    ! The main call to this subroutine has corners of a grid cell for the 
+    ! rectangle and m = 1 in order to compute the integral over the cell 
+    ! using all topo arrays.
+
+    ! The recursive strategy is to first compute the integral using only topo 
+    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
+    ! and then apply corrections due to adding topo array mtopoorder(m).
+     
+    ! Corrections are needed if the new topo array intersects the grid cell.
+    ! Let the intersection be (x1m,x2m) x (y1m,y2m).
+    ! Two corrections are needed, first to subtract out the integral over
+    ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
+    ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
+    ! and then adding in the integral over this same region using 
+    ! topo array mtopoorder(m).
+
+    ! Note that the function topointegral returns the integral over the 
+    ! rectangle based on a single topo array, and that routine calls
+    ! bilinearintegral.
+
+
+    implicit none
+
+    ! arguments
+    real (kind=8), intent(in) :: x1,x2,y1,y2
+    integer, intent(in) :: m
+    real (kind=8), intent(out) :: integral
+
+    ! local
+    real(kind=8) :: xmlo,xmhi,ymlo,ymhi,x1m,x2m,y1m,y2m,int1,int2,int3,area
+    integer :: indicator
+
+    mrasters = raster_collection%num_rasters
+    rasternum = raster_collection%raster_resolution_order(m)
+    raster_data = raster_collection(rasternum)
+
+    if (m == mrasters) then
+         ! innermost step of recursion reaches this point.
+         ! only using coarsest topo grid -- compute directly...
+         call intersection(indicator,area,xmlo,xmhi,ymlo,ymhi,x1,x2,y1,y2,raster_data)
+
+         if (indicator.eq.1) then
+            ! cell overlaps the file
+            ! integrate surface over intersection of grid and cell
+            integral = topointegral( xmlo,xmhi,ymlo, &
+                    ymhi,xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
+                    dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
+         else
+            integral = 0.d0
+         endif
+
+    else
+        ! recursive call to compute area using one fewer topo grids:
+        call rectintegral(x1,x2,y1,y2,m+1,int1)
+
+        ! region of intersection of cell with new topo grid:
+        call intersection(indicator,area,x1m,x2m, &
+             y1m,y2m, x1,x2,y1,y2, &
+             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
+
+        
+        if (area > 0) then
+        
+            ! correction to subtract out from previous set of topo grids:
+            call rectintegral(x1m,x2m,y1m,y2m,m+1,int2)
+    
+            ! correction to add in for new topo grid:
+            int3 = topointegral(x1m,x2m, y1m,y2m, &
+                        xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
+                        dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
+    
+            ! adjust integral due to corrections for new topo grid:
+            integral = int1 - int2 + int3
+        else
+            integral = int1
+        endif
+    endif
+
+end subroutine rectintegral
 
     !-------------------------------------------------------------------------------
 
@@ -252,163 +402,6 @@ contains
         topointegral= theintegral
         return
         end function rasterintegral
-
-    
-recursive subroutine topoarea(x1,x2,y1,y2,m,area,raster_collection)
-
-    ! Compute the area of overlap of top with the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
-    ! (coarse to fine).
-
-    ! The main call to this subroutine has corners of a physical domain for
-    ! the rectangle and m = 1 in order to compute the area of overlap of
-    ! domain by all topo arrays.  Used to check inputs and insure topo
-    ! covers domain.
-
-    ! The recursive strategy is to first compute the area using only topo 
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
-    ! and then apply corrections due to adding topo array mtopoorder(m).
-     
-    ! Corrections are needed if the new topo array intersects the grid cell.
-    ! Let the intersection be (x1m,x2m) x (y1m,y2m).
-    ! Two corrections are needed, first to subtract out the area over
-    ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
-    ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the area over this same region using 
-    ! topo array mtopoorder(m).
-
-    ! Based on the recursive routine rectintegral that integrates
-    ! topo over grid cells using a similar strategy.
-
-    implicit none
-
-    ! arguments
-    real (kind=8), intent(in) :: x1,x2,y1,y2
-    integer, intent(in) :: m
-    real (kind=8), intent(out) :: area
-
-    type(raster_collection_type), intent(in) :: raster_collection
-
-    ! local
-    real(kind=8) :: xmlo,xmhi,ymlo,ymhi,x1m,x2m,y1m,y2m,area1,area2,area_m
-    integer :: indicator  
-
-    mrasters = raster_collection%num_raster_sets
-    rasternum = raster_collection%raster_resolution_order(m)
-    raster_data = raster_collection(rasternum)
-
-    if (m == mrasters) then
-        ! innermost step of recursion reaches this point.
-        ! only using coarsest topo grid -- compute directly...
-        call intersection(indicator,area,xmlo,xmhi,ymlo,ymhi,x1,x2,y1,y2,raster_data)
-    else
-        ! recursive call to compute area using one fewer topo grids:
-        call topoarea(x1,x2,y1,y2,m+1,area1,raster_collection)
-
-        ! region of intersection of cell with new topo grid:
-        call intersection(indicator,area_m,x1m,x2m,y1m,y2m,x1,x2,y1,y2,raster_data)
-             
-        if (area_m > 0) then
-        
-            ! correction to subtract out from previous set of topo grids:
-            call topoarea(x1m,x2m,y1m,y2m,m+1,area2,raster_collection)
-    
-            ! adjust integral due to corrections for new topo grid:
-            area = area1 - area2 + area_m
-        else
-            area = area1
-        endif
-    endif
-
-end subroutine topoarea
-
-    
-
-recursive subroutine rectintegral(x1,x2,y1,y2,m,integral,raster_collection)
-
-    ! Compute the integral of topo over the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
-    ! (coarse to fine).
-
-    ! The main call to this subroutine has corners of a grid cell for the 
-    ! rectangle and m = 1 in order to compute the integral over the cell 
-    ! using all topo arrays.
-
-    ! The recursive strategy is to first compute the integral using only topo 
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
-    ! and then apply corrections due to adding topo array mtopoorder(m).
-     
-    ! Corrections are needed if the new topo array intersects the grid cell.
-    ! Let the intersection be (x1m,x2m) x (y1m,y2m).
-    ! Two corrections are needed, first to subtract out the integral over
-    ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
-    ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the integral over this same region using 
-    ! topo array mtopoorder(m).
-
-    ! Note that the function topointegral returns the integral over the 
-    ! rectangle based on a single topo array, and that routine calls
-    ! bilinearintegral.
-
-
-    implicit none
-
-    ! arguments
-    real (kind=8), intent(in) :: x1,x2,y1,y2
-    integer, intent(in) :: m
-    real (kind=8), intent(out) :: integral
-
-    ! local
-    real(kind=8) :: xmlo,xmhi,ymlo,ymhi,x1m,x2m,y1m,y2m,int1,int2,int3,area
-    integer :: indicator
-
-    mrasters = raster_collection%num_raster_sets
-    rasternum = raster_collection%raster_resolution_order(m)
-    raster_data = raster_collection(rasternum)
-
-    if (m == mrasters) then
-         ! innermost step of recursion reaches this point.
-         ! only using coarsest topo grid -- compute directly...
-         call intersection(indicator,area,xmlo,xmhi,ymlo,ymhi,x1,x2,y1,y2,raster_data)
-
-         if (indicator.eq.1) then
-            ! cell overlaps the file
-            ! integrate surface over intersection of grid and cell
-            integral = topointegral( xmlo,xmhi,ymlo, &
-                    ymhi,xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
-                    dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
-         else
-            integral = 0.d0
-         endif
-
-    else
-        ! recursive call to compute area using one fewer topo grids:
-        call rectintegral(x1,x2,y1,y2,m+1,int1)
-
-        ! region of intersection of cell with new topo grid:
-        call intersection(indicator,area,x1m,x2m, &
-             y1m,y2m, x1,x2,y1,y2, &
-             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
-
-        
-        if (area > 0) then
-        
-            ! correction to subtract out from previous set of topo grids:
-            call rectintegral(x1m,x2m,y1m,y2m,m+1,int2)
-    
-            ! correction to add in for new topo grid:
-            int3 = topointegral(x1m,x2m, y1m,y2m, &
-                        xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
-                        dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
-    
-            ! adjust integral due to corrections for new topo grid:
-            integral = int1 - int2 + int3
-        else
-            integral = int1
-        endif
-    endif
-
-end subroutine rectintegral
 
 
 subroutine intersection(indicator,area,xintlo,xinthi, &
