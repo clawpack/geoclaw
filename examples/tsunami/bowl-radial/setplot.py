@@ -10,6 +10,7 @@ function setplot is called to set the plot parameters.
 
 from __future__ import absolute_import
 from __future__ import print_function
+from clawpack.visclaw import colormaps
 
 try:
     from setplotfg import setplotfg
@@ -78,8 +79,8 @@ def setplot(plotdata=None):
     plotitem.pcolor_cmin = -0.9
     plotitem.pcolor_cmax = 0.9
     plotitem.add_colorbar = True
-    plotitem.amr_celledges_show = [1,1,0]
-    plotitem.amr_patchedges_show = [1]
+    plotitem.amr_celledges_show = [0,0,0,0]
+    plotitem.amr_patchedges_show = [1,1,1,1]
 
     # Land
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
@@ -88,10 +89,43 @@ def setplot(plotdata=None):
     plotitem.pcolor_cmin = 0.0
     plotitem.pcolor_cmax = 100.0
     plotitem.add_colorbar = False
-    plotitem.amr_celledges_show = [1,1,0]
+    plotitem.amr_celledges_show = [0,0,0,0]
+    plotitem.amr_patchedges_show = [1,1,1,1]
     plotaxes.xlimits = [-100,100]
     plotaxes.ylimits = [-100,100]
 
+    #-----------------------------------------
+    # Figure for topo plot
+    #-----------------------------------------
+    plotfigure = plotdata.new_plotfigure(name='topo', figno=1)
+
+    # Set up for axes in this figure:
+    plotaxes = plotfigure.new_plotaxes()
+    plotaxes.title = 'topo'
+    plotaxes.scaled = True
+
+    # customized color map
+    topo_colormap = colormaps.make_colormap({-80:geoplot.dark_green,120:geoplot.light_green})
+    plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
+    plotitem.plot_var = geoplot.topo
+    plotitem.pcolor_cmap = topo_colormap
+    plotitem.pcolor_cmin = -80
+    plotitem.pcolor_cmax = 120
+    plotitem.add_colorbar = True
+    plotitem.amr_celledges_show = [0,0,0,0]
+    plotitem.amr_patchedges_show = [0,0,0,0]
+
+    # Add contour lines:
+    plotitem = plotaxes.new_plotitem(plot_type='2d_contour')
+    plotitem.plot_var = geoplot.topo
+    from numpy import arange, linspace
+    plotitem.contour_levels = arange(-80., 120., 20.)
+    plotitem.amr_contour_colors = ['k']  # color on each level
+    plotitem.kwargs = {'linestyles':'solid'}
+    plotitem.amr_contour_show = [1,1,1]  # show contours only on finest level
+    plotitem.celledges_show = 0
+    plotitem.patchedges_show = 0
+    plotitem.show = True
 
 
     #-----------------------------------------
