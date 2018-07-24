@@ -19,10 +19,39 @@ OUTDIR = _output               # Directory for output
 SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
+OVERWRITE ?= True                   # False ==> make a copy of OUTDIR first
+
+# FC = pgi
+# USE_CUDA = TRUE
+FC = gfortran
+USE_CUDA = FALSE
+ 
+ 
+# DEBUG = TRUE
+DEBUG = FALSE
+
+CC = pgi
+USE_CPP = FALSE
+
+PROFILE = TRUE
+# PROFILE = FALSE 
+
+USE_OPENMP = TRUE
+
+VERBOSE = FALSE
+
+# USE_DOUBLE_PRECISION = FALSE
+USE_DOUBLE_PRECISION = TRUE
+
+DIM = 2
+NUM_EQUATIONS = 3
+NUM_WAVES = 2
+NUM_COEFFS = 0
+
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 
 # Compiler flags can be specified here or set as an environment variable
-FFLAGS ?= -O3 -fopenmp
+FFLAGS ?= 
 
 
 # ---------------------------------
