@@ -45,8 +45,8 @@ USE_DOUBLE_PRECISION = TRUE
 
 DIM = 2
 NUM_EQUATIONS = 3
-NUM_WAVES = 2
-NUM_COEFFS = 0
+NUM_WAVES = 3
+NUM_COEFFS = 1
 
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 
@@ -76,6 +76,7 @@ EXCLUDE_SOURCES = \
 # ----------------------------------------
 
 MODULES = \
+  $(CLAW)/riemann/src/shallow_topo_device_module.f90
 
 SOURCES = \
   $(CLAW)/riemann/src/rpn2_geoclaw.f \
