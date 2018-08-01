@@ -6,6 +6,10 @@ c
 c
       use amr_module
       use fgmax_module
+#ifdef CUDA
+      use memory_module, only: cpu_deallocate_pinned, gpu_deallocate
+      use cuda_module, only: device_id
+#endif
       implicit double precision (a-h,o-z)
       logical   ee
  
@@ -157,8 +161,13 @@ c
                 if (lev .gt. mxnest) lstart(lev) = 0   
  85             if (mptr .eq. 0) go to 95
                    if (lev .lt. mxnold) then
+#ifdef CUDA
+                    call cpu_deallocate_pinned(cflux_hh(mptr)%ptr)
+                    call gpu_deallocate(cflux_hd(mptr)%ptr,device_id)
+#else
                     call reclam(node(cfluxptr,mptr), 5*listsp(lev))
                     node(cfluxptr,mptr) = 0
+#endif
                    endif
                    nx = node(ndihi,mptr) - node(ndilo,mptr) + 1
                    ny = node(ndjhi,mptr) - node(ndjlo,mptr) + 1
@@ -166,18 +175,33 @@ c
                    jkeep = ny/intrty(lev-1)
                    lenbc = 2*(ikeep+jkeep)
                    if (lev .gt. mxnest) then
+#ifdef CUDA
+                    call cpu_deallocate_pinned(fflux_hh(mptr)%ptr)
+                    call gpu_deallocate(fflux_hd(mptr)%ptr,device_id)
+#else
                        call reclam
      .                  (node(ffluxptr,mptr),2*nvar*lenbc+naux*lenbc)
                        node(ffluxptr,mptr) = 0
+#endif
                    endif
                    mitot = nx + 2*nghost
                    mjtot = ny + 2*nghost
                    if (lev .gt. mxnest) then ! if level going away take away first storage
                       call reclam(node(store1,mptr),mitot*mjtot*nvar)
                       node(store1,mptr) = 0
+#ifdef CUDA
+                      call gpu_deallocate(
+     &                  grid_data_d(mptr)%ptr, device_id)
+                      call gpu_deallocate(
+     &                  grid_data_d_copy2(mptr)%ptr,device_id)
+#endif
+
                       if (naux .gt. 0) then ! and aux arrays
                        call reclam(node(storeaux,mptr),mitot*mjtot*naux)
                        node(storeaux,mptr) = 0
+#ifdef CUDA
+                       call gpu_deallocate(aux_d(mptr)%ptr,device_id)
+#endif
                       endif
                    endif
                    if (lev .ge. mxnest .and. lev .lt. mxnold) then  !reclam 2nd level storage too

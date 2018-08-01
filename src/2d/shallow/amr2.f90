@@ -103,6 +103,13 @@ program amr2
     use regions_module, only: set_regions
     use fgmax_module, only: set_fgmax, FG_num_fgrids
     use multilayer_module, only: set_multilayer
+#ifdef PROFILE
+    use timer_module, only: take_cpu_timer, cpu_timer_start, cpu_timer_stop, &
+        print_all_cpu_timers, timer_total_run_time
+#endif
+#ifdef CUDA
+   use cuda_module, only: initialize_cuda, finalize_cuda
+#endif
 
     implicit none
 
@@ -248,6 +255,19 @@ program amr2
     read(inunit,*) mcapa1
     
     read(inunit,*) use_fwaves
+#ifdef CUDA
+    if (use_fwaves) then
+#ifndef USE_FWAVES
+       print *, 'Must turn on USE_FWAVES in Makefile when compile the code'
+       stop
+#endif
+    else
+#ifdef USE_FWAVES
+       print *, 'Must turn off USE_FWAVES in Makefile when compile the code'
+       stop
+#endif
+    endif
+#endif
     allocate(mthlim(mwaves))
     read(inunit,*) (mthlim(mw), mw=1,mwaves)
 
@@ -314,6 +334,13 @@ program amr2
     endif
 
     close(inunit)
+
+#ifdef CUDA
+    ! ==========================================================================
+    ! GPU setups
+    call initialize_cuda()
+    ! END GPU setups============================================================
+#endif
 
     ! ==========================================================================
     !  Refinement Control
@@ -606,6 +633,10 @@ program amr2
 
  
 
+#ifdef PROFILE
+    call take_cpu_timer("Total run time", timer_total_run_time)
+    call cpu_timer_start(timer_total_run_time)
+#endif
     ! --------------------------------------------------------
     !  Tick is the main routine which drives the computation:
     ! --------------------------------------------------------
@@ -613,6 +644,9 @@ program amr2
     ! --------------------------------------------------------
 
     ! Done with computation, cleanup:
+#ifdef PROFILE
+    call cpu_timer_stop(timer_total_run_time)
+#endif
 
     ! Print out the fgmax files
     if (FG_num_fgrids > 0) call fgmax_finalize()
@@ -736,7 +770,9 @@ program amr2
     write(*,*)
     write(outunit,*)
     
-    
+#ifdef PROFILE
+    call print_all_cpu_timers()
+#endif
     
     
     !format_string = "('Total time to solution = ',1f16.8,' s, using', i3,' threads')"
@@ -852,5 +888,8 @@ program amr2
     ! Close output and debug files.
     close(outunit)
     close(dbugunit)
+
+    call finalize_cuda()
+
 
 end program amr2

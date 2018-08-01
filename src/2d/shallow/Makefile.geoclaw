@@ -6,7 +6,20 @@ GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
 #list of common sources for amr 2d codes
 COMMON_MODULES += \
  $(AMRLIB)/amr_module.f90 \
- $(AMRLIB)/regions_module.f90 
+ $(AMRLIB)/regions_module.f90 \
+ $(AMRLIB)/parallel_advanc_module.f90 \
+ $(AMRLIB)/timer_module.f90
+
+ifeq ($(USE_CUDA), TRUE)
+    COMMON_MODULES += \
+    $(AMRLIB)/cuda_module.f90 \
+    $(AMRLIB)/memory_module.f90 \
+    $(AMRLIB)/profiling_module.f90 \
+    $(AMRLIB)/reflux_module.f90 \
+    $(AMRLIB)/step2_cuda_module.f90 \
+    $(AMRLIB)/sweep_module.f90
+endif
+
 
 #list of common sources needed for geoclaw codes (subset of amr dependencies)
 COMMON_MODULES += \
@@ -39,33 +52,33 @@ COMMON_SOURCES += \
   $(AMRLIB)/init_iflags.f \
   $(AMRLIB)/igetsp.f \
   $(AMRLIB)/reclam.f \
-  $(AMRLIB)/birect.f \
+  $(AMRLIB)/birect.f90 \
   $(AMRLIB)/cleanup.f \
   $(AMRLIB)/colate2.f \
   $(AMRLIB)/errest.f \
   $(AMRLIB)/prepregstep.f \
   $(AMRLIB)/prepbigstep.f \
-  $(AMRLIB)/bufnst2.f \
+  $(AMRLIB)/bufnst2.f90 \
   $(AMRLIB)/flagger.f \
   $(AMRLIB)/flagregions.f90 \
   $(AMRLIB)/errf1.f \
   $(AMRLIB)/fixcapaq.f \
   $(AMRLIB)/flglvl2.f \
-  $(AMRLIB)/fluxad.f \
-  $(AMRLIB)/fluxsv.f \
+  $(AMRLIB)/fluxad.f90 \
+  $(AMRLIB)/fluxsv.f90 \
   $(AMRLIB)/grdfit2.f \
   $(AMRLIB)/moment.f \
   $(AMRLIB)/nestck2.f \
-  $(AMRLIB)/prepc.f \
-  $(AMRLIB)/prepf.f \
+  $(AMRLIB)/prepc.f90 \
+  $(AMRLIB)/prepf.f90 \
   $(AMRLIB)/projec2.f \
   $(AMRLIB)/signs.f \
   $(AMRLIB)/findcut.f \
   $(AMRLIB)/smartbis.f \
   $(AMRLIB)/putnod.f \
-  $(AMRLIB)/putsp.f \
+  $(AMRLIB)/putsp.f90 \
   $(AMRLIB)/regrid.f \
-  $(AMRLIB)/setuse.f \
+  $(AMRLIB)/setuse.f90 \
   $(AMRLIB)/stst1.f \
   $(AMRLIB)/nodget.f \
   $(AMRLIB)/basic.f \
@@ -104,7 +117,7 @@ COMMON_SOURCES += \
   $(AMRLIB)/preintcopy.f \
   $(AMRLIB)/icall.f \
   $(AMRLIB)/preicall.f \
-  $(AMRLIB)/inlinelimiter.f \
+  $(AMRLIB)/inlinelimiter.f90 \
   $(AMRLIB)/cstore.f \
   $(AMRLIB)/saveqc.f \
   $(AMRLIB)/opendatafile.f \
@@ -130,7 +143,7 @@ COMMON_SOURCES += \
   $(GEOLIB)/filval.f90 \
   $(GEOLIB)/filpatch.f90 \
   $(GEOLIB)/bc2amr.f \
-  $(GEOLIB)/update.f \
+  $(GEOLIB)/update.f90 \
   $(GEOLIB)/setaux.f90 \
   $(GEOLIB)/flag2refine2.f90  \
   $(GEOLIB)/allowflag.f90  \
@@ -141,7 +154,7 @@ COMMON_SOURCES += \
   $(GEOLIB)/gfixup.f \
   $(GEOLIB)/ginit.f \
   $(GEOLIB)/getmaxspeed.f90 \
-  $(GEOLIB)/advanc.f \
+  $(GEOLIB)/advanc.f90 \
   $(GEOLIB)/amr2.f90 \
   $(GEOLIB)/fgmax_read.f90 \
   $(GEOLIB)/fgmax_frompatch.f90 \
@@ -149,4 +162,44 @@ COMMON_SOURCES += \
   $(GEOLIB)/fgmax_values.f90 \
   $(GEOLIB)/fgmax_finalize.f90 \
   $(GEOLIB)/check.f \
-  $(GEOLIB)/restrt.f \
+  $(GEOLIB)/restrt.f
+
+ifeq ($(USE_CPP), TRUE)
+
+CPP_SOURCES += \
+  $(AMRLIB)/clawpack_mempool.cpp \
+  $(AMRLIB)/clawpack_MemoryManager.cpp \
+  $(AMRLIB)/clawpack_CPUPinnedMemoryManager.cpp
+
+CPP_HEADERS += \
+  $(AMRLIB)/clawpack_MemoryManager.H \
+  $(AMRLIB)/clawpack_CPUPinnedMemoryManager.H \
+  $(AMRLIB)/clawpack_mempool.H \
+  $(AMRLIB)/clawpack_CUDA_helper.H  
+
+ifeq ($(USE_CUDA), TRUE)
+CPP_SOURCES += \
+  $(AMRLIB)/clawpack_GPUMemoryManager.cpp \
+  $(AMRLIB)/cudaclaw/advance.cu \
+  $(AMRLIB)/cudaclaw/params.cu
+CPP_HEADERS += \
+  $(AMRLIB)/clawpack_GPUMemoryManager.H \
+  $(AMRLIB)/cudaclaw/advance.H \
+  $(AMRLIB)/cudaclaw/common.H \
+  $(AMRLIB)/cudaclaw/arrayIndex.H \
+  $(AMRLIB)/cudaclaw/params.H \
+  $(AMRLIB)/cudaclaw/real.H \
+  $(AMRLIB)/cudaclaw/reduce_Max.H \
+  $(AMRLIB)/cudaclaw/sharedMemory.H \
+  $(AMRLIB)/cudaclaw/acoustics_riemann_solver.H \
+  $(AMRLIB)/cudaclaw/shallow_water_riemann_solver.H \
+  $(AMRLIB)/cudaclaw/shallow_topo_riemann_solver.H \
+  $(AMRLIB)/cudaclaw/burger_riemann_solver.H
+endif
+
+ifeq ($(USE_CUDA), TRUE)
+    INCLUDE += $(AMRLIB)/cudaclaw
+endif
+
+endif # USE_CPP
+

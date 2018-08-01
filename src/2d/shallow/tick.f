@@ -13,6 +13,11 @@ c
       use gauges_module, only: print_gauges_and_reset_nextLoc
 
       use storm_module, only: landfall, display_landfall_time
+#ifdef PROFILE
+      use cuda_module, only: toString
+      use profiling_module
+      use timer_module
+#endif
 
 
       implicit double precision (a-h,o-z)
@@ -221,7 +226,17 @@ c
 
           call system_clock(clock_start,clock_rate)
           call cpu_time(cpu_start)
+#ifdef PROFILE
+          call startCudaProfiler("regrid at level "//toString(lbase)
+     .          ,lbase)
+          call take_cpu_timer("Regridding", timer_regridding)
+          call cpu_timer_start(timer_regridding)
+#endif
           call regrid(nvar,lbase,cut,naux,start_time)
+#ifdef PROFILE
+          call cpu_timer_stop(timer_regridding)
+          call endCudaProfiler() 
+#endif
           call system_clock(clock_finish,clock_rate)
           call cpu_time(cpu_finish)
           timeRegridding = timeRegridding + clock_finish - clock_start
@@ -348,9 +363,22 @@ c                   adjust time steps for this and finer levels
               else
                  level = level - 1
                  call system_clock(clock_start,clock_rate)
+                 call cpu_time(cpu_start)
+#ifdef PROFILE
+                 call startCudaProfiler(
+     .              "update level "//toString(level),level+2)
+                 call take_cpu_timer("Updating", timer_updating)
+                 call cpu_timer_start(timer_updating)
+#endif
                  call update(level,nvar,naux)
+#ifdef PROFILE
+                 call cpu_timer_stop(timer_updating)
+                 call endCudaProfiler() 
+#endif
                  call system_clock(clock_finish,clock_rate)
+                 call cpu_time(cpu_finish)
                  timeUpdating=timeUpdating+clock_finish-clock_start
+                 timeUpdatingCPU=timeUpdatingCPU+cpu_finish-cpu_start
               endif
           go to 105
 c
@@ -361,7 +389,14 @@ c
  110      continue
           time    = time   + possk(1)
           ncycle  = ncycle + 1
+#ifdef PROFILE
+          call take_cpu_timer("conservation check", timer_conck)
+          call cpu_timer_start(timer_conck)
+#endif
           call conck(1,nvar,naux,time,rest)
+#ifdef PROFILE
+          call cpu_timer_stop(timer_conck)
+#endif
 
 
       if ( .not.vtime) goto 201

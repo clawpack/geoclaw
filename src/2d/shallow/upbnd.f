@@ -1,6 +1,7 @@
 c
 c ------------------------------------------------------------
 c
+#include "amr_macros.H"
        subroutine upbnd(listbc,val,nvar,maux,mitot,mjtot,
      1                  maxsp,mptr)
 c     1                  maxsp,iused,mptr)
@@ -69,7 +70,9 @@ c        to mapped bcs. should still only have one update per side of coarse cel
             go to 40
          endif
          mkid = listbc(4,ispot)
+#ifndef CUDA
          kidlst = node(ffluxptr,mkid)
+#endif
          lkid = listbc(5,ispot)
 c         if (mod(iside,4).gt.1) then
 c         modified to include other side options
@@ -100,8 +103,13 @@ c        # grid fluxes that might give unphysical wetting because coarse
 c        # cell may be much higher than some fine cells:
          if (val(1,icrse,jcrse) > dry_tolerance) then
            do 20 ivar = 1,nvar
+#ifndef CUDA
             val(ivar,icrse,jcrse) = val(ivar,icrse,jcrse) +
      1      sgnm*alloc(kidlst+nvar*(lkid-1)+ivar-1)/area
+#else
+            val(ivar,icrse,jcrse) = val(ivar,icrse,jcrse) +
+     1      sgnm*fflux_hh(mkid)%ptr(nvar*(lkid-1)+ivar)/area
+#endif
  20        continue
          else
 c          write(6,*) '+++ throw out ',alloc(kidlst+nvar*(lkid-1))

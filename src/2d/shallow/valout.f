@@ -5,6 +5,9 @@ c
 c
       use amr_module
       use storm_module, only: storm_type, output_storm_location
+#ifdef PROFILE
+      use profiling_module
+#endif
 
       implicit double precision (a-h,o-z)
       character*10  fname1, fname2, fname3, fname4, fname5
@@ -29,8 +32,10 @@ c     # set outaux = .true. to also output the aux arrays to fort.a<iframe>
       iaddqeta(ivar,i,j)  = 1 + ivar - 1 + 4*((j-1)*mitot+i-1)
 c
       call system_clock(clock_start,clock_rate)
-
-
+      call cpu_time(cpu_start)
+#ifdef PROFILE
+      call startCudaProfiler("Output sol.", 47)
+#endif
       if (nvar /= 3) then
           write(6,*) '*** Error: valout assumes nvar==3 for geoclaw'
           stop
@@ -292,10 +297,14 @@ c
       close(unit=matunit2)
       if (output_format == 3) then
           close(unit=matunit4)
-          endif
-
-       call system_clock(clock_finish,clock_rate)
-       timeValout = timeValout + clock_finish - clock_start
+      endif
+#ifdef PROFILE
+      call endCudaProfiler() 
+#endif
+      call system_clock(clock_finish,clock_rate)
+      call cpu_time(cpu_finish)
+      timeValout = timeValout + clock_finish - clock_start
+      timeValoutCPU = timeValoutCPU + cpu_finish - cpu_start
 
       return
       end

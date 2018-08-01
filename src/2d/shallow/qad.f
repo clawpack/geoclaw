@@ -1,11 +1,14 @@
-c
-c -------------------------------------------------------------
-c
+!
+! -------------------------------------------------------------
+!
        subroutine qad(valbig,mitot,mjtot,nvar,
      .                svdflx,qc1d,lenbc,lratiox,lratioy,hx,hy,
      .                maux,aux,auxc1d,delt,mptr)
 
        use amr_module
+#ifdef PROFILE
+      use profiling_module
+#endif
        implicit double precision (a-h, o-z)
 
 
@@ -17,80 +20,85 @@ c
        dimension aux(maux,mitot,mjtot)
        dimension auxc1d(maux,lenbc)
 
-c
-c ::::::::::::::::::::::::::: QAD ::::::::::::::::::::::::::::::::::
-c  solve RP between ghost cell value on fine grid and coarse grid
-c  value that ghost cell overlaps. The resulting fluctuations
-c  are added in to coarse grid value, as a conservation fixup. 
-c  Done each fine grid time step. If source terms are present, the
-c  coarse grid value is advanced by source terms each fine time step too.
+!
+! ::::::::::::::::::::::::::: QAD ::::::::::::::::::::::::::::::::::
+!  solve RP between ghost cell value on fine grid and coarse grid
+!  value that ghost cell overlaps. The resulting fluctuations
+!  are added in to coarse grid value, as a conservation fixup. 
+!  Done each fine grid time step. If source terms are present, the
+!  coarse grid value is advanced by source terms each fine time step too.
 
-c  No change needed in this sub. for spherical mapping: correctly
-c  mapped vals already in bcs on this fine grid and coarse saved
-c  vals also properly prepared
-c
-c Side 1 is the left side of the fine grid patch.  Then go around clockwise.
-c ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-c
-c      # local storage
-c      # note that dimension here are bigger than dimensions used
-c      # in rp2, but shouldn't matter since wave is not used in qad
-c      # and for other arrays it is only the last parameter that is wrong
-c      #  ok as long as meqn, mwaves < maxvar
+!  No change needed in this sub. for spherical mapping: correctly
+!  mapped vals already in bcs on this fine grid and coarse saved
+!  vals also properly prepared
+!
+! Side 1 is the left side of the fine grid patch.  Then go around clockwise.
+! ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+!
+!      # local storage
+!      # note that dimension here are bigger than dimensions used
+!      # in rp2, but shouldn't matter since wave is not used in qad
+!      # and for other arrays it is only the last parameter that is wrong
+!      #  ok as long as meqn, mwaves < maxvar
 
        parameter (max1dp1 = max1d+1)
        dimension ql(nvar,max1dp1),    qr(nvar,max1dp1)
        dimension wave(nvar,mwaves,max1dp1), s(mwaves,max1dp1)
        dimension amdq(nvar,max1dp1),  apdq(nvar,max1dp1)
        dimension auxl(maxaux*max1dp1),  auxr(maxaux*max1dp1)
-c
-c  WARNING: auxl,auxr dimensioned at max possible, but used as if
-c  they were dimensioned as the real maux by max1dp1. Would be better
-c  of course to dimension by maux by max1dp1 but this wont work if maux=0
-c  So need to access using your own indexing into auxl,auxr.
+       
+#ifndef CUDA
+!
+!  WARNING: auxl,auxr dimensioned at max possible, but used as if
+!  they were dimensioned as the real maux by max1dp1. Would be better
+!  of course to dimension by maux by max1dp1 but this wont work if maux=0
+!  So need to access using your own indexing into auxl,auxr.
        iaddaux(iaux,i) = iaux + maux*(i-1)
 
        data qprint/.false./
-c
-c      aux is auxiliary array with user parameters needed in Riemann solvers
-c          on fine grid corresponding to valbig
-c      auxc1d is coarse grid stuff from around boundary, same format as qc1d
-c      auxl, auxr are work arrays needed to pass stuff to rpn2
-c      maux is the number of aux variables, which may be zero.
+!
+!      aux is auxiliary array with user parameters needed in Riemann solvers
+!          on fine grid corresponding to valbig
+!      auxc1d is coarse grid stuff from around boundary, same format as qc1d
+!      auxl, auxr are work arrays needed to pass stuff to rpn2
+!      maux is the number of aux variables, which may be zero.
 
 
-c  ---------------------------------------------------------------
-c      # for GeoClaw we skip this routine --- need to fix someday:
+!  ---------------------------------------------------------------
+!      # for GeoClaw we skip this routine --- need to fix someday:
 
-c      # Is this routine properly implemented with dry states and
-c      # interpolation based on surface eta?
+!      # Is this routine properly implemented with dry states and
+!      # interpolation based on surface eta?
 
-c       return
+!       return
 
-c  ---------------------------------------------------------------
+!  ---------------------------------------------------------------
 
 
+#ifdef PROFILE
+       call startCudaProfiler("qad",13)
+#endif
        if (qprint) write(dbugunit,*)" working on grid ",mptr
        tgrid = rnode(timemult, mptr)
        nc = mjtot-2*nghost
        nr = mitot-2*nghost
        level = node(nestlevel, mptr)
        index = 0
-c
-c--------
-c  side 1
-c--------
-c
+!
+!--------
+!  side 1
+!--------
+!
        do 10 j = nghost+1, mjtot-nghost
        if (maux.gt.0) then
           do 5 ma = 1,maux
              if (auxtype(ma).eq."xleft") then
-c                # Assuming velocity at left-face, this fix
-c                # preserves conservation in incompressible flow:
+!                # Assuming velocity at left-face, this fix
+!                # preserves conservation in incompressible flow:
                  auxl(iaddaux(ma,j-nghost+1)) = aux(ma,nghost+1,j)
                else
-c                # Normal case -- we set the aux arrays 
-c                # from the cell corresponding  to q
+!                # Normal case -- we set the aux arrays 
+!                # from the cell corresponding  to q
                  auxl(iaddaux(ma,j-nghost+1)) = aux(ma,nghost,j)
                endif
   5          continue
@@ -135,9 +143,9 @@ c                # from the cell corresponding  to q
  
        call rpn2(1,max1dp1-2*nghost,nvar,mwaves,maux,nghost,
      .           nc+1-2*nghost,ql,qr,auxl,auxr,wave,s,amdq,apdq)
-c
-c we have the wave. for side 1 add into sdflxm
-c
+!
+! we have the wave. for side 1 add into sdflxm
+!
        influx = 0
        do 30 j = 1, nc/lratioy
           influx  = influx + 1
@@ -151,15 +159,15 @@ c
  40       continue
  30    continue
 
-c--------
-c  side 2
-c--------
-c
+!--------
+!  side 2
+!--------
+!
        if (mjtot .eq. 2*nghost+1) then
-c          # a single row of interior cells only happens when using the
-c          # 2d amrclaw code to do a 1d problem with refinement.
-c          # (feature added in Version 4.3)
-c          # skip over sides 2 and 4 in this case
+!          # a single row of interior cells only happens when using the
+!          # 2d amrclaw code to do a 1d problem with refinement.
+!          # (feature added in Version 4.3)
+!          # skip over sides 2 and 4 in this case
            go to 299
            endif
 
@@ -182,8 +190,8 @@ c          # skip over sides 2 and 4 in this case
          if (maux.gt.0) then
             do 224 ma=1,maux
              if (auxtype(ma).eq."yleft") then
-c                # Assuming velocity at bottom-face, this fix
-c                # preserves conservation in incompressible flow:
+!                # Assuming velocity at bottom-face, this fix
+!                # preserves conservation in incompressible flow:
                  ifine = (ic-1)*lratiox + nghost + l
                  auxl(iaddaux(ma,lind+1)) = aux(ma,ifine,mjtot-nghost+1)
                else
@@ -213,9 +221,9 @@ c                # preserves conservation in incompressible flow:
        endif
        call rpn2(2,max1dp1-2*nghost,nvar,mwaves,maux,nghost,
      .              nr+1-2*nghost,ql,qr,auxl,auxr,wave,s,amdq,apdq)
-c
-c we have the wave. for side 2. add into sdflxp
-c
+!
+! we have the wave. for side 2. add into sdflxp
+!
        do 230 i = 1, nr/lratiox
           influx  = influx + 1
           ifine = (i-1)*lratiox
@@ -230,10 +238,10 @@ c
 
  299  continue
 
-c--------
-c  side 3
-c--------
-c
+!--------
+!  side 3
+!--------
+!
        do 310 j = nghost+1, mjtot-nghost
         if (maux.gt.0) then
           do 305 ma = 1,maux
@@ -253,8 +261,8 @@ c
          if (maux.gt.0) then
             do 324 ma=1,maux
              if (auxtype(ma).eq."xleft") then
-c                # Assuming velocity at left-face, this fix
-c                # preserves conservation in incompressible flow:
+!                # Assuming velocity at left-face, this fix
+!                # preserves conservation in incompressible flow:
                  jfine = (jc-1)*lratioy + nghost + l
                  auxl(iaddaux(ma,lind+1)) = aux(ma,mitot-nghost+1,jfine)
                else
@@ -274,9 +282,9 @@ c                # preserves conservation in incompressible flow:
        endif
        call rpn2(1,max1dp1-2*nghost,nvar,mwaves,maux,nghost,
      .              nc+1-2*nghost,ql,qr,auxl,auxr,wave,s,amdq,apdq)
-c
-c we have the wave. for side 3 add into sdflxp
-C
+!
+! we have the wave. for side 3 add into sdflxp
+!
        do 330 j = 1, nc/lratioy
           influx  = influx + 1
           jfine = (j-1)*lratioy
@@ -289,24 +297,24 @@ C
  340       continue
  330    continue
 
-c--------
-c  side 4
-c--------
-c
+!--------
+!  side 4
+!--------
+!
        if (mjtot .eq. 2*nghost+1) then
-c          # a single row of interior cells only happens when using the
-c          # 2d amrclaw code to do a 1d problem with refinement.
-c          # (feature added in Version 4.3)
-c          # skip over sides 2 and 4 in this case
+!          # a single row of interior cells only happens when using the
+!          # 2d amrclaw code to do a 1d problem with refinement.
+!          # (feature added in Version 4.3)
+!          # skip over sides 2 and 4 in this case
            go to 499
            endif
-c
+!
        do 410 i = nghost+1, mitot-nghost
         if (maux.gt.0) then
           do 405 ma = 1,maux
              if (auxtype(ma).eq."yleft") then
-c                # Assuming velocity at bottom-face, this fix
-c                # preserves conservation in incompressible flow:
+!                # Assuming velocity at bottom-face, this fix
+!                # preserves conservation in incompressible flow:
                  auxl(iaddaux(ma,i-nghost+1)) = aux(ma,i,nghost+1)
                else
                  auxl(iaddaux(ma,i-nghost+1)) = aux(ma,i,nghost)
@@ -340,9 +348,9 @@ c                # preserves conservation in incompressible flow:
        endif
        call rpn2(2,max1dp1-2*nghost,nvar,mwaves,maux,nghost,
      .              nr+1-2*nghost,ql,qr,auxl,auxr,wave,s,amdq,apdq)
-c
-c we have the wave. for side 4. add into sdflxm
-c
+!
+! we have the wave. for side 4. add into sdflxm
+!
        do 430 i = 1, nr/lratiox
           influx  = influx + 1
           ifine = (i-1)*lratiox
@@ -357,15 +365,19 @@ c
 
  499   continue
 
-c      # for source terms:
-c      # This is commented out for now --- updating the momenumtum due
-c      # to friction/Coriolis source terms affects the resulting mass flux
-c      # and leads to loss of conservation when src1d is used.
-c      # It would be better to incorporate these source terms into the
-c      # the f-wave formulation?
-c      if (method(5) .ne. 0) then
-c          call src1d(nvar,nghost,lenbc,qc1d,maux,auxc1d,tgrid,delt)
-c          endif
+!      # for source terms:
+!      # This is commented out for now --- updating the momenumtum due
+!      # to friction/Coriolis source terms affects the resulting mass flux
+!      # and leads to loss of conservation when src1d is used.
+!      # It would be better to incorporate these source terms into the
+!      # the f-wave formulation?
+!      if (method(5) .ne. 0) then
+!          call src1d(nvar,nghost,lenbc,qc1d,maux,auxc1d,tgrid,delt)
+!          endif
+#ifdef PROFILE
+       call endCudaProfiler()
+#endif
+#endif
 
        return
        end

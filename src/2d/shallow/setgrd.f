@@ -136,6 +136,11 @@ c
          call prepf(level+1,nvar,naux)
          call prepc(level,nvar)
  70   continue
+#ifdef CUDA
+      ! fflux_hd is updated so we copy it to fflux_dd
+      fflux_dd = fflux_hd
+      cflux_dd = cflux_hd
+#endif
 c
       if (.not. varRefTime) go to 99   ! keep consistent with gfixup and filval
 
