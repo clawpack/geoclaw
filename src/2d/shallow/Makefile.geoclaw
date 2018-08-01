@@ -40,6 +40,7 @@ COMMON_MODULES += \
 
 # list of source files from AMR library. 
 COMMON_SOURCES += \
+  $(AMRLIB)/advanc.f90 \
   $(AMRLIB)/prefilp.f90 \
   $(AMRLIB)/trimbd.f90 \
   $(AMRLIB)/bound.f90 \
@@ -154,7 +155,6 @@ COMMON_SOURCES += \
   $(GEOLIB)/gfixup.f \
   $(GEOLIB)/ginit.f \
   $(GEOLIB)/getmaxspeed.f90 \
-  $(GEOLIB)/advanc.f90 \
   $(GEOLIB)/amr2.f90 \
   $(GEOLIB)/fgmax_read.f90 \
   $(GEOLIB)/fgmax_frompatch.f90 \
