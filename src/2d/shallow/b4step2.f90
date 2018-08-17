@@ -10,7 +10,6 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux)
 ! This is for problems where q(1,i,j) is a depth.
 ! This should occur only because of rounding error.
 !
-! Also calls movetopo if topography might be moving.
 
     use geoclaw_module, only: dry_tolerance
     use geoclaw_module, only: g => grav

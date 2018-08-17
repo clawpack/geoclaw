@@ -10,6 +10,8 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
 !        aux(2,i,j) = area ratio (capacity function -- set mcapa = 2)
 !        aux(3,i,j) = length ratio for edge
 !
+!     In GeoClaw, setaux is called with xlow being lowex x-coordinate of the 
+!     grid patch, excluding ghost cells
 !
 
     use amr_module, only: mcapa, xupper, yupper, xlower, ylower, NEEDS_TO_BE_SET
