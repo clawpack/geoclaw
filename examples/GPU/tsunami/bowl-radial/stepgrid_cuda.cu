@@ -12,7 +12,7 @@ extern "C" void call_C_limited_riemann_update(
         real* q, real* qNew, 
         real* coefficients,
         const int numStates, const int numCoefficients,
-        real* cfls, const int ngrids, 
+        real* cfls, const int ngrids, const int mcapa,
         const int id, const int dev_id) {
 
     // actually qNew holds the input old solution as well as new output solution
@@ -29,14 +29,15 @@ extern "C" void call_C_limited_riemann_update(
             startX, endX, startY, endY, dt,
             q, qNew, 
             coefficients, 
-            cfl_grid, id, dev_id); 
+            cfl_grid, mcapa, id, dev_id); 
 
     param.setOrderOfAccuracy(2);
 
     shallow_topo_horizontal swe_h;
     shallow_topo_vertical swe_v;
     
-    limiter_VanLeer phi;
+    limiter_MC phi;
+    // limiter_VanLeer phi;
 
     limited_Riemann_Update(param, 
             swe_h, swe_v, 

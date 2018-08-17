@@ -444,6 +444,18 @@ program amr2
         stop 'Error ***   mcapa > naux in input file'
     endif
 
+#ifdef CUDA
+#ifdef USE_CAPA
+    if (.not. mcapa > 0) then
+        stop 'Error ***  USE_CAPA is defined when the code is compiled. mcapa > 0 is expected.'
+    endif
+#else
+    if (mcapa > 0) then
+        stop 'Error ***  Should set USE_CAPA = TRUE in Makefile when mcapa > 0'
+    endif
+#endif
+#endif
+
     if (.not. vtime .and. nout /= 0) then
         print *,        ' cannot specify output times with fixed dt'
         stop
