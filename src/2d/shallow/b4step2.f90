@@ -41,6 +41,9 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux)
     ! Check for NaNs in the solution
     call check4nans(meqn,mbc,mx,my,q,t,1)
 
+#ifdef CUDA
+    ! this is done in the riemann solver on GPU
+#else
     ! check for h < 0 and reset to zero
     ! check for h < drytolerance
     ! set hu = hv = 0 in all these cells
@@ -48,6 +51,7 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux)
         q(1,i,j) = max(q(1,i,j),0.d0)
         q(2:3,i,j) = 0.d0
     end forall
+#endif
 
 
     if (aux_finalized < 2) then
