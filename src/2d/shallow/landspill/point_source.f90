@@ -27,12 +27,18 @@ module point_source_mod
         contains
         !> @brief Reinitialize this instance.
         procedure:: reinit => init
+        !> @brief Manually clear this instance.
+        procedure:: clear
         !> @brief Calculate and return depth rate.
         procedure:: d_rate
         !> @brief Write the information and data of this instance.
         procedure:: writef
+        !> @brief Read the information and data of this instance.
+        procedure:: readf
         !> @brief Overriding intrinsic write function.
         generic:: write(formatted) => writef
+        !> @brief Overriding intrinsic read function.
+        generic:: read(formatted) => readf
         !> @brief Destructor.
         final:: destructor
     end type point_source
@@ -61,6 +67,20 @@ contains
         call init(constructor, coord, nt, t, v_rate)
     end function constructor
 
+    !> @brief Finalize a point_source instance.
+    !!
+    !! Deallocate dynamic arrays and finalize the instance.
+    !!
+    !! @param[in] this an instance of point_source
+    subroutine destructor(this)
+        ! declaration
+        type(point_source), intent(inout):: this
+
+        ! code
+        call this%clear()
+
+    end subroutine destructor
+
     !> @brief Initialize a point_source instance.
     !!
     !! Initializ a point_source instance.
@@ -79,6 +99,9 @@ contains
         real(kind=8), dimension(nt), intent(in):: v_rate
 
         ! code
+        if (allocated(this%t)) deallocate(this%t)
+        if (allocated(this%v_rate)) deallocate(this%t)
+
         this%coord = coord
         this%nt = nt
         this%t = t ! implicit allocation
@@ -87,6 +110,24 @@ contains
         ! TODO: make sure the t array is sorted and v_rate is sorted based on t
 
     end subroutine init
+
+    !> @brief Manually clear a point_source instance.
+    !!
+    !! Deallocate dynamic arrays and finalize the instance.
+    !!
+    !! @param[in] this an instance of point_source
+    subroutine clear(this)
+        ! declaration
+        class(point_source), intent(inout):: this
+
+        ! code
+        if (allocated(this%t)) deallocate(this%t)
+        if (allocated(this%v_rate)) deallocate(this%v_rate)
+
+        this%coord = (/ 0D0, 0D0 /)
+        this%nt = -1
+
+    end subroutine clear
 
     !> @brief Print information of an instance of point_source.
     !!
@@ -118,23 +159,35 @@ contains
 
     end subroutine writef
 
-    !> @brief Finalize a point_source instance.
+    !> @brief Read formatted data block and re-initialize the instance.
     !!
-    !! Deallocate dynamic arrays and finalize the instance.
+    !! Read formatted data block and re-initialize the instance.
     !!
     !! @param[in] this an instance of point_source
-    subroutine destructor(this)
-        ! declaration
-        type(point_source), intent(inout):: this
+    !! @param[in] iounit see intrinsic write function
+    !! @param[in] iotype see intrinsic write function
+    !! @param[in] v_list see intrinsic write function
+    !! @param[out] stat see intrinsic write function
+    !! @param[in, out] msg see intrinsic write function
+    subroutine readf(this, iounit, iotype, v_list, stat, msg)
+        ! variable declaration
+        class(point_source), intent(inout):: this
+        integer(kind=4), intent(in):: iounit
+        character(*), intent(in)::iotype
+        integer(kind=4), intent(in):: v_list(:)
+        integer(kind=4), intent(out):: stat
+        character(*), intent(inout):: msg
 
         ! code
-        if (allocated(this%t)) deallocate(this%t)
-        if (allocated(this%v_rate)) deallocate(this%v_rate)
+        read(iounit, *, iostat=stat, iomsg=msg) this%coord
+        read(iounit, *, iostat=stat, iomsg=msg) this%nt
 
-        this%coord = (/ 0D0, 0D0 /)
-        this%nt = -1
+        allocate(this%t(this%nt), this%v_rate(this%nt))
 
-    end subroutine destructor
+        read(iounit, *, iostat=stat, iomsg=msg) this%t
+        read(iounit, *, iostat=stat, iomsg=msg) this%v_rate
+
+    end subroutine readf
 
     !> @brief Return a depth rate according to time, dx and dy.
     !!
@@ -162,5 +215,44 @@ contains
         endif
 
     end function d_rate
+
+    !> @brief Find the (i, j) of this point source in a provided mesh.
+    !!
+    !! Find the index (i, j) in a provided mesh where this point source located
+    !! in. If the returned i and j are -999, this means this point source is not
+    !! located in this mesh.
+    !!
+    !! @param[in] this an instance of point_source
+    !! @param[in] mx the number of cells in x direction.
+    !! @param[in] my the number of cells in y direction.
+    !! @param[in] xlower the lower limit in x direction of this mesh.
+    !! @param[in] ylower the lower limit in y direction of this mesh.
+    !! @param[in] dx the cell size in x direction.
+    !! @param[in] dy the cell size in y direction.
+    !! @param[out] i the cell index in x direction.
+    !! @param[out] j the cell index in y direction.
+    subroutine cell_id(this, mx, my, xlower, ylower, dx, dy, i, j)
+        ! declaration
+        class(point_source), intent(in):: this
+        integer(kind=4), intent(in):: mx, my
+        real(kind=8), intent(in):: xlower, ylower, dx, dy
+        integer(kind=4), intent(out):: i, j
+        real(kind=8):: xupper, yupper
+
+        ! code
+        i = -999
+        j = -999
+
+        xupper = xlower + mx * dx
+        yupper = ylower + my * dy
+
+        if ((this%coord(1) .ge. xlower) .and. (this%coord(1) .lt. xupper)) then
+            if ((this%coord(2) .ge. ylower) .and. (this%coord(2) .lt. yupper)) then
+                i = int(this%coord(1)/dx) + 1
+                j = int(this%coord(2)/dy) + 1
+            endif
+        endif
+
+    end subroutine cell_id
 
 end module point_source_mod
