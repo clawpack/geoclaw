@@ -42,7 +42,7 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux)
     call check4nans(meqn,mbc,mx,my,q,t,1)
 
 #ifdef CUDA
-    ! this is done in the riemann solver on GPU
+    ! this is done on the GPU
 #else
     ! check for h < 0 and reset to zero
     ! check for h < drytolerance
