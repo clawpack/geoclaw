@@ -1,4 +1,4 @@
-!> @file point_source.f90
+!> @file point_source_module.f90
 !! @brief Point source class. 
 !! @author Pi-Yueh Chuang
 !! @version alpha
@@ -8,7 +8,7 @@
 !!
 !! Only the point_source class is exposed to public. All others are private.
 !!
-module point_source_mod
+module point_source_module
     implicit none
     private
     public:: point_source
@@ -147,15 +147,11 @@ contains
         integer(kind=4), intent(in):: v_list(:)
         integer(kind=4), intent(out):: stat
         character(*), intent(inout):: msg
+        character:: c
 
         ! code
-        write(iounit, *, iostat=stat, iomsg=msg) this%coord
-        write(iounit, "(/)", iostat=stat, iomsg=msg)
-        write(iounit, *, iostat=stat, iomsg=msg) this%nt
-        write(iounit, "(/)", iostat=stat, iomsg=msg)
-        write(iounit, *, iostat=stat, iomsg=msg) this%t
-        write(iounit, "(/)", iostat=stat, iomsg=msg)
-        write(iounit, *, iostat=stat, iomsg=msg) this%v_rate
+        write(iounit, *, iostat=stat, iomsg=msg) new_line(c), this%coord, &
+            new_line(c), this%nt, new_line(c), this%t, new_line(c), this%v_rate
 
     end subroutine writef
 
@@ -255,4 +251,4 @@ contains
 
     end subroutine cell_id
 
-end module point_source_mod
+end module point_source_module
