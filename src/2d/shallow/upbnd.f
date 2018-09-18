@@ -107,8 +107,8 @@ c        # cell may be much higher than some fine cells:
             val(ivar,icrse,jcrse) = val(ivar,icrse,jcrse) +
      1      sgnm*alloc(kidlst+nvar*(lkid-1)+ivar-1)/area
 #else
-            val(ivar,icrse,jcrse) = val(ivar,icrse,jcrse) +
-     1      sgnm*fflux_hh(mkid)%ptr(nvar*(lkid-1)+ivar)/area
+c           val(ivar,icrse,jcrse) = val(ivar,icrse,jcrse) +
+c    1      sgnm*fflux_hh(mkid)%ptr(nvar*(lkid-1)+ivar)/area
 #endif
  20        continue
          else
