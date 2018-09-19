@@ -14,6 +14,8 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     use friction_module, only: variable_friction, friction_index
 
+    use landspill_module, only: apply_point_sources
+
     implicit none
     
     ! Input parameters
@@ -73,6 +75,10 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
         enddo
     endif
     ! End of friction source term
+
+    ! Point source term
+    call apply_point_sources(meqn, mbc, mx, my, xlower, ylower, dx, dy, q, t, dt)
+    ! End of point source term
 
     ! Coriolis source term
     ! TODO: May want to remove the internal calls to coriolis as this could 

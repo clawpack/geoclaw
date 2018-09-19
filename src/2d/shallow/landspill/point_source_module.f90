@@ -31,6 +31,8 @@ module point_source_module
         procedure:: clear
         !> @brief Calculate and return depth rate.
         procedure:: d_rate
+        !> @brief Obtain the cell indices
+        procedure:: cell_id
         !> @brief Write the information and data of this instance.
         procedure:: writef
         !> @brief Read the information and data of this instance.
@@ -244,8 +246,8 @@ contains
 
         if ((this%coord(1) .ge. xlower) .and. (this%coord(1) .lt. xupper)) then
             if ((this%coord(2) .ge. ylower) .and. (this%coord(2) .lt. yupper)) then
-                i = int(this%coord(1)/dx) + 1
-                j = int(this%coord(2)/dy) + 1
+                i = int((this%coord(1)-xlower)/dx) + 1
+                j = int((this%coord(2)-ylower)/dy) + 1
             endif
         endif
 
