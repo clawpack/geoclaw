@@ -63,9 +63,9 @@ contains
     end subroutine write_data_constant
 
     ! implementation of get_coefficient_constant
-    function get_coefficient_constant(this, x, y) result(coef)
+    function get_coefficient_constant(this, x, y, q) result(coef)
         class(DarcyWeisbachConstant), intent(in):: this
-        real(kind=8), intent(in):: x, y
+        real(kind=8), intent(in):: x, y, q(3)
         real(kind=8):: coef
 
         coef = this%coefficient

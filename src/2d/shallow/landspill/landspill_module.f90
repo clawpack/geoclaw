@@ -16,6 +16,9 @@ module landspill_module
     !> @brief Object for a collection of point sources.
     type(PointSourceCollection):: point_sources
 
+    !> @brief kinematic viscosity
+    real(kind=8):: nu
+
 contains
 
     !> @brief Initialize landspill module

@@ -10,7 +10,8 @@ module darcy_weisbach_module
     use darcy_weisbach_abstract_module
     use darcy_weisbach_constant_module
     use darcy_weisbach_block_constants_module
-    use darcy_weisbach_cells
+    use darcy_weisbach_cells_module
+    use darcy_weisbach_three_models_module
     implicit none
     private
     public:: DarcyWeisbach
@@ -83,6 +84,8 @@ contains
             allocate(DarcyWeisbachBlockConstants::this%ptr)
         case (3)
             allocate(DarcyWeisbachCells::this%ptr)
+        case (4)
+            allocate(DarcyWeisbachThreeModels::this%ptr)
         case default
             write(*, *) "Invalid Darcy-Weisbach friction type."
             stop

@@ -60,10 +60,11 @@ module darcy_weisbach_abstract_module
         end subroutine write_data_base
 
         ! get_coefficient_base
-        function get_coefficient_base(this, x, y) result(coef)
+        function get_coefficient_base(this, x, y, q) result(coef)
             import
             class(DarcyWeisbachBase), intent(in):: this
             real(kind=8), intent(in):: x, y
+            real(kind=8), intent(in):: q(3)
             real(kind=8):: coef
         end function get_coefficient_base
     end interface
@@ -107,7 +108,8 @@ contains
                 ! set momentum to be zero if depth is smaller than dry_tol
                 if (q(1, i, j) < this%dry_tol) q(2:3, i, j) = 0D0
 
-                dgamma = 1D0 - dt * kernel(q(:, i, j), this%get_coefficient(x, y))
+                dgamma = 1D0 - dt * kernel(q(:, i, j), &
+                    this%get_coefficient(x, y, q(1:3, i, j)))
 
                 q(2, i, j) = q(2, i, j) / dgamma
                 q(3, i, j) = q(3, i, j) / dgamma

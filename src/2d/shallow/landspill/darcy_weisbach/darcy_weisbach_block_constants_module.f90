@@ -93,9 +93,9 @@ contains
     end subroutine write_data_block_constants
 
     ! implementation of get_coefficient_block_constants
-    function get_coefficient_block_constants(this, x, y) result(coef)
+    function get_coefficient_block_constants(this, x, y, q) result(coef)
         class(DarcyWeisbachBlockConstants), intent(in):: this
-        real(kind=8), intent(in):: x, y
+        real(kind=8), intent(in):: x, y, q(3)
         real(kind=8):: coef
         logical:: found = .false.
         integer(kind=4):: i
