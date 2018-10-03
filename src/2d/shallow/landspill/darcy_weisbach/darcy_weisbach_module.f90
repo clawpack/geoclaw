@@ -78,7 +78,8 @@ contains
         read(funit, *) this%type
 
         select case (this%type)
-        case (0) ! Darcy-Weisbach is turned off
+        case (0) ! a trivial null object
+            allocate(DarcyWeisbachNull::this%ptr)
         case (1)
             allocate(DarcyWeisbachConstant::this%ptr)
         case (2)
@@ -118,6 +119,14 @@ contains
         integer(kind=4), intent(in):: v_list(:)
         integer(kind=4), intent(out):: stat
         character(*), intent(inout):: msg
+        character:: n, t
+
+        n = new_line(t) ! n is the "new line" character
+        t = achar(9) ! t is the character for a tab
+
+        ! write type
+        write(iounit, *, iostat=stat, iomsg=msg) &
+            n, this%type, t, t, "=: type of Darcy-Weisbach factor"
 
         ! use underlying object's method
         write(iounit, *, iostat=stat, iomsg=msg) this%ptr

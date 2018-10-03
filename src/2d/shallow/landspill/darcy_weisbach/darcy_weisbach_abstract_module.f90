@@ -6,11 +6,11 @@
 !
 
 
-!> @brief An abstract class and its derived classes.
+!> @brief Abstract and null class for Darcy-Weisbach classes.
 module darcy_weisbach_abstract_module
     implicit none
     private
-    public:: DarcyWeisbachBase
+    public:: DarcyWeisbachBase, DarcyWeisbachNull
 
     !> @brief The abstract class for friction objects.
     type, abstract:: DarcyWeisbachBase
@@ -68,6 +68,22 @@ module darcy_weisbach_abstract_module
             real(kind=8):: coef
         end function get_coefficient_base
     end interface
+
+    type, extends(DarcyWeisbachBase):: DarcyWeisbachNull
+        private
+
+        contains
+        !> @brief Initialize.
+        procedure:: init_from_funit => init_from_funit_null
+        !> @brief Underlying outputing.
+        procedure:: write_data => write_data_null
+        !> @brief Getting the coefficient of a single cell.
+        procedure:: get_coefficient => get_coefficient_null
+        !> @brief Trivial function.
+        procedure:: apply_to_grid => apply_to_grid_null
+        !> @bried Destructor
+        final:: destructor_null
+    end type DarcyWeisbachNull
 
 contains
 
@@ -130,5 +146,63 @@ contains
         write(*, *) "Error: direct read of this object is prohibited."
         stop
     end subroutine read_base
+
+    ! implementation of init_from_funit_null
+    subroutine init_from_funit_null(this, funit)
+        class(DarcyWeisbachNull), intent(inout):: this
+        integer(kind=4), intent(in):: funit
+
+        this%name = "Trivial Darcy-Weisbach (Do nothing object)"
+
+        ! do not read from file. Force to safety numbers
+        this%friction_tol = 0D0
+        this%dry_tol = 1D7
+    end subroutine init_from_funit_null
+
+    ! implementation of write_data_null
+    subroutine write_data_null(this, iounit, iotype, v_list, stat, msg)
+        class(DarcyWeisbachNull), intent(in):: this
+        integer(kind=4), intent(in):: iounit
+        character(*), intent(in)::iotype
+        integer(kind=4), intent(in):: v_list(:)
+        integer(kind=4), intent(out):: stat
+        character(*), intent(inout):: msg
+        character:: n, t
+
+        n = new_line(t) ! n is the "new line" character
+        t = achar(9) ! t is the character for a tab
+
+        write(iounit, *, iostat=stat, iomsg=msg) &
+            n, this%friction_tol, t, t, "=: ", "friction_tol", &
+            n, this%dry_tol, t, t, "=: ", "dry_tol"
+    end subroutine write_data_null
+
+    ! implementation of get_coefficient_null
+    function get_coefficient_null(this, x, y, q) result(coef)
+        class(DarcyWeisbachNull), intent(in):: this
+        real(kind=8), intent(in):: x, y, q(3)
+        real(kind=8):: coef
+
+        coef = 0D0
+    end function get_coefficient_null
+
+    ! implementation of apply_to_grid_null
+    subroutine apply_to_grid_null(this, meqn, mbc, mx, my, &
+        xlower, ylower, dx, dy, q, dt)
+
+        ! passed-in variables
+        class(DarcyWeisbachNull), intent(in):: this
+        integer(kind=4), intent(in):: meqn, mbc, mx, my
+        real(kind=8), intent(in):: xlower, ylower, dx, dy, dt
+        real(kind=8), intent(inout):: q(meqn, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+
+        return
+    end subroutine apply_to_grid_null
+
+    ! implementation of destructor_null
+    subroutine destructor_null(this)
+        type(DarcyWeisbachNull), intent(inout):: this
+        this%name = ''
+    end subroutine destructor_null
 
 end module darcy_weisbach_abstract_module
