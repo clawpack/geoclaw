@@ -11,7 +11,8 @@ module darcy_weisbach_module
     use darcy_weisbach_constant_module
     use darcy_weisbach_block_constants_module
     use darcy_weisbach_cells_module
-    use darcy_weisbach_three_models_module
+    use darcy_weisbach_three_regimes_module
+    use darcy_weisbach_churchill_module
     implicit none
     private
     public:: DarcyWeisbach
@@ -86,6 +87,8 @@ contains
             allocate(DarcyWeisbachCells::this%ptr)
         case (4)
             allocate(DarcyWeisbachThreeModels::this%ptr)
+        case (5)
+            allocate(DarcyWeisbachChurchill::this%ptr)
         case default
             write(*, *) "Invalid Darcy-Weisbach friction type."
             stop
@@ -134,12 +137,12 @@ contains
     end subroutine read_data
 
     ! implementation fo get_coefficient
-    function get_coefficient(this, x, y) result(coef)
+    function get_coefficient(this, x, y, q) result(coef)
     class(DarcyWeisbach), intent(in):: this
-    real(kind=8), intent(in):: x, y
+    real(kind=8), intent(in):: x, y, q(3)
     real(kind=8):: coef
         ! use underlying object's method
-        coef = this%ptr%get_coefficient(x, y)
+        coef = this%ptr%get_coefficient(x, y, q)
     end function get_coefficient
 
     ! implementation of apply_to_grid

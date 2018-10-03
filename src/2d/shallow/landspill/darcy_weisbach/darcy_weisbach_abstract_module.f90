@@ -79,7 +79,7 @@ contains
         real(kind=8):: gamma
         
         ! code
-        gamma = 0.125D0 * coefficient * sqrt(q(2)**2+q(3)**2) / (q(1)**2)
+        gamma = 0.125D0 * coefficient * dsqrt(q(2)**2+q(3)**2) / (q(1)**2)
 
     end function kernel      
 

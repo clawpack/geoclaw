@@ -1,5 +1,5 @@
 !
-! darcy_weisbach_three_models.f90
+! darcy_weisbach_three_regimes.f90
 ! Copyright (C) 2018 Pi-Yueh Chuang <pychuang@gwu.edu>
 !
 ! Distributed under terms of the MIT license.
@@ -7,14 +7,14 @@
 
 
 !> @brief Calculate coefficients with the combination of three models.
-module darcy_weisbach_three_models_module
+module darcy_weisbach_three_regimes_module
     use darcy_weisbach_abstract_module
     implicit none
     private
-    public:: DarcyWeisbachThreeModels
+    public:: DarcyWeisbachThreeRegimes
 
     !> @brief Darcy-Weisbach with cell-wide coefficients
-    type, extends(DarcyWeisbachBase):: DarcyWeisbachThreeModels
+    type, extends(DarcyWeisbachBase):: DarcyWeisbachThreeRegimes
         private ! variables
         !> @brief Keep the underlying roughness file name.
         character(len=255):: filename
@@ -41,35 +41,35 @@ module darcy_weisbach_three_models_module
 
         contains ! member functions
         !> @brief Initialize.
-        procedure:: init_from_funit => init_from_funit_three_models
+        procedure:: init_from_funit => init_from_funit_three_regimes
         !> @brief Underlying outputing.
-        procedure:: write_data => write_data_three_models
+        procedure:: write_data => write_data_three_regimes
         !> @brief Getting the coefficient of a single cell.
-        procedure:: get_coefficient => get_coefficient_three_models
+        procedure:: get_coefficient => get_coefficient_three_regimes
         !> @brief Read real coefficient file (in Esri ASCII format)
         procedure:: read_roughness_file
         !> @bried Destructor
-        final:: destructor_three_models
-    end type DarcyWeisbachThreeModels
+        final:: destructor_three_regimes
+    end type DarcyWeisbachThreeRegimes
 
 contains
 
-    ! implementation of init_from_funit_three_models
-    subroutine init_from_funit_three_models(this, funit)
-        class(DarcyWeisbachThreeModels), intent(inout):: this
+    ! implementation of init_from_funit_three_regimes
+    subroutine init_from_funit_three_regimes(this, funit)
+        class(DarcyWeisbachThreeRegimes), intent(inout):: this
         integer(kind=4), intent(in):: funit
 
-        this%name = "Cell-wide Darcy-Weisbach"
+        this%name = "Three-regime Darcy-Weisbach"
         read(funit, *) this%friction_tol
         read(funit, *) this%dry_tol
         read(funit, *) this%filename
         read(funit, *) this%default_roughness
         call this%read_roughness_file()
-    end subroutine init_from_funit_three_models
+    end subroutine init_from_funit_three_regimes
 
-    ! implementation of write_data_three_models
-    subroutine write_data_three_models(this, iounit, iotype, v_list, stat, msg)
-        class(DarcyWeisbachThreeModels), intent(in):: this
+    ! implementation of write_data_three_regimes
+    subroutine write_data_three_regimes(this, iounit, iotype, v_list, stat, msg)
+        class(DarcyWeisbachThreeRegimes), intent(in):: this
         integer(kind=4), intent(in):: iounit
         character(*), intent(in)::iotype
         integer(kind=4), intent(in):: v_list(:)
@@ -87,12 +87,12 @@ contains
             n, this%default_roughness, t, t, "=: default_coefficien", t, t, &
             "# (coefficient for cells uncovered by the file)"
 
-    end subroutine write_data_three_models
+    end subroutine write_data_three_regimes
 
-    ! implementation of get_coefficient_three_models
-    function get_coefficient_three_models(this, x, y, q) result(coef)
+    ! implementation of get_coefficient_three_regimes
+    function get_coefficient_three_regimes(this, x, y, q) result(coef)
         use landspill_module, only: nu
-        class(DarcyWeisbachThreeModels), intent(in):: this
+        class(DarcyWeisbachThreeRegimes), intent(in):: this
         real(kind=8), intent(in):: x, y, q(3)
         real(kind=8):: coef, roughness, Re
         integer(kind=4):: i, j
@@ -103,7 +103,7 @@ contains
         ! *********************************************************************
 
         ! calculate local Reynolds number (defined by hydraulic radius, i.e., h)
-        Re = q(1) * sqrt(q(2)**2+q(3)**2) / nu
+        Re = q(1) * dsqrt(q(2)**2+q(3)**2) / nu
 
         ! if it is laminar, we don't need roughness
         if (Re .le. 5D2) then
@@ -137,16 +137,16 @@ contains
 
         ! Swamee & Jain (note we use hydraulic radius, not hydraulic diameter)
         coef = roughness/(14.8*q(1))+1.6483821394207454/(Re**0.9)
-        coef = log10(coef)
+        coef = dlog10(coef)
         coef = coef * coef
         coef = 0.25D0 / coef
 
-    end function get_coefficient_three_models
+    end function get_coefficient_three_regimes
 
     ! implementation of read_roughness_file
     subroutine read_roughness_file(this, filename)
         use utility_module, only: parse_values
-        class(DarcyWeisbachThreeModels), intent(inout):: this
+        class(DarcyWeisbachThreeRegimes), intent(inout):: this
         character(len=*), intent(in), optional:: filename
         integer(kind=4), parameter:: funit = 253
         character(len=255):: line
@@ -174,22 +174,22 @@ contains
         ! xlower
         read(funit, "(A)") line
         call parse_values(line, n_values, values)
-        this%xlower = idnint(values(1))
+        this%xlower = values(1)
 
         ! ylower
         read(funit, "(A)") line
         call parse_values(line, n_values, values)
-        this%ylower = idnint(values(1))
+        this%ylower = values(1)
 
         ! cellsize
         read(funit, "(A)") line
         call parse_values(line, n_values, values)
-        this%cellsize = idnint(values(1))
+        this%cellsize = values(1)
 
         ! nodatavalue
         read(funit, "(A)") line
         call parse_values(line, n_values, values)
-        this%nodatavalue = idnint(values(1))
+        this%nodatavalue = values(1)
 
         ! calculate xupper and yupper
         this%xupper = this%xlower + this%cellsize * this%mx
@@ -216,9 +216,9 @@ contains
         ! TODO: NetCDF file
     end subroutine read_roughness_file
 
-    ! implementation of destructor_three_models
-    subroutine destructor_three_models(this)
-        type(DarcyWeisbachThreeModels), intent(inout):: this
+    ! implementation of destructor_three_regimes
+    subroutine destructor_three_regimes(this)
+        type(DarcyWeisbachThreeRegimes), intent(inout):: this
         this%name = ''
         this%filename = ''
         this%mx = 0
@@ -232,6 +232,6 @@ contains
         this%default_roughness = 0D0
 
         if (allocated(this%roughness)) deallocate(this%roughness)
-    end subroutine destructor_three_models
+    end subroutine destructor_three_regimes
 
-end module darcy_weisbach_three_models_module
+end module darcy_weisbach_three_regimes_module
