@@ -561,15 +561,11 @@ class PointSourceData(clawpack.clawutil.data.ClawData):
         # write point sources
         for i, pts in enumerate(self.point_sources):
             self.data_write() # a blank line
-            self.data_write("id", i, description="ID of the point source")
-            self._out_file.write(str(pts[0])[1:-1].replace(", ", " "))
-            self._out_file.write('\n')
-            self._out_file.write(str(format(pts[1])))
-            self._out_file.write('\n')
-            self._out_file.write(str(pts[2])[1:-1].replace(", ", " "))
-            self._out_file.write('\n')
-            self._out_file.write(str(pts[3])[1:-1].replace(", ", " "))
-            self._out_file.write('\n')
+            self.data_write("id", i, description="ID of this point source")
+            self.data_write("coord", pts[0], description="coordinates")
+            self.data_write("n_times", pts[1], description="number of time segments")
+            self.data_write("end_times", pts[2], description="end times of segments")
+            self.data_write("vol_rates", pts[3], description="volumetric rates of segments")
 
         # close the output file
         self.close_data_file()
