@@ -94,7 +94,7 @@ contains
         use landspill_module, only: nu
         class(DarcyWeisbachChurchill), intent(in):: this
         real(kind=8), intent(in):: x, y, q(3)
-        real(kind=8):: coef, roughness, Re, theat1, theta2
+        real(kind=8):: coef, roughness, Re, theta1, theta2
         integer(kind=4):: i, j
 
         ! *********************************************************************
@@ -103,7 +103,7 @@ contains
         ! *********************************************************************
 
         ! calculate local Reynolds number (defined by hydraulic radius, i.e., h)
-        Re = q(1) * dsqrt(q(2)**2+q(3)**2) / nu
+        Re = dsqrt(q(2)**2+q(3)**2) / nu ! depth h is included in q(2) & q(3)
 
         ! initialize roughness with default value
         roughness = this%default_roughness

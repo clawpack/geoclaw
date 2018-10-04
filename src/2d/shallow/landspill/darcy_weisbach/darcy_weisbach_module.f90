@@ -87,7 +87,7 @@ contains
         case (3)
             allocate(DarcyWeisbachCells::this%ptr)
         case (4)
-            allocate(DarcyWeisbachThreeModels::this%ptr)
+            allocate(DarcyWeisbachThreeRegimes::this%ptr)
         case (5)
             allocate(DarcyWeisbachChurchill::this%ptr)
         case default

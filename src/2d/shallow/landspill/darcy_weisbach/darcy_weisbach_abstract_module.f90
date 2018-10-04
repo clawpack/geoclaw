@@ -124,7 +124,7 @@ contains
                 ! set momentum to be zero if depth is smaller than dry_tol
                 if (q(1, i, j) < this%dry_tol) q(2:3, i, j) = 0D0
 
-                dgamma = 1D0 - dt * kernel(q(:, i, j), &
+                dgamma = 1D0 + dt * kernel(q(:, i, j), &
                     this%get_coefficient(x, y, q(1:3, i, j)))
 
                 q(2, i, j) = q(2, i, j) / dgamma

@@ -103,7 +103,10 @@ contains
         ! *********************************************************************
 
         ! calculate local Reynolds number (defined by hydraulic radius, i.e., h)
-        Re = q(1) * dsqrt(q(2)**2+q(3)**2) / nu
+        Re = dsqrt(q(2)**2+q(3)**2) / nu ! depth h is included in q(2) & q(3)
+
+        ! static cell, no friction
+        if (dabs(Re) .le. 1D-7) return
 
         ! if it is laminar, we don't need roughness
         if (Re .le. 5D2) then
@@ -112,7 +115,7 @@ contains
         endif
 
         ! if it is not laminar but smooth turbulent regime, we don't need roughness
-        if (Re .le. 5D3) then
+        if (Re .le. 1250D0) then
             coef = 0.224D0 / (Re**0.25)
             return
         endif
