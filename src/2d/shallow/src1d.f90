@@ -71,6 +71,11 @@ subroutine src1d(meqn,mbc,mx1d,q1d,maux,aux1d,t,dt)
             endif
         enddo
     endif
+
+    ! TODO: Darcy-Weisbach
+    ! So far we don't need this, because we force that only the finest grid
+    ! to be wet grids, while all other coarser grids are dry grids. So the 
+    ! boundary of the finest grid should be dry.
     
     ! Only lat-long coordinate system supported here right now
     if (coriolis_forcing .and. coordinate_system == 2) then

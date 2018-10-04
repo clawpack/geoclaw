@@ -25,6 +25,13 @@ COMMON_MODULES += \
  $(GEOLIB)/friction_module.f90 \
  $(GEOLIB)/landspill/point_source/point_source_module.f90 \
  $(GEOLIB)/landspill/point_source/point_source_collection_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_abstract_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_constant_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_block_constants_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_cells_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_three_regimes_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_churchill_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_module.f90 \
  $(GEOLIB)/landspill/landspill_module.f90
 
 # list of source files from AMR library. 

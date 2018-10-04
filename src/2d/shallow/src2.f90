@@ -14,7 +14,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     use friction_module, only: variable_friction, friction_index
 
-    use landspill_module, only: point_sources
+    use landspill_module, only: point_sources, darcy_weisbach
 
     implicit none
     
@@ -75,6 +75,11 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
         enddo
     endif
     ! End of friction source term
+
+    ! Darcy-Weisbach
+    call darcy_weisbach%apply_to_grid(&
+        meqn, mbc, mx, my, xlower, ylower, dx, dy, q, dt)
+    ! End of Darcy-Weisbach
 
     ! Point source term
     call point_sources%apply_point_sources(&
