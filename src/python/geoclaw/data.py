@@ -50,6 +50,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('gravity',9.8)
         self.add_attribute('rho', 1025.0)  # Density of water kg/m^3
         self.add_attribute('rho_air',1.15) # Density of air kg/m^3
+        self.add_attribute('nu', 1.004e-6)  # Kinematic viscosity of water/working fluid
         self.add_attribute('ambient_pressure', 101.3e3) # Nominal atmos pressure
         self.add_attribute('earth_radius',Rearth)
         self.add_attribute('coordinate_system',1)
@@ -73,6 +74,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
                                description="(gravitational acceleration m/s^2)")
         self.data_write('rho', description="(Density of water kg/m^3)")
         self.data_write('rho_air',description="(Density of air kg/m^3)")
+        self.data_write('nu', description="(Kinematic viscosity of water/working fluid m^2/s)")
         self.data_write('ambient_pressure',
                                 description="(Nominal atmospheric pressure Pa)")
         self.data_write('earth_radius', description="(Radius of the earth m)")

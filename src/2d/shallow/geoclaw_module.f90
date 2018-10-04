@@ -28,6 +28,7 @@ module geoclaw_module
     !  Physics
     ! ========================================================================
     real(kind=8) :: grav, rho_air, ambient_pressure, earth_radius, sea_level
+    real(kind=8) :: nu = 0D0
     ! Water density can be an array to handle multiple layers
     real(kind=8), allocatable :: rho(:)
     integer :: coordinate_system
@@ -90,6 +91,7 @@ contains
             allocate(rho(get_value_count(line)))
             read(line,*) (rho(i), i=1, size(rho, 1))
             read(unit,*) rho_air
+            read(unit,*) nu
             read(unit,*) ambient_pressure
             read(unit,*) earth_radius
             read(unit,*) coordinate_system

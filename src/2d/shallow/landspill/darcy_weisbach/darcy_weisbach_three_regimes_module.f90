@@ -91,7 +91,7 @@ contains
 
     ! implementation of get_coefficient_three_regimes
     function get_coefficient_three_regimes(this, x, y, q) result(coef)
-        use landspill_module, only: nu
+        use geoclaw_module, only: nu
         class(DarcyWeisbachThreeRegimes), intent(in):: this
         real(kind=8), intent(in):: x, y, q(3)
         real(kind=8):: coef, roughness, Re
