@@ -22,7 +22,7 @@ module constant_storm_module
     end type constant_storm_type
 
     logical, private :: module_setup = .false.
-    logical, private, parameter :: DEBUG = .true.
+    logical, private, parameter :: debug_flag = .true.
 
 contains
 

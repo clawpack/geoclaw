@@ -41,7 +41,7 @@ module holland_storm_module
     real(kind=8), private :: A,B
     integer, private :: last_storm_index
 
-    logical, private :: DEBUG = .false. 
+    logical, private :: debug_flag = .false. 
 
     ! Atmospheric boundary layer, input variable in ADCIRC but always is
     ! set to the following value
@@ -224,6 +224,7 @@ contains
                                         0.5d0 * (x(1) + y(1)), y(2))
                 storm%velocity(2,i) = sign(ds / dt,y(2) - x(2))
             end do
+
 
             ! Use last approximation for velocity point going forward
             storm%velocity(:,num_casts) = storm%velocity(:,num_casts - 1)
@@ -554,8 +555,8 @@ contains
         if (B <  1.d0) B = 1.d0
         if (B > 2.5d0) B = 2.5d0
 
-        if (DEBUG) print "('Holland B = ',d16.8)",B
-        if (DEBUG) print "('Holland A = ',d16.8)",(mwr / 1000.d0)**B
+        if (debug_flag) print "('Holland B = ',d16.8)",B
+        if (debug_flag) print "('Holland A = ',d16.8)",(mwr / 1000.d0)**B
 
         ! Set initial wind and pressure field, do not really need to do this
 !         aux(wind_index:wind_index+1,:,:) = 0.d0

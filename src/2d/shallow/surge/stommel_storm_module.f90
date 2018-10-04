@@ -24,7 +24,7 @@ module stommel_storm_module
     end type stommel_storm_type
 
     logical, private :: module_setup = .false.
-    logical, private, parameter :: DEBUG = .true.
+    logical, private, parameter :: debug_flag = .true.
 
 contains
 
