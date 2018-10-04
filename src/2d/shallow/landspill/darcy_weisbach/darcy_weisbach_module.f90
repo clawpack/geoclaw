@@ -34,6 +34,8 @@ module darcy_weisbach_module
         procedure:: get_coefficient
         !> @brief Add forcing terms to a grid.
         procedure:: apply_to_grid
+        !> @brief An interface to get type.
+        procedure:: get_type
         !> @brief Overriding generic write
         generic:: write(formatted) => write_data
         !> @brief Overriding generic read
@@ -171,4 +173,11 @@ contains
         call this%ptr%apply_to_grid(meqn, mbc, mx, my, &
             xlower, ylower, dx, dy, q, dt)
     end subroutine apply_to_grid
+
+    ! implementation of get_type
+    function get_type(this)
+        class(DarcyWeisbach), intent(in):: this
+        integer(kind=4):: get_type
+        get_type = this%type
+    end function get_type
 end module darcy_weisbach_module
