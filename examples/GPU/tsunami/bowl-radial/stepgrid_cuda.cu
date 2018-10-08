@@ -19,8 +19,6 @@ extern "C" void call_C_limited_riemann_update(
     // actually qNew holds the input old solution as well as new output solution
     // q is just temporary storage for intermediate solution between x-sweep and y-sweep
 
-    real* cfl_grid = cfls+(id-1)*SPACEDIM;
-
     cudaStream_t stream;
 
     get_cuda_stream(id, dev_id, &stream);
@@ -31,7 +29,7 @@ extern "C" void call_C_limited_riemann_update(
             q, qNew, 
             coefficients, 
             waveSpeedsX, waveSpeedsY,
-            cfl_grid, mcapa, id, dev_id); 
+            cfls, mcapa, id, dev_id);
 
     param.setOrderOfAccuracy(2);
 
