@@ -112,7 +112,7 @@ def setrun(claw_pkg='geoclaw'):
 
     if clawdata.output_style == 1:
         # Output nout frames at equally spaced times up to tfinal:
-        clawdata.num_output_times = 48
+        clawdata.num_output_times = 240
         clawdata.tfinal = 28800
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
@@ -130,7 +130,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.output_format = 'ascii'      # 'ascii' or 'netcdf'
 
     clawdata.output_q_components = 'all'   # could be list such as [True,True]
-    clawdata.output_aux_components = 'none'  # could be list
+    clawdata.output_aux_components = 'all'  # could be list
     clawdata.output_aux_onlyonce = True    # output aux arrays only at t0
 
 
@@ -156,14 +156,14 @@ def setrun(claw_pkg='geoclaw'):
 
     # Initial time step for variable dt.
     # If dt_variable==0 then dt=dt_initial for all steps:
-    clawdata.dt_initial = 1e-5
+    clawdata.dt_initial = 1e-6
 
     # Max time step to be allowed if variable dt used:
     clawdata.dt_max = 4.0
 
     # Desired Courant number if variable dt used, and max to allow without
     # retaking step with a smaller dt:
-    clawdata.cfl_desired = 0.9
+    clawdata.cfl_desired = 0.95
     clawdata.cfl_max = 1.0
 
     # Maximum number of time steps to allow between output times:
@@ -258,12 +258,12 @@ def setrun(claw_pkg='geoclaw'):
     amrdata = rundata.amrdata
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 2
+    amrdata.amr_levels_max = 3
 
     # List of refinement ratios at each level (length at least mxnest-1)
-    amrdata.refinement_ratios_x = [4]
-    amrdata.refinement_ratios_y = [4]
-    amrdata.refinement_ratios_t = [4]
+    amrdata.refinement_ratios_x = [2, 2]
+    amrdata.refinement_ratios_y = [2, 2]
+    amrdata.refinement_ratios_t = [2, 2]
 
 
     # Specify type of each aux variable in amrdata.auxtype.
@@ -347,13 +347,13 @@ def setgeo(rundata):
     # == Algorithm and Initial Conditions ==
     geo_data.sea_level = 0.0
     geo_data.dry_tolerance = 1.e-4
-    geo_data.friction_forcing = True
+    geo_data.friction_forcing = False
     geo_data.manning_coefficient = 0.035
     geo_data.friction_depth = 1.e6
 
     # Refinement data
     refinement_data = rundata.refinement_data
-    refinement_data.wave_tolerance = 1.e-4
+    refinement_data.wave_tolerance = 1.e-5
     refinement_data.deep_depth = 1e2
     refinement_data.max_level_deep = 3
     refinement_data.variable_dt_refinement_ratios = True
@@ -362,7 +362,7 @@ def setgeo(rundata):
     topo_data = rundata.topo_data
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([3, 1, 3, 0., 1.e10, 'utah_dem_topo_3.txt'])
+    topo_data.topofiles.append([3, 1, 5, 0., 1.e10, 'utah_dem_topo_3.txt'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
@@ -388,6 +388,15 @@ def setgeo(rundata):
     ptsources_data.n_point_sources = 1
     ptsources_data.point_sources.append(
         [[-12459650., 4986000.], 2, [1800., 12600.], [0.5, 0.1]])
+
+    from clawpack.geoclaw.data import DarcyWeisbachData
+    rundata.add_data(DarcyWeisbachData(), 'darcy_weisbach_data')
+    darcy_weisbach_data = rundata.darcy_weisbach_data
+    darcy_weisbach_data.type = 4
+    darcy_weisbach_data.dry_tol = 1e-5
+    darcy_weisbach_data.friction_tol = 1e6
+    darcy_weisbach_data.default_roughness = 0.0
+    darcy_weisbach_data.filename = "roughness.txt"
 
     return rundata
     # end of function setgeo
