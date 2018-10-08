@@ -3,6 +3,7 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     
     use qinit_module, only: qinit_type,add_perturbation
     use geoclaw_module, only: sea_level
+    use landspill_module, only: point_sources
     
     implicit none
     
@@ -25,6 +26,10 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     if (qinit_type > 0) then
         call add_perturbation(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     endif
+
+    ! add an almost trivial amount to the cells holding point sources
+    call point_sources%apply_trivial_ic(&
+        meqn, mbc, mx, my, xlower, ylower, dx, dy, q)
 
     if (.false.) then
         open(23, file='fort.aux',status='unknown',form='formatted')

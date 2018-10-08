@@ -29,6 +29,8 @@ module point_source_collection_module
         procedure, private:: read_data
         !> @brief Apply point sources to the RHS of equations.
         procedure:: apply_point_sources
+        !> @brief Apply tiny amount depth to IC.
+        procedure:: apply_trivial_ic
         !> @brief Overload intrinsic write.
         generic:: write(formatted) => write_data
         !> @brief Overload intrinsic write.
@@ -183,5 +185,42 @@ contains
         enddo
 
     end subroutine apply_point_sources
+
+    !> @brief Add a trivial amount depth to IC.
+    !! @param[in[ this a PointSourceCollection object.
+    !! @param[in] meqn number of equations (the 1st dimension of variable q)
+    !! @param[in] mbc number of ghost cell layers
+    !! @param[in] mx number of cells in the x direction
+    !! @param[in] my number of cells in the y direction
+    !! @param[in] xlower the x-coordinate of the bottom-left corner of the mesh
+    !! @param[in] ylower the y-coordinate of the bottom-left corner of the mesh
+    !! @param[in] dx the cell size in x direction
+    !! @param[in] dy the cell size in y direction
+    !! @param[in] q the array holding values
+    subroutine apply_trivial_ic(this, &
+        meqn, mbc, mx, my, xlower, ylower, dx, dy, q)
+        use geoclaw_module, only: dry_tolerance
+
+        ! declarations
+        class(PointSourceCollection), intent(in):: this
+        integer(kind=4), intent(in):: meqn, mbc, mx, my
+        real(kind=8), intent(in):: xlower, ylower, dx, dy
+        real(kind=8), intent(inout):: q(meqn, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+        integer(kind=4):: pti, i, j
+
+        ! code
+        do pti = 1, this%npts
+            ! get indices of this point source on provided mesh
+            call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
+
+            ! if this point source located outside this mesh, we skip this point
+            if (i .eq. -999) cycle
+
+            if ((q(1, i, j) / dry_tolerance) .lt. 1.2) then
+                q(1, i, j) = dry_tolerance * 1.2
+            endif
+        enddo
+
+    end subroutine apply_trivial_ic
 
 end module point_source_collection_module
