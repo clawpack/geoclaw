@@ -277,7 +277,20 @@ c
  90       continue
 
 
+#ifdef PROFILE
+          call take_cpu_timer("Advance (all levels)", 
+     &      timer_advanc_all_levels)
+          call cpu_timer_start(timer_advanc_all_levels)
+
+          call take_cpu_timer("Advance level "//toString(level), 
+     &      timer_advanc_start+level-1)
+          call cpu_timer_start(timer_advanc_start+level-1)
+#endif
           call advanc(level,nvar,dtlevnew,vtime,naux)
+#ifdef PROFILE
+          call cpu_timer_stop(timer_advanc_start+level-1)
+          call cpu_timer_stop(timer_advanc_all_levels)
+#endif
 
 c Output time info
           timenew = tlevel(level)+possk(level)
