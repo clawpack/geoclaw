@@ -592,6 +592,8 @@ class PointSourceData(clawpack.clawutil.data.ClawData):
                 "of the {}-th point source is not a Python list.".format(i)
             assert len(pts[2]) == pts[1], "The number of end times does not " \
                 "match the integer provided for the {}-th point source.".format(i)
+            assert sorted(pts[2]) == pts[2], "The list of end times is not " \
+                "sorted in an ascending order."
             assert isinstance(pts[3], list), "The volumetric rates of the time " \
                 "segments of the {}-th point source is not a Python list.".format(i)
             assert len(pts[3]) == pts[1], "The number of volumetric rates does " \

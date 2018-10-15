@@ -30,6 +30,9 @@ contains
             call point_sources%init("point_source.data")
         endif
 
+        ! set module_setup
+        module_setup = .true.
+
     end subroutine set_landspill
 
 end module landspill_module

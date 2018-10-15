@@ -1,4 +1,4 @@
-#! /usr/bin python3
+#! /usr/bin/env python
 # -*- coding: utf-8 -*-
 # vim:fenc=utf-8
 #
@@ -12,7 +12,13 @@ Download topography file
 import os
 import sys
 import time
-import urllib.request
+
+if sys.version_info.major == 2:
+    from urllib import urlretrieve
+elif sys.version_info.major == 3:
+    from urllib.request import urlretrieve
+else:
+    raise ImportError("Unknown Python version.")
 
 def reporthook(count, block_size, total_size):
     """Progress bar
@@ -39,7 +45,7 @@ if __name__ == "__main__":
     else:
         print("Downloading topography file: utah_dem_topo_3.txt ...")
 
-        urllib.request.urlretrieve(
+        urlretrieve(
             "https://dl.dropboxusercontent.com/s/hhpebow2s81yzgo/utah_dem_topo_3.txt?dl=0",
             "./utah_dem_topo_3.txt", reporthook)
 

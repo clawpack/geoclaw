@@ -68,7 +68,7 @@ contains
 
         ! so far, we only support xy coordinates (Cartesian)
         if (coordinate_system .ne. 1) then
-            write(*, *) "Point source functionality now only works with &
+            print *, "Point source functionality now only works with &
                 Cartesian coordinates."
             stop
         endif
@@ -143,7 +143,7 @@ contains
         integer(kind=4), intent(out):: stat
         character(*), intent(inout):: msg
 
-        write(*, *) "Direct read of this object is prohibited!"
+        print *, "Direct read of this object is prohibited!"
         stop
 
     end subroutine read_data

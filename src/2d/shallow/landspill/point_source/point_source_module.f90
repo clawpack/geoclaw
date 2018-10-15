@@ -125,6 +125,11 @@ contains
         real(kind=8), dimension(nt), intent(in):: t
         real(kind=8), dimension(nt), intent(in):: v_rate
 
+        ! =====================================================================
+        ! Note: t array should be already sorted. Using GeoClaw's preprocessing
+        !       mechanism should have already checked this.
+        ! =====================================================================
+
         ! code
         call destructor(this)
 
@@ -133,8 +138,6 @@ contains
         this%nt = nt
         this%t = t ! implicit allocation
         this%v_rate = v_rate ! implicit allocation
-
-        ! TODO: make sure the t array is sorted and v_rate is sorted based on t
 
     end subroutine init_direct
 
@@ -222,7 +225,7 @@ contains
         character(*), intent(inout):: msg
 
         ! code
-        write(*, *) "Direct read of this object is prohibited!"
+        print *, "Direct read of this object is prohibited!"
         stop
 
     end subroutine readf
