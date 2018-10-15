@@ -31,6 +31,8 @@ module point_source_collection_module
         procedure:: apply_point_sources
         !> @brief Apply tiny amount depth to IC.
         procedure:: apply_trivial_ic
+        !> @brief Flag cells to be refined
+        procedure:: flag_cells
         !> @brief Overload intrinsic write.
         generic:: write(formatted) => write_data
         !> @brief Overload intrinsic write.
@@ -216,11 +218,35 @@ contains
             ! if this point source located outside this mesh, we skip this point
             if (i .eq. -999) cycle
 
-            if ((q(1, i, j) / dry_tolerance) .lt. 1.2) then
-                q(1, i, j) = dry_tolerance * 1.2
+            if ((q(1, i, j) / dry_tolerance) .lt. 0.9) then
+                q(1, i, j) = dry_tolerance * 0.9
             endif
         enddo
 
     end subroutine apply_trivial_ic
+
+    subroutine flag_cells(this, &
+        mbuff, mx, my, xlower, ylower, dx, dy, amrflags)
+        use amr_module, only: DOFLAG
+
+        ! declarations
+        class(PointSourceCollection), intent(in):: this
+        integer(kind=4), intent(in):: mbuff, mx, my
+        real(kind=8), intent(in):: xlower, ylower, dx, dy
+        real(kind=8), intent(inout):: amrflags(1-mbuff:mx+mbuff, 1-mbuff:my+mbuff)
+        integer(kind=4):: pti, i, j
+
+        ! code
+        do pti = 1, this%npts
+            ! get indices of this point source on provided mesh
+            call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
+
+            ! if this point source located outside this mesh, we skip this point
+            if (i .eq. -999) cycle
+
+            ! flag the cell
+            amrflags(i, j) = DOFLAG
+        enddo
+    end subroutine flag_cells
 
 end module point_source_collection_module
