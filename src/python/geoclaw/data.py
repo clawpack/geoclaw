@@ -28,7 +28,7 @@ import os
 import numpy
 import clawpack.clawutil.data
 
-# Radius of earth in meters.  
+# Radius of earth in meters.
 # For consistency, should always use this value when needed, e.g.
 # in setrun.py or topotools:
 Rearth = 6367.5e3  # average of polar and equatorial radii
@@ -69,7 +69,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
 
         self.open_data_file('geoclaw.data',data_source)
 
-        self.data_write('gravity', 
+        self.data_write('gravity',
                                description="(gravitational acceleration m/s^2)")
         self.data_write('rho', description="(Density of water kg/m^3)")
         self.data_write('rho_air',description="(Density of air kg/m^3)")
@@ -99,7 +99,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write()
 
         self.data_write('dry_tolerance')
- 
+
         self.close_data_file()
 
 
@@ -143,13 +143,13 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         # Topography data
         self.add_attribute('test_topography',0)
         self.add_attribute('topofiles',[])
-        
+
         # Jump discontinuity
         self.add_attribute('topo_location',-50e3)
         self.add_attribute('topo_left',-4000.0)
         self.add_attribute('topo_right',-200.0)
         self.add_attribute('topo_angle',0.0)
-        
+
         # Simple oceanic shelf
         self.add_attribute('x0',350e3)
         self.add_attribute('x1',450e3)
@@ -159,7 +159,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         self.add_attribute('beach_slope',0.008)
 
 
-    def write(self,data_source='setrun.py'): 
+    def write(self,data_source='setrun.py'):
 
         self.open_data_file('topo.data',data_source)
         self.data_write(name='test_topography',description='(Type topography specification)')
@@ -174,7 +174,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             self.data_write(name='topo_location',description='(Bathymetry jump location)')
             self.data_write(name='topo_left',description='(Depth to left of bathy_location)')
             self.data_write(name='topo_right',description='(Depth to right of bathy_location)')
-        elif self.test_topography == 2 or self.test_topography == 3: 
+        elif self.test_topography == 2 or self.test_topography == 3:
             self.data_write(name='x0',description='(Location of basin end)')
             self.data_write(name='x1',description='(Location of shelf slope end)')
             self.data_write(name='x2',description='(Location of beach slope)')
@@ -194,7 +194,7 @@ class FixedGridData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(FixedGridData,self).__init__()
-        
+
         # Fixed Grids
         self.add_attribute('fixedgrids',[])
 
@@ -214,7 +214,7 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(FGmaxData,self).__init__()
-        
+
         # File name for fgmax points and parameters:
         self.add_attribute('fgmax_files',[])
         self.add_attribute('num_fgmax_val',1)
@@ -242,7 +242,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(DTopoData,self).__init__()
-        
+
         # Moving topograhpy
         self.add_attribute('dtopofiles',[])
         self.add_attribute('dt_max_dtopo', 1.e99)
@@ -271,7 +271,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         with open(os.path.abspath(path), 'r') as data_file:
 
             file_name = None
-            
+
             # Forward to first parameter
             for line in data_file:
 
@@ -308,10 +308,10 @@ class QinitData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(QinitData,self).__init__()
-        
+
         # Qinit data
         self.add_attribute('qinit_type',0)
-        self.add_attribute('qinitfiles',[])   
+        self.add_attribute('qinitfiles',[])
 
     def write(self,data_source='setrun.py'):
         # Initial perturbation
@@ -359,13 +359,13 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         # AMR parameters
         self.add_attribute('wind_refine',[20.0,40.0,60.0])
         self.add_attribute('R_refine',[60.0e3,40e3,20e3])
-        
+
         # Storm parameters
         self.add_attribute('storm_type', None)  # Backwards compatibility
         self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
         self.add_attribute("storm_file", None) # File(s) containing data
 
-        
+
     def write(self,out_file='./surge.data',data_source="setrun.py"):
         """Write out the data file to the path given"""
 
@@ -382,7 +382,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                         description="(Index into aux array - fortran indexing)")
         self.data_write("pressure_index", value=self.pressure_index +  1,
                         description="(Index into aux array - fortran indexing)")
-        self.data_write("display_landfall_time", 
+        self.data_write("display_landfall_time",
                         description='(Display time relative to landfall)')
         self.data_write()
 
@@ -529,3 +529,72 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
                         description=('(Method for calculating inundation ',
                                      'eigenspace)'))
         self.close_data_file()
+
+
+# Point source data
+class PointSourceData(clawpack.clawutil.data.ClawData):
+    """Data object describing point sources"""
+
+    def __init__(self):
+        """Constructor of PointSourceData class"""
+
+        super(PointSourceData, self).__init__()
+
+        # number of point sources
+        self.add_attribute('n_point_sources', 0)
+
+        # a list of point sources
+        self.add_attribute('point_sources', [])
+
+    def write(self, out_file='./point_source.data', data_source="setrun.py"):
+        """Write out the data file to the path given"""
+
+        # check data consistency
+        self._check()
+
+        # open the output file
+        self.open_data_file(out_file, data_source)
+
+        # write number of point sources
+        self.data_write('n_point_sources', description='Number of point sources')
+
+        # write point sources
+        for i, pts in enumerate(self.point_sources):
+            self.data_write() # a blank line
+            self.data_write("id", i, description="ID of this point source")
+            self.data_write("coord", pts[0], description="coordinates")
+            self.data_write("n_times", pts[1], description="number of time segments")
+            self.data_write("end_times", pts[2], description="end times of segments")
+            self.data_write("vol_rates", pts[3], description="volumetric rates of segments")
+
+        # close the output file
+        self.close_data_file()
+
+    def _check(self):
+        """Check if the data are consistent"""
+
+        # check if the number of data set match n_point_sources
+        assert self.n_point_sources == len(self.point_sources),  \
+            "The number of point sources is not consistent with point source data."
+
+        # check the records of point sources
+        for i, pts in enumerate(self.point_sources):
+            assert len(pts) == 4, "There should be 4 records in the data of " \
+                "the {}-th point source.".format(i)
+            assert isinstance(pts[0], list), "The coordinate of the {}-th " \
+                "point source is not a Python list.".format(i)
+            assert len(pts[0]) == 2, "The coordinate of the {}-th point " \
+                "is not in the format of [x, y].".format(i)
+            assert isinstance(pts[1], int), "The 2nd record in the data of " \
+                "the {}-th point source should be an integer for the number " \
+                "of time segments.".format(i)
+            assert isinstance(pts[2], list), "The end times of the time segments " \
+                "of the {}-th point source is not a Python list.".format(i)
+            assert len(pts[2]) == pts[1], "The number of end times does not " \
+                "match the integer provided for the {}-th point source.".format(i)
+            assert sorted(pts[2]) == pts[2], "The list of end times is not " \
+                "sorted in an ascending order."
+            assert isinstance(pts[3], list), "The volumetric rates of the time " \
+                "segments of the {}-th point source is not a Python list.".format(i)
+            assert len(pts[3]) == pts[1], "The number of volumetric rates does " \
+                "not match the integer provided for the {}-th point source.".format(i)
