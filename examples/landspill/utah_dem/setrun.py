@@ -258,12 +258,12 @@ def setrun(claw_pkg='geoclaw'):
     amrdata = rundata.amrdata
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 3
+    amrdata.amr_levels_max = 2
 
     # List of refinement ratios at each level (length at least mxnest-1)
-    amrdata.refinement_ratios_x = [2, 2]
-    amrdata.refinement_ratios_y = [2, 2]
-    amrdata.refinement_ratios_t = [2, 2]
+    amrdata.refinement_ratios_x = [4]
+    amrdata.refinement_ratios_y = [4]
+    amrdata.refinement_ratios_t = [4]
 
 
     # Specify type of each aux variable in amrdata.auxtype.
@@ -282,7 +282,7 @@ def setrun(claw_pkg='geoclaw'):
 
     # width of buffer zone around flagged points:
     # (typically the same as regrid_interval so waves don't escape):
-    amrdata.regrid_buffer_width  = 1
+    amrdata.regrid_buffer_width  = 3
 
     # clustering alg. cutoff for (# flagged pts) / (total # of cells refined)
     # (closer to 1.0 => more small grids may be needed to cover flagged cells)
