@@ -121,7 +121,7 @@ contains
         endif
 
         ! *********************************************************************
-        ! For Re > 5000, we need roughness for Swamee & Jain model.
+        ! For Re > 1250, we need roughness for Swamee & Jain model.
         ! *********************************************************************
 
         ! initialize roughness with default value
@@ -133,7 +133,7 @@ contains
                 ! TODO: should we use at least linear interpolation?
 
                 i = int((x-this%xlower)/this%cellsize) + 1
-                j = int((y-this%xlower)/this%cellsize) + 1
+                j = int((y-this%ylower)/this%cellsize) + 1
                 roughness = this%roughness(i, j)
             endif
         endif
