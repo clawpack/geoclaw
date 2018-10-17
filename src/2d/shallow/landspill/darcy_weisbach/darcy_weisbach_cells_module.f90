@@ -100,7 +100,7 @@ contains
         if ((x .ge. this%xlower) .and. (x .lt. this%xupper)) then
             if ((y .ge. this%ylower) .and. (y .lt. this%yupper)) then
                 i = int((x-this%xlower)/this%cellsize) + 1
-                j = int((y-this%xlower)/this%cellsize) + 1
+                j = int((y-this%ylower)/this%cellsize) + 1
                 coef = this%coefficients(i, j)
                 ! TODO: should we use at least linear interpolation?
 
