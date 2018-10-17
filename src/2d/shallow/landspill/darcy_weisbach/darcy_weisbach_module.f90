@@ -13,6 +13,7 @@ module darcy_weisbach_module
     use darcy_weisbach_cells_module
     use darcy_weisbach_three_regimes_module
     use darcy_weisbach_churchill_module
+    use darcy_weisbach_two_regimes_module
     implicit none
     private
     public:: DarcyWeisbach
@@ -92,6 +93,8 @@ contains
             allocate(DarcyWeisbachThreeRegimes::this%ptr)
         case (5)
             allocate(DarcyWeisbachChurchill::this%ptr)
+        case (6)
+            allocate(DarcyWeisbachTwoRegimes::this%ptr)
         case default
             write(*, *) "Invalid Darcy-Weisbach friction type."
             stop

@@ -618,6 +618,7 @@ class DarcyWeisbachData(clawpack.clawutil.data.ClawData):
         # 3: cell-wise coefficients
         # 4: three-regime coefficient model
         # 5: Churchill's coefficient model
+        # 6: two-regime coefficient model: laminar + Colebrook-White
         self.add_attribute('type', 0)
 
         # friction_tol, the same as friction_tol in GeoClaw.
@@ -646,10 +647,10 @@ class DarcyWeisbachData(clawpack.clawutil.data.ClawData):
         # coefficients; only meaningful for type 2
         self.add_attribute('coefficients', [])
 
-        # filename; only meaningful for type 3, 4, 5
+        # filename; only meaningful for type 3, 4, 5, 6
         self.add_attribute('filename', '')
 
-        # default_roughness; only meaningful for type 4, 5
+        # default_roughness; only meaningful for type 4, 5, 6
         self.add_attribute('default_roughness', 0.0)
 
     def write(self, out_file='./darcy_weisbach.data', data_source="setrun.py"):
@@ -699,7 +700,7 @@ class DarcyWeisbachData(clawpack.clawutil.data.ClawData):
                             description="Escri ASCII file for coefficients")
             self.data_write('default_coefficient',
                             description="coefficient for cells not covered by the file")
-        elif self.type in [4, 5]:
+        elif self.type in [4, 5, 6]:
             self.filename = os.path.abspath(self.filename)
             self.data_write('filename',
                             description="Escri ASCII file for roughness")
@@ -751,7 +752,7 @@ class DarcyWeisbachData(clawpack.clawutil.data.ClawData):
                 "coefficients shoudl be a list."
             assert len(self.coefficients) == self.n_blocks, \
                 "the length of coefficients shoudl be n_blocks."
-        elif self.type in [3, 4, 5]:
+        elif self.type in [3, 4, 5, 6]:
             assert isinstance(self.filename, str), \
                 "filename should be a string."
             assert self.filename != "", \

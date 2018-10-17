@@ -31,6 +31,7 @@ COMMON_MODULES += \
  $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_cells_module.f90 \
  $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_three_regimes_module.f90 \
  $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_churchill_module.f90 \
+ $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_two_regimes_module.f90 \
  $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_module.f90 \
  $(GEOLIB)/landspill/landspill_module.f90
 
