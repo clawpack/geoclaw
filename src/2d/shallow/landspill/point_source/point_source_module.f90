@@ -249,7 +249,7 @@ contains
         ! code
         i = count(this%t<t) + 1
 
-        if (i .ge. this%nt) then
+        if (i .gt. this%nt) then
             rate = 0D0
         else
             rate = this%v_rate(i) / (dx * dy)
