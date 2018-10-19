@@ -339,9 +339,9 @@ if __name__ == "__main__":
         ax.set_xlabel("x (m)")
         ax.set_ylabel("y (m)")
 
-        lister = numpy.loadtxt("./lister_1999/T={}.csv".format(t), delimiter=',', skiprows=1)
+        lister = numpy.loadtxt("./lister_1992/T={}.csv".format(t), delimiter=',', skiprows=1)
         pyplot.plot(lister[:, 0], lister[:, 1], 'ro',
-                    markersize=5, label="Experimental data (Lister, 1999)")
+                    markersize=5, label="Experimental data (Lister, 1992)")
 
         pyplot.xlim(-0.2, 1.0)
         pyplot.ylim(-0.3, 0.3)
