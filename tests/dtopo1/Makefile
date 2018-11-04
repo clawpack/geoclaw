@@ -50,9 +50,9 @@ EXCLUDE_SOURCES = \
 MODULES = \
 
 SOURCES = \
-  $(CLAW)/riemann/src/rpn2_geoclaw.f \
-  $(CLAW)/riemann/src/rpt2_geoclaw.f \
-  $(CLAW)/riemann/src/geoclaw_riemann_utils.f \
+  $(CLAW)/riemann/riemann/rpn2_geoclaw.f \
+  $(CLAW)/riemann/riemann/rpt2_geoclaw.f \
+  $(CLAW)/riemann/riemann/geoclaw_riemann_utils.f \
 
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:

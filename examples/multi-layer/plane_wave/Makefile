@@ -49,9 +49,9 @@ MODULES = \
 
 SOURCES = \
   ./qinit.f90 \
-  $(CLAW)/riemann/src/rpn2_layered_shallow_water.f90 \
-  $(CLAW)/riemann/src/rpt2_layered_shallow_water.f90 \
-  $(CLAW)/riemann/src/geoclaw_riemann_utils.f
+  $(CLAW)/riemann/riemann/rpn2_layered_shallow_water.f90 \
+  $(CLAW)/riemann/riemann/rpt2_layered_shallow_water.f90 \
+  $(CLAW)/riemann/riemann/geoclaw_riemann_utils.f
 
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:

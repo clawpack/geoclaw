@@ -43,7 +43,7 @@ EXCLUDE_SOURCES = \
 # List of custom sources for this program:
 # ----------------------------------------
 
-RIEMANN = $(CLAW)/riemann/src
+RIEMANN = $(CLAW)/riemann/riemann
 
 MODULES = \
 
