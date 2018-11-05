@@ -90,6 +90,7 @@ program amr2
     use amr_module, only: rprint, sprint, tprint, uprint
 
     use amr_module, only: t0, tstart_thisrun
+    use setprob_module, only: setprob
 
     ! Data modules
     use geoclaw_module, only: set_geo
