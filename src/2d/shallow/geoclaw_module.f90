@@ -20,31 +20,49 @@ module geoclaw_module
     ! ========================================================================
     integer, parameter :: GEO_PARM_UNIT = 78
     integer, parameter :: KAPPA_UNIT = 42
-    real(kind=8), parameter :: pi = 4.d0*datan(1.d0)
-    real(kind=8), parameter :: DEG2RAD = pi / 180.d0
-    real(kind=8), parameter :: RAD2DEG = 180.d0 / pi
+    real(CLAW_REAL), parameter :: pi = 4.d0*datan(1.d0)
+    real(CLAW_REAL), parameter :: DEG2RAD = pi / 180.d0
+    real(CLAW_REAL), parameter :: RAD2DEG = 180.d0 / pi
     
     ! ========================================================================
     !  Physics
     ! ========================================================================
-    real(kind=8) :: grav, rho_air, ambient_pressure, earth_radius, sea_level
+    real(CLAW_REAL) :: grav, rho_air, ambient_pressure, earth_radius, sea_level
     ! Water density can be an array to handle multiple layers
-    real(kind=8), allocatable :: rho(:)
+    real(CLAW_REAL), allocatable :: rho(:)
     integer :: coordinate_system
 
     ! Rotational velocity of Earth
-    real(kind=8), parameter :: omega = 2.0d0 * pi / 86164.2d0
+    real(CLAW_REAL), parameter :: omega = 2.0d0 * pi / 86164.2d0
     
     ! Forcing
     logical :: coriolis_forcing ! True then coriolis terms included in src
-    real(kind=8) :: theta_0 ! Used if using the beta-plane approximation
+    real(CLAW_REAL) :: theta_0 ! Used if using the beta-plane approximation
     logical :: friction_forcing ! Friction forcing will be applied
-    real(kind=8), dimension(:),allocatable :: manning_coefficient, manning_break
+    real(CLAW_REAL), dimension(:),allocatable :: manning_coefficient, manning_break
     integer :: num_manning
-    real(kind=8) :: friction_depth
+    real(CLAW_REAL) :: friction_depth
     
     ! Method parameters    
-    real(kind=8) :: dry_tolerance
+    real(CLAW_REAL) :: dry_tolerance
+
+#ifdef CUDA
+    real(kind=CLAW_REAL) :: grav_d, dry_tolerance_d, rho_d, earth_radius_d
+    attributes(constant) :: grav_d, dry_tolerance_d, rho_d, earth_radius_d
+
+    interface
+    subroutine set_dry_tolerance(val) bind(C,name='set_dry_tolerance')
+        use iso_c_binding
+        implicit none
+#if (CLAW_REAL == 8)
+        real(kind=c_double), value, intent(in) :: val
+#else
+        real(kind=c_float), value, intent(in) :: val
+#endif
+    end subroutine set_dry_tolerance
+    end interface
+#endif
+
 
 contains
 
@@ -156,6 +174,13 @@ contains
 
             module_setup = .true.
         end if
+#ifdef CUDA
+        grav_d = grav
+        dry_tolerance_d = dry_tolerance
+        rho_d = rho(1) ! assume only one layer of water
+        earth_radius_d = earth_radius
+        call set_dry_tolerance(dry_tolerance)
+#endif
 
     end subroutine set_geo
 
@@ -168,15 +193,15 @@ contains
     !       Grid is in lat-long and y should be in degrees which is converted
     !       to radians
     ! ==========================================================================
-    real(kind=8) pure function coriolis(y)
+    real(CLAW_REAL) pure function coriolis(y)
 
         implicit none
         
         ! Input
-        real(kind=8), intent(in) :: y
+        real(CLAW_REAL), intent(in) :: y
         
         ! Locals
-        real(kind=8) :: theta
+        real(CLAW_REAL) :: theta
         
         ! Assume beta plane approximation and y is in meters    
         if (coordinate_system == 1) then
@@ -193,19 +218,19 @@ contains
 
     ! ==========================================================================
     !  Calculate the distance along a sphere
-    !    real(kind=8) spherical_distance(x1,y1,x2,y2)
+    !    real(CLAW_REAL) spherical_distance(x1,y1,x2,y2)
     !       x1 = (long,lat)
     !       x2 = (long,lat)
     ! ==========================================================================
-    real(kind=8) pure function spherical_distance(x1,y1,x2,y2) result(distance)
+    real(CLAW_REAL) pure function spherical_distance(x1,y1,x2,y2) result(distance)
 
         implicit none
 
         ! Input
-        real(kind=8), intent(in) :: x1,y1,x2,y2
+        real(CLAW_REAL), intent(in) :: x1,y1,x2,y2
 
         ! Locals
-        real(kind=8) :: dx ,dy
+        real(CLAW_REAL) :: dx ,dy
 
         dx = (x2 - x1) * DEG2RAD
         dy = (y2 - y1) * DEG2RAD
@@ -229,8 +254,8 @@ contains
     !=================================================================
     pure function latlon2xy(coords,projection_center) result(x)
 
-        real(kind=8), intent(in) :: coords(2), projection_center(2)
-        real(kind=8) :: x(2)
+        real(CLAW_REAL), intent(in) :: coords(2), projection_center(2)
+        real(CLAW_REAL) :: x(2)
 
         x(1) = deg2rad * earth_radius * (coords(1) - &
                     projection_center(1)) * cos(deg2rad * projection_center(2))
@@ -251,8 +276,8 @@ contains
     !=================================================================
     pure function xy2latlon(x,projection_center) result(coords)
 
-        real(kind=8), intent(in) :: x(2), projection_center(2)
-        real(kind=8) :: coords(2)
+        real(CLAW_REAL), intent(in) :: x(2), projection_center(2)
+        real(CLAW_REAL) :: coords(2)
 
         coords(1) = projection_center(1) + x(1) &
                 / (deg2rad * earth_radius * cos(deg2rad * projection_center(2)))
