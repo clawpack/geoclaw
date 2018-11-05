@@ -47,8 +47,8 @@ module geoclaw_module
     real(CLAW_REAL) :: dry_tolerance
 
 #ifdef CUDA
-    real(kind=CLAW_REAL) :: grav_d, dry_tolerance_d, rho_d, earth_radius_d
-    attributes(constant) :: grav_d, dry_tolerance_d, rho_d, earth_radius_d
+    real(kind=CLAW_REAL) :: grav_d, dry_tolerance_d, rho_d, earth_radius_d, deg2rad_d
+    attributes(constant) :: grav_d, dry_tolerance_d, rho_d, earth_radius_d, deg2rad_d
 
     interface
     subroutine set_dry_tolerance(val) bind(C,name='set_dry_tolerance')
@@ -179,6 +179,7 @@ contains
         dry_tolerance_d = dry_tolerance
         rho_d = rho(1) ! assume only one layer of water
         earth_radius_d = earth_radius
+        deg2rad_d = deg2rad
         call set_dry_tolerance(dry_tolerance)
 #endif
 
