@@ -33,6 +33,8 @@ COMMON_MODULES += \
  $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_churchill_module.f90 \
  $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_two_regimes_module.f90 \
  $(GEOLIB)/landspill/darcy_weisbach/darcy_weisbach_module.f90 \
+ $(GEOLIB)/landspill/hydrologic/hydro_feature_module.f90 \
+ $(GEOLIB)/landspill/hydrologic/hydro_feature_collection_module.f90 \
  $(GEOLIB)/landspill/landspill_module.f90
 
 # list of source files from AMR library. 

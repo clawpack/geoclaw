@@ -766,3 +766,44 @@ class DarcyWeisbachData(clawpack.clawutil.data.ClawData):
                     "default_roughness shoudl be a float"
         else:
             raise ValueError("Type values outside [0, 5] not allowed.")
+
+
+# Hydrologic feature data
+class HydroFeatureData(clawpack.clawutil.data.ClawData):
+    """Data object describing hydrologic features"""
+
+    def __init__(self):
+        """Constructor of HydroFeatureData class"""
+
+        super(HydroFeatureData, self).__init__()
+
+        # a list of files of hydro features
+        self.add_attribute('files', [])
+
+    def write(self, out_file='./hydro_feature.data', data_source="setrun.py"):
+        """Write out the data file to the path given"""
+
+        # check data consistency
+        self._check()
+
+        # open the output file
+        self.open_data_file(out_file, data_source)
+
+        # write number of files
+        self.data_write('n_files', len(self.files),
+                        description='Number of hydro files')
+
+        # write file names line by line
+        for i, f in enumerate(self.files):
+            f = os.path.abspath(f)
+            self.data_write('file {0}'.format(i), f)
+
+        print(super(HydroFeatureData, self).__dict__)
+
+        # close the output file
+        self.close_data_file()
+
+    def _check(self):
+        """Check if the data are consistent"""
+
+        pass
