@@ -157,7 +157,7 @@ contains
         allocate(temp(this%mx))
         
         ! read coefficients
-        do j = 1, this%my
+        do j = this%my, 1, -1
             read(funit, *) temp
             where(temp .ne. this%nodatavalue) this%hydro_cell(:, j) = .true.
         enddo

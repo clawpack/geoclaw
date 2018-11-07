@@ -190,7 +190,7 @@ contains
         allocate(this%roughness(this%mx, this%my))
         
         ! read coefficients
-        do j = 1, this%my
+        do j = this%my, 1, -1
             read(funit, *) this%roughness(:, j)
         enddo
 
