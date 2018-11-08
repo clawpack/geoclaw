@@ -4,12 +4,40 @@ Module to set up run time parameters for Clawpack.
 The values set in the function setrun are then written out to data files
 that will be read in by the Fortran code.
 
+
+For AMR based on adjoint flagging. 
+Set the appropriate parameters in the function setadjoint.
+
 """
 
 from __future__ import absolute_import
 from __future__ import print_function
 import os
 import numpy as np
+
+
+#-----------------------------------------------
+# Set these parameters for adjoint flagging....
+
+# location of output from computing adjoint:
+adjoint_output = os.path.abspath('adjoint/_output')
+print('Will flag using adjoint solution from  %s' % adjoint_output)
+
+# Time period of interest:
+t1 = 3.0*3600.
+t2 = 4.0*3600.
+
+# Determining type of adjoint flagging:
+
+# taking inner product with forward solution or Richardson error:
+flag_forward_adjoint = True
+flag_richardson_adjoint = False
+
+# tolerance for adjoint flagging:
+adjoint_flag_tolerance = 0.0005
+#adjoint_flag_tolerance = 0.00001    # suggested if using Richardson error
+#-----------------------------------------------
+
 
 try:
     CLAW = os.environ['CLAW']
@@ -47,13 +75,14 @@ def setrun(claw_pkg='geoclaw'):
     # Problem-specific parameters to be written to setprob.data:
     #------------------------------------------------------------------
     
-    #probdata = rundata.new_UserData(name='probdata',fname='setprob.data')
+    # see setadjoint function below.
 
 
     #------------------------------------------------------------------
     # GeoClaw specific parameters:
     #------------------------------------------------------------------
     rundata = setgeo(rundata)
+
 
     #------------------------------------------------------------------
     # Standard Clawpack parameters to be written to claw.data:
@@ -94,7 +123,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_eqn = 3
 
     # Number of auxiliary variables in the aux array (initialized in setaux)
-    clawdata.num_aux = 3
+    # see setadjoint
 
     # Index of aux array corresponding to capacity function, if there is one:
     clawdata.capa_index = 2
@@ -128,8 +157,8 @@ def setrun(claw_pkg='geoclaw'):
 
     if clawdata.output_style==1:
         # Output nout frames at equally spaced times up to tfinal:
-        clawdata.num_output_times = 18
-        clawdata.tfinal = 9*3600.
+        clawdata.num_output_times = 28
+        clawdata.tfinal = 7*3600.
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:
@@ -143,10 +172,10 @@ def setrun(claw_pkg='geoclaw'):
         clawdata.output_t0 = True
         
 
-    clawdata.output_format = 'ascii'      # 'ascii' or 'netcdf' 
+    clawdata.output_format = 'ascii'      # 'ascii', 'binary', 'netcdf' 
 
     clawdata.output_q_components = 'all'   # need all
-    clawdata.output_aux_components = 'none'  # eta=h+B is in q
+    clawdata.output_aux_components = 'all'  # need this to plot inner product
     clawdata.output_aux_onlyonce = False    # output aux arrays each frame
 
 
@@ -283,22 +312,25 @@ def setrun(claw_pkg='geoclaw'):
     amrdata.amr_levels_max = 3
 
     # List of refinement ratios at each level (length at least mxnest-1)
-    amrdata.refinement_ratios_x = [2,6]
-    amrdata.refinement_ratios_y = [2,6]
-    amrdata.refinement_ratios_t = [2,6]
+    amrdata.refinement_ratios_x = [2,4]
+    amrdata.refinement_ratios_y = [2,4]
+    amrdata.refinement_ratios_t = [2,4]
 
 
     # Specify type of each aux variable in amrdata.auxtype.
     # This must be a list of length maux, each element of which is one of:
     #   'center',  'capacity', 'xleft', or 'yleft'  (see documentation).
 
-    amrdata.aux_type = ['center','capacity','yleft']
+    # need 4 values, set in setadjoint
 
 
-    # Flag using refinement routine flag2refine rather than richardson error
-    amrdata.flag_richardson = False    # use Richardson?
-    amrdata.flag_richardson_tol = 0.002  # Richardson tolerance
-    amrdata.flag2refine = True
+    # Flag for refinement based on Richardson error estimater:
+    amrdata.flag_richardson = False
+    
+    # Flag for refinement using routine flag2refine:
+    amrdata.flag2refine = False
+    
+    # see setadjoint to set tolerance for adjoint flagging
 
     # steps to take on each level L between regriddings of level L+1:
     amrdata.regrid_interval = 3
@@ -335,8 +367,12 @@ def setrun(claw_pkg='geoclaw'):
     rundata.regiondata.regions = []
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
-    rundata.regiondata.regions.append([3, 3, 0., 10000., -85,-72,-38,-25])
-    rundata.regiondata.regions.append([3, 3, 8000., 26000., -90,-80,-30,-15])
+
+    # all 3 levels anywhere, based on flagging:
+    rundata.regiondata.regions.append([1, 3, 0., 1e9, -220,0,-90,90])
+
+    # earthquake source region - force refinement initially:
+    rundata.regiondata.regions.append([3, 3, 0., 200., -85,-70,-38,-25])
 
     # ---------------
     # Gauges:
@@ -345,6 +381,14 @@ def setrun(claw_pkg='geoclaw'):
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
     rundata.gaugedata.gauges.append([32412, -86.392, -17.975, 0., 1.e10])
     
+
+    #------------------------------------------------------------------
+    # Adjoint specific data:
+    #------------------------------------------------------------------
+    # Do this last since it resets some parameters such as num_aux
+    # as needed for adjoint flagging.
+    rundata = setadjoint(rundata)
+
 
     return rundata
     # end of function setrun
@@ -383,7 +427,7 @@ def setgeo(rundata):
     # Refinement settings
     refinement_data = rundata.refinement_data
     refinement_data.variable_dt_refinement_ratios = True
-    refinement_data.wave_tolerance = 1.e-1
+    refinement_data.wave_tolerance = 1.e-1  # not used for adjoint flagging
     refinement_data.deep_depth = 1e2
     refinement_data.max_level_deep = 3
 
@@ -419,6 +463,63 @@ def setgeo(rundata):
     # end of function setgeo
     # ----------------------
 
+
+#-------------------
+def setadjoint(rundata):
+#-------------------
+
+    """
+    Set parameters used for adjoint flagging.
+    Also reads in all of the checkpointed Adjoint files.
+    """
+    
+    import glob
+
+    # Set these parameters at top of this file:
+    # adjoint_flag_tolerance, t1, t2, adjoint_output
+    # Then you don't need to modify this function...
+
+    # flag and tolerance for adjoint flagging:
+    if flag_forward_adjoint == True:
+        # setting up taking inner product with forward solution
+        rundata.amrdata.flag2refine = True
+        rundata.amrdata.flag2refine_tol = adjoint_flag_tolerance
+    elif flag_richardson_adjoint == True:
+        # setting up taking inner product with Richardson error
+        rundata.amrdata.flag_richardson = True
+        rundata.amrdata.flag_richardson_tol = adjoint_flag_tolerance
+    else:
+        print("No refinement flag set!")
+
+    rundata.clawdata.num_aux = 4   # 4 required for adjoint flagging
+    rundata.amrdata.aux_type = ['center','capacity','yleft','center']
+
+    adjointdata = rundata.new_UserData(name='adjointdata',fname='adjoint.data')
+    adjointdata.add_param('adjoint_output',adjoint_output,'adjoint_output')
+    adjointdata.add_param('t1',t1,'t1, start time of interest')
+    adjointdata.add_param('t2',t2,'t2, final time of interest')
+    
+    files = glob.glob(os.path.join(adjoint_output,"fort.b*"))
+    files.sort()
+    
+    if (len(files) == 0):
+        print("No binary files found for adjoint output!")
+    
+    adjointdata.add_param('numadjoints', len(files), 
+                       'Number of adjoint output files.')
+    adjointdata.add_param('innerprod_index', 4, 
+                       'Index for innerproduct data in aux array.')
+
+    counter = 1
+    for fname in files:
+        f = open(fname)
+        adjointdata.add_param('file' + str(counter), fname, \
+            'Binary file' + str(counter))
+        counter = counter + 1
+
+    return rundata
+    # end of function setadjoint
+    # ----------------------
 
 
 if __name__ == '__main__':
