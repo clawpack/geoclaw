@@ -28,6 +28,10 @@ module hydro_feature_collection_module
         procedure, private:: read_data
         !> @brief Return if a cell is a hydro cell.
         procedure:: is_hydro_cell
+        !> @brief Update aux.
+        procedure:: update_aux
+        !> @brief Remove working fluid from hydro cells.
+        procedure:: remove_fluid
         !> @brief Overload intrinsic write.
         generic:: write(formatted) => write_data
         !> @brief Overload intrinsic write.
@@ -173,4 +177,53 @@ contains
         enddo
 
     end function is_hydro_cell
+
+    ! implementation of update_aux
+    subroutine update_aux(this, mbc, mx, my, xlow, ylow, dx, dy, maux, aux)
+        ! arguments
+        class(HydroFeatureCollection), intent(in):: this
+        integer(kind=4), intent(in):: mbc, mx, my, maux
+        real(kind=8), intent(in):: xlow, ylow, dx, dy
+        real(kind=8), intent(inout):: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+
+        ! local variables
+        integer(kind=4):: i, j
+        logical:: hydro_cell
+        real(kind=8):: xl, xr, yb, yt
+
+        ! if there's no hydrolic feature, exit the subroutine
+        if (this%nfeats == 0) return
+
+        xl = xlow - mbc * dy
+        yb = ylow - mbc * dy
+
+        do j=1-mbc, my+mbc
+            yt = ylow + j * dy
+            do i=1-mbc, mx+mbc
+                xr = xlow + i * dx
+                hydro_cell = this%is_hydro_cell(xl, xr, yb, yt)
+                if (hydro_cell) aux(2, i, j) = 2D0
+                xl = xr
+            enddo
+            yb = yt
+        enddo
+    end subroutine update_aux
+
+    ! implementation of remove_fluid
+    subroutine remove_fluid(this, meqn, mbc, mx, my, q, maux, aux)
+        class(HydroFeatureCollection), intent(in):: this
+        integer(kind=4), intent(in):: meqn, mbc, mx, my, maux
+        real(kind=8), intent(inout):: q(meqn, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+        real(kind=8), intent(in):: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+
+        ! if there's no hydrolic feature, exit the subroutine
+        if (this%nfeats == 0) return
+
+        where(abs(aux(2, :, :)-2D0) < 1e-6) 
+            q(1, :, :) = 0D0
+            q(2, :, :) = 0D0
+            q(3, :, :) = 0D0
+        end where
+    end subroutine remove_fluid
+
 end module hydro_feature_collection_module

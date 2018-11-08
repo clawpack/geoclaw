@@ -14,7 +14,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     use friction_module, only: variable_friction, friction_index
 
-    use landspill_module, only: point_sources, darcy_weisbach
+    use landspill_module, only: point_sources, darcy_weisbach, hydro_features
 
     implicit none
     
@@ -173,5 +173,9 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     !         enddo
     !     enddo
     ! endif
+
+    ! remove fluid from hydro cells
+    call hydro_features%remove_fluid(meqn, mbc, mx, my, q, maux, aux)
+    ! End of removing fluid from hydro cells
 
 end subroutine src2
