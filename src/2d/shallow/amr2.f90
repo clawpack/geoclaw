@@ -125,6 +125,13 @@ program amr2
     ! Timing variables
     integer :: clock_start, clock_finish, clock_rate, ttotal
     real(kind=8) :: ttotalcpu
+    character(len=256) :: timing_line, timing_substr
+    character(len=*), parameter :: timing_file_name = "timing.csv"
+    integer, parameter :: out_unit = 67
+    character(len=*), parameter :: timing_header_format =                      &
+                                                  "(' wall time (', i2,')," // &
+                                                  " CPU time (', i2,'), "   // &
+                                                  "cells updated (', i2,'),')"
 
     ! Common block variables
     real(kind=8) :: dxmin, dymin
@@ -516,6 +523,19 @@ program amr2
 
     else
 
+        ! Create new timing file
+        open(unit=out_unit, file=timing_file_name, form='formatted',         &
+             status='unknown', action='write')
+        ! Construct header string
+        timing_line = 'output_time,total_wall_time,total_cpu_time,'
+        timing_substr = ""
+        do level=1, mxnest
+            write(timing_substr, timing_header_format) level, level, level
+            timing_line = trim(timing_line) // trim(timing_substr)
+        end do
+        write(out_unit, "(a)") timing_line
+        close(out_unit)
+
         open(outunit, file=outfile, status='unknown', form='formatted')
 
         tstart_thisrun = t0
@@ -748,12 +768,14 @@ program amr2
     
     !Total Time
     format_string="('Total time:   ',1f15.3,'        ',1f15.3,'  ')"
-    write(outunit,format_string) &
-            real(timeTick,kind=8) / real(clock_rate,kind=8), &
-            timeTickCPU         
-    write(*,format_string) &
-            real(timeTick,kind=8) / real(clock_rate,kind=8), &
-            timeTickCPU         
+
+!    write(*,format_string)  &
+!            real(clock_finish - clock_start,kind=8) / real(clock_rate,kind=8), &
+!            cpu_finish-cpu_start
+    write(*,format_string) real(timeTick,kind=8)/real(clock_rate,kind=8), &
+            timeTickCPU
+    write(outunit,format_string) real(timeTick,kind=8)/real(clock_rate,kind=8), &
+            timeTickCPU
     
     format_string="('Using',i3,' thread(s)')"
     write(outunit,format_string) maxthreads

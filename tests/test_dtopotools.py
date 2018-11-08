@@ -90,9 +90,9 @@ def test_read_ucsb_make_dtopo(save=False):
 
     tmax = 0.
     for s in fault.subfaults:
-        tmax = max(tmax, s.rupture_time + s.rise_time + s.rise_time_ending)
+        tmax = max(tmax, s.rupture_time + s.rise_time)
 
-    fault.rupture_type = 'dynamic'
+    fault.rupture_type = 'kinematic'
     times = numpy.linspace(0, tmax, 10)
     dtopo = fault.create_dtopography(x, y, times)
 
@@ -115,7 +115,7 @@ def test_read_sift_make_dtopo(save=False):
     sift_slip = {'acsza1':2, 'acszb1':3}
     fault = dtopotools.SiftFault(sift_slip)
 
-    assert abs(fault.Mw() - 7.3) < 1e-4, "*** Mw is wrong: %g" % fault.Mw()
+    assert abs(fault.Mw() - 7.966666666667) < 1e-4, "*** Mw is wrong: %g" % fault.Mw()
 
     xlower = 162.
     xupper = 168.
@@ -163,7 +163,7 @@ def test_SubdividedPlaneFault_make_dtopo(save=False):
     # print "new Mo = ",fault2.Mo()
     #fault2.plot_subfaults(slip_color=True)
 
-    assert abs(fault2.Mw() - 6.83402) < 1e-4, \
+    assert abs(fault2.Mw() - 7.500686667) < 1e-4, \
            "*** Mw is wrong: %g" % fault.Mw()
 
     xlower = 162.
@@ -464,19 +464,21 @@ def test_subdivided_plane_fault(verbose=False, plot=False):
 
 
 if __name__ == "__main__":
+
+    save = False  # default 
+
     if len(sys.argv) > 1:
         if "plot" in sys.argv[1].lower():
             pass
         elif bool(sys.argv[1]):
-            test_read_csv_make_dtopo(save=True)
-    else:
-        try:
-            test_read_csv_make_dtopo()
-            test_read_ucsb_make_dtopo()
-            test_read_sift_make_dtopo()
-            test_SubdividedPlaneFault_make_dtopo()
-            test_dtopo_io()
-            test_geometry()
-            test_vs_old_dtopo()
-        except nose.SkipTest as e:
-            print(e.message)
+            save = True
+    try:
+        test_read_csv_make_dtopo(save=save)
+        test_read_ucsb_make_dtopo(save=save)
+        test_read_sift_make_dtopo(save=save)
+        test_SubdividedPlaneFault_make_dtopo(save=save)
+        test_dtopo_io()
+        test_geometry()
+        test_vs_old_dtopo()
+    except nose.SkipTest as e:
+        print(e.message)
