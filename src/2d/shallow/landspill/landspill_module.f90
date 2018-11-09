@@ -6,6 +6,7 @@
 
 module landspill_module
     use point_source_collection_module
+    use darcy_weisbach_module
     implicit none
     save
     public
@@ -16,18 +17,38 @@ module landspill_module
     !> @brief Object for a collection of point sources.
     type(PointSourceCollection):: point_sources
 
+    !> @brief Object for Darcy-Weisbach.
+    type(DarcyWeisbach):: darcy_weisbach
+
 contains
 
     !> @brief Initialize landspill module
     !! @param[in] point_source_file an optional arg; file for point sources
-    subroutine set_landspill(point_source_file)
+    !! @param[in] darcy_weisbach_file an optional arg; file for Darcy-Weisbach
+    subroutine set_landspill(point_source_file, darcy_weisbach_file)
+        use geoclaw_module, only: geo_friction => friction_forcing 
         character(len=*), intent(in), optional:: point_source_file 
+        character(len=*), intent(in), optional:: darcy_weisbach_file 
 
-        ! open data file for point source collection
+        ! point source collection
         if (present(point_source_file)) then
             call point_sources%init(point_source_file)
         else
             call point_sources%init("point_source.data")
+        endif
+
+        ! Darcy-Weisbach
+        if (present(darcy_weisbach_file)) then
+            call darcy_weisbach%init(darcy_weisbach_file)
+        else
+            call darcy_weisbach%init("darcy_weisbach.data")
+        endif
+
+        ! Disable Manning's friction in GeoClaw
+        ! Warning: this assumes geoclaw module has been set up!
+        ! TODO: this is just a temporary workaround. Need to integrate to GeoClaw.
+        if (darcy_weisbach%get_type() > 0) then
+            geo_friction = .false.
         endif
 
         ! set module_setup

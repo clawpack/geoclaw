@@ -249,7 +249,7 @@ contains
         ! code
         i = count(this%t<t) + 1
 
-        if (i .ge. this%nt) then
+        if (i > this%nt) then
             rate = 0D0
         else
             rate = this%v_rate(i) / (dx * dy)
@@ -287,8 +287,8 @@ contains
         xupper = xlower + mx * dx
         yupper = ylower + my * dy
 
-        if ((this%coord(1) .ge. xlower) .and. (this%coord(1) .lt. xupper)) then
-            if ((this%coord(2) .ge. ylower) .and. (this%coord(2) .lt. yupper)) then
+        if ((this%coord(1) >= xlower) .and. (this%coord(1) < xupper)) then
+            if ((this%coord(2) >= ylower) .and. (this%coord(2) < yupper)) then
                 i = int((this%coord(1)-xlower)/dx) + 1
                 j = int((this%coord(2)-ylower)/dy) + 1
             endif
