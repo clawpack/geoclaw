@@ -1,10 +1,10 @@
 
 #define IADD(IVAR,I,J,LOC,NVAR,MITOT) LOC+IVAR-1+NVAR*((J-1)*MITOT+I-1)
 #define IADDF(IVAR,I,J,LOCF,NVAR,MI) LOCF+IVAR-1+NVAR*((J-1)*MI+I-1)
-#define IADDFAUX_UP(I,J,LOCFAUX,MCAPA,NAUX,MI) LOCFAUX+MCAPA-1+NAUX*((J-1)*MI+(I-1))
-#define IADDCAUX_UP(I,J,LOCCAUX,MCAPA,NAUX,MITOT) LOCCAUX+MCAPA-1+NAUX*((J-1)*MITOT+(I-1))
-#define IADDFTOPO_UP(I,J,LOCFAUX,NAUX,MI) LOCFAUX+NAUX*((J-1)*MI+(I-1)) 
-#define IADDCTOPO_UP(I,J,LOCCAUX,NAUX,MITOT) LOCCAUX+NAUX*((J-1)*MITOT+(I-1)) 
+#define IADDFAUX(I,J,LOCFAUX,MCAPA,NAUX,MI) LOCFAUX+MCAPA-1+NAUX*((J-1)*MI+(I-1))
+#define IADDCAUX(I,J,LOCCAUX,MCAPA,NAUX,MITOT) LOCCAUX+MCAPA-1+NAUX*((J-1)*MITOT+(I-1))
+#define IADDFTOPO(I,J,LOCFAUX,NAUX,MI) LOCFAUX+NAUX*((J-1)*MI+(I-1)) 
+#define IADDCTOPO(I,J,LOCCAUX,NAUX,MITOT) LOCCAUX+NAUX*((J-1)*MITOT+(I-1)) 
 
 !
 ! :::::::::::::::::::::::::: UPDATE :::::::::::::::::::::::::::::::::
@@ -147,10 +147,10 @@ subroutine update (level, nvar, naux)
                         if (mcapa == 0) then
                             capac = 1.0d0
                         else
-                            capac = alloc(iaddcaux(i,j,loccaux,mcapa,mitot))
+                            capac = alloc(IADDCAUX(i,j,loccaux,mcapa,naux,mitot))
                         endif
 
-                        bc = alloc(iaddctopo(i,j,loccaux,mitot))
+                        bc = alloc(IADDCTOPO(i,j,loccaux,naux,mitot))
 
                         etasum = 0.d0
                         hsum = 0.d0
@@ -164,15 +164,15 @@ subroutine update (level, nvar, naux)
                                 if (mcapa == 0) then
                                     capa = 1.0d0
                                 else
-                                    capa = alloc(iaddfaux(iff+ico-1,jff+jco-1,locfaux,mcapa,mi))
+                                    capa = alloc(IADDFAUX(iff+ico-1,jff+jco-1,locfaux,mcapa,naux,mi))
                                 endif
 
                                 hf = alloc(IADDF(1,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
-                                bf = alloc(iaddftopo(iff+ico-1,jff+jco-1,locfaux,mi))*capa
+                                bf = alloc(IADDFTOPO(iff+ico-1,jff+jco-1,locfaux,naux,mi))*capa
                                 huf= alloc(IADDF(2,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
                                 hvf= alloc(IADDF(3,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
 
-                                if (alloc(iaddf(1,iff+ico-1,jff+jco-1,locf,mi)) > dry_tolerance) then
+                                if (alloc(IADDF(1,iff+ico-1,jff+jco-1,locf,nvar,mi)) > dry_tolerance) then
                                     etaf = hf + bf
                                     nwet = nwet + 1
                                 else
@@ -230,27 +230,6 @@ subroutine update (level, nvar, naux)
 
 contains
 
-
-
-    integer pure function iaddfaux(i,j,locfaux,mcapa,mi)
-        integer, intent(in) :: i, j, locfaux, mcapa, mi
-        iaddfaux = locfaux + mcapa-1 + naux*((j-1)*mi + (i-1))
-    end function iaddfaux
-
-    integer pure function iaddcaux(i,j,loccaux,mcapa,mitot)
-        integer, intent(in) :: i, j, loccaux, mcapa, mitot
-        iaddcaux = loccaux + mcapa-1 + naux*((j-1)*mitot+(i-1))
-    end function iaddcaux
-
-    integer pure function iaddftopo(i,j,locfaux,mi)
-        integer, intent(in) :: i, j, locfaux, mi
-        iaddftopo = locfaux + naux*((j-1)*mi + (i-1))
-    end function iaddftopo
-
-    integer pure function iaddctopo(i,j,loccaux, mitot)
-        integer, intent(in) :: i, j, loccaux, mitot
-        iaddctopo = loccaux + naux*((j-1)*mitot+(i-1))
-    end function iaddctopo
 
 
 end subroutine
