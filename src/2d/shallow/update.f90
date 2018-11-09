@@ -172,7 +172,7 @@ subroutine update (level, nvar, naux)
                                 huf= alloc(IADDF(2,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
                                 hvf= alloc(IADDF(3,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
 
-                                if (hf > dry_tolerance) then
+                                if (alloc(iaddf(1,iff+ico-1,jff+jco-1,locf,mi)) > dry_tolerance) then
                                     etaf = hf + bf
                                     nwet = nwet + 1
                                 else
