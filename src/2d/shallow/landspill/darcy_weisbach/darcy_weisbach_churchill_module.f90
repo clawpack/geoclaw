@@ -109,8 +109,8 @@ contains
         roughness = this%default_roughness
 
         ! when the coordinate is covered by the provided roughness file
-        if ((x .ge. this%xlower) .and. (x .lt. this%xupper)) then
-            if ((y .ge. this%ylower) .and. (y .lt. this%yupper)) then
+        if ((x >= this%xlower) .and. (x < this%xupper)) then
+            if ((y >= this%ylower) .and. (y < this%yupper)) then
                 ! TODO: should we use at least linear interpolation?
 
                 i = int((x-this%xlower)/this%cellsize) + 1
@@ -195,8 +195,8 @@ contains
         enddo
 
         ! handle missing data
-        if (any(this%roughness .eq. this%nodatavalue)) then
-            where(this%roughness .eq. this%nodatavalue) this%roughness = 0D0
+        if (any(this%roughness == this%nodatavalue)) then
+            where(this%roughness == this%nodatavalue) this%roughness = 0D0
 
             write(*, *) "WARNING: missing data found in the roughness file. &
                 Set these data to zero automatically."

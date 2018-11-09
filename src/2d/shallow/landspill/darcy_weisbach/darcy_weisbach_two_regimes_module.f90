@@ -114,10 +114,10 @@ contains
         Re = dsqrt(q(2)**2+q(3)**2) / nu ! depth h is included in q(2) & q(3)
 
         ! static cell, no friction
-        if (dabs(Re) .le. 1D-7) return
+        if (dabs(Re) <= 1D-7) return
 
         ! if it is laminar, we don't need roughness
-        if (Re .le. 5D2) then
+        if (Re <= 5D2) then
             coef = 24D0 / Re
             return ! exit this function
         endif
@@ -130,8 +130,8 @@ contains
         roughness = this%default_roughness
 
         ! when the coordinate is covered by the provided roughness file
-        if ((x .ge. this%xlower) .and. (x .lt. this%xupper)) then
-            if ((y .ge. this%ylower) .and. (y .lt. this%yupper)) then
+        if ((x >= this%xlower) .and. (x < this%xupper)) then
+            if ((y >= this%ylower) .and. (y < this%yupper)) then
                 ! TODO: should we use at least linear interpolation?
 
                 i = int((x-this%xlower)/this%cellsize) + 1
@@ -156,12 +156,12 @@ contains
         new = 1.5
         niters = 0
 
-        do while ((dabs((new-old)/old) .gt. 1e-6) .or. (niters .eq. 0))
+        do while ((dabs((new-old)/old) > 1e-6) .or. (niters == 0))
             old = new
             new = - this%K1 * dlog10(eps/this%K2+this%K3*old/(4.*Re))
             niters = niters + 1
 
-            if (niters .gt. 100) then
+            if (niters > 100) then
                 print *, "Infinite loop when solving Colebrook-White."
                 stop
             endif
@@ -231,8 +231,8 @@ contains
         enddo
 
         ! handle missing data
-        if (any(this%roughness .eq. this%nodatavalue)) then
-            where(this%roughness .eq. this%nodatavalue) this%roughness = 0D0
+        if (any(this%roughness == this%nodatavalue)) then
+            where(this%roughness == this%nodatavalue) this%roughness = 0D0
 
             write(*, *) "WARNING: missing data found in the roughness file. &
                 Set these data to zero automatically."

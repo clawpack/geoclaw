@@ -47,7 +47,7 @@ contains
         ! Disable Manning's friction in GeoClaw
         ! Warning: this assumes geoclaw module has been set up!
         ! TODO: this is just a temporary workaround. Need to integrate to GeoClaw.
-        if (darcy_weisbach%get_type() .gt. 0) then
+        if (darcy_weisbach%get_type() > 0) then
             geo_friction = .false.
         endif
 

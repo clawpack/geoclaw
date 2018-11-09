@@ -86,7 +86,7 @@ contains
         read(funit, *) this%npts
 
         ! if there's no point source, exit
-        if (this%npts .eq. 0) then
+        if (this%npts == 0) then
             close(funit)
             return
         endif
@@ -180,7 +180,7 @@ contains
             call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
 
             ! if this point source located outside this mesh, we skip this point
-            if (i .eq. -999) cycle
+            if (i == -999) cycle
 
             d = this%pts(pti)%d_rate(t, dx, dy) ! get depth increment
             q(1, i, j) = q(1, i, j) + dt * d ! add to the continuity equation
@@ -216,9 +216,9 @@ contains
             call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
 
             ! if this point source located outside this mesh, we skip this point
-            if (i .eq. -999) cycle
+            if (i == -999) cycle
 
-            if ((q(1, i, j) / dry_tolerance) .lt. 0.9) then
+            if ((q(1, i, j) / dry_tolerance) < 0.9) then
                 q(1, i, j) = dry_tolerance * 0.9
             endif
         enddo
@@ -242,7 +242,7 @@ contains
             call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
 
             ! if this point source located outside this mesh, we skip this point
-            if (i .eq. -999) cycle
+            if (i == -999) cycle
 
             ! flag the cell
             amrflags(i, j) = DOFLAG

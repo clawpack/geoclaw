@@ -102,8 +102,8 @@ contains
 
         ! TODO: think about a better algorithm
         do i = 0, this%n_blocks
-            if ((x .ge. this%xlowers(i)) .and. (x .lt. this%xuppers(i))) then
-                if ((y .ge. this%ylowers(i)) .and. (y .lt. this%yuppers(i))) then
+            if ((x >= this%xlowers(i)) .and. (x < this%xuppers(i))) then
+                if ((y >= this%ylowers(i)) .and. (y < this%yuppers(i))) then
                     coef = this%coefficients(i)
                     found = .true.
                     exit ! exit the loop

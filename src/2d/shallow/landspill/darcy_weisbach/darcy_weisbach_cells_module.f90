@@ -97,8 +97,8 @@ contains
         integer(kind=4):: i, j
 
         ! when the coordinate is covered by the provided coefficient file
-        if ((x .ge. this%xlower) .and. (x .lt. this%xupper)) then
-            if ((y .ge. this%ylower) .and. (y .lt. this%yupper)) then
+        if ((x >= this%xlower) .and. (x < this%xupper)) then
+            if ((y >= this%ylower) .and. (y < this%yupper)) then
                 i = int((x-this%xlower)/this%cellsize) + 1
                 j = int((y-this%ylower)/this%cellsize) + 1
                 coef = this%coefficients(i, j)
@@ -174,8 +174,8 @@ contains
         enddo
 
         ! handle missing data
-        if (any(this%coefficients .eq. this%nodatavalue)) then
-            where(this%coefficients .eq. this%nodatavalue) this%coefficients = 0D0
+        if (any(this%coefficients == this%nodatavalue)) then
+            where(this%coefficients == this%nodatavalue) this%coefficients = 0D0
 
             write(*, *) "WARNING: missing data found in the Darcy-Weisbach &
                 coefficient file. Set these data to zero automatically."
