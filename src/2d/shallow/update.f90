@@ -226,10 +226,4 @@ subroutine update (level, nvar, naux)
 !$OMP END PARALLEL DO
 
     return
-
-
-contains
-
-
-
 end subroutine
