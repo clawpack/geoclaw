@@ -44,6 +44,7 @@ module darcy_weisbach_abstract_module
         ! init_from_funit_base
         subroutine init_from_funit_base(this, funit)
             import 
+            implicit none
             class(DarcyWeisbachBase), intent(inout):: this
             integer(kind=4), intent(in):: funit
         end subroutine init_from_funit_base
@@ -51,6 +52,7 @@ module darcy_weisbach_abstract_module
         ! write_data_base
         subroutine write_data_base(this, iounit, iotype, v_list, stat, msg)
             import
+            implicit none
             class(DarcyWeisbachBase), intent(in):: this
             integer(kind=4), intent(in):: iounit
             character(*), intent(in)::iotype
@@ -62,6 +64,7 @@ module darcy_weisbach_abstract_module
         ! get_coefficient_base
         function get_coefficient_base(this, x, y, q) result(coef)
             import
+            implicit none
             class(DarcyWeisbachBase), intent(in):: this
             real(kind=8), intent(in):: x, y
             real(kind=8), intent(in):: q(3)
@@ -89,6 +92,7 @@ contains
 
     !> @brief Kernel function for Darcy-Weisbach friction force.
     function kernel(q, coefficient) result(gamma)
+        implicit none
 
         ! passed-in variables
         real(kind=8), intent(in):: q(3), coefficient
@@ -102,6 +106,7 @@ contains
     !> @brief Calculate and add friction force to the whole array of q.
     subroutine apply_to_grid(this, meqn, mbc, mx, my, &
         xlower, ylower, dx, dy, q, dt)
+        implicit none
 
         ! passed-in variables
         class(DarcyWeisbachBase), intent(in):: this
@@ -138,6 +143,8 @@ contains
 
     ! implementation of read_base
     subroutine read_base(this, iounit, iotype, v_list, stat, msg)
+        implicit none
+
         ! variable declaration
         class(DarcyWeisbachBase), intent(inout):: this
         integer(kind=4), intent(in):: iounit
@@ -152,6 +159,7 @@ contains
 
     ! implementation of init_from_funit_null
     subroutine init_from_funit_null(this, funit)
+        implicit none
         class(DarcyWeisbachNull), intent(inout):: this
         integer(kind=4), intent(in):: funit
 
