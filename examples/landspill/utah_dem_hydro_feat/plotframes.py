@@ -13,13 +13,65 @@ Plot topography and flow depth
 import os
 import numpy
 import matplotlib
-import matplotlib.pyplot as pyplot
-import clawpack.geoclaw.topotools as topo
-import clawpack.geoclaw.geoplot as geoplot
-import clawpack.visclaw as visclaw
-import clawpack.visclaw.data
-import clawpack.visclaw.frametools
-import readdata
+from matplotlib import pyplot
+from clawpack.geoclaw import topotools
+from clawpack import pyclaw
+
+
+def get_max_depth(solution):
+    """
+    """
+
+    max_depth = 0.
+
+    for state in solution.states:
+        max_temp = state.q[0, :, :].max()
+        if max_temp > max_depth:
+            max_depth = max_temp
+
+    return max_depth
+
+
+def plot_at_axes(solution, ax, min_level=2, max_level=None,
+                 shift=[0., 0.], vmin=0, vmax=None, dry_tol=1e-4,
+                 cmap=pyplot.cm.viridis):
+    """
+    Plot fluid depth
+    """
+
+    if vmax is None:
+        vmax = get_max_depth(solution)
+
+    for state in solution.states:
+        p = state.patch
+
+        if p.level < min_level:
+            continue
+
+        if max_level is not None:
+            if p.level > max_level:
+                continue
+
+        x, dx = numpy.linspace(p.lower_global[0], p.upper_global[0],
+                               p.num_cells_global[0]+1, retstep=True)
+        y, dy = numpy.linspace(p.lower_global[1], p.upper_global[1],
+                               p.num_cells_global[1]+1, retstep=True)
+        assert numpy.abs(dx-p.delta[0]) < 1e-6, "{} {}".format(dx, p.delta[0])
+        assert numpy.abs(dy-p.delta[1]) < 1e-6, "{} {}".format(dy, p.delta[1])
+
+        x -= shift[0]
+        y -= shift[1]
+
+        im = ax.pcolormesh(
+            x, y, numpy.ma.masked_less(state.q[0, :, :], dry_tol).T,
+            shading='flat', edgecolors='None',
+            vmin=vmin, vmax=vmax, cmap=cmap)
+
+    try:
+        return im
+    except UnboundLocalError:
+        return None
+
 
 topo_xbg = -12461650
 topo_xed = topo_xbg + 4000
@@ -44,7 +96,7 @@ y_crop_ed = y_crop_bg + raster_y_size
 
 
 # read topo file
-topofile = topo.Topography()
+topofile = topotools.Topography()
 topofile.read("./utah_dem_topo_3.txt", topo_type=3)
 topofile_crop = topofile.crop([x_crop_bg, x_crop_ed, y_crop_bg, y_crop_ed])
 
@@ -102,12 +154,19 @@ for frameno in range(frame_bg, frame_ed+1):
     cbar = pyplot.colorbar(im, cax=cbarax, ax=ax_topo)
     cbar.set_label("Elevation (m)")
 
-    soln = readdata.Solution("./_output", frameno, min_lvl=2)
+    soln = pyclaw.Solution()
 
-    print("Plotting frame No. {}, T={} secs ({} mins)".format(frameno, soln.time, int(soln.time/60.)))
+    aux = False
+    if os.path.isfile("./_output/fort.a" + "{}".format(frameno).zfill(4)):
+        aux = True
 
-    im = soln.plot_at_axes(ax_topo, min_level=2, shift=[x_crop_bg, y_crop_bg],
-                           dry_tol=1e-8)
+    soln.read(frameno, file_format="binary", read_aux=aux)
+
+    print("Plotting frame No. {}, T={} secs ({} mins)".format(
+        frameno, soln.state.t, int(soln.state.t/60.)))
+
+    im = plot_at_axes(soln, ax_topo, min_level=2,
+                      shift=[x_crop_bg, y_crop_bg], dry_tol=1e-8)
 
     ax_topo.set_xlim(0, raster_x_size)
     ax_topo.set_ylim(0, raster_y_size)
@@ -127,7 +186,8 @@ for frameno in range(frame_bg, frame_ed+1):
     line = ax_topo.plot(source_x, source_y, 'r.', markersize=10)
 
     # figure title
-    fig.suptitle("Topography and depth near breakage point, T = {} (mins)".format(int(soln.time/60.)),
+    fig.suptitle("Topography and depth near breakage point, "
+                 "T = {} (mins)".format(int(soln.state.t/60.)),
                  x=0.5, y=0.9, fontsize=16,
                  horizontalalignment="center",
                  verticalalignment="bottom")
