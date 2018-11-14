@@ -25,12 +25,12 @@ After the simulation, open the file `plot.claw` with
 [VisIt](https://wci.llnl.gov/simulation/computer-codes/visit/)
 to visualize the results.
 
-Alternatively, the Python script `readdata.py` can be used to plot the flow
+Alternatively, the Python script `plotresults.py` can be used to plot the flow
 at each output time step. The generated plots will be in the folder `_plots`.
 
 In the folder `lister_1992`, there are `.csv` files for the experimental data
-obtained from Lister's paper (1992). If one uses `readdata.py` to plot the flow,
-the experimental data will also be plotted.
+obtained from Lister's paper (1992). If one uses `plotresults.py` to plot the 
+flow, the experimental data will also be plotted.
 
 Instead of a simple `$ make all`, users can do a fine control of the process 
 with the following steps:
