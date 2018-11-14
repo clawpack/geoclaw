@@ -14,6 +14,8 @@ module hydro_feature_collection_module
     !> brief A class for collection of hydro features
     type:: HydroFeatureCollection
         private
+        !> @brief The index in aux array for hydro cell indicator
+        integer(kind=4):: hydro_index = -1
         !> @brief Number of features in the collection.
         integer(kind=4):: nfeats = -1
         !> @brief Array of HydroFeature objects.
@@ -22,6 +24,8 @@ module hydro_feature_collection_module
         contains ! member functions
         !> @brief Initialization
         procedure:: init
+        !> @brief Set hydro cell indicator index in aux
+        procedure, private:: set_index
         !> @brief Underlying output driver.
         procedure, private:: write_data
         !> @brief Underlying input driver.
@@ -32,6 +36,10 @@ module hydro_feature_collection_module
         procedure:: update_aux
         !> @brief Remove working fluid from hydro cells.
         procedure:: remove_fluid
+        !> @brief Get a copy of the number of features.
+        procedure:: get_n_features
+        !> @brief Get a copy of the aux index.
+        procedure:: get_hydro_index
         !> @brief Overload intrinsic write.
         generic:: write(formatted) => write_data
         !> @brief Overload intrinsic write.
@@ -94,7 +102,57 @@ contains
 
         ! close the file
         close(funit)
+
+        ! set index in aux
+        call this%set_index()
+        
     end subroutine init
+
+    subroutine set_index(this)
+        use:: geoclaw_module, only: coordinate_system
+        use:: friction_module, only: variable_friction
+        use:: storm_module, only: wind_forcing, pressure_forcing
+        use:: multilayer_module, only: num_layers
+        use:: amr_module, only: auxtype
+        class(HydroFeatureCollection), intent(inout):: this
+
+        if (this%nfeats == -1) then
+            print *, "Error: Hydro feature collection class is not yet initialized."
+            stop
+        else if (this%nfeats == 0) then
+            this%hydro_index = -1
+            return
+        endif
+
+        ! topo data
+        this%hydro_index = 1
+
+        ! coordinate system
+        if (coordinate_system == 2) this%hydro_index = this%hydro_index + 2
+
+        ! friction coefficients
+        if (variable_friction) this%hydro_index = this%hydro_index + 1
+
+        ! from wind module
+        if (wind_forcing) this%hydro_index = this%hydro_index + 2
+
+        ! from wind pressure
+        if (pressure_forcing) this%hydro_index = this%hydro_index + 1
+
+        ! from multi-layer
+        if (num_layers > 1) this%hydro_index = this%hydro_index + num_layers
+
+        ! finally, the index of hydro cell indicators
+        this%hydro_index = this%hydro_index + 1
+
+        ! check is the size of aux array is correct
+        if (size(auxtype) /= this%hydro_index) then
+            print *, "The index for hydro cell indicator,", this%hydro_index, &
+                " is not correct. Maybe the number of aux is  not set &
+                correctly in setrun.py"
+            stop
+        endif
+    end subroutine set_index
 
     ! implementation of C++ stype constructor
     function constructor(filename)
@@ -202,7 +260,7 @@ contains
             do i=1-mbc, mx+mbc
                 xr = xlow + i * dx
                 hydro_cell = this%is_hydro_cell(xl, xr, yb, yt)
-                if (hydro_cell) aux(2, i, j) = 2D0
+                if (hydro_cell) aux(this%hydro_index, i, j) = 2D0
                 xl = xr
             enddo
             yb = yt
@@ -219,11 +277,25 @@ contains
         ! if there's no hydrolic feature, exit the subroutine
         if (this%nfeats == 0) return
 
-        where(abs(aux(2, :, :)-2D0) < 1e-6) 
+        where(abs(aux(this%hydro_index, :, :)-2D0) < 1e-6) 
             q(1, :, :) = 0D0
             q(2, :, :) = 0D0
             q(3, :, :) = 0D0
         end where
     end subroutine remove_fluid
+
+    ! implementation of get_n_features
+    function get_n_features(this)
+        class(HydroFeatureCollection), intent(in):: this
+        integer(kind=4):: get_n_features
+        get_n_features = this%nfeats 
+    end function get_n_features
+
+    ! implementation of get_hydro_index
+    function get_hydro_index(this)
+        class(HydroFeatureCollection), intent(in):: this
+        integer(kind=4):: get_hydro_index
+        get_hydro_index = this%hydro_index 
+    end function get_hydro_index
 
 end module hydro_feature_collection_module
