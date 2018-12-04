@@ -108,6 +108,7 @@ contains
         
     end subroutine init
 
+    ! implementation of set_index
     subroutine set_index(this)
         use:: geoclaw_module, only: coordinate_system
         use:: friction_module, only: variable_friction
