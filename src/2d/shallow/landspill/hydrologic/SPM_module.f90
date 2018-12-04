@@ -92,6 +92,12 @@ module SPM_module
         contains
         !> @brief Init from a CSR matrix.
         procedure:: init => init_CSR
+        !> @brief Access matrix element.
+        procedure:: get => get_CSR
+        !> @brief Set matrix element.
+        procedure:: set => set_CSR
+        !> @brief Add value to a matrix element.
+        procedure:: add => add_CSR
         !> @brief Destroy this CSR.
         procedure:: destroy => destroy_CSR
         !> @brief Write.
@@ -104,21 +110,42 @@ module SPM_module
 
     !> @brief An intergace to standard C qsort function
     interface
-        subroutine qsort(arry, n_elem, size_of_elem, compare) bind(c, name='qsort')
+        subroutine qsort(arry, n_elem, size_of_elem, compare) bind(C, name='qsort')
             use, intrinsic:: iso_c_binding, only: c_size_t, c_int, c_ptr
             import
-            type(*), intent(inout) :: arry(*)
+            type(*), intent(inout):: arry(*)
+            integer(kind=c_size_t), intent(in), value:: n_elem
+            integer(kind=c_size_t), intent(in), value:: size_of_elem
+            abstract interface
+                function compare_func(a, b) bind(C)
+                    import
+                    type(c_ptr), intent(in), value:: a, b
+                    integer(kind=c_int):: compare_func
+                end function compare_func
+            end interface
+            procedure(compare_func):: compare
+        end subroutine qsort
+    end interface
+
+    !> @brief An intergace to standard C bsearch function
+    interface
+        function bsearch(key, arry, n_elem, size_of_elem, compare) bind(C, name='bsearch')
+            use, intrinsic:: iso_c_binding, only: c_size_t, c_int, c_ptr
+            import
+            type(*), intent(in):: key
+            type(*), intent(in):: arry(*)
             integer(kind=c_size_t), intent(in), value :: n_elem
             integer(kind=c_size_t), intent(in), value :: size_of_elem
             abstract interface
-                function compare_func(a, b) bind(c)
+                function compare_func(a, b) bind(C)
                     import
                     type(c_ptr), intent(in), value :: a, b
                     integer(kind=c_int):: compare_func
                 end function compare_func
             end interface
             procedure(compare_func):: compare
-        end subroutine
+            type(c_ptr) :: bsearch
+        end function bsearch
     end interface
 
 contains
@@ -350,6 +377,87 @@ contains
         end do
         nullify(head)
     end subroutine init_CSR
+
+    ! get_CSR
+    function get_CSR(this, i, j) result(val)
+        use, intrinsic:: iso_c_binding, only: c_ptr, c_size_t, c_associated
+        use, intrinsic:: iso_c_binding, only: c_f_pointer, c_sizeof
+        class(CSR), intent(in):: this
+        integer(kind=4), intent(in):: i, j
+        real(kind=8):: val
+
+        ! local variables
+        type(c_ptr):: c_loc_ptr
+        integer(kind=4), pointer:: f_loc_ptr
+        integer(kind=4):: loc_cols
+
+        c_loc_ptr = bsearch(j, this%cols(this%rows(i):this%rows(i+1)-1), &
+            int(this%rows(i+1)-this%rows(i), c_size_t), &
+            c_sizeof(this%cols(this%rows(i))), compare_int4)
+
+        if (.not. c_associated(c_loc_ptr)) then
+            val = 0D0
+            return
+        end if
+
+        call c_f_pointer(c_loc_ptr, f_loc_ptr)
+        loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
+        val = this%vals(loc_cols)
+    end function get_CSR
+
+    ! set_CSR
+    subroutine set_CSR(this, i, j, val)
+        use, intrinsic:: iso_c_binding, only: c_ptr, c_size_t, c_associated
+        use, intrinsic:: iso_c_binding, only: c_f_pointer, c_sizeof
+        class(CSR), intent(inout):: this
+        integer(kind=4), intent(in):: i, j
+        real(kind=8), intent(in):: val
+
+        ! local variables
+        type(c_ptr):: c_loc_ptr
+        integer(kind=4), pointer:: f_loc_ptr
+        integer(kind=4):: loc_cols
+
+        c_loc_ptr = bsearch(j, this%cols(this%rows(i):this%rows(i+1)-1), &
+            int(this%rows(i+1)-this%rows(i), c_size_t), &
+            c_sizeof(this%cols(this%rows(i))), compare_int4)
+
+        if (.not. c_associated(c_loc_ptr)) then
+            print *, "Error: trying to set value to zero location in CSR."
+            stop
+        end if
+
+        call c_f_pointer(c_loc_ptr, f_loc_ptr)
+        loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
+        this%vals(loc_cols) = val
+    end subroutine set_CSR
+
+    ! add_CSR
+    subroutine add_CSR(this, i, j, val)
+        use, intrinsic:: iso_c_binding, only: c_ptr, c_size_t, c_associated
+        use, intrinsic:: iso_c_binding, only: c_f_pointer, c_sizeof
+        class(CSR), intent(inout):: this
+        integer(kind=4), intent(in):: i, j
+        real(kind=8), intent(in):: val
+
+        ! local variables
+        type(c_ptr):: c_loc_ptr
+        integer(kind=4), pointer:: f_loc_ptr
+        integer(kind=4):: loc_cols
+
+        c_loc_ptr = bsearch(j, this%cols(this%rows(i):this%rows(i+1)-1), &
+            int(this%rows(i+1)-this%rows(i), c_size_t), &
+            c_sizeof(this%cols(this%rows(i))), compare_int4)
+
+        if (.not. c_associated(c_loc_ptr)) then
+            print *, "Error: trying to set value to zero location in CSR."
+            stop
+        end if
+
+        call c_f_pointer(c_loc_ptr, f_loc_ptr)
+        loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
+        this%vals(loc_cols) = this%vals(loc_cols) + val
+    end subroutine add_CSR
 
     ! write_CSR
     subroutine write_CSR(this, iounit, iotype, v_list, stat, msg)
