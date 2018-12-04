@@ -9,7 +9,7 @@
 module SPM_module
     implicit none
     private
-    public:: IndexSet, COO, CSR
+    public:: IndexSet, COO, CSR, compress
 
     !> @brief A helper type representing indices and value of a non-zero for COO.
     type:: IndexSet
@@ -263,6 +263,12 @@ contains
         type(IndexSet), pointer:: head
         integer(kind=4):: i
 
+        this%n_rows = 0
+        this%n_cols = 0
+
+        ! this means the list is not initialized
+        if (.not. associated(this%bg)) return
+
         do i = this%nnz, 2, -1
             this%ed => this%ed%prev
             deallocate(this%ed%next)
@@ -275,8 +281,7 @@ contains
 
         deallocate(this%bg)
         this%nnz = 0
-        this%n_rows = 0
-        this%n_cols = 0
+
     end subroutine destroy_COO
 
     ! destructor_COO
@@ -495,7 +500,10 @@ contains
         this%nnz = 0
         this%n_rows = 0
         this%n_cols = 0
-        deallocate(this%rows, this%cols, this%vals)
+
+        if (allocated(this%rows)) deallocate(this%rows)
+        if (allocated(this%cols)) deallocate(this%cols)
+        if (allocated(this%vals)) deallocate(this%vals)
     end subroutine destroy_CSR
 
     ! destructor_CSR
@@ -516,5 +524,39 @@ contains
 
         compare_int4 = int(ap-bp, c_int)
     end function compare_int4
+
+    ! compress
+    module subroutine compress(A, sp)
+        real(kind=8), dimension(:, :), intent(in):: A
+        type(CSR), intent(inout):: sp
+
+        ! local variables
+        integer(kind=4):: i, j
+
+        ! clear sp
+        call sp%destroy()
+
+        sp%nnz = count(dabs(A) >= 1e-9)
+        sp%n_rows = size(A, 1)
+        sp%n_cols = size(A, 2)
+
+        allocate(sp%rows(sp%n_rows+1))
+        allocate(sp%cols(sp%nnz))
+        allocate(sp%vals(sp%nnz))
+
+        sp%rows(1) = 1
+
+        ! TODO: bad implementation. Expensive. Improve in the future.
+        do i = 1, sp%n_rows
+            sp%rows(i+1) = count(dabs(A(i, :))>=1e-9) + sp%rows(i)
+
+            sp%cols(sp%rows(i):sp%rows(i+1)-1) = &
+                pack((/ (j, j=1, sp%n_cols) /), dabs(A(i, :))>=1e-9)
+
+            sp%vals(sp%rows(i):sp%rows(i+1)-1) = &
+                pack(A(i, :), dabs(A(i, :))>=1e-9)
+        end do
+
+    end subroutine compress
 
 end module SPM_module

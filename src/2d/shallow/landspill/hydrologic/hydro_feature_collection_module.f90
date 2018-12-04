@@ -7,11 +7,12 @@
 
 module hydro_feature_collection_module
     use hydro_feature_module
+    use SPM_module
     implicit none
     private
     public:: HydroFeatureCollection
 
-    !> brief A class for collection of hydro features
+    !> @brief A class for collection of hydro features
     type:: HydroFeatureCollection
         private
         !> @brief The index in aux array for hydro cell indicator
@@ -20,18 +21,38 @@ module hydro_feature_collection_module
         integer(kind=4):: nfeats = -1
         !> @brief Array of HydroFeature objects.
         type(HydroFeature), allocatable, dimension(:):: feats
+        !> @brief A removed-fluid tracer represented by CSR.
+        type(CSR):: tracer
+        !> @brief xlower of the mesh tracing removed fluid.
+        real(kind=8):: tracer_xlower
+        !> @brief ylower of the mesh tracing removed fluid.
+        real(kind=8):: tracer_ylower
+        !> @brief xupper of the mesh tracing removed fluid.
+        real(kind=8):: tracer_xupper
+        !> @brief yupper of the mesh tracing removed fluid.
+        real(kind=8):: tracer_yupper
+        !> @brief Number of cell in x-dir of the mesh tracing removed fluid.
+        integer(kind=4):: tracer_mx
+        !> @brief Number of cell in y-dir of the mesh tracing removed fluid.
+        integer(kind=4):: tracer_my
+        !> @brief Cell size in x-dir of the mesh tracing removed fluid.
+        real(kind=8):: tracer_dx
+        !> @brief Cell size in x-dir of the mesh tracing removed fluid.
+        real(kind=8):: tracer_dy
 
         contains ! member functions
         !> @brief Initialization
         procedure:: init
         !> @brief Set hydro cell indicator index in aux
-        procedure, private:: set_index
+        procedure, private:: set_aux_index
+        !> @brief Initialize tracer.
+        procedure, private:: init_rmvd_fluid_tracer
         !> @brief Underlying output driver.
         procedure, private:: write_data
         !> @brief Underlying input driver.
         procedure, private:: read_data
-        !> @brief Return if a cell is a hydro cell.
-        procedure:: is_hydro_cell
+        !> @brief Return the id of the hydro feature owning this cell.
+        procedure:: cell_type
         !> @brief Update aux.
         procedure:: update_aux
         !> @brief Remove working fluid from hydro cells.
@@ -48,11 +69,11 @@ module hydro_feature_collection_module
         final:: destructor
     end type HydroFeatureCollection
 
-
     !> @brief C++ style constructor.
     interface HydroFeatureCollection
         procedure:: constructor
     end interface HydroFeatureCollection
+
 contains
     
     ! implementation of init
@@ -104,12 +125,15 @@ contains
         close(funit)
 
         ! set index in aux
-        call this%set_index()
+        call this%set_aux_index()
+
+        ! set tracer tracing removed fluid on feature boundary
+        call this%init_rmvd_fluid_tracer()
         
     end subroutine init
 
-    ! implementation of set_index
-    subroutine set_index(this)
+    ! implementation of set_aux_index
+    subroutine set_aux_index(this)
         use:: geoclaw_module, only: coordinate_system
         use:: friction_module, only: variable_friction
         use:: storm_module, only: wind_forcing, pressure_forcing
@@ -153,7 +177,59 @@ contains
                 correctly in setrun.py"
             stop
         endif
-    end subroutine set_index
+    end subroutine set_aux_index
+
+    ! implementation init_rmvd_fluid_tracer
+    subroutine init_rmvd_fluid_tracer(this)
+        use:: amr_module, only: xlower, ylower, xupper, yupper
+        use:: amr_module, only: mxnest, hxposs, hyposs
+        class(HydroFeatureCollection), intent(inout):: this
+
+        integer(kind=4):: i, j
+        integer(kind=1):: tracer_cell_type
+        real(kind=8):: xl, xh, yl, yh
+        type(COO):: temp_mtx
+
+        this%tracer_xlower = xlower
+        this%tracer_ylower = ylower
+        this%tracer_xupper = xupper
+        this%tracer_yupper = yupper
+
+        this%tracer_dx = hxposs(mxnest)
+        this%tracer_dy = hyposs(mxnest)
+
+        this%tracer_mx = idnint((xupper-xlower)/this%tracer_dx)
+        this%tracer_my = idnint((yupper-ylower)/this%tracer_dy)
+
+        ! initialize temporary COO matrix
+        call temp_mtx%init(this%tracer_mx, this%tracer_my)
+
+        ! loop
+        do j = 1, this%tracer_my
+
+            yl = (j - 1) * this%tracer_dy + this%tracer_ylower
+            yh = yl + this%tracer_dy
+
+            do i = 1, this%tracer_mx
+
+                xl = (i - 1) * this%tracer_dx + this%tracer_xlower
+                xh = xl + this%tracer_dx
+
+                tracer_cell_type = this%cell_type(xl, xh, yl, yh)
+
+                if (tracer_cell_type == 2) then
+                    call temp_mtx%append(IndexSet(i, j, 0D0))
+                end if
+            end do
+        end do
+
+        ! transform to CSR
+        call this%tracer%init(temp_mtx)
+
+        ! destroy temporary COO matrix
+        call temp_mtx%destroy()
+
+    end subroutine init_rmvd_fluid_tracer
 
     ! implementation of C++ stype constructor
     function constructor(filename)
@@ -215,27 +291,28 @@ contains
 
     end subroutine read_data
 
-    ! implementation of is_hydro_cell
-    function is_hydro_cell(this, x_cell_lower, x_cell_higher, &
-        y_cell_lower, y_cell_higher)
+    ! implementation of cell_type
+    function cell_type(this, x_cell_lower, x_cell_higher, &
+                       y_cell_lower, y_cell_higher)
         
         ! function argument
         class(HydroFeatureCollection), intent(in):: this
         real(kind=8), intent(in):: x_cell_lower, x_cell_higher 
         real(kind=8), intent(in):: y_cell_lower, y_cell_higher 
-        logical:: is_hydro_cell
+        integer(kind=1):: cell_type
 
         ! local variables
         integer(kind=4):: i
 
         do i = 1, this%nfeats
-            is_hydro_cell = this%feats(i)%is_hydro_cell(&
-                x_cell_lower, x_cell_higher, y_cell_lower, y_cell_higher)
+            cell_type = this%feats(i)%cell_type(x_cell_lower, &
+                x_cell_higher, y_cell_lower, y_cell_higher)
 
-            if (is_hydro_cell) exit
+            ! no need to go through other hydro feature
+            if (cell_type /= 0) exit
         enddo
 
-    end function is_hydro_cell
+    end function cell_type
 
     ! implementation of update_aux
     subroutine update_aux(this, mbc, mx, my, xlow, ylow, dx, dy, maux, aux)
@@ -260,8 +337,8 @@ contains
             yt = ylow + j * dy
             do i=1-mbc, mx+mbc
                 xr = xlow + i * dx
-                hydro_cell = this%is_hydro_cell(xl, xr, yb, yt)
-                if (hydro_cell) aux(this%hydro_index, i, j) = 2D0
+                aux(this%hydro_index, i, j) = &
+                    real(this%cell_type(xl, xr, yb, yt), 8)
                 xl = xr
             enddo
             yb = yt
@@ -269,16 +346,23 @@ contains
     end subroutine update_aux
 
     ! implementation of remove_fluid
-    subroutine remove_fluid(this, meqn, mbc, mx, my, q, maux, aux)
-        class(HydroFeatureCollection), intent(in):: this
-        integer(kind=4), intent(in):: meqn, mbc, mx, my, maux
+    subroutine remove_fluid(this, level, meqn, mbc, mx, my, xlow, &
+                            ylow, dx, dy, q, maux, aux)
+        ! input arguments
+        class(HydroFeatureCollection), intent(inout):: this
+        integer(kind=4), intent(in):: level, meqn, mbc, mx, my, maux
         real(kind=8), intent(inout):: q(meqn, 1-mbc:mx+mbc, 1-mbc:my+mbc)
         real(kind=8), intent(in):: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+        real(kind=8), intent(in):: xlow, ylow, dx, dy
+
+        ! local variables
+        integer(kind=4):: i, j, ifeat, n_ol_pts
+        real(kind=8):: x_cell_low, x_cell_high, y_cell_low, y_cell_high
 
         ! if there's no hydrolic feature, exit the subroutine
         if (this%nfeats == 0) return
 
-        where(abs(aux(this%hydro_index, :, :)-2D0) < 1e-6) 
+        where(idnint(aux(this%hydro_index, :, :)) /= 0) 
             q(1, :, :) = 0D0
             q(2, :, :) = 0D0
             q(3, :, :) = 0D0

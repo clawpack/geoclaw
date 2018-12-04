@@ -34,27 +34,19 @@ module hydro_feature_module
         !> @brief No data value.
         real(kind=8):: nodatavalue
         !> @brief Array indicating whether a cell belongs to hydrologic heature.
-        logical, allocatable, dimension(:, :):: hydro_cell
-        !> @brief Number of the cells laying on the outlines of the features
-        integer(kind=4):: n_ol_cells
-        !> @brief x-coordinates of the outline cell
-        real(kind=8), allocatable, dimension(:):: x_ol_cells
-        !> @brief y-coordinates of the outline cell
-        real(kind=8), allocatable, dimension(:):: y_ol_cells
-        !> @brief Accumulated removed fluid on the outline at each AMR level
-        real(kind=8), allocatable, dimension(:, :):: rmvd_ol_cells
+        integer(kind=1), allocatable, dimension(:, :):: hydro_cell
 
         contains ! member function
         !> @brief Init from file
         procedure:: init
+        !> @brief Change the value of hydro feature boundary
+        procedure:: process_boundary
         !> @brief Read hydro data file (in Esri ASCII format)
-        procedure:: read_file
+        procedure, private:: read_file
         !> @brief Underlying outputing.
-        procedure:: write_data
+        procedure, private:: write_data
         !> @brief Return if a cell is a hydro cell.
-        procedure:: is_hydro_cell
-        !> @brief Identify cells located on the outlines of the features
-        procedure, private:: identify_outline
+        procedure:: cell_type
         !> @brief Overriding intrinsic write function.
         generic:: write(formatted) => write_data
         !> @bried Destructor
@@ -70,7 +62,7 @@ contains
 
         this%filename = filename
         call this%read_file()
-        call this%identify_outline()
+        call this%process_boundary()
     end subroutine init
 
     ! implementation of destructor
@@ -119,9 +111,11 @@ contains
         character(len=255):: line
 
         if (present(filename)) then
+            print *, "Reading hydro feature:", filename
             open(unit=funit, file=filename, action="read", &
                 status="old", form="formatted")
         else
+            print *, "Reading hydro feature:", this%filename
             open(unit=funit, file=this%filename, action="read", &
                 status="old", form="formatted")
         endif
@@ -162,7 +156,7 @@ contains
 
         ! allocate coefficients
         allocate(this%hydro_cell(this%mx, this%my))
-        this%hydro_cell = .false.
+        this%hydro_cell = 0
 
         ! allocate temporary array for real/integer numbers of every line
         allocate(temp(this%mx))
@@ -170,7 +164,7 @@ contains
         ! read coefficients
         do j = this%my, 1, -1
             read(funit, *) temp
-            where(temp .ne. this%nodatavalue) this%hydro_cell(:, j) = .true.
+            where(temp .ne. this%nodatavalue) this%hydro_cell(:, j) = 1
         enddo
 
         close(funit)
@@ -179,106 +173,41 @@ contains
         ! TODO: NetCDF file
     end subroutine read_file
 
-    ! implementation of identify_outline
-    subroutine identify_outline(this)
-        use:: amr_module, only: mxnest
-        
-        ! function argument
+    ! implementation of process_boundary
+    subroutine process_boundary(this)
         class(HydroFeature), intent(inout):: this
 
-        ! definitions of point. Used only in this subroutine
-        type:: point
-            real(kind=8):: x
-            real(kind=8):: y
-            type(point), pointer:: prev => null()
-            type(point), pointer:: next => null()
-        end type point
-
-        ! local variables
-        type(point), pointer:: bg => null()
-        type(point), pointer:: ed => null()
-        type(point), pointer:: head => null()
         integer(kind=4):: i, j
-        real(kind=8):: xlower_shift
-        real(kind=8):: ylower_shift
 
-        ! code
-        xlower_shift = this%xlower - this%cellsize / 2D0
-        ylower_shift = this%ylower - this%cellsize / 2D0
-        this%n_ol_cells = 0
+        ! we don't care the cells on computational domain boundary, really!
+        do j = 2, this%my-1
+            do i = 2, this%mx-1
+                ! skip interation if this is not a hydro cell
+                if (this%hydro_cell(i, j) == 0) cycle
 
-        ! create a linked list for temporarily recording outlines
-        do i = 1, this%mx
-            do j = 1, this%my
-                ! if this is not a hydro cell, skip
-                if (.not. this%hydro_cell(i, j)) cycle
-                
-                ! if all 3x3 cells are hydro cells, this is not on outline
-                if (all(this%hydro_cell(max(1, i-1):min(this%mx, i+1), &
-                    max(1, j-1):min(this%my, j+1)))) cycle
-
-                ! if this is the first point found
-                if (.not. associated(bg)) then
-                    allocate(bg)
-                    head => bg
-                else ! else, append to the list
-                    allocate(head%next)
-                    head%next%prev => head
-                    head => head%next
+                if (any(this%hydro_cell(i-1:i+1, j-1:j+1) == 0)) then
+                    this%hydro_cell(i, j) = 2
                 end if
-
-                head%x = i * this%cellsize + xlower_shift
-                head%y = j * this%cellsize + ylower_shift
-                this%n_ol_cells = this%n_ol_cells + 1
             end do
         end do
-
-        ! the last element of the list
-        ed => head
-        nullify(head)
-
-        allocate(this%x_ol_cells(this%n_ol_cells))
-        allocate(this%y_ol_cells(this%n_ol_cells))
-        allocate(this%rmvd_ol_cells(mxnest, this%n_ol_cells))
-
-        ! init/copy values
-        this%rmvd_ol_cells = 0D0
-        
-        head => bg
-        do i = 1, this%n_ol_cells
-            this%x_ol_cells(i) = head%x
-            this%y_ol_cells(i) = head%y
-            head => head%next
-        end do
-        nullify(head)
-
-        ! deallocate linked list
-        head => ed%prev
-        do while(associated(head))
-            deallocate(head%next)
-            head => head%prev
-        end do
-        nullify(head)
-        deallocate(bg)
-
-    end subroutine identify_outline
+    end subroutine process_boundary
 
     ! implementation of is_hydro_cell
-    function is_hydro_cell(this, x_cell_lower, x_cell_higher, &
+    function cell_type(this, x_cell_lower, x_cell_higher, &
         y_cell_lower, y_cell_higher)
         
         ! function argument
         class(HydroFeature), intent(in):: this
         real(kind=8), intent(in):: x_cell_lower, x_cell_higher 
         real(kind=8), intent(in):: y_cell_lower, y_cell_higher 
-        logical:: is_hydro_cell
+        integer(kind=1):: cell_type
 
         ! local variables
         integer(kind=4):: i_lower, i_higher
         integer(kind=4):: j_lower, j_higher
 
-        ! initialize is_hydro_cell
-        is_hydro_cell = .false.
+        ! initialize cell_type
+        cell_type = 0
 
         ! completely out of domain, return false
         if ((x_cell_higher <= this%xlower) .or. &
@@ -313,11 +242,17 @@ contains
             j_higher = int((y_cell_lower - this%ylower) / this%cellsize) + 1
         endif
 
-        ! see if any cell covered in the block is a hydro cell
-        if (any(this%hydro_cell(i_lower:i_higher, j_lower:j_higher))) then
-            is_hydro_cell = .true.
+        ! see if any cell covered in the block is a hydro boundary cell
+        if (any(this%hydro_cell(i_lower:i_higher, j_lower:j_higher) == 2)) then
+            cell_type = 2
+            return
         endif
 
-    end function is_hydro_cell
+        ! see if this is a interior hydro cell
+        if (any(this%hydro_cell(i_lower:i_higher, j_lower:j_higher) == 1)) then
+            cell_type = 1
+        endif
+
+    end function cell_type
 
 end module hydro_feature_module
