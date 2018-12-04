@@ -35,6 +35,14 @@ module hydro_feature_module
         real(kind=8):: nodatavalue
         !> @brief Array indicating whether a cell belongs to hydrologic heature.
         logical, allocatable, dimension(:, :):: hydro_cell
+        !> @brief Number of the cells laying on the outlines of the features
+        integer(kind=4):: n_ol_cells
+        !> @brief x-coordinates of the outline cell
+        real(kind=8), allocatable, dimension(:):: x_ol_cells
+        !> @brief y-coordinates of the outline cell
+        real(kind=8), allocatable, dimension(:):: y_ol_cells
+        !> @brief Accumulated removed fluid on the outline at each AMR level
+        real(kind=8), allocatable, dimension(:, :):: rmvd_ol_cells
 
         contains ! member function
         !> @brief Init from file
@@ -45,6 +53,8 @@ module hydro_feature_module
         procedure:: write_data
         !> @brief Return if a cell is a hydro cell.
         procedure:: is_hydro_cell
+        !> @brief Identify cells located on the outlines of the features
+        procedure, private:: identify_outline
         !> @brief Overriding intrinsic write function.
         generic:: write(formatted) => write_data
         !> @bried Destructor
@@ -60,6 +70,7 @@ contains
 
         this%filename = filename
         call this%read_file()
+        call this%identify_outline()
     end subroutine init
 
     ! implementation of destructor
@@ -167,6 +178,90 @@ contains
 
         ! TODO: NetCDF file
     end subroutine read_file
+
+    ! implementation of identify_outline
+    subroutine identify_outline(this)
+        use:: amr_module, only: mxnest
+        
+        ! function argument
+        class(HydroFeature), intent(inout):: this
+
+        ! definitions of point. Used only in this subroutine
+        type:: point
+            real(kind=8):: x
+            real(kind=8):: y
+            type(point), pointer:: prev => null()
+            type(point), pointer:: next => null()
+        end type point
+
+        ! local variables
+        type(point), pointer:: bg => null()
+        type(point), pointer:: ed => null()
+        type(point), pointer:: head => null()
+        integer(kind=4):: i, j
+        real(kind=8):: xlower_shift
+        real(kind=8):: ylower_shift
+
+        ! code
+        xlower_shift = this%xlower - this%cellsize / 2D0
+        ylower_shift = this%ylower - this%cellsize / 2D0
+        this%n_ol_cells = 0
+
+        ! create a linked list for temporarily recording outlines
+        do i = 1, this%mx
+            do j = 1, this%my
+                ! if this is not a hydro cell, skip
+                if (.not. this%hydro_cell(i, j)) cycle
+                
+                ! if all 3x3 cells are hydro cells, this is not on outline
+                if (all(this%hydro_cell(max(1, i-1):min(this%mx, i+1), &
+                    max(1, j-1):min(this%my, j+1)))) cycle
+
+                ! if this is the first point found
+                if (.not. associated(bg)) then
+                    allocate(bg)
+                    head => bg
+                else ! else, append to the list
+                    allocate(head%next)
+                    head%next%prev => head
+                    head => head%next
+                end if
+
+                head%x = i * this%cellsize + xlower_shift
+                head%y = j * this%cellsize + ylower_shift
+                this%n_ol_cells = this%n_ol_cells + 1
+            end do
+        end do
+
+        ! the last element of the list
+        ed => head
+        nullify(head)
+
+        allocate(this%x_ol_cells(this%n_ol_cells))
+        allocate(this%y_ol_cells(this%n_ol_cells))
+        allocate(this%rmvd_ol_cells(mxnest, this%n_ol_cells))
+
+        ! init/copy values
+        this%rmvd_ol_cells = 0D0
+        
+        head => bg
+        do i = 1, this%n_ol_cells
+            this%x_ol_cells(i) = head%x
+            this%y_ol_cells(i) = head%y
+            head => head%next
+        end do
+        nullify(head)
+
+        ! deallocate linked list
+        head => ed%prev
+        do while(associated(head))
+            deallocate(head%next)
+            head => head%prev
+        end do
+        nullify(head)
+        deallocate(bg)
+
+    end subroutine identify_outline
 
     ! implementation of is_hydro_cell
     function is_hydro_cell(this, x_cell_lower, x_cell_higher, &
