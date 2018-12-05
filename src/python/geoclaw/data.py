@@ -50,7 +50,6 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('gravity',9.8)
         self.add_attribute('rho', 1025.0)  # Density of water kg/m^3
         self.add_attribute('rho_air',1.15) # Density of air kg/m^3
-        self.add_attribute('nu', 1.004e-6)  # Kinematic viscosity of water/working fluid
         self.add_attribute('ambient_pressure', 101.3e3) # Nominal atmos pressure
         self.add_attribute('earth_radius',Rearth)
         self.add_attribute('coordinate_system',1)
@@ -74,7 +73,6 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
                                description="(gravitational acceleration m/s^2)")
         self.data_write('rho', description="(Density of water kg/m^3)")
         self.data_write('rho_air',description="(Density of air kg/m^3)")
-        self.data_write('nu', description="(Kinematic viscosity of water/working fluid m^2/s)")
         self.data_write('ambient_pressure',
                                 description="(Nominal atmospheric pressure Pa)")
         self.data_write('earth_radius', description="(Radius of the earth m)")
@@ -533,6 +531,77 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
+# Land-spill data
+class LandSpillData(clawpack.clawutil.data.ClawData):
+    """Data object describing land spill simulation configurations"""
+
+    def __init__(self):
+        """Constructor of LandSpillData class"""
+
+        super(LandSpillData, self).__init__()
+
+        # Reference dynamic viscosity used in temperature-dependent viscosity
+        self.add_attribute('ref_mu', 332.) # unit: mPa-s (= cP = 1e-3kg/s/m)
+
+        # Reference temperature at which the nu_ref is
+        self.add_attribute('ref_temperature', 288.) # unit: K
+
+        # Ambient temperature (K)
+        self.add_attribute('ambient_temperature', 298.) # unit: K
+
+        # Density at ambient temperature
+        self.add_attribute('density', 926.6) # unit: kg / m^3
+
+        # add point source data
+        self.add_attribute('point_sources_file', 'point_source.data')
+        self.add_attribute('point_sources', PointSourceData())
+
+        # add Darcy-Weisbach friction
+        self.add_attribute('darcy_weisbach_file', 'darcy_weisbach.data')
+        self.add_attribute('darcy_weisbach_friction', DarcyWeisbachData())
+
+        # add hydrological features
+        self.add_attribute('hydro_feature_file', 'hydro_feature.data')
+        self.add_attribute('hydro_features', HydroFeatureData())
+
+    def write(self, out_file='./landspill.data', data_source="setrun.py"):
+        """Write out the data file to the path given"""
+
+        # check data consistency
+        self._check()
+
+        # open the output file
+        self.open_data_file(out_file, data_source)
+
+        self.data_write('ref_mu', description='Reference dynamic viscosity (mPa-s)')
+        self.data_write('ref_temperature', description='Reference temperature " \
+                                for temperature-dependent viscosity (K)')
+        self.data_write('ambient_temperature', description='Ambient temperature (K)')
+        self.data_write('density', description='Density at ambient temperature (kg/m^3')
+
+        # output point sources data
+        self.data_write('point_sources_file',
+                        description='File name of point sources settings')
+        self.point_sources.write(self.point_sources_file)
+
+        # output Darcy-Weisbach data
+        self.data_write('darcy_weisbach_file',
+                        description='File name of Darcy-Weisbach settings')
+        self.darcy_weisbach_friction.write(self.darcy_weisbach_file)
+
+        # output hydroological feature data
+        self.data_write('hydro_feature_file',
+                        description='File name of hydrological feature settings')
+        self.hydro_features.write(self.hydro_feature_file)
+
+        # close the output file
+        self.close_data_file()
+
+    def _check(self):
+        """Check if the data are consistent"""
+        pass
+
+
 # Point source data
 class PointSourceData(clawpack.clawutil.data.ClawData):
     """Data object describing point sources"""
@@ -798,12 +867,9 @@ class HydroFeatureData(clawpack.clawutil.data.ClawData):
             f = os.path.abspath(f)
             self.data_write('file {0}'.format(i), f)
 
-        print(super(HydroFeatureData, self).__dict__)
-
         # close the output file
         self.close_data_file()
 
     def _check(self):
         """Check if the data are consistent"""
-
         pass
