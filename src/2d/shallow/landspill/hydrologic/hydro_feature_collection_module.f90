@@ -182,7 +182,7 @@ contains
     ! implementation init_rmvd_fluid_tracer
     subroutine init_rmvd_fluid_tracer(this)
         use:: amr_module, only: xlower, ylower, xupper, yupper
-        use:: amr_module, only: mxnest, hxposs, hyposs
+        use:: amr_module, only: mxnest, hxposs, hyposs, intratx, intraty
         class(HydroFeatureCollection), intent(inout):: this
 
         integer(kind=4):: i, j
@@ -190,13 +190,19 @@ contains
         real(kind=8):: xl, xh, yl, yh
         type(COO):: temp_mtx
 
+
         this%tracer_xlower = xlower
         this%tracer_ylower = ylower
         this%tracer_xupper = xupper
         this%tracer_yupper = yupper
 
-        this%tracer_dx = hxposs(mxnest)
-        this%tracer_dy = hyposs(mxnest)
+        this%tracer_dx = hxposs(1)
+        this%tracer_dy = hyposs(1)
+
+        do i = 1, mxnest-1
+            this%tracer_dx = this%tracer_dx / intratx(i)
+            this%tracer_dy = this%tracer_dy / intraty(i)
+        end do
 
         this%tracer_mx = idnint((xupper-xlower)/this%tracer_dx)
         this%tracer_my = idnint((yupper-ylower)/this%tracer_dy)
@@ -316,6 +322,8 @@ contains
 
     ! implementation of update_aux
     subroutine update_aux(this, mbc, mx, my, xlow, ylow, dx, dy, maux, aux)
+        use:: amr_module, only: xlower, ylower
+
         ! arguments
         class(HydroFeatureCollection), intent(in):: this
         integer(kind=4), intent(in):: mbc, mx, my, maux
@@ -323,25 +331,24 @@ contains
         real(kind=8), intent(inout):: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
 
         ! local variables
-        integer(kind=4):: i, j
+        integer(kind=4):: i, j, ilo, jlo
         logical:: hydro_cell
         real(kind=8):: xl, xr, yb, yt
 
         ! if there's no hydrolic feature, exit the subroutine
         if (this%nfeats == 0) return
 
-        xl = xlow - mbc * dy
-        yb = ylow - mbc * dy
+        ilo = floor((xlow-xlower+.05d0*dx)/dx)
+        jlo = floor((ylow-ylower+.05d0*dy)/dy)
 
         do j=1-mbc, my+mbc
-            yt = ylow + j * dy
+            yb = ylower + real(jlo+j-1, 8) * dy
+            yt = yb + dy
             do i=1-mbc, mx+mbc
-                xr = xlow + i * dx
-                aux(this%hydro_index, i, j) = &
-                    real(this%cell_type(xl, xr, yb, yt), 8)
-                xl = xr
+                xl = xlower + real(ilo+i-1, 8) * dx
+                xr = xl + dx
+                aux(this%hydro_index, i, j) = this%cell_type(xl, xr, yb, yt)
             enddo
-            yb = yt
         enddo
     end subroutine update_aux
 

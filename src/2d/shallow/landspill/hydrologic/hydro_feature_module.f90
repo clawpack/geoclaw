@@ -227,7 +227,7 @@ contains
         if (x_cell_higher >= this%xupper) then
             i_higher = this%mx
         else
-            i_higher = int((x_cell_lower - this%xlower) / this%cellsize) + 1
+            i_higher = int((x_cell_higher - this%xlower) / this%cellsize) + 1
         endif
 
         if (y_cell_lower < this%ylower) then
@@ -239,7 +239,7 @@ contains
         if (y_cell_higher >= this%yupper) then
             j_higher = this%my
         else
-            j_higher = int((y_cell_lower - this%ylower) / this%cellsize) + 1
+            j_higher = int((y_cell_higher - this%ylower) / this%cellsize) + 1
         endif
 
         ! see if any cell covered in the block is a hydro boundary cell
