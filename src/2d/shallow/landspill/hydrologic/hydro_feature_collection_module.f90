@@ -61,6 +61,8 @@ module hydro_feature_collection_module
         procedure:: get_n_features
         !> @brief Get a copy of the aux index.
         procedure:: get_hydro_index
+        !> @brief Output data of removed fluid.
+        procedure:: output_removed_fluid
         !> @brief Overload intrinsic write.
         generic:: write(formatted) => write_data
         !> @brief Overload intrinsic write.
@@ -355,6 +357,9 @@ contains
     ! implementation of remove_fluid
     subroutine remove_fluid(this, level, meqn, mbc, mx, my, xlow, &
                             ylow, dx, dy, q, maux, aux)
+        use:: amr_module, only: mxnest
+        use:: geoclaw_module, only: dry_tolerance
+
         ! input arguments
         class(HydroFeatureCollection), intent(inout):: this
         integer(kind=4), intent(in):: level, meqn, mbc, mx, my, maux
@@ -363,17 +368,46 @@ contains
         real(kind=8), intent(in):: xlow, ylow, dx, dy
 
         ! local variables
-        integer(kind=4):: i, j, ifeat, n_ol_pts
-        real(kind=8):: x_cell_low, x_cell_high, y_cell_low, y_cell_high
+        integer(kind=4):: i, j, nnz
+        integer(kind=4):: rowl, rowh, coll, colh
+        real(kind=8):: val
 
         ! if there's no hydrolic feature, exit the subroutine
         if (this%nfeats == 0) return
 
-        where(idnint(aux(this%hydro_index, :, :)) /= 0) 
-            q(1, :, :) = 0D0
-            q(2, :, :) = 0D0
-            q(3, :, :) = 0D0
-        end where
+        if (level /= mxnest) then
+            do j = 1-mbc, my+mbc
+                do i = 1-mbc, mx+mbc
+                    if (idnint(aux(this%hydro_index, i, j)) /= 0) q(:, i, j) = 0D0
+                end do
+            end do
+        else
+            do j = 1-mbc, my+mbc
+                do i = 1-mbc, mx+mbc
+                    if (idnint(aux(this%hydro_index, i, j)) /= 0) then
+                        if (q(1, i, j) /= 0D0) then
+
+                            rowl = int(((i - 1) * dx + xlow - &
+                                this%tracer_xlower) / this%tracer_dx) + 1
+                            rowh = int((i * dx + xlow - &
+                                this%tracer_xlower) / this%tracer_dx) + 1
+                            coll = int(((j - 1) * dy + ylow - &
+                                this%tracer_ylower) / this%tracer_dy) + 1
+                            colh = int((j * dy + ylow - &
+                                this%tracer_ylower) / this%tracer_dy) + 1
+
+                            nnz = this%tracer%count_block(rowl, rowh, coll, colh)
+                            val = q(1, i, j) * dx * dy / nnz
+
+                            call this%tracer%add_block(rowl, rowh, coll, colh, val)
+                        end if
+
+                        q(:, i, j) = 0D0
+                    end if
+                end do
+            end do
+        end if
+
     end subroutine remove_fluid
 
     ! implementation of get_n_features
@@ -389,5 +423,27 @@ contains
         integer(kind=4):: get_hydro_index
         get_hydro_index = this%hydro_index 
     end function get_hydro_index
+
+    ! implementation of output_removed_fluid
+    subroutine output_removed_fluid(this)
+        class(HydroFeatureCollection), intent(in):: this
+        integer(kind=4):: i, j
+        real(kind=8):: val
+
+        open(unit=995, file="removed_fluid.dat", action="write")
+        do i = 1, this%tracer_mx
+            do j = 1, this%tracer_my
+                val = this%tracer%get(i, j)
+
+                if (val /= 0D0) then
+                    write(995, *) &
+                        (i - 0.5) * this%tracer_dx + this%tracer_xlower, &
+                        (j - 0.5) * this%tracer_dy + this%tracer_ylower, &
+                        val
+                end if
+            end do
+        end do
+        close(995)
+    end subroutine output_removed_fluid
 
 end module hydro_feature_collection_module

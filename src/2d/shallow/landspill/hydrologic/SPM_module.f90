@@ -98,6 +98,10 @@ module SPM_module
         procedure:: set => set_CSR
         !> @brief Add value to a matrix element.
         procedure:: add => add_CSR
+        !> @brief Count nnz in a given block region.
+        procedure:: count_block => count_block_CSR
+        !> @brief Add values to non-zeros inside a given block region.
+        procedure:: add_block => add_block_CSR
         !> @brief Destroy this CSR.
         procedure:: destroy => destroy_CSR
         !> @brief Write.
@@ -463,6 +467,69 @@ contains
         loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
         this%vals(loc_cols) = this%vals(loc_cols) + val
     end subroutine add_CSR
+
+    ! count_block_CSR
+    function count_block_CSR(this, rowl, rowh, coll, colh) result(ans)
+        class(CSR), intent(in):: this
+        integer(kind=4), intent(in):: rowl, rowh, coll, colh
+        integer(kind=4):: ans
+
+        integer(kind=4):: i
+        integer(kind=4):: low_bound, high_bound
+
+        ans = 0
+        do i = rowl, rowh
+            low_bound = this%rows(i)
+            do while (low_bound<this%rows(i+1))
+                if (this%cols(low_bound) >= coll) exit
+                low_bound = low_bound + 1
+            end do
+
+            ! all col indices in this row are smaller than coll
+            if (low_bound == this%rows(i+1)) exit ! go to next row
+            
+            high_bound = low_bound
+            do while (high_bound<this%rows(i+1))
+                if (this%cols(high_bound) <= colh) then
+                    ans = ans + 1
+                    high_bound = high_bound + 1
+                else
+                    exit
+                end if
+            end do
+        end do
+    end function count_block_CSR
+
+    ! count_block_CSR
+    subroutine add_block_CSR(this, rowl, rowh, coll, colh, val)
+        class(CSR), intent(inout):: this
+        integer(kind=4), intent(in):: rowl, rowh, coll, colh
+        real(kind=8), intent(in):: val
+
+        integer(kind=4):: i
+        integer(kind=4):: low_bound, high_bound
+
+        do i = rowl, rowh
+            low_bound = this%rows(i)
+            do while (low_bound<this%rows(i+1))
+                if (this%cols(low_bound) >= coll) exit
+                low_bound = low_bound + 1
+            end do
+
+            ! all col indices in this row are smaller than coll
+            if (low_bound == this%rows(i+1)) exit ! go to next row
+            
+            high_bound = low_bound
+            do while (high_bound<this%rows(i+1))
+                if (this%cols(high_bound) <= colh) then
+                    this%vals(high_bound) = this%vals(high_bound) + val
+                    high_bound = high_bound + 1
+                else
+                    exit
+                end if
+            end do
+        end do
+    end subroutine add_block_CSR
 
     ! write_CSR
     subroutine write_CSR(this, iounit, iotype, v_list, stat, msg)
