@@ -19,3 +19,4 @@ _plots/
 scratch/*
 !scratch/README.txt
 *.notrack/
+*.smod
