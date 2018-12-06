@@ -21,6 +21,8 @@ module darcy_weisbach_abstract_module
         real(kind=8), public:: friction_tol = 1D6
         !> @brief The tolerance for momentum to be considered zero
         real(kind=8), public:: dry_tol = 1D-30
+        !> @brief Kinematic viscosity (m^2 / s).
+        real(kind=8), public:: nu = 0D0
 
         contains ! member functions
         !> @brief Initialize.
@@ -42,11 +44,12 @@ module darcy_weisbach_abstract_module
     !> @brief Interface of abstract (i.e., virtual) functions.
     abstract interface
         ! init_from_funit_base
-        subroutine init_from_funit_base(this, funit)
+        subroutine init_from_funit_base(this, funit, kin_vis)
             import 
             implicit none
             class(DarcyWeisbachBase), intent(inout):: this
             integer(kind=4), intent(in):: funit
+            real(kind=8), intent(in):: kin_vis
         end subroutine init_from_funit_base
 
         ! write_data_base
@@ -158,16 +161,18 @@ contains
     end subroutine read_base
 
     ! implementation of init_from_funit_null
-    subroutine init_from_funit_null(this, funit)
+    subroutine init_from_funit_null(this, funit, kin_vis)
         implicit none
         class(DarcyWeisbachNull), intent(inout):: this
         integer(kind=4), intent(in):: funit
+        real(kind=8), intent(in):: kin_vis
 
         this%name = "Trivial Darcy-Weisbach (Do nothing object)"
 
         ! do not read from file. Force to safety numbers
         this%friction_tol = 0D0
         this%dry_tol = 1D7
+        this%nu = 0D0
     end subroutine init_from_funit_null
 
     ! implementation of write_data_null

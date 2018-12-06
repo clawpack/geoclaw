@@ -18,3 +18,5 @@ _plots/
 *.xyz
 scratch/*
 !scratch/README.txt
+*.notrack/
+*.smod

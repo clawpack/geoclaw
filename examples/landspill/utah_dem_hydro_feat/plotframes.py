@@ -114,8 +114,8 @@ topo_xed = topo_xbg + 4000
 topo_ybg = 4984000
 topo_yed = topo_ybg + 4000
 
-source_x = topo_xbg + 2000
-source_y = topo_ybg + 2000
+source_x = -12460209.5
+source_y = 4985137.4
 
 domain_xbg = source_x - 400
 domain_xed = source_x + 400
@@ -138,7 +138,7 @@ topofile_crop = topofile.crop([x_crop_bg, x_crop_ed, y_crop_bg, y_crop_ed])
 
 colormap = pyplot.cm.terrain
 topo_min = 1284
-topo_max = 1290
+topo_max = 1287
 frame_bg = 0
 frame_ed = 240
 

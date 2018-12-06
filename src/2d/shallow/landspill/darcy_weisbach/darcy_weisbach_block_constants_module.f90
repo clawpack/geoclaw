@@ -45,11 +45,13 @@ module darcy_weisbach_block_constants_module
 contains
 
     ! implementation of init_from_funit_block_constant
-    subroutine init_from_funit_block_constants(this, funit)
+    subroutine init_from_funit_block_constants(this, funit, kin_vis)
         class(DarcyWeisbachBlockConstants), intent(inout):: this
         integer(kind=4), intent(in):: funit
+        real(kind=8), intent(in):: kin_vis
 
         this%name = "Block Constant Darcy-Weisbach"
+        this%nu = kin_vis
         read(funit, *) this%friction_tol
         read(funit, *) this%dry_tol
         read(funit, *) this%default_coefficient

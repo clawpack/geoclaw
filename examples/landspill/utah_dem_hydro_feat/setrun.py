@@ -58,11 +58,11 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_dim = num_dim
 
     # Lower and upper edge of computational domain:
-    clawdata.lower[0] = -12459650.-400.
-    clawdata.upper[0] = -12459650.+400.
+    clawdata.lower[0] = -12460209.5-400.
+    clawdata.upper[0] = -12460209.5+400.
 
-    clawdata.lower[1] = 4986000.-400
-    clawdata.upper[1] = 4986000.+400
+    clawdata.lower[1] = 4985137.4-400
+    clawdata.upper[1] = 4985137.4+400
 
 
 
@@ -78,7 +78,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_eqn = 3
 
     # Number of auxiliary variables in the aux array (initialized in setaux)
-    clawdata.num_aux = 1
+    clawdata.num_aux = 2
 
     # Index of aux array corresponding to capacity function, if there is one:
     clawdata.capa_index = 0
@@ -131,7 +131,7 @@ def setrun(claw_pkg='geoclaw'):
 
     clawdata.output_q_components = 'all'   # could be list such as [True,True]
     clawdata.output_aux_components = 'all'  # could be list
-    clawdata.output_aux_onlyonce = True    # output aux arrays only at t0
+    clawdata.output_aux_onlyonce = False    # output aux arrays only at t0
 
 
 
@@ -270,7 +270,7 @@ def setrun(claw_pkg='geoclaw'):
     # This must be a list of length maux, each element of which is one of:
     #   'center',  'capacity', 'xleft', or 'yleft'  (see documentation).
 
-    amrdata.aux_type = ['center']
+    amrdata.aux_type = ['center', 'center']
 
 
     # Flag using refinement routine flag2refine rather than richardson error
@@ -346,7 +346,7 @@ def setgeo(rundata):
 
     # == Algorithm and Initial Conditions ==
     geo_data.sea_level = 0.0
-    geo_data.dry_tolerance = 1.e-4
+    geo_data.dry_tolerance = 1.e-6
     geo_data.friction_forcing = False
     geo_data.manning_coefficient = 0.035
     geo_data.friction_depth = 1.e6
@@ -394,16 +394,21 @@ def setgeo(rundata):
     ptsources_data = landspill.point_sources
     ptsources_data.n_point_sources = 1
     ptsources_data.point_sources.append(
-        [[-12459650., 4986000.], 2, [1800., 12600.], [0.5, 0.1]])
-
+        [[-12460209.5, 4985137.4], 2, [1800., 12600.], [0.5, 0.1]])
 
     # Darcy-Weisbach friction
     darcy_weisbach_data = landspill.darcy_weisbach_friction
     darcy_weisbach_data.type = 4
-    darcy_weisbach_data.dry_tol = 1e-5
+    darcy_weisbach_data.dry_tol = 1e-6
     darcy_weisbach_data.friction_tol = 1e6
     darcy_weisbach_data.default_roughness = 0.0
     darcy_weisbach_data.filename = "roughness.txt"
+
+    # hydrological features
+    hydro_feature_data = landspill.hydro_features
+    hydro_feature_data.files.append("./hydro_feature1.asc")
+    hydro_feature_data.files.append("./hydro_feature2.asc")
+    hydro_feature_data.files.append("./hydro_feature3.asc")
 
     return rundata
     # end of function setgeo

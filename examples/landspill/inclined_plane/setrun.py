@@ -127,7 +127,7 @@ def setrun(claw_pkg='geoclaw'):
         clawdata.output_t0 = True
 
 
-    clawdata.output_format = 'ascii'      # 'ascii' or 'netcdf'
+    clawdata.output_format = 'binary'      # 'ascii' or 'netcdf'
 
     clawdata.output_q_components = 'all'   # could be list such as [True,True]
     clawdata.output_aux_components = 'all'  # could be list
@@ -342,16 +342,12 @@ def setgeo(rundata):
     geo_data.earth_radius = 6367.5e3
     geo_data.sea_level = -1000.
 
-    # == Fluid ==
-    geo_data.rho = 970. # kg / m^3
-    geo_data.nu = 1.13e-3 # m^2 / sec
-
     # == Forcing Options
     geo_data.coriolis_forcing = False
 
     # == Algorithm and Initial Conditions ==
     geo_data.sea_level = 0.0
-    geo_data.dry_tolerance = 1e-5
+    geo_data.dry_tolerance = 5e-5
     geo_data.friction_forcing = False
     geo_data.manning_coefficient = 0.035
     geo_data.friction_depth = 1.e6
@@ -386,19 +382,25 @@ def setgeo(rundata):
     # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
     #  ioutarrivaltimes,ioutsurfacemax]
 
+    # Land-spill module settings
+    from clawpack.geoclaw.data import LandSpillData
+    rundata.add_data(LandSpillData(), 'landspill_data')
+    landspill = rundata.landspill_data
+    landspill.ref_mu = 1096.1 # cP @ unknown temperature of silicon oil
+    landspill.ref_temperature = 298.
+    landspill.ambient_temperature = 298. # set to ref_temperature
+    landspill.density = 970. # kg / m^3 @ 15 degree C; will overwrite rho in GeoClaw
+
     # Point sources
-    from clawpack.geoclaw.data import PointSourceData
-    rundata.add_data(PointSourceData(), 'pointsource_data')
-    ptsources_data = rundata.pointsource_data
+    ptsources_data = landspill.point_sources
     ptsources_data.n_point_sources = 1
     ptsources_data.point_sources.append(
         [[0., 0.], 1, [3600.], [1.48e-6]])
 
-    from clawpack.geoclaw.data import DarcyWeisbachData
-    rundata.add_data(DarcyWeisbachData(), 'darcy_weisbach_data')
-    darcy_weisbach_data = rundata.darcy_weisbach_data
+    # Darcy-Weisbach friction
+    darcy_weisbach_data = landspill.darcy_weisbach_friction
     darcy_weisbach_data.type = 6
-    darcy_weisbach_data.dry_tol = 1e-5
+    darcy_weisbach_data.dry_tol = 5e-5
     darcy_weisbach_data.friction_tol = 1e6
     darcy_weisbach_data.default_roughness = 0.0
     darcy_weisbach_data.filename = "roughness.txt"

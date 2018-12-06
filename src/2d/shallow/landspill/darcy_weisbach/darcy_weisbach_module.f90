@@ -52,21 +52,23 @@ module darcy_weisbach_module
 contains
 
     ! implementation of constrtuctor
-    function constructor(filename) 
+    function constructor(kin_vis, filename) 
         type(DarcyWeisbach):: constructor
         character(len=*), intent(in), optional:: filename
+        real(kind=8), intent(in):: kin_vis
 
         if (present(filename)) then
-            call constructor%init(filename)
+            call constructor%init(kin_vis, filename)
         else
-            call constructor%init()
+            call constructor%init(kin_vis)
         endif
     end function constructor
 
     ! implementation of init
-    subroutine init(this, filename)
+    subroutine init(this, kin_vis, filename)
         class(DarcyWeisbach), intent(inout):: this
         character(len=*), intent(in), optional:: filename
+        real(kind=8), intent(in):: kin_vis
         integer(kind=4), parameter:: funit = 254
 
         if (present(filename)) then
@@ -102,7 +104,7 @@ contains
 
         ! TODO: maybe design a dummy DarcyWeisbach object for type=0 case?
 
-        call this%ptr%init_from_funit(funit)
+        call this%ptr%init_from_funit(funit, kin_vis)
 
         close(funit)
     end subroutine init
