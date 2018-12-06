@@ -8,6 +8,7 @@ module landspill_module
     use point_source_collection_module
     use darcy_weisbach_module
     use hydro_feature_collection_module
+    use evap_module
     implicit none
     save
     public
@@ -51,6 +52,13 @@ module landspill_module
     !> @brief Object for a collection of hydro features.
     type(HydroFeatureCollection):: hydro_features
 
+
+    !> @brief File name of evaporation settings.
+    character(len=:), allocatable:: evaporation_file
+
+    !> @brief Object for a collection of hydro features.
+    type(EvapModel):: evaporation
+
 contains
 
     !> @brief Initialize landspill module
@@ -87,6 +95,7 @@ contains
         read(funit, *) point_source_file
         read(funit, *) darcy_weisbach_file
         read(funit, *) hydro_feature_file
+        read(funit, *) evaporation_file
 
         ! close file
         close(funit)
@@ -112,6 +121,9 @@ contains
         ! hydro feature collection
         call hydro_features%init(hydro_feature_file)
 
+        ! evaporation
+        call evaporation%init(ambient_temperature, evaporation_file)
+
         ! set module_setup
         module_setup = .true.
 
@@ -121,7 +133,10 @@ contains
         write(funit, *) "Reference Temperature (K): ", ref_temperature
         write(funit, *) "Ambient Temperature (K): ", ambient_temperature
         write(funit, *) "Density (kg / m^3): ", density
-        write(funit, *) "Calculated kinematic viscosity (m^2 / s)", nu
+        write(funit, *) "Calculated kinematic viscosity (m^2 / s): ", nu
+        write(funit, *) "Evaporation type: ", evaporation%get_type()
+        write(funit, *) "Remained percentage from 60min to 61min: ", &
+            evaporation%remained_percentage(36D2, 6D1)
         close(funit)
 
     end subroutine set_landspill

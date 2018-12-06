@@ -127,7 +127,7 @@ contains
 
         remained_percent = 1D0
     end function remained_kernel_null
-    
+
     ! apply_to_grid_null
     subroutine apply_to_grid_null(this, meqn, mbc, mx, my, xlower, &
                                   ylower, dx, dy, q, maux, aux, t, dt)

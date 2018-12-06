@@ -51,11 +51,18 @@ contains
         real(kind=8), intent(in):: T
 
         real(kind=8):: C1, C2
-        integer(kind=4):: i
+        integer(kind=4):: n_coeffs
 
         this%model_name = "Fingas1996 Log"
         this%ambient_temperature = T
         this%evap_volume_tracker = 0D0
+
+        read(funit, *) n_coeffs
+
+        if (n_coeffs /= 2) then
+            print *, "The number of coefficients in Fingas' model should be 2."
+            stop
+        end if
 
         read(funit, *) C1
         read(funit, *) C2
@@ -71,8 +78,8 @@ contains
         real(kind=8):: remained_percent
 
         remained_percent = &
-            (1D0 - this%final_coeffs * dlog(t+dt)) / &
-            (1D0 - this%final_coeffs * dlog(t))
+            (1D2 - this%final_coeffs * dlog((t+dt)/6D1)) / &
+            (1D2 - this%final_coeffs * dlog(t/6D1))
     end function remained_kernel_fingas1996log
 
     ! destructor_fingas1996log
@@ -91,11 +98,16 @@ contains
         real(kind=8), intent(in):: T
 
         real(kind=8):: C1, C2
-        integer(kind=4):: i
+        integer(kind=4):: n_coeffs
 
         this%model_name = "Fingas1996 Log"
         this%ambient_temperature = T
         this%evap_volume_tracker = 0D0
+
+        if (n_coeffs /= 2) then
+            print *, "The number of coefficients in Fingas' model should be 2."
+            stop
+        end if
 
         read(funit, *) C1
         read(funit, *) C2
@@ -111,8 +123,8 @@ contains
         real(kind=8):: remained_percent
 
         remained_percent = &
-            (1D0 - this%final_coeffs * dsqrt(t+dt)) / &
-            (1D0 - this%final_coeffs * dsqrt(t))
+            (1D2 - this%final_coeffs * dsqrt((t+dt)/6D1)) / &
+            (1D2 - this%final_coeffs * dsqrt(t/6D1))
     end function remained_kernel_fingas1996sqrt
 
     ! destructor_fingas1996sqrt
