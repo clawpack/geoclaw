@@ -358,7 +358,6 @@ contains
     subroutine remove_fluid(this, level, meqn, mbc, mx, my, xlow, &
                             ylow, dx, dy, q, maux, aux)
         use:: amr_module, only: mxnest
-        use:: geoclaw_module, only: dry_tolerance
 
         ! input arguments
         class(HydroFeatureCollection), intent(inout):: this

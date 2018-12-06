@@ -115,6 +115,15 @@ contains
         ! set module_setup
         module_setup = .true.
 
+        ! write a log
+        open(unit=funit, file="landspill.log", action="write")
+        write(funit, *) "Reference Dynamic Viscosity (cP): ", ref_mu
+        write(funit, *) "Reference Temperature (K): ", ref_temperature
+        write(funit, *) "Ambient Temperature (K): ", ambient_temperature
+        write(funit, *) "Density (kg / m^3): ", density
+        write(funit, *) "Calculated kinematic viscosity (m^2 / s)", nu
+        close(funit)
+
     end subroutine set_landspill
 
     !> @brief Calculate kinematic viscosity.
