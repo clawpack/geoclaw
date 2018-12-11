@@ -1,5 +1,5 @@
 !> @file point_source_collection_module.f90
-!! @brief PointSourceCollection class. 
+!! @brief PointSourceCollection class.
 !! @author Pi-Yueh Chuang
 !! @version alpha
 !! @date 2018-10-03
@@ -33,6 +33,18 @@ module point_source_collection_module
         procedure:: apply_trivial_ic
         !> @brief Flag cells to be refined
         procedure:: flag_cells
+        !> @brief Get number of point sources.
+        procedure:: get_n_points
+        !> @brief Get number of segments of a point.
+        procedure:: get_n_stages
+        !> @brief Get time information of releasing fluids of a point.
+        procedure:: get_times
+        !> @brief Set new times of a point.
+        procedure:: set_times
+        !> @brief Get volumetric rates of a point.
+        procedure:: get_v_rates
+        !> @brief Set volumetric rates of a point.
+        procedure:: set_v_rates
         !> @brief Overload intrinsic write.
         generic:: write(formatted) => write_data
         !> @brief Overload intrinsic write.
@@ -47,7 +59,7 @@ module point_source_collection_module
     end interface PointSourceCollection
 
 contains
-    
+
     ! implementation of constructor
     function constructor(filename)
         type(PointSourceCollection):: constructor
@@ -225,6 +237,7 @@ contains
 
     end subroutine apply_trivial_ic
 
+    ! flag_cells
     subroutine flag_cells(this, &
         mbuff, mx, my, xlower, ylower, dx, dy, amrflags)
         use amr_module, only: DOFLAG
@@ -248,5 +261,52 @@ contains
             amrflags(i, j) = DOFLAG
         enddo
     end subroutine flag_cells
+
+    ! get_n_points.
+    function get_n_points(this) result(ans)
+        class(PointSourceCollection), intent(in):: this
+        integer(kind=4):: ans
+        ans = this%npts
+    end function get_n_points
+
+    ! get_n_stages
+    function get_n_stages(this, i) result(ans)
+        class(PointSourceCollection), intent(in):: this
+        integer(kind=4), intent(in):: i
+        integer(kind=4):: ans
+        ans = this%pts(i)%get_n_stages()
+    end function get_n_stages
+
+    ! get_times
+    subroutine get_times(this, i, times)
+        class(PointSourceCollection), intent(in):: this
+        integer(kind=4), intent(in):: i
+        real(kind=8), dimension(:), intent(inout):: times
+        call this%pts(i)%get_times(times)
+    end subroutine get_times
+
+    ! set_times
+    subroutine set_times(this, i, times)
+        class(PointSourceCollection), intent(inout):: this
+        integer(kind=4), intent(in):: i
+        real(kind=8), dimension(:), intent(in):: times
+        call this%pts(i)%set_times(times)
+    end subroutine set_times
+
+    ! get_v_rates
+    subroutine get_v_rates(this, i, rates)
+        class(PointSourceCollection), intent(in):: this
+        integer(kind=4), intent(in):: i
+        real(kind=8), dimension(:), intent(inout):: rates
+        call this%pts(i)%get_v_rates(rates)
+    end subroutine get_v_rates
+
+    ! set_v_rates
+    subroutine set_v_rates(this, i, rates)
+        class(PointSourceCollection), intent(inout):: this
+        integer(kind=4), intent(in):: i
+        real(kind=8), dimension(:), intent(in):: rates
+        call this%pts(i)%set_v_rates(rates)
+    end subroutine set_v_rates
 
 end module point_source_collection_module
