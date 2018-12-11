@@ -14,7 +14,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     use friction_module, only: variable_friction, friction_index
 
-    use landspill_module, only: point_sources, darcy_weisbach
+    use landspill_module, only: point_sources, darcy_weisbach, evaporation
 
     implicit none
     
@@ -173,5 +173,8 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     !         enddo
     !     enddo
     ! endif
+
+    call evaporation%apply_to_grid(meqn, mbc, mx, my, xlower, &
+                                    ylower, dx, dy, q, maux, aux, t, dt)
 
 end subroutine src2

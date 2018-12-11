@@ -28,11 +28,8 @@ module fingas1996_module
     end type EvapFingas1996Log
 
     !> @brief A model from Fingas 1996 based on square-root law.
-    type, extends(EvapBase):: EvapFingas1996SQRT
+    type, extends(EvapFingas1996Log):: EvapFingas1996SQRT
         private
-        !> @brief Final and combined coefficients used in Fingas 1996 model.
-        real(kind=8):: final_coeffs
-
         contains
         !> @brief Initialization with an opened file unit.
         procedure:: init_with_funit => init_with_funit_fingas1996sqrt
@@ -44,16 +41,14 @@ module fingas1996_module
 
 contains
 
-    ! init_with_funit_fingas1996log
-    subroutine init_with_funit_fingas1996log(this, funit, T)
+    ! init the common part of Fingas models
+    subroutine init_with_funit_common(this, funit, T)
         class(EvapFingas1996Log), intent(inout):: this
         integer(kind=4), intent(in):: funit
         real(kind=8), intent(in):: T
-
-        real(kind=8):: C1, C2
         integer(kind=4):: n_coeffs
+        real(kind=8):: C1, C2
 
-        this%model_name = "Fingas1996 Log"
         this%ambient_temperature = T
         this%evap_volume_tracker = 0D0
 
@@ -67,7 +62,17 @@ contains
         read(funit, *) C1
         read(funit, *) C2
 
-        this%final_coeffs = C1 + C2 * this%ambient_temperature
+        this%final_coeffs = C1 + C2 * (this%ambient_temperature - 273D0)
+    end subroutine init_with_funit_common
+
+    ! init_with_funit_fingas1996log
+    subroutine init_with_funit_fingas1996log(this, funit, T)
+        class(EvapFingas1996Log), intent(inout):: this
+        integer(kind=4), intent(in):: funit
+        real(kind=8), intent(in):: T
+
+        this%model_name = "Fingas1996 Log"
+        call init_with_funit_common(this, funit, T)
     end subroutine init_with_funit_fingas1996log
 
     ! remained_kernel_fingas1996log
@@ -76,6 +81,12 @@ contains
         real(kind=8), intent(in):: t
         real(kind=8), intent(in):: dt
         real(kind=8):: remained_percent
+
+        ! before 1 minute, no evaporation
+        if (t <= 6D1) then
+            remained_percent = 1D0
+            return
+        end if
 
         remained_percent = &
             (1D2 - this%final_coeffs * dlog((t+dt)/6D1)) / &
@@ -97,22 +108,8 @@ contains
         integer(kind=4), intent(in):: funit
         real(kind=8), intent(in):: T
 
-        real(kind=8):: C1, C2
-        integer(kind=4):: n_coeffs
-
-        this%model_name = "Fingas1996 Log"
-        this%ambient_temperature = T
-        this%evap_volume_tracker = 0D0
-
-        if (n_coeffs /= 2) then
-            print *, "The number of coefficients in Fingas' model should be 2."
-            stop
-        end if
-
-        read(funit, *) C1
-        read(funit, *) C2
-
-        this%final_coeffs = C1 + C2 * this%ambient_temperature
+        this%model_name = "Fingas1996 Square-Root"
+        call init_with_funit_common(this, funit, T)
     end subroutine init_with_funit_fingas1996sqrt
 
     ! remained_kernel_fingas1996sqrt
