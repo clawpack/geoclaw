@@ -410,6 +410,11 @@ def setgeo(rundata):
     hydro_feature_data.files.append("./hydro_feature2.asc")
     hydro_feature_data.files.append("./hydro_feature3.asc")
 
+    # Evaporation
+    evaporation_data = landspill.evaporation
+    evaporation_data.type = 1
+    evaporation_data.coefficients = [1.38, 0.045]
+
     return rundata
     # end of function setgeo
     # ----------------------

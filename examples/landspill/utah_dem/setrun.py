@@ -405,6 +405,11 @@ def setgeo(rundata):
     darcy_weisbach_data.default_roughness = 0.0
     darcy_weisbach_data.filename = "roughness.txt"
 
+    # Evaporation
+    evaporation_data = landspill.evaporation
+    evaporation_data.type = 1
+    evaporation_data.coefficients = [1.38, 0.045]
+
     return rundata
     # end of function setgeo
     # ----------------------
