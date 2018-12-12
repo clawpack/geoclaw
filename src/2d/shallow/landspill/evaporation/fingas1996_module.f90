@@ -1,5 +1,5 @@
 !
-! fingas1996.f90
+! fingas1996_module.f90
 ! Copyright (C) 2018 Pi-Yueh Chuang <pychuang@gwu.edu>
 !
 ! Distributed under terms of the MIT license.
@@ -62,7 +62,7 @@ contains
         read(funit, *) C1
         read(funit, *) C2
 
-        this%final_coeffs = C1 + C2 * (this%ambient_temperature - 273D0)
+        this%final_coeffs = C1 + C2 * this%ambient_temperature
     end subroutine init_with_funit_common
 
     ! init_with_funit_fingas1996log

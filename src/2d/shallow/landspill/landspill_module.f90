@@ -23,10 +23,10 @@ module landspill_module
     !> @brief Reference dynamic viscosity (mPa-s = 1e-3 kg/s/m = cP).
     real(kind=8):: ref_mu = 0D0
 
-    !> @brief Reference temperature (K).
+    !> @brief Reference temperature (Celsius).
     real(kind=8):: ref_temperature = 0D0
 
-    !> @brief Ambient temperature (K).
+    !> @brief Ambient temperature (Celsius).
     real(kind=8):: ambient_temperature = 0D0
 
     !> @brief Density at reference temperature.
@@ -137,8 +137,8 @@ contains
     function get_kinematic_viscosity(mu_ref, T_ref, T, rho) result(nu)
         implicit none
         real(kind=8), intent(in):: mu_ref ! cP, i.e., 1e-3 kg / m /s
-        real(kind=8), intent(in):: T_ref ! K
-        real(kind=8), intent(in):: T ! K
+        real(kind=8), intent(in):: T_ref ! Celsius
+        real(kind=8), intent(in):: T ! Celsius
         real(kind=8), intent(in):: rho ! kg / m^3
         real(kind=8):: nu
 
@@ -164,8 +164,8 @@ contains
         open(unit=funit, file="landspill.log", action="write")
 
         write(funit, *) "Reference Dynamic Viscosity (cP): ", ref_mu
-        write(funit, *) "Reference Temperature (K): ", ref_temperature
-        write(funit, *) "Ambient Temperature (K): ", ambient_temperature
+        write(funit, *) "Reference Temperature (Celsius): ", ref_temperature
+        write(funit, *) "Ambient Temperature (Celsius): ", ambient_temperature
         write(funit, *) "Density (kg / m^3): ", density
         write(funit, *) "Calculated kinematic viscosity (m^2 / s): ", nu
 

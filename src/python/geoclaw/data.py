@@ -544,10 +544,10 @@ class LandSpillData(clawpack.clawutil.data.ClawData):
         self.add_attribute('ref_mu', 332.) # unit: mPa-s (= cP = 1e-3kg/s/m)
 
         # Reference temperature at which the nu_ref is
-        self.add_attribute('ref_temperature', 288.) # unit: K
+        self.add_attribute('ref_temperature', 15.) # unit: Celsius
 
-        # Ambient temperature (K)
-        self.add_attribute('ambient_temperature', 298.) # unit: K
+        # Ambient temperature (Celsius)
+        self.add_attribute('ambient_temperature', 25.) # unit: Celsius
 
         # Density at ambient temperature
         self.add_attribute('density', 926.6) # unit: kg / m^3
@@ -577,11 +577,15 @@ class LandSpillData(clawpack.clawutil.data.ClawData):
         # open the output file
         self.open_data_file(out_file, data_source)
 
-        self.data_write('ref_mu', description='Reference dynamic viscosity (mPa-s)')
-        self.data_write('ref_temperature', description='Reference temperature " \
-                                for temperature-dependent viscosity (K)')
-        self.data_write('ambient_temperature', description='Ambient temperature (K)')
-        self.data_write('density', description='Density at ambient temperature (kg/m^3')
+        self.data_write('ref_mu',
+                        description='Reference dynamic viscosity (mPa-s)')
+        self.data_write('ref_temperature',
+                        description='Reference temperature for \
+                            temperature-dependent viscosity (Celsius)')
+        self.data_write('ambient_temperature',
+                        description='Ambient temperature (Celsius)')
+        self.data_write('density',
+                        description='Density at ambient temperature (kg/m^3')
 
         # output point sources data
         self.data_write('point_sources_file',

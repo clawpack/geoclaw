@@ -37,7 +37,7 @@ COMMON_MODULES += \
  $(GEOLIB)/landspill/hydrologic/hydro_feature_module.f90 \
  $(GEOLIB)/landspill/hydrologic/hydro_feature_collection_module.f90 \
  $(GEOLIB)/landspill/evaporation/evap_base_module.f90 \
- $(GEOLIB)/landspill/evaporation/fingas1996.f90 \
+ $(GEOLIB)/landspill/evaporation/fingas1996_module.f90 \
  $(GEOLIB)/landspill/evaporation/evap_module.f90 \
  $(GEOLIB)/landspill/landspill_module.f90
 

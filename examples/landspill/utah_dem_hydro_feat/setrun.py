@@ -386,8 +386,8 @@ def setgeo(rundata):
     rundata.add_data(LandSpillData(), 'landspill_data')
     landspill = rundata.landspill_data
     landspill.ref_mu = 332. # cP @ 15 degree C
-    landspill.ref_temperature = 15. + 273.
-    landspill.ambient_temperature = 298.
+    landspill.ref_temperature = 15.
+    landspill.ambient_temperature = 25.
     landspill.density = 9.266e2 # kg / m^3 @ 15 degree C; will overwrite rho in GeoClaw
 
     # Point sources
