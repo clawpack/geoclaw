@@ -57,6 +57,8 @@ module hydro_feature_collection_module
         procedure:: update_aux
         !> @brief Remove working fluid from hydro cells.
         procedure:: remove_fluid
+        !> @brief Evaporate fluid removed.
+        procedure:: evap_fluid
         !> @brief Get a copy of the number of features.
         procedure:: get_n_features
         !> @brief Get a copy of the aux index.
@@ -408,6 +410,15 @@ contains
         end if
 
     end subroutine remove_fluid
+
+    ! implementation of evap_fluid
+    subroutine evap_fluid(this, remained_rate)
+        class(HydroFeatureCollection), intent(inout):: this
+        real(kind=8), intent(in):: remained_rate
+        
+        if (this%nfeats == 0) return
+        call this%tracer%all_multiply(remained_rate)
+    end subroutine evap_fluid
 
     ! implementation of get_n_features
     function get_n_features(this)

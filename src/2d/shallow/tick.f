@@ -13,6 +13,7 @@ c
       use gauges_module, only: print_gauges_and_reset_nextLoc
 
       use storm_module, only: landfall, display_landfall_time
+      use landspill_module, only: hydro_features, evaporation
 
 
       implicit double precision (a-h,o-z)
@@ -360,6 +361,11 @@ c
 c      time for output?  done with the whole thing?
 c
  110      continue
+
+c         # evaporation of removed fluid
+          call evaporation%evap_hydro_fluid(
+     &                      hydro_features, time, possk(1))
+
           time    = time   + possk(1)
           ncycle  = ncycle + 1
           call conck(1,nvar,naux,time,rest)

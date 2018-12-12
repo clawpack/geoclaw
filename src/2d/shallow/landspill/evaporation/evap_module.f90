@@ -30,6 +30,8 @@ module evap_module
         procedure:: get_type
         !> @brief Reset the releasing profile of a point source.
         procedure:: reset_release_profile
+        !> @brief Evaporate the fluid in hydrological features.
+        procedure:: evap_hydro_fluid
         !> @brief Return percentage remained.
         procedure:: remained_percentage
         !> @brief Destructor.
@@ -132,6 +134,8 @@ contains
         real(kind=8):: dt, T
         real(kind=8), allocatable, dimension(:):: rates, times
 
+        if (this%type == 0) return
+
         if (present(tol)) then
             dt = tol
         else
@@ -172,5 +176,19 @@ contains
 
         deallocate(times, rates)
     end subroutine reset_release_profile
+
+    ! evaporate the fluid already in hydrological features
+    subroutine evap_hydro_fluid(this, hydro, t, dt)
+        use hydro_feature_collection_module
+        class(EvapModel), intent(in):: this
+        type(HydroFeatureCollection), intent(inout):: hydro
+        real(kind=8), intent(in):: t, dt
+        real(kind=8):: remained_rate
+
+        if (this%type == 0) return
+
+        remained_rate = this%remained_percentage(t, dt)
+        call hydro%evap_fluid(remained_rate)
+    end subroutine evap_hydro_fluid
 
 end module evap_module

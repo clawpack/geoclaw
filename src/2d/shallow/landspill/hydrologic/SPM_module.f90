@@ -98,6 +98,8 @@ module SPM_module
         procedure:: set => set_CSR
         !> @brief Add value to a matrix element.
         procedure:: add => add_CSR
+        !> @brief Multipky a value to all matrix elements.
+        procedure:: all_multiply => all_multiply_CSR
         !> @brief Count nnz in a given block region.
         procedure:: count_block => count_block_CSR
         !> @brief Add values to non-zeros inside a given block region.
@@ -467,6 +469,14 @@ contains
         loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
         this%vals(loc_cols) = this%vals(loc_cols) + val
     end subroutine add_CSR
+
+    ! all_multiply_CSR
+    subroutine all_multiply_CSR(this, factor)
+        class(CSR), intent(inout):: this
+        real(kind=8), intent(in):: factor
+
+        this%vals = this%vals * factor
+    end subroutine all_multiply_CSR
 
     ! count_block_CSR
     function count_block_CSR(this, rowl, rowh, coll, colh) result(ans)
