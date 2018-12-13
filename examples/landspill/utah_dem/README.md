@@ -24,6 +24,11 @@ to visualize the results.
 Alternatively, the Python script `plotframes.py` can be used to plot the flow
 at each output time step. The generated plots will be in the folder `_plots`.
 
+If GIS software will be used to visualize the result, users can use the script
+`writenc.py` to create a multidimension NetCDF file. The output NetCDF file has
+been tested with [QGIS](https://www.qgis.org/) 
+and [ArcGIS Pro](https://pro.arcgis.com/).
+
 Instead of a simple `$ make all`, users can do a fine control of the process 
 with the following steps:
 

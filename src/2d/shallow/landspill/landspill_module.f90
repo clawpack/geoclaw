@@ -7,6 +7,7 @@
 module landspill_module
     use point_source_collection_module
     use darcy_weisbach_module
+    use hydro_feature_collection_module
     implicit none
     save
     public
@@ -20,15 +21,23 @@ module landspill_module
     !> @brief Object for Darcy-Weisbach.
     type(DarcyWeisbach):: darcy_weisbach
 
+    !> @brief Object for a collection of hydro features.
+    type(HydroFeatureCollection):: hydro_features
+
 contains
 
     !> @brief Initialize landspill module
     !! @param[in] point_source_file an optional arg; file for point sources
     !! @param[in] darcy_weisbach_file an optional arg; file for Darcy-Weisbach
-    subroutine set_landspill(point_source_file, darcy_weisbach_file)
+    !! @param[in] hydro_feature_file an optional arg; file for hydro features
+    subroutine set_landspill(&
+        point_source_file, darcy_weisbach_file, hydro_feature_file)
         use geoclaw_module, only: geo_friction => friction_forcing 
+
+        ! arguments
         character(len=*), intent(in), optional:: point_source_file 
         character(len=*), intent(in), optional:: darcy_weisbach_file 
+        character(len=*), intent(in), optional:: hydro_feature_file 
 
         ! point source collection
         if (present(point_source_file)) then
@@ -49,6 +58,13 @@ contains
         ! TODO: this is just a temporary workaround. Need to integrate to GeoClaw.
         if (darcy_weisbach%get_type() > 0) then
             geo_friction = .false.
+        endif
+
+        ! hydro feature collection
+        if (present(hydro_feature_file)) then
+            call hydro_features%init(hydro_feature_file)
+        else
+            call hydro_features%init("hydro_feature.data")
         endif
 
         ! set module_setup

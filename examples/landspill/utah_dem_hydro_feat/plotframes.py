@@ -32,6 +32,42 @@ def get_max_depth(solution):
     return max_depth
 
 
+def get_max_AMR_level(solution):
+    """
+    Get the max AMR level in a solution object.
+    """
+
+    max_level = 1
+
+    for state in solution.states:
+        p = state.patch
+
+        if p.level > max_level:
+            max_level = p.level
+
+    return max_level
+
+
+def get_level_ncells_volumes(solution):
+    """
+    Get level-wise numbers of cells and fluid volumes.
+    """
+
+    max_level = get_max_AMR_level(solution)
+
+    ncells = numpy.zeros(max_level, dtype=numpy.int)
+    volumes = numpy.zeros(max_level, dtype=numpy.float64)
+
+    for state in solution.states:
+        p = state.patch
+        level = p.level
+
+        ncells[level-1] += p.num_cells_global[0] * p.num_cells_global[1]
+        volumes[level-1] += (numpy.sum(state.q[0, :, :]) * p.delta[0] * p.delta[1])
+
+    return ncells, volumes
+
+
 def plot_at_axes(solution, ax, min_level=2, max_level=None,
                  shift=[0., 0.], vmin=0, vmax=None, dry_tol=1e-4,
                  cmap=pyplot.cm.viridis):
@@ -78,8 +114,8 @@ topo_xed = topo_xbg + 4000
 topo_ybg = 4984000
 topo_yed = topo_ybg + 4000
 
-source_x = topo_xbg + 2000
-source_y = topo_ybg + 2000
+source_x = -12460209.5
+source_y = 4985137.4
 
 domain_xbg = source_x - 400
 domain_xed = source_x + 400
@@ -102,7 +138,7 @@ topofile_crop = topofile.crop([x_crop_bg, x_crop_ed, y_crop_bg, y_crop_ed])
 
 colormap = pyplot.cm.terrain
 topo_min = 1284
-topo_max = 1290
+topo_max = 1287
 frame_bg = 0
 frame_ed = 240
 
@@ -162,8 +198,13 @@ for frameno in range(frame_bg, frame_ed+1):
 
     soln.read(frameno, file_format="binary", read_aux=aux)
 
+    ncells, volumes = get_level_ncells_volumes(soln)
+
     print("Plotting frame No. {}, T={} secs ({} mins)".format(
         frameno, soln.state.t, int(soln.state.t/60.)))
+
+    print("\tFrame No. {}: N Cells: {}; Fluid volume: {}".format(
+        frameno, ncells, volumes))
 
     im = plot_at_axes(soln, ax_topo, min_level=2,
                       shift=[x_crop_bg, y_crop_bg], dry_tol=1e-8)

@@ -58,17 +58,17 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_dim = num_dim
 
     # Lower and upper edge of computational domain:
-    clawdata.lower[0] = -0.2
-    clawdata.upper[0] = 1.0
+    clawdata.lower[0] = -12460209.5-400.
+    clawdata.upper[0] = -12460209.5+400.
 
-    clawdata.lower[1] = -0.3
-    clawdata.upper[1] = 0.3
+    clawdata.lower[1] = 4985137.4-400
+    clawdata.upper[1] = 4985137.4+400
 
 
 
     # Number of grid cells: Coarsest grid
-    clawdata.num_cells[0] = 120
-    clawdata.num_cells[1] = 60
+    clawdata.num_cells[0] = 200
+    clawdata.num_cells[1] = 200
 
     # ---------------
     # Size of system:
@@ -78,7 +78,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_eqn = 3
 
     # Number of auxiliary variables in the aux array (initialized in setaux)
-    clawdata.num_aux = 1
+    clawdata.num_aux = 2
 
     # Index of aux array corresponding to capacity function, if there is one:
     clawdata.capa_index = 0
@@ -108,17 +108,17 @@ def setrun(claw_pkg='geoclaw'):
     # Note that the time integration stops after the final output time.
     # The solution at initial time t0 is always written in addition.
 
-    clawdata.output_style = 2
+    clawdata.output_style = 1
 
     if clawdata.output_style == 1:
         # Output nout frames at equally spaced times up to tfinal:
-        clawdata.num_output_times = 30
-        clawdata.tfinal = 900
+        clawdata.num_output_times = 240
+        clawdata.tfinal = 28800
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:
         # Specify a list of output times.
-        clawdata.output_times = [0.0, 32.0, 59.0, 122.0, 271.0, 486.0, 727.0]
+        clawdata.output_times = [0.0, 32.0, 122.0, 271.0, 727.0]
 
     elif clawdata.output_style == 3:
         # Output every iout timesteps with a total of ntot time steps:
@@ -131,7 +131,7 @@ def setrun(claw_pkg='geoclaw'):
 
     clawdata.output_q_components = 'all'   # could be list such as [True,True]
     clawdata.output_aux_components = 'all'  # could be list
-    clawdata.output_aux_onlyonce = True    # output aux arrays only at t0
+    clawdata.output_aux_onlyonce = False    # output aux arrays only at t0
 
 
 
@@ -142,7 +142,7 @@ def setrun(claw_pkg='geoclaw'):
     # The current t, dt, and cfl will be printed every time step
     # at AMR levels <= verbosity.  Set verbosity = 0 for no printing.
     #   (E.g. verbosity == 2 means print only on levels 1 and 2.)
-    clawdata.verbosity = 5
+    clawdata.verbosity = 3
 
 
 
@@ -156,10 +156,10 @@ def setrun(claw_pkg='geoclaw'):
 
     # Initial time step for variable dt.
     # If dt_variable==0 then dt=dt_initial for all steps:
-    clawdata.dt_initial = 1e-3
+    clawdata.dt_initial = 1e-6
 
     # Max time step to be allowed if variable dt used:
-    clawdata.dt_max = 0.05
+    clawdata.dt_max = 4.0
 
     # Desired Courant number if variable dt used, and max to allow without
     # retaking step with a smaller dt:
@@ -258,19 +258,19 @@ def setrun(claw_pkg='geoclaw'):
     amrdata = rundata.amrdata
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 3
+    amrdata.amr_levels_max = 2
 
     # List of refinement ratios at each level (length at least mxnest-1)
-    amrdata.refinement_ratios_x = [4, 4]
-    amrdata.refinement_ratios_y = [4, 4]
-    amrdata.refinement_ratios_t = [4, 4]
+    amrdata.refinement_ratios_x = [4]
+    amrdata.refinement_ratios_y = [4]
+    amrdata.refinement_ratios_t = [4]
 
 
     # Specify type of each aux variable in amrdata.auxtype.
     # This must be a list of length maux, each element of which is one of:
     #   'center',  'capacity', 'xleft', or 'yleft'  (see documentation).
 
-    amrdata.aux_type = ['center']
+    amrdata.aux_type = ['center', 'center']
 
 
     # Flag using refinement routine flag2refine rather than richardson error
@@ -282,7 +282,7 @@ def setrun(claw_pkg='geoclaw'):
 
     # width of buffer zone around flagged points:
     # (typically the same as regrid_interval so waves don't escape):
-    amrdata.regrid_buffer_width  = 1
+    amrdata.regrid_buffer_width  = 3
 
     # clustering alg. cutoff for (# flagged pts) / (total # of cells refined)
     # (closer to 1.0 => more small grids may be needed to cover flagged cells)
@@ -340,18 +340,13 @@ def setgeo(rundata):
     geo_data.gravity = 9.81
     geo_data.coordinate_system = 1
     geo_data.earth_radius = 6367.5e3
-    geo_data.sea_level = -1000.
-
-    # == Fluid ==
-    geo_data.rho = 970. # kg / m^3
-    geo_data.nu = 1.13e-3 # m^2 / sec
 
     # == Forcing Options
     geo_data.coriolis_forcing = False
 
     # == Algorithm and Initial Conditions ==
     geo_data.sea_level = 0.0
-    geo_data.dry_tolerance = 1e-5
+    geo_data.dry_tolerance = 1.e-6
     geo_data.friction_forcing = False
     geo_data.manning_coefficient = 0.035
     geo_data.friction_depth = 1.e6
@@ -367,7 +362,7 @@ def setgeo(rundata):
     topo_data = rundata.topo_data
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([3, 1, 10, 0., 1.e10, 'inclined_plane_2.5.txt'])
+    topo_data.topofiles.append([3, 1, 5, 0., 1.e10, 'utah_dem_topo_3.txt'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
@@ -392,19 +387,23 @@ def setgeo(rundata):
     ptsources_data = rundata.pointsource_data
     ptsources_data.n_point_sources = 1
     ptsources_data.point_sources.append(
-        [[0., 0.], 1, [3600.], [1.48e-6]])
+        [[-12460209.5, 4985137.4], 2, [1800., 12600.], [0.5, 0.1]])
 
     from clawpack.geoclaw.data import DarcyWeisbachData
     rundata.add_data(DarcyWeisbachData(), 'darcy_weisbach_data')
     darcy_weisbach_data = rundata.darcy_weisbach_data
-    darcy_weisbach_data.type = 6
-    darcy_weisbach_data.dry_tol = 1e-5
+    darcy_weisbach_data.type = 4
+    darcy_weisbach_data.dry_tol = 1e-6
     darcy_weisbach_data.friction_tol = 1e6
     darcy_weisbach_data.default_roughness = 0.0
     darcy_weisbach_data.filename = "roughness.txt"
 
     from clawpack.geoclaw.data import HydroFeatureData
     rundata.add_data(HydroFeatureData(), 'hydro_feature_data')
+    hydro_feature_data = rundata.hydro_feature_data
+    hydro_feature_data.files.append("./hydro_feature1.asc")
+    hydro_feature_data.files.append("./hydro_feature2.asc")
+    hydro_feature_data.files.append("./hydro_feature3.asc")
 
     return rundata
     # end of function setgeo
