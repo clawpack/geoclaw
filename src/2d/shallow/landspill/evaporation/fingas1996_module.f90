@@ -17,6 +17,8 @@ module fingas1996_module
         private
         !> @brief Final and combined coefficients used in Fingas 1996 model.
         real(kind=8):: final_coeffs
+        !> @brief Time point at which evaporation percentage is 100%.
+        real(kind=8):: t100
 
         contains
         !> @brief Initialization with an opened file unit.
@@ -73,6 +75,8 @@ contains
 
         this%model_name = "Fingas1996 Log"
         call init_with_funit_common(this, funit, T)
+
+        this%t100 = 6D1 * dexp(1D2/this%final_coeffs)
     end subroutine init_with_funit_fingas1996log
 
     ! remained_kernel_fingas1996log
@@ -85,6 +89,11 @@ contains
         ! before 1 minute, no evaporation
         if (t <= 6D1) then
             remained_percent = 1D0
+            return
+        end if
+
+        if (t >= this%t100) then
+            remained_percent = 0D0
             return
         end if
 
@@ -110,6 +119,8 @@ contains
 
         this%model_name = "Fingas1996 Square-Root"
         call init_with_funit_common(this, funit, T)
+
+        this%t100 = 6D1 * 1D4 / (this%final_coeffs**2)
     end subroutine init_with_funit_fingas1996sqrt
 
     ! remained_kernel_fingas1996sqrt
@@ -118,6 +129,11 @@ contains
         real(kind=8), intent(in):: t
         real(kind=8), intent(in):: dt
         real(kind=8):: remained_percent
+
+        if (t >= this%t100) then
+            remained_percent = 0D0
+            return
+        end if
 
         remained_percent = &
             (1D2 - this%final_coeffs * dsqrt((t+dt)/6D1)) / &
