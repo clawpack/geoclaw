@@ -172,6 +172,10 @@ C       do i = 1, maxlv
 C          dtnew(i)  = rinfinity
 C       enddo
 
+c         # evaporation of removed fluid
+      call evaporation%evap_hydro_fluid(hydro_features, time, possk(1))
+
+
 c     We should take at least one step on all levels after any
 c     moving topography (dtopo) has been finalized to insure that
 c     all aux arrays are consistent with the final topography.
@@ -361,11 +365,6 @@ c
 c      time for output?  done with the whole thing?
 c
  110      continue
-
-c         # evaporation of removed fluid
-          call evaporation%evap_hydro_fluid(
-     &                      hydro_features, time, possk(1))
-
           time    = time   + possk(1)
           ncycle  = ncycle + 1
           call conck(1,nvar,naux,time,rest)
