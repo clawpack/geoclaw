@@ -92,7 +92,7 @@ contains
             return
         end if
 
-        if (t >= this%t100) then
+        if ((t + dt) >= this%t100) then
             remained_percent = 0D0
             return
         end if
@@ -130,7 +130,7 @@ contains
         real(kind=8), intent(in):: dt
         real(kind=8):: remained_percent
 
-        if (t >= this%t100) then
+        if ((t + dt) >= this%t100) then
             remained_percent = 0D0
             return
         end if

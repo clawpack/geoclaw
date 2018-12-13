@@ -78,7 +78,8 @@ contains
     ! apply_to_grid
     subroutine apply_to_grid(this, meqn, mbc, mx, my, xlower, &
                              ylower, dx, dy, q, maux, aux, t, dt)
-        use geoclaw_module, only: dry_tolerance
+        use:: amr_module, only: mxnest, hxposs, hyposs
+        use:: geoclaw_module, only: dry_tolerance
         implicit none
         class(EvapBase), intent(inout):: this
         integer(kind=4), intent(in):: meqn, mbc, mx,my, maux
@@ -87,31 +88,32 @@ contains
         real(kind=8), intent(in):: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
 
         ! local variables
-        real(kind=8):: remained, new_val
+        real(kind=8):: remained, total
         integer(kind=4):: i, j
 
         ! get the percentage of evaporation between t to t+dt
         remained = this%remained_kernel(t, dt)
 
+        ! track the volume evaporated from the finest grid
+        if ((dabs(dx-hxposs(mxnest)) <= 1e-9) .and. (dabs(dy-hyposs(mxnest)) <= 1e-9)) then
+            total = sum(q(1, 1:mx, 1:my)) * dx * dy
+            this%evap_volume_tracker = this%evap_volume_tracker + total * (1D0 - remained)
+        end if
+
         do j = 1-mbc, my+mbc
             do i = 1-mbc, mx+mbc
                 ! skip, because there's no fluid in this cell
-                if (q(1, i, j) < 1e-9) cycle
-
-                new_val = q(1, i, j) * remained
-
-                ! update removed volume
-                this%evap_volume_tracker = &
-                    this%evap_volume_tracker + q(1, i, j) - new_val
+                if (q(1, i, j) == 0D0) cycle
 
                 ! remove from grid
-                q(1, i, j) = new_val
+                q(1, i, j) = q(1, i, j) * remained
 
-                ! lower than dry_tolerance, then fluid stops
+                ! lower than dry_tolerance, then fluid stops moving
                 if (q(1, i, j) <= dry_tolerance) q(2:3, i, j) = 0D0
 
             end do
         end do
+
     end subroutine apply_to_grid
 
     ! evaporate the fluid already in hydrological features
@@ -133,7 +135,7 @@ contains
         ans = this%evap_volume_tracker
     end function get_evaporated_volume
 
-    ! get_evaporated_volume
+    ! set_evaporated_volume
     subroutine set_evaporated_volume(this, val)
         class(EvapBase), intent(inout):: this
         real(kind=8), intent(in):: val
