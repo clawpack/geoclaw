@@ -412,12 +412,21 @@ contains
     end subroutine remove_fluid
 
     ! implementation of evap_fluid
-    subroutine evap_fluid(this, remained_rate)
+    subroutine evap_fluid(this, remained_rate, tracker)
         class(HydroFeatureCollection), intent(inout):: this
         real(kind=8), intent(in):: remained_rate
+        real(kind=8), intent(inout), optional:: tracker
+        real(kind=8):: temp
         
         if (this%nfeats == 0) return
-        call this%tracer%all_multiply(remained_rate)
+
+        if (present(tracker)) then ! we need to track the volume evaporated
+            tracker = tracker + this%tracer%sum()
+            call this%tracer%all_multiply(remained_rate)
+            tracker = tracker - this%tracer%sum()
+        else
+            call this%tracer%all_multiply(remained_rate)
+        end if
     end subroutine evap_fluid
 
     ! implementation of get_n_features

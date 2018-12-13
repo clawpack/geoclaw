@@ -30,6 +30,10 @@ module evap_base_module
         procedure:: apply_to_grid
         !> @brief Evaporate the fluid in hydrological features.
         procedure:: evap_hydro_fluid
+        !> @brief Get the value of evap_volume_tracker.
+        procedure:: get_evaporated_volume
+        !> @brief Set the value of evap_volume_tracker.
+        procedure:: set_evaporated_volume
     end type EvapBase
 
     ! virtual functions/subroutines
@@ -113,14 +117,28 @@ contains
     ! evaporate the fluid already in hydrological features
     subroutine evap_hydro_fluid(this, hydro, t, dt)
         use hydro_feature_collection_module
-        class(EvapBase), intent(in):: this
+        class(EvapBase), intent(inout):: this
         type(HydroFeatureCollection), intent(inout):: hydro
         real(kind=8), intent(in):: t, dt
         real(kind=8):: remained_rate
 
         remained_rate = this%remained_kernel(t, dt)
-        call hydro%evap_fluid(remained_rate)
+        call hydro%evap_fluid(remained_rate, this%evap_volume_tracker)
     end subroutine evap_hydro_fluid
+
+    ! get_evaporated_volume
+    function get_evaporated_volume(this) result(ans)
+        class(EvapBase), intent(in):: this
+        real(kind=8):: ans
+        ans = this%evap_volume_tracker
+    end function get_evaporated_volume
+
+    ! get_evaporated_volume
+    subroutine set_evaporated_volume(this, val)
+        class(EvapBase), intent(inout):: this
+        real(kind=8), intent(in):: val
+        this%evap_volume_tracker = val
+    end subroutine set_evaporated_volume
 
     ! init_with_funit_null
     subroutine init_with_funit_null(this, funit, T)
@@ -159,7 +177,7 @@ contains
     ! evap_hydro_fluid_null
     subroutine evap_hydro_fluid_null(this, hydro, t, dt)
         use hydro_feature_collection_module
-        class(EvapNull), intent(in):: this
+        class(EvapNull), intent(inout):: this
         type(HydroFeatureCollection), intent(inout):: hydro
         real(kind=8), intent(in):: t, dt
     end subroutine evap_hydro_fluid_null

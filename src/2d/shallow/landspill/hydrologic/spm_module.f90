@@ -96,6 +96,8 @@ module SPM_module
         procedure:: get => get_CSR
         !> @brief Set matrix element.
         procedure:: set => set_CSR
+        !> @brief Summation.
+        procedure:: sum => sum_CSR
         !> @brief Add value to a matrix element.
         procedure:: add => add_CSR
         !> @brief Multipky a value to all matrix elements.
@@ -447,6 +449,14 @@ contains
         loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
         this%vals(loc_cols) = val
     end subroutine set_CSR
+
+    ! sum_CSR
+    function sum_CSR(this) result(ans)
+        class(CSR), intent(in):: this
+        real(kind=8):: ans
+
+        ans = sum(this%vals)
+    end function sum_CSR
 
     ! add_CSR
     subroutine add_CSR(this, i, j, val)

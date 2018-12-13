@@ -34,6 +34,8 @@ module evap_module
         procedure:: evap_hydro_fluid
         !> @brief Return percentage remained.
         procedure:: remained_percentage
+        !> @brief Output evaporated volume.
+        procedure:: output
         !> @brief Destructor.
         final:: destructor
     end type EvapModel
@@ -131,7 +133,7 @@ contains
         integer(kind=4):: npts ! number of point sources
         integer(kind=4):: nt ! number of stages in release profile
         real(kind=8):: Vp ! remained volume in pipeline
-        real(kind=8):: dt, T
+        real(kind=8):: dt, T, V0
         real(kind=8), allocatable, dimension(:):: rates, times
 
         if (this%type == 0) return
@@ -158,6 +160,7 @@ contains
         do i = 2, nt
             Vp = Vp + rates(i) * (times(i) - times(i-1))
         end do
+        V0 = Vp
 
         ! find the time that no fuild remained in pipeline
         do while (Vp > 0D0)
@@ -174,6 +177,17 @@ contains
         call pts%set_times(1, times)
         call pts%set_v_rates(1, rates)
 
+        ! now Vp is the initial volume in the pipe AFTER modifying times
+        Vp = rates(1) * times(1)
+        do i = 2, nt
+            Vp = Vp + rates(i) * (times(i) - times(i-1))
+        end do
+        V0 = V0 - Vp ! now V0 is the different between original and modified volume
+
+        Vp = this%ptr%get_evaporated_volume() ! now Vp: current evaporated volume
+        Vp = Vp + V0 ! now Vp: add the volume evaporated from the pipe
+        call this%ptr%set_evaporated_volume(Vp) ! set the evaporated volume back
+
         deallocate(times, rates)
     end subroutine reset_release_profile
 
@@ -186,5 +200,14 @@ contains
 
         call this%ptr%evap_hydro_fluid(hydro, t, dt)
     end subroutine evap_hydro_fluid
+
+    ! output
+    subroutine output(this)
+        class(EvapModel), intent(in):: this
+
+        open(unit=895, file="evaporated_fluid.dat", action="write")
+        write(895, *) this%ptr%get_evaporated_volume()
+        close(895)
+    end subroutine output
 
 end module evap_module
