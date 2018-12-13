@@ -28,6 +28,8 @@ module evap_base_module
         procedure(remained_kernel_base), deferred:: remained_kernel
         !> @brief Remove evaporated volume from a grid.
         procedure:: apply_to_grid
+        !> @brief Evaporate the fluid in hydrological features.
+        procedure:: evap_hydro_fluid
     end type EvapBase
 
     ! virtual functions/subroutines
@@ -63,6 +65,8 @@ module evap_base_module
         procedure:: remained_kernel => remained_kernel_null
         !> @brief A dummy function.
         procedure:: apply_to_grid => apply_to_grid_null
+        !> @brief Evaporate the fluid in hydrological features.
+        procedure:: evap_hydro_fluid => evap_hydro_fluid_null
     end type EvapNull
 
 contains
@@ -106,6 +110,18 @@ contains
         end do
     end subroutine apply_to_grid
 
+    ! evaporate the fluid already in hydrological features
+    subroutine evap_hydro_fluid(this, hydro, t, dt)
+        use hydro_feature_collection_module
+        class(EvapBase), intent(in):: this
+        type(HydroFeatureCollection), intent(inout):: hydro
+        real(kind=8), intent(in):: t, dt
+        real(kind=8):: remained_rate
+
+        remained_rate = this%remained_kernel(t, dt)
+        call hydro%evap_fluid(remained_rate)
+    end subroutine evap_hydro_fluid
+
     ! init_with_funit_null
     subroutine init_with_funit_null(this, funit, T)
         class(EvapNull), intent(inout):: this
@@ -139,5 +155,13 @@ contains
         real(kind=8), intent(inout):: q(meqn, 1-mbc:mx+mbc, 1-mbc:my+mbc)
         real(kind=8), intent(in):: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
     end subroutine apply_to_grid_null
+
+    ! evap_hydro_fluid_null
+    subroutine evap_hydro_fluid_null(this, hydro, t, dt)
+        use hydro_feature_collection_module
+        class(EvapNull), intent(in):: this
+        type(HydroFeatureCollection), intent(inout):: hydro
+        real(kind=8), intent(in):: t, dt
+    end subroutine evap_hydro_fluid_null
 
 end module evap_base_module

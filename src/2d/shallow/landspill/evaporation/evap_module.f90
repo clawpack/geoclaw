@@ -183,12 +183,8 @@ contains
         class(EvapModel), intent(in):: this
         type(HydroFeatureCollection), intent(inout):: hydro
         real(kind=8), intent(in):: t, dt
-        real(kind=8):: remained_rate
 
-        if (this%type == 0) return
-
-        remained_rate = this%remained_percentage(t, dt)
-        call hydro%evap_fluid(remained_rate)
+        call this%ptr%evap_hydro_fluid(hydro, t, dt)
     end subroutine evap_hydro_fluid
 
 end module evap_module
