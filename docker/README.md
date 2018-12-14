@@ -38,3 +38,6 @@ and then create a container and get into the shell with
 ```
 $ docker run -it barbagroup/landspill:PR8
 ```
+
+Currently available images can be found 
+[here](https://cloud.docker.com/u/barbagroup/repository/docker/barbagroup/landspill).
