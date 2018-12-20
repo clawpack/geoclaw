@@ -236,6 +236,9 @@ contains
         ! transform to CSR
         call this%tracer%init(3, temp_mtx)
 
+        ! let the time recorder be -1 at the beginning
+        call this%tracer%set_all(1, -1D0)
+
         ! destroy temporary COO matrix
         call temp_mtx%destroy()
 
@@ -369,7 +372,7 @@ contains
         real(kind=8), intent(in):: xlow, ylow, dx, dy, time
 
         ! local variables
-        integer(kind=4):: i, j, nnz
+        integer(kind=4):: i, j, nnz, k
         integer(kind=4):: rowl, rowh, coll, colh
         integer(kind=4):: idxs((int(dx/this%tracer_dx)+2)*(int(dy/this%tracer_dy)+2))
         real(kind=8):: val
@@ -409,6 +412,13 @@ contains
 
                         call this%tracer%add_multiples(nnz, idxs, 2, val)
                         call this%tracer%add_multiples(nnz, idxs, 3, val)
+
+                        ! record the time of first contact
+                        ! TODO: this may be somehow inefficient!!
+                        do k = 1, nnz
+                            if (this%tracer%get_value(idxs(k), 1) < 0D0) &
+                                call this%tracer%set(idxs(k), 1, time)
+                        end do
                     end if
                     
                     ! zero the cell quantities
@@ -481,6 +491,8 @@ contains
             do j = 1, this%tracer_my
 
                 idx = this%tracer%get_index(i, j)
+                if (idx == 0) cycle ! not a non-zero element
+
                 val(2) = this%tracer%get_value(idx, 2)
 
                 if (val(2) /= 0D0) then
