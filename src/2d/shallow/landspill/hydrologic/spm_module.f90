@@ -9,7 +9,7 @@
 module SPM_module
     implicit none
     private
-    public:: IndexSet, COO, CSR, compress
+    public:: IndexSet, COO, MultiLayerCSR, compress
 
     !> @brief A helper type representing indices and value of a non-zero for COO.
     type:: IndexSet
@@ -73,8 +73,8 @@ module SPM_module
         procedure:: constructor_COO
     end interface COO
 
-    !> @brief A naive implementation of CSR sparse matrix.
-    type:: CSR
+    !> @brief A naive implementation of the sparse pattern of CSR format.
+    type:: SparsePattern
         private
         !> @brief Number of non-zeros.
         integer(kind=4):: nnz = 0
@@ -86,35 +86,74 @@ module SPM_module
         integer(kind=4), allocatable, dimension(:):: rows
         !> @brief Column indices.
         integer(kind=4), allocatable, dimension(:):: cols
-        !> @brief Values of non-zeros.
-        real(kind=8), allocatable, dimension(:):: vals
 
         contains
-        !> @brief Init from a CSR matrix.
-        procedure:: init => init_CSR
-        !> @brief Access matrix element.
-        procedure:: get => get_CSR
-        !> @brief Set matrix element.
-        procedure:: set => set_CSR
-        !> @brief Summation.
-        procedure:: sum => sum_CSR
-        !> @brief Add value to a matrix element.
-        procedure:: add => add_CSR
-        !> @brief Multipky a value to all matrix elements.
-        procedure:: all_multiply => all_multiply_CSR
-        !> @brief Count nnz in a given block region.
-        procedure:: count_block => count_block_CSR
-        !> @brief Add values to non-zeros inside a given block region.
-        procedure:: add_block => add_block_CSR
-        !> @brief Destroy this CSR.
-        procedure:: destroy => destroy_CSR
+        !> @brief Init the sparse pattern from a COO matrix.
+        procedure:: init => init_SparsePattern
+        !> @brief Given a (i, j), return the true 1d index in CSR format.
+        procedure:: get_index => get_index_SparsePattern
+        !> @brief Given multiple (i, j)s, return the true 1d indices in CSR format.
+        procedure:: get_indices => get_indices_SparsePattern
+        !> @brief Destroy this SparsePattern.
+        procedure:: destroy => destroy_SparsePattern
         !> @brief Write.
-        procedure, private:: write_CSR
+        procedure, private:: write_SparsePattern
         !> @brief Overloading intrinsic write.
-        generic:: write(formatted) => write_CSR
+        generic:: write(formatted) => write_SparsePattern
         !> @brief Destructor.
-        final:: destructor_CSR
-    end type CSR
+        final:: destructor_SparsePattern
+    end type SparsePattern
+
+    !> @brief A naive implementation of multi-layer CSR sparse matrix.
+    type:: MultiLayerCSR
+        private
+        !> @brief Underlying sparse pattern.
+        type(SparsePattern):: sp
+        !> @brief Number of layers in the matrix.
+        integer(kind=4):: n_layers = 0
+        !> @brief Values of non-zeros.
+        real(kind=8), allocatable, dimension(:, :):: vals
+
+        contains
+        !> @brief Init from a MultiLayerCSR matrix.
+        procedure:: init => init_MultiLayerCSR
+        !> @brief Given a (i, j), return the true 1d index in CSR format.
+        procedure:: get_index => get_index_MultiLayerCSR
+        !> @brief Given multiple (i, j)s, return the true 1d indices in CSR format.
+        procedure:: get_indices => get_indices_MultiLayerCSR
+        !> @brief Access the value of a matrix element.
+        procedure:: get_value => get_value_MultiLayerCSR
+        !> @brief Access the values of multiple matrix elements.
+        procedure:: get_values => get_values_MultiLayerCSR
+        !> @brief Set a matrix element.
+        procedure:: set => set_MultiLayerCSR
+        !> @brief Set multiple matrix elements to the same value.
+        procedure:: set_multiples => set_multiples_MultiLayerCSR
+        !> @brief Set a single value to all non-zero elements.
+        procedure:: set_all => set_all_MultiLayerCSR
+        !> @brief Add a value to a matrix element.
+        procedure:: add => add_MultiLayerCSR
+        !> @brief Add a single value to multiple matrix elements.
+        procedure:: add_multiples => add_multiples_MultiLayerCSR
+        !> @brief Add a single value to all non-zero elements.
+        procedure:: add_all => add_all_MultiLayerCSR
+        !> @brief In-place multiplying a value to a matrix element.
+        procedure:: mult => mult_MultiLayerCSR
+        !> @brief In-place multiplying a value to multiple matrix elements.
+        procedure:: mult_multiples => mult_multiples_MultiLayerCSR
+        !> @brief In-place multiplying a value to all non-zero elements.
+        procedure:: mult_all => mult_all_MultiLayerCSR
+        !> @brief Summation.
+        procedure:: sum => sum_MultiLayerCSR
+        !> @brief Destroy this MultiLayerCSR.
+        procedure:: destroy => destroy_MultiLayerCSR
+        !> @brief Write.
+        procedure, private:: write_MultiLayerCSR
+        !> @brief Overloading intrinsic write.
+        generic:: write(formatted) => write_MultiLayerCSR
+        !> @brief Destructor.
+        final:: destructor_MultiLayerCSR
+    end type MultiLayerCSR
 
     !> @brief An interface to standard C qsort function
     interface
@@ -303,18 +342,18 @@ contains
         call this%destroy()
     end subroutine destructor_COO
 
-    ! constructor_CSR
-    function constructor_CSR(src) result(mtx)
+    ! constructor_SparsePattern
+    function constructor_SparsePattern(src) result(sp)
         type(COO), intent(in):: src
-        type(CSR):: mtx
+        type(SparsePattern):: sp
 
-        call init_CSR(mtx, src)
-    end function constructor_CSR
+        call init_SparsePattern(sp, src)
+    end function constructor_SparsePattern
 
-    ! init_CSR
-    subroutine init_CSR(this, src)
+    ! init_SparsePattern
+    subroutine init_SparsePattern(this, src)
         use, intrinsic:: iso_c_binding, only: c_size_t, c_sizeof
-        class(CSR), intent(inout):: this
+        class(SparsePattern), intent(inout):: this
         type(COO), intent(in):: src
         integer(kind=4):: i, j, i_nnz
         type(IndexSet), pointer:: head => null()
@@ -326,7 +365,6 @@ contains
 
         allocate(this%rows(this%n_rows+1))
         allocate(this%cols(this%nnz))
-        allocate(this%vals(this%nnz))
         allocate(current_j(this%n_rows))
 
         ! note that Fortran is 1-based, not 0-based, so it's a little tricky
@@ -355,7 +393,7 @@ contains
         ! copy the current state of column index counter
         current_j = this%rows(1:this%n_rows)
 
-        ! copy column indices and values to CSR
+        ! copy column indices to CSR
         head => src%bg
         do i_nnz = 1, this%nnz
             i = head%idx(1)
@@ -383,126 +421,45 @@ contains
                 int(this%rows(i+1)-this%rows(i), c_size_t), &
                 c_sizeof(this%cols(i)), compare_int4)
         end do
+    end subroutine init_SparsePattern
 
-        ! set values according to sorted columns
-        head => src%bg
-        do i_nnz = 1, this%nnz
-            i = head%idx(1)
-            where(this%cols(this%rows(i):this%rows(i+1)-1) == head%idx(2))
-                this%vals(this%rows(i):this%rows(i+1)-1) = head%val
-            end where
-            head => head%next
-        end do
-        nullify(head)
-    end subroutine init_CSR
-
-    ! get_CSR
-    function get_CSR(this, i, j) result(val)
+    ! get_index_SparsePattern
+    function get_index_SparsePattern(this, i, j) result(idx)
         use, intrinsic:: iso_c_binding, only: c_ptr, c_size_t, c_associated
         use, intrinsic:: iso_c_binding, only: c_f_pointer, c_sizeof
-        class(CSR), intent(in):: this
+        class(SparsePattern), intent(in):: this
         integer(kind=4), intent(in):: i, j
-        real(kind=8):: val
+        integer(kind=4):: idx
 
         ! local variables
         type(c_ptr):: c_loc_ptr
         integer(kind=4), pointer:: f_loc_ptr
-        integer(kind=4):: loc_cols
 
         c_loc_ptr = bsearch(j, this%cols(this%rows(i):this%rows(i+1)-1), &
             int(this%rows(i+1)-this%rows(i), c_size_t), &
             c_sizeof(this%cols(this%rows(i))), compare_int4)
 
         if (.not. c_associated(c_loc_ptr)) then
-            val = 0D0
+            idx = 0D0
             return
         end if
 
         call c_f_pointer(c_loc_ptr, f_loc_ptr)
-        loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
-        val = this%vals(loc_cols)
-    end function get_CSR
+        idx = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
+    end function get_index_SparsePattern
 
-    ! set_CSR
-    subroutine set_CSR(this, i, j, val)
-        use, intrinsic:: iso_c_binding, only: c_ptr, c_size_t, c_associated
-        use, intrinsic:: iso_c_binding, only: c_f_pointer, c_sizeof
-        class(CSR), intent(inout):: this
-        integer(kind=4), intent(in):: i, j
-        real(kind=8), intent(in):: val
-
-        ! local variables
-        type(c_ptr):: c_loc_ptr
-        integer(kind=4), pointer:: f_loc_ptr
-        integer(kind=4):: loc_cols
-
-        c_loc_ptr = bsearch(j, this%cols(this%rows(i):this%rows(i+1)-1), &
-            int(this%rows(i+1)-this%rows(i), c_size_t), &
-            c_sizeof(this%cols(this%rows(i))), compare_int4)
-
-        if (.not. c_associated(c_loc_ptr)) then
-            print *, "Error: trying to set value to zero location in CSR."
-            stop
-        end if
-
-        call c_f_pointer(c_loc_ptr, f_loc_ptr)
-        loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
-        this%vals(loc_cols) = val
-    end subroutine set_CSR
-
-    ! sum_CSR
-    function sum_CSR(this) result(ans)
-        class(CSR), intent(in):: this
-        real(kind=8):: ans
-
-        ans = sum(this%vals)
-    end function sum_CSR
-
-    ! add_CSR
-    subroutine add_CSR(this, i, j, val)
-        use, intrinsic:: iso_c_binding, only: c_ptr, c_size_t, c_associated
-        use, intrinsic:: iso_c_binding, only: c_f_pointer, c_sizeof
-        class(CSR), intent(inout):: this
-        integer(kind=4), intent(in):: i, j
-        real(kind=8), intent(in):: val
-
-        ! local variables
-        type(c_ptr):: c_loc_ptr
-        integer(kind=4), pointer:: f_loc_ptr
-        integer(kind=4):: loc_cols
-
-        c_loc_ptr = bsearch(j, this%cols(this%rows(i):this%rows(i+1)-1), &
-            int(this%rows(i+1)-this%rows(i), c_size_t), &
-            c_sizeof(this%cols(this%rows(i))), compare_int4)
-
-        if (.not. c_associated(c_loc_ptr)) then
-            print *, "Error: trying to set value to zero location in CSR."
-            stop
-        end if
-
-        call c_f_pointer(c_loc_ptr, f_loc_ptr)
-        loc_cols = (loc(f_loc_ptr) - loc(this%cols(1))) / sizeof(this%cols(1)) + 1
-        this%vals(loc_cols) = this%vals(loc_cols) + val
-    end subroutine add_CSR
-
-    ! all_multiply_CSR
-    subroutine all_multiply_CSR(this, factor)
-        class(CSR), intent(inout):: this
-        real(kind=8), intent(in):: factor
-
-        this%vals = this%vals * factor
-    end subroutine all_multiply_CSR
-
-    ! count_block_CSR
-    function count_block_CSR(this, rowl, rowh, coll, colh) result(ans)
-        class(CSR), intent(in):: this
+    ! get_indices_SparsePattern
+    subroutine get_indices_SparsePattern(this, rowl, rowh, coll, colh, nnzs, idxs)
+        class(SparsePattern), intent(in):: this
         integer(kind=4), intent(in):: rowl, rowh, coll, colh
-        integer(kind=4):: ans
+        integer(kind=4), intent(out):: nnzs
+        integer(kind=4), dimension(:), intent(out):: idxs
 
         integer(kind=4):: i
         integer(kind=4):: low_bound, high_bound
 
-        ans = 0
+        nnzs = 0
+        idxs = 0
         do i = rowl, rowh
             low_bound = this%rows(i)
             do while (low_bound<this%rows(i+1))
@@ -516,56 +473,26 @@ contains
             high_bound = low_bound
             do while (high_bound<this%rows(i+1))
                 if (this%cols(high_bound) <= colh) then
-                    ans = ans + 1
+                    nnzs = nnzs + 1
+                    idxs(nnzs) = high_bound
                     high_bound = high_bound + 1
                 else
                     exit
                 end if
             end do
         end do
-    end function count_block_CSR
+    end subroutine get_indices_SparsePattern
 
-    ! count_block_CSR
-    subroutine add_block_CSR(this, rowl, rowh, coll, colh, val)
-        class(CSR), intent(inout):: this
-        integer(kind=4), intent(in):: rowl, rowh, coll, colh
-        real(kind=8), intent(in):: val
-
-        integer(kind=4):: i
-        integer(kind=4):: low_bound, high_bound
-
-        do i = rowl, rowh
-            low_bound = this%rows(i)
-            do while (low_bound<this%rows(i+1))
-                if (this%cols(low_bound) >= coll) exit
-                low_bound = low_bound + 1
-            end do
-
-            ! all col indices in this row are smaller than coll
-            if (low_bound == this%rows(i+1)) exit ! go to next row
-            
-            high_bound = low_bound
-            do while (high_bound<this%rows(i+1))
-                if (this%cols(high_bound) <= colh) then
-                    this%vals(high_bound) = this%vals(high_bound) + val
-                    high_bound = high_bound + 1
-                else
-                    exit
-                end if
-            end do
-        end do
-    end subroutine add_block_CSR
-
-    ! write_CSR
-    subroutine write_CSR(this, iounit, iotype, v_list, stat, msg)
+    ! write_SparsePattern
+    subroutine write_SparsePattern(this, iounit, iotype, v_list, stat, msg)
         ! variable declaration
-        class(CSR), intent(in):: this
+        class(SparsePattern), intent(in):: this
         integer(kind=4), intent(in):: iounit
         character(*), intent(in)::iotype
         integer(kind=4), intent(in):: v_list(:)
         integer(kind=4), intent(out):: stat
         character(*), intent(inout):: msg
-        integer(kind=4):: i, j
+        integer(kind=4):: i, j, k
         character:: n, t
 
 
@@ -578,16 +505,15 @@ contains
         do i = 1, this%n_rows
             do j = this%rows(i), this%rows(i+1)-1
                 write(iounit, *, iostat=stat, iomsg=msg) &
-                    "(", i, ",", this%cols(j), ") =>", this%vals(j)
+                    "(", i, ",", this%cols(j), ")"
                 write(iounit, *, iostat=stat, iomsg=msg) n
             end do
         end do
-    end subroutine write_CSR
+    end subroutine write_SparsePattern
 
-    ! destroy_CSR
-    subroutine destroy_CSR(this)
-        class(CSR), intent(inout):: this
-        type(IndexSet), pointer:: head
+    ! destroy_SparsePattern
+    subroutine destroy_SparsePattern(this)
+        class(SparsePattern), intent(inout):: this
 
         this%nnz = 0
         this%n_rows = 0
@@ -595,14 +521,227 @@ contains
 
         if (allocated(this%rows)) deallocate(this%rows)
         if (allocated(this%cols)) deallocate(this%cols)
-        if (allocated(this%vals)) deallocate(this%vals)
-    end subroutine destroy_CSR
+    end subroutine destroy_SparsePattern
 
-    ! destructor_CSR
-    subroutine destructor_CSR(this)
-        type(CSR), intent(inout):: this
+    ! destructor_SparsePattern
+    subroutine destructor_SparsePattern(this)
+        type(SparsePattern), intent(inout):: this
         call this%destroy()
-    end subroutine destructor_CSR
+    end subroutine destructor_SparsePattern
+
+    ! constructor_MultiLayerCSR
+    function constructor_MultiLayerCSR(n_layers, src) result(mtx)
+        type(COO), intent(in):: src
+        integer(kind=4), intent(in):: n_layers
+        type(MultiLayerCSR):: mtx
+
+        call init_MultiLayerCSR(mtx, n_layers, src)
+    end function constructor_MultiLayerCSR
+
+    ! init_MultiLayerCSR
+    subroutine init_MultiLayerCSR(this, n_layers, src)
+        use, intrinsic:: iso_c_binding, only: c_size_t, c_sizeof
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: n_layers
+        type(COO), intent(in):: src
+        integer(kind=4):: i, i_nnz
+        type(IndexSet), pointer:: head => null()
+
+        call this%sp%init(src)
+        this%n_layers = n_layers
+
+        allocate(this%vals(this%sp%nnz, this%n_layers))
+        this%vals = 0D0
+
+        ! set values according to sorted columns
+        head => src%bg
+        do i_nnz = 1, this%sp%nnz
+            i = head%idx(1)
+            where(this%sp%cols(this%sp%rows(i):this%sp%rows(i+1)-1) == head%idx(2))
+                this%vals(this%sp%rows(i):this%sp%rows(i+1)-1, 1) = head%val
+            end where
+            head => head%next
+        end do
+        nullify(head)
+    end subroutine init_MultiLayerCSR
+
+    ! get_index_MultiLayerCSR
+    function get_index_MultiLayerCSR(this, i, j) result(idx)
+        class(MultiLayerCSR), intent(in):: this
+        integer(kind=4), intent(in):: i, j
+        integer(kind=4):: idx
+
+        idx = this%sp%get_index(i, j)
+    end function get_index_MultiLayerCSR
+
+    ! get_indices_MultiLayerCSR
+    subroutine get_indices_MultiLayerCSR(this, rowl, rowh, coll, colh, nnzs, idxs)
+        class(MultiLayerCSR), intent(in):: this
+        integer(kind=4), intent(in):: rowl, rowh, coll, colh
+        integer(kind=4), intent(out):: nnzs
+        integer(kind=4), dimension(:), intent(out):: idxs
+
+        call this%sp%get_indices(rowl, rowh, coll, colh, nnzs, idxs)
+    end subroutine get_indices_MultiLayerCSR
+
+    ! get_value_MultiLayerCSR
+    function get_value_MultiLayerCSR(this, idx, layer) result(val)
+        class(MultiLayerCSR), intent(in):: this
+        integer(kind=4), intent(in):: idx, layer
+        real(kind=8):: val
+
+        val = this%vals(idx, layer)
+    end function get_value_MultiLayerCSR
+
+    ! get_values_MultiLayerCSR
+    subroutine get_values_MultiLayerCSR(this, nnzs, idxs, layer, vals)
+        class(MultiLayerCSR), intent(in):: this
+        integer(kind=4), intent(in):: nnzs, layer
+        integer(kind=4), dimension(nnzs), intent(in):: idxs
+        real(kind=8), dimension(nnzs), intent(out):: vals
+
+        vals = this%vals(idxs, layer)
+    end subroutine get_values_MultiLayerCSR
+
+    ! set_MultiLayerCSR
+    subroutine set_MultiLayerCSR(this, idx, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: idx, layer
+        real(kind=8), intent(in):: val
+
+        this%vals(idx, layer) = val
+    end subroutine set_MultiLayerCSR
+
+    ! set_multiples_MultiLayerCSR
+    subroutine set_multiples_MultiLayerCSR(this, nnzs, idxs, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: nnzs, layer
+        integer(kind=4), dimension(nnzs), intent(in):: idxs
+        real(kind=8), intent(in):: val
+
+        this%vals(idxs, layer) = val
+    end subroutine set_multiples_MultiLayerCSR
+
+    ! set_all_MultiLayerCSR
+    subroutine set_all_MultiLayerCSR(this, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: layer
+        real(kind=8), intent(in):: val
+
+        this%vals(:, layer) = val
+    end subroutine set_all_MultiLayerCSR
+
+    ! add_MultiLayerCSR
+    subroutine add_MultiLayerCSR(this, idx, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: idx, layer
+        real(kind=8), intent(in):: val
+
+        this%vals(idx, layer) = this%vals(idx, layer) + val
+    end subroutine add_MultiLayerCSR
+
+    ! add_multiples_MultiLayerCSR
+    subroutine add_multiples_MultiLayerCSR(this, nnzs, idxs, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: nnzs, layer
+        integer(kind=4), dimension(nnzs), intent(in):: idxs
+        real(kind=8), intent(in):: val
+
+        this%vals(idxs, layer) = this%vals(idxs, layer) + val
+    end subroutine add_multiples_MultiLayerCSR
+
+    ! add_all_MultiLayerCSR
+    subroutine add_all_MultiLayerCSR(this, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: layer
+        real(kind=8), intent(in):: val
+
+        this%vals(:, layer) = this%vals(:, layer) + val
+    end subroutine add_all_MultiLayerCSR
+
+    ! mult_MultiLayerCSR
+    subroutine mult_MultiLayerCSR(this, idx, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: idx, layer
+        real(kind=8), intent(in):: val
+
+        this%vals(idx, layer) = this%vals(idx, layer) * val
+    end subroutine mult_MultiLayerCSR
+
+    ! mult_multiples_MultiLayerCSR
+    subroutine mult_multiples_MultiLayerCSR(this, nnzs, idxs, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: nnzs, layer
+        integer(kind=4), dimension(nnzs), intent(in):: idxs
+        real(kind=8), intent(in):: val
+
+        this%vals(idxs, layer) = this%vals(idxs, layer) * val
+    end subroutine mult_multiples_MultiLayerCSR
+
+    ! mult_all_MultiLayerCSR
+    subroutine mult_all_MultiLayerCSR(this, layer, val)
+        class(MultiLayerCSR), intent(inout):: this
+        integer(kind=4), intent(in):: layer
+        real(kind=8), intent(in):: val
+
+        this%vals(:, layer) = this%vals(:, layer) * val
+    end subroutine mult_all_MultiLayerCSR
+
+    ! sum_MultiLayerCSR
+    function sum_MultiLayerCSR(this, layer) result(ans)
+        class(MultiLayerCSR), intent(in):: this
+        integer(kind=4), intent(in):: layer
+        real(kind=8):: ans
+
+        ans = sum(this%vals(:, layer))
+    end function sum_MultiLayerCSR
+
+    ! write_MultiLayerCSR
+    subroutine write_MultiLayerCSR(this, iounit, iotype, v_list, stat, msg)
+        ! variable declaration
+        class(MultiLayerCSR), intent(in):: this
+        integer(kind=4), intent(in):: iounit
+        character(*), intent(in)::iotype
+        integer(kind=4), intent(in):: v_list(:)
+        integer(kind=4), intent(out):: stat
+        character(*), intent(inout):: msg
+        integer(kind=4):: i, j, k
+        character:: n, t
+
+
+        n = new_line(t) ! n is the "new line" character
+        t = achar(9) ! t is the character for a tab
+
+        write(iounit, *, iostat=stat, iomsg=msg) "NNZ = ", this%sp%nnz
+        write(iounit, *, iostat=stat, iomsg=msg) "N Layers = ", this%n_layers
+        write(iounit, *, iostat=stat, iomsg=msg) n
+
+        do k = 1, this%n_layers
+            write(iounit, *, iostat=stat, iomsg=msg) "Layer", k
+            do i = 1, this%sp%n_rows
+                do j = this%sp%rows(i), this%sp%rows(i+1)-1
+                    write(iounit, *, iostat=stat, iomsg=msg) &
+                        "(", i, ",", this%sp%cols(j), ") =>", this%vals(j, k)
+                    write(iounit, *, iostat=stat, iomsg=msg) n
+                end do
+            end do
+        end do
+    end subroutine write_MultiLayerCSR
+
+    ! destroy_MultiLayerCSR
+    subroutine destroy_MultiLayerCSR(this)
+        class(MultiLayerCSR), intent(inout):: this
+
+        this%n_layers = 0
+        if (allocated(this%vals)) deallocate(this%vals)
+        call this%sp%destroy()
+    end subroutine destroy_MultiLayerCSR
+
+    ! destructor_MultiLayerCSR
+    subroutine destructor_MultiLayerCSR(this)
+        type(MultiLayerCSR), intent(inout):: this
+        call this%destroy()
+    end subroutine destructor_MultiLayerCSR
 
     ! compare_int4
     function compare_int4(a, b) bind(C)
@@ -618,34 +757,35 @@ contains
     end function compare_int4
 
     ! compress
-    subroutine compress(A, sp)
+    subroutine compress(A, mtx)
         real(kind=8), dimension(:, :), intent(in):: A
-        type(CSR), intent(inout):: sp
+        type(MultiLayerCSR), intent(inout):: mtx
 
         ! local variables
         integer(kind=4):: i, j
 
         ! clear sp
-        call sp%destroy()
+        call mtx%destroy()
 
-        sp%nnz = count(dabs(A) >= 1e-9)
-        sp%n_rows = size(A, 1)
-        sp%n_cols = size(A, 2)
+        mtx%sp%nnz = count(dabs(A) >= 1e-9)
+        mtx%sp%n_rows = size(A, 1)
+        mtx%sp%n_cols = size(A, 2)
+        mtx%n_layers = 1
 
-        allocate(sp%rows(sp%n_rows+1))
-        allocate(sp%cols(sp%nnz))
-        allocate(sp%vals(sp%nnz))
+        allocate(mtx%sp%rows(mtx%sp%n_rows+1))
+        allocate(mtx%sp%cols(mtx%sp%nnz))
+        allocate(mtx%vals(mtx%sp%nnz, mtx%n_layers))
 
-        sp%rows(1) = 1
+        mtx%sp%rows(1) = 1
 
         ! TODO: bad implementation. Expensive. Improve in the future.
-        do i = 1, sp%n_rows
-            sp%rows(i+1) = count(dabs(A(i, :))>=1e-9) + sp%rows(i)
+        do i = 1, mtx%sp%n_rows
+            mtx%sp%rows(i+1) = count(dabs(A(i, :))>=1e-9) + mtx%sp%rows(i)
 
-            sp%cols(sp%rows(i):sp%rows(i+1)-1) = &
-                pack((/ (j, j=1, sp%n_cols) /), dabs(A(i, :))>=1e-9)
+            mtx%sp%cols(mtx%sp%rows(i):mtx%sp%rows(i+1)-1) = &
+                pack((/ (j, j=1, mtx%sp%n_cols) /), dabs(A(i, :))>=1e-9)
 
-            sp%vals(sp%rows(i):sp%rows(i+1)-1) = &
+            mtx%vals(mtx%sp%rows(i):mtx%sp%rows(i+1)-1, 1) = &
                 pack(A(i, :), dabs(A(i, :))>=1e-9)
         end do
 

@@ -22,7 +22,7 @@ module hydro_feature_collection_module
         !> @brief Array of HydroFeature objects.
         type(HydroFeature), allocatable, dimension(:):: feats
         !> @brief A removed-fluid tracer represented by CSR.
-        type(CSR):: tracer
+        type(MultiLayerCSR):: tracer
         !> @brief xlower of the mesh tracing removed fluid.
         real(kind=8):: tracer_xlower
         !> @brief ylower of the mesh tracing removed fluid.
@@ -234,7 +234,10 @@ contains
         end do
 
         ! transform to CSR
-        call this%tracer%init(temp_mtx)
+        call this%tracer%init(3, temp_mtx)
+
+        ! let the time recorder be -1 at the beginning
+        call this%tracer%set_all(1, -1D0)
 
         ! destroy temporary COO matrix
         call temp_mtx%destroy()
@@ -358,7 +361,7 @@ contains
 
     ! implementation of remove_fluid
     subroutine remove_fluid(this, level, meqn, mbc, mx, my, xlow, &
-                            ylow, dx, dy, q, maux, aux)
+                            ylow, dx, dy, q, maux, aux, time)
         use:: amr_module, only: mxnest
 
         ! input arguments
@@ -366,45 +369,60 @@ contains
         integer(kind=4), intent(in):: level, meqn, mbc, mx, my, maux
         real(kind=8), intent(inout):: q(meqn, 1-mbc:mx+mbc, 1-mbc:my+mbc)
         real(kind=8), intent(in):: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
-        real(kind=8), intent(in):: xlow, ylow, dx, dy
+        real(kind=8), intent(in):: xlow, ylow, dx, dy, time
 
         ! local variables
-        integer(kind=4):: i, j, nnz
+        integer(kind=4):: i, j, nnz, k
         integer(kind=4):: rowl, rowh, coll, colh
+        integer(kind=4):: idxs((int(dx/this%tracer_dx)+2)*(int(dy/this%tracer_dy)+2))
         real(kind=8):: val
 
         ! if there's no hydrolic feature, exit the subroutine
         if (this%nfeats == 0) return
 
+        ! not the finest grid, just remove fluids
         if (level /= mxnest) then
             do j = 1-mbc, my+mbc
                 do i = 1-mbc, mx+mbc
                     if (idnint(aux(this%hydro_index, i, j)) /= 0) q(:, i, j) = 0D0
                 end do
             end do
+
+        ! the finest grid, remove fluids and also record the volume
         else
             do j = 1-mbc, my+mbc
                 do i = 1-mbc, mx+mbc
-                    if (idnint(aux(this%hydro_index, i, j)) /= 0) then
-                        if (q(1, i, j) /= 0D0) then
+                    ! skip, if this is not a boundary of hydor features
+                    if (idnint(aux(this%hydro_index, i, j)) == 0) cycle
 
-                            rowl = int(((i - 1) * dx + xlow - &
-                                this%tracer_xlower) / this%tracer_dx) + 1
-                            rowh = int((i * dx + xlow - &
-                                this%tracer_xlower) / this%tracer_dx) + 1
-                            coll = int(((j - 1) * dy + ylow - &
-                                this%tracer_ylower) / this%tracer_dy) + 1
-                            colh = int((j * dy + ylow - &
-                                this%tracer_ylower) / this%tracer_dy) + 1
+                    ! only boundary cells with non-zero depth undergoes this
+                    if (q(1, i, j) /= 0D0) then
 
-                            nnz = this%tracer%count_block(rowl, rowh, coll, colh)
-                            val = q(1, i, j) * dx * dy / nnz
+                        rowl = int(((i - 1) * dx + xlow - &
+                            this%tracer_xlower) / this%tracer_dx) + 1
+                        rowh = int((i * dx + xlow - &
+                            this%tracer_xlower) / this%tracer_dx) + 1
+                        coll = int(((j - 1) * dy + ylow - &
+                            this%tracer_ylower) / this%tracer_dy) + 1
+                        colh = int((j * dy + ylow - &
+                            this%tracer_ylower) / this%tracer_dy) + 1
 
-                            call this%tracer%add_block(rowl, rowh, coll, colh, val)
-                        end if
+                        call this%tracer%get_indices(rowl, rowh, coll, colh, nnz, idxs)
+                        val = q(1, i, j) * dx * dy / nnz
 
-                        q(:, i, j) = 0D0
+                        call this%tracer%add_multiples(nnz, idxs, 2, val)
+                        call this%tracer%add_multiples(nnz, idxs, 3, val)
+
+                        ! record the time of first contact
+                        ! TODO: this may be somehow inefficient!!
+                        do k = 1, nnz
+                            if (this%tracer%get_value(idxs(k), 1) < 0D0) &
+                                call this%tracer%set(idxs(k), 1, time)
+                        end do
                     end if
+                    
+                    ! zero the cell quantities
+                    q(:, i, j) = 0D0
                 end do
             end do
         end if
@@ -421,11 +439,11 @@ contains
         if (this%nfeats == 0) return
 
         if (present(tracker)) then ! we need to track the volume evaporated
-            tracker = tracker + this%tracer%sum()
-            call this%tracer%all_multiply(remained_rate)
-            tracker = tracker - this%tracer%sum()
+            tracker = tracker + this%tracer%sum(3)
+            call this%tracer%mult_all(3, remained_rate)
+            tracker = tracker - this%tracer%sum(3)
         else
-            call this%tracer%all_multiply(remained_rate)
+            call this%tracer%mult_all(3, remained_rate)
         end if
     end subroutine evap_fluid
 
@@ -446,19 +464,44 @@ contains
     ! implementation of output_removed_fluid
     subroutine output_removed_fluid(this)
         class(HydroFeatureCollection), intent(in):: this
-        integer(kind=4):: i, j
-        real(kind=8):: val
+        integer(kind=4):: i, j, x_prec, y_prec, idx
+        real(kind=8):: val(3), x, y
+        character(len=255):: fmt_str
 
-        open(unit=995, file="removed_fluid.dat", action="write")
+        ! calculate the required precision for coordinates
+        if (this%tracer_dx >= 1D0) then
+            x_prec = 1
+        else
+            x_prec = iabs(floor(dlog10(this%tracer_dx))) + 1
+        end if
+
+        if (this%tracer_dy >= 1D0) then
+            y_prec = 1
+        else
+            y_prec = iabs(floor(dlog10(this%tracer_dy))) + 1
+        end if
+
+        ! prepare the format for each line of output
+        write(fmt_str, "('(F0.', I0, ', '', '', F0.', &
+            I0, ', '', '', F0.1, 2('', '', ES23.15E3))')") x_prec, y_prec
+
+        ! write to file
+        open(unit=995, file="removed_fluid.csv", action="write", recl=9999)
         do i = 1, this%tracer_mx
             do j = 1, this%tracer_my
-                val = this%tracer%get(i, j)
 
-                if (val /= 0D0) then
-                    write(995, *) &
-                        (i - 0.5) * this%tracer_dx + this%tracer_xlower, &
-                        (j - 0.5) * this%tracer_dy + this%tracer_ylower, &
-                        val
+                idx = this%tracer%get_index(i, j)
+                if (idx == 0) cycle ! not a non-zero element
+
+                val(2) = this%tracer%get_value(idx, 2)
+
+                if (val(2) /= 0D0) then
+                    x = (i - 0.5) * this%tracer_dx + this%tracer_xlower
+                    y = (j - 0.5) * this%tracer_dy + this%tracer_ylower
+                    val(1) = this%tracer%get_value(idx, 1)
+                    val(3) = this%tracer%get_value(idx, 3)
+
+                    write(995, fmt_str) x, y, val
                 end if
             end do
         end do
