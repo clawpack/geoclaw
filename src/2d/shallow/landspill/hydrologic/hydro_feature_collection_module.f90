@@ -483,7 +483,7 @@ contains
 
         ! prepare the format for each line of output
         write(fmt_str, "('(F0.', I0, ', '', '', F0.', &
-            I0, ', '', '', F0.1, 2('', '', E22.15E2))')") x_prec, y_prec
+            I0, ', '', '', F0.1, 2('', '', ES23.15E3))')") x_prec, y_prec
 
         ! write to file
         open(unit=995, file="removed_fluid.csv", action="write", recl=9999)
