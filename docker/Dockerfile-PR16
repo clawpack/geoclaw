@@ -9,7 +9,7 @@ RUN ln -snf /usr/share/zoneinfo/UTC /etc/localtime \
     make \
     git \
     ca-certificates \
-    gfortran \
+    gfortran-8 \
     python3 \
     python3-numpy \
     python3-six \
@@ -24,7 +24,7 @@ WORKDIR /home/landspill
 
 # set up necessary environment variables
 ENV PYTHON=python3 \
-    FC=gfortran \
+    FC=gfortran-8 \
     CLAW=/home/landspill/clawpack \
     PYTHONPATH=/home/landspill/clawpack \
     MPLBACKEND=agg
