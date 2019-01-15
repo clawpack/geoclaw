@@ -156,7 +156,11 @@ c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
        call b4step2(mbc,mx,my,nvar,q,
      &             xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux)
 
-      if (.not. any(q(1, :, :) > dry_tolerance)) goto 77
+c     # this is a dry grid patch, skip updating conservation law
+      if (.not. any(q(1, :, :) > dry_tolerance)) then
+        cflgrid = 0D0
+        goto 77
+      end if
       
 c::::::::::::::::::::::::FIXED GRID DATA before step:::::::::::::::::::::::
 c     # fill in values at fixed grid points effected at time tc0
@@ -274,8 +278,10 @@ c     # Copied here from b4step2 since need to do before saving to qc1d:
         q(1,i,j) = max(q(1,i,j),0.d0)
         q(2:meqn,i,j) = 0.d0
       end forall
-c
- 77       continue
+
+c     # for dry grid pathces, the solver will jump to here directly
+ 77   continue
+
       if (method(5).eq.1) then
 c        # with source term:   use Godunov splitting
          call src2(nvar,mbc,mx,my,xlowmbc,ylowmbc,dx,dy,
