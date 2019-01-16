@@ -387,8 +387,8 @@ def setgeo(rundata):
     rundata.add_data(LandSpillData(), 'landspill_data')
     landspill = rundata.landspill_data
     landspill.ref_mu = 1096.1 # cP @ unknown temperature of silicon oil
-    landspill.ref_temperature = 298.
-    landspill.ambient_temperature = 298. # set to ref_temperature
+    landspill.ref_temperature = 25.
+    landspill.ambient_temperature = 25. # set to ref_temperature
     landspill.density = 970. # kg / m^3 @ 15 degree C; will overwrite rho in GeoClaw
 
     # Point sources

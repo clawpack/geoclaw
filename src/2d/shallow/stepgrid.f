@@ -281,7 +281,7 @@ c        # with source term:   use Godunov splitting
 c        ! remove fluid from hydro cells
          call hydro_features%remove_fluid(level, nvar, mbc, 
      &             mx, my, xlowmbc, ylowmbc, dx, dy, 
-     &             q, maux, aux)
+     &             q, maux, aux, time)
 c        ! End of removing fluid from hydro cells
          endif
 

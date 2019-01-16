@@ -544,10 +544,10 @@ class LandSpillData(clawpack.clawutil.data.ClawData):
         self.add_attribute('ref_mu', 332.) # unit: mPa-s (= cP = 1e-3kg/s/m)
 
         # Reference temperature at which the nu_ref is
-        self.add_attribute('ref_temperature', 288.) # unit: K
+        self.add_attribute('ref_temperature', 15.) # unit: Celsius
 
-        # Ambient temperature (K)
-        self.add_attribute('ambient_temperature', 298.) # unit: K
+        # Ambient temperature (Celsius)
+        self.add_attribute('ambient_temperature', 25.) # unit: Celsius
 
         # Density at ambient temperature
         self.add_attribute('density', 926.6) # unit: kg / m^3
@@ -564,6 +564,10 @@ class LandSpillData(clawpack.clawutil.data.ClawData):
         self.add_attribute('hydro_feature_file', 'hydro_feature.data')
         self.add_attribute('hydro_features', HydroFeatureData())
 
+        # add evaporation model
+        self.add_attribute('evaporation_file', 'evaporation.data')
+        self.add_attribute('evaporation', EvaporationData())
+
     def write(self, out_file='./landspill.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
 
@@ -573,11 +577,15 @@ class LandSpillData(clawpack.clawutil.data.ClawData):
         # open the output file
         self.open_data_file(out_file, data_source)
 
-        self.data_write('ref_mu', description='Reference dynamic viscosity (mPa-s)')
-        self.data_write('ref_temperature', description='Reference temperature " \
-                                for temperature-dependent viscosity (K)')
-        self.data_write('ambient_temperature', description='Ambient temperature (K)')
-        self.data_write('density', description='Density at ambient temperature (kg/m^3')
+        self.data_write('ref_mu',
+                        description='Reference dynamic viscosity (mPa-s)')
+        self.data_write('ref_temperature',
+                        description='Reference temperature for \
+                            temperature-dependent viscosity (Celsius)')
+        self.data_write('ambient_temperature',
+                        description='Ambient temperature (Celsius)')
+        self.data_write('density',
+                        description='Density at ambient temperature (kg/m^3')
 
         # output point sources data
         self.data_write('point_sources_file',
@@ -593,6 +601,11 @@ class LandSpillData(clawpack.clawutil.data.ClawData):
         self.data_write('hydro_feature_file',
                         description='File name of hydrological feature settings')
         self.hydro_features.write(self.hydro_feature_file)
+
+        # output evaporation data
+        self.data_write('evaporation_file',
+                        description='File name of evaporation settings')
+        self.evaporation.write(self.evaporation_file)
 
         # close the output file
         self.close_data_file()
@@ -873,3 +886,51 @@ class HydroFeatureData(clawpack.clawutil.data.ClawData):
     def _check(self):
         """Check if the data are consistent"""
         pass
+
+
+# Evaporation data
+class EvaporationData(clawpack.clawutil.data.ClawData):
+    """Data object describing evaporation"""
+
+    def __init__(self):
+        """Constructor of EvaporationData class"""
+
+        super(EvaporationData, self).__init__()
+
+        # type of evaporation model
+        # 0: no evaporation
+        # 1: Fingas 1996 model, natural log law
+        # 2: Fingas 1996 model, square root law
+        self.add_attribute('type', 0)
+
+        # a list of model coefficients
+        self.add_attribute('coefficients', [])
+
+    def write(self, out_file='./evaporation.data', data_source="setrun.py"):
+        """Write out the data file to the path given"""
+
+        # check data consistency
+        self._check()
+
+        # open the output file
+        self.open_data_file(out_file, data_source)
+
+        # write model type
+        self.data_write('type', description='Evaporation type')
+
+        # number of coefficients
+        self.data_write('n_coefficients', len(self.coefficients),
+                        description='Number of evaporation coefficients.')
+
+        for i, c in enumerate(self.coefficients):
+            self.data_write('C{}'.format(i), c,
+                            description='Coefficient {}'.format(i))
+
+        # close the output file
+        self.close_data_file()
+
+    def _check(self):
+        """Check if the data are consistent"""
+
+        assert isinstance(self.type, int), "Evaporation type should be an integer."
+        assert self.type in [0, 1, 2], "Evaporation type should be in [0, 1, 2]"

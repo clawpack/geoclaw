@@ -103,7 +103,7 @@ program amr2
     use regions_module, only: set_regions
     use fgmax_module, only: set_fgmax, FG_num_fgrids
     use multilayer_module, only: set_multilayer
-    use landspill_module, only: set_landspill, hydro_features
+    use landspill_module, only: set_landspill, hydro_features, evaporation
 
     implicit none
 
@@ -644,8 +644,9 @@ program amr2
 
     call system_clock(clock_finish,clock_rate)
 
-    ! output removed fluid data
+    ! output removed fluid data and evaporated volume data
     call hydro_features%output_removed_fluid()
+    call evaporation%output()
     
     !output timing data
     open(timing_unit, file=timing_base_name//"txt", status='unknown',       &

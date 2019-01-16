@@ -386,8 +386,8 @@ def setgeo(rundata):
     rundata.add_data(LandSpillData(), 'landspill_data')
     landspill = rundata.landspill_data
     landspill.ref_mu = 332. # cP @ 15 degree C
-    landspill.ref_temperature = 15. + 273.
-    landspill.ambient_temperature = 298.
+    landspill.ref_temperature = 15.
+    landspill.ambient_temperature = 25.
     landspill.density = 9.266e2 # kg / m^3 @ 15 degree C; will overwrite rho in GeoClaw
 
     # Point sources
@@ -409,6 +409,11 @@ def setgeo(rundata):
     hydro_feature_data.files.append("./hydro_feature1.asc")
     hydro_feature_data.files.append("./hydro_feature2.asc")
     hydro_feature_data.files.append("./hydro_feature3.asc")
+
+    # Evaporation
+    evaporation_data = landspill.evaporation
+    evaporation_data.type = 1
+    evaporation_data.coefficients = [1.38, 0.045]
 
     return rundata
     # end of function setgeo

@@ -1,5 +1,5 @@
 !> @file landspill_module.f90
-!! @brief Top-level module for land-spill simulations. 
+!! @brief Top-level module for land-spill simulations.
 !! @author Pi-Yueh Chuang
 !! @version alpha
 !! @date 2018-09-17
@@ -8,9 +8,11 @@ module landspill_module
     use point_source_collection_module
     use darcy_weisbach_module
     use hydro_feature_collection_module
+    use evap_module
     implicit none
     save
     public
+    private::  get_kinematic_viscosity, landspill_log
 
     !> @brief The state of this module.
     logical, private:: module_setup = .false.
@@ -21,10 +23,10 @@ module landspill_module
     !> @brief Reference dynamic viscosity (mPa-s = 1e-3 kg/s/m = cP).
     real(kind=8):: ref_mu = 0D0
 
-    !> @brief Reference temperature (K).
+    !> @brief Reference temperature (Celsius).
     real(kind=8):: ref_temperature = 0D0
 
-    !> @brief Ambient temperature (K).
+    !> @brief Ambient temperature (Celsius).
     real(kind=8):: ambient_temperature = 0D0
 
     !> @brief Density at reference temperature.
@@ -51,17 +53,24 @@ module landspill_module
     !> @brief Object for a collection of hydro features.
     type(HydroFeatureCollection):: hydro_features
 
+
+    !> @brief File name of evaporation settings.
+    character(len=:), allocatable:: evaporation_file
+
+    !> @brief Object for a collection of hydro features.
+    type(EvapModel):: evaporation
+
 contains
 
     !> @brief Initialize landspill module
     !! @param[in] landspill_file an optional arg; file for landspill module
     subroutine set_landspill(landspill_file)
-        use geoclaw_module, only: geo_module_setup => coordinate_system 
-        use geoclaw_module, only: geo_friction => friction_forcing 
-        use geoclaw_module, only: geo_rho => rho 
+        use geoclaw_module, only: geo_module_setup => coordinate_system
+        use geoclaw_module, only: geo_friction => friction_forcing
+        use geoclaw_module, only: geo_rho => rho
 
         ! arguments
-        character(len=*), intent(in), optional:: landspill_file 
+        character(len=*), intent(in), optional:: landspill_file
         integer(kind=4), parameter:: funit = 200
 
         ! We ASSUME that coordinate_system in GeoClaw is initially zero.
@@ -87,6 +96,7 @@ contains
         read(funit, *) point_source_file
         read(funit, *) darcy_weisbach_file
         read(funit, *) hydro_feature_file
+        read(funit, *) evaporation_file
 
         ! close file
         close(funit)
@@ -112,17 +122,14 @@ contains
         ! hydro feature collection
         call hydro_features%init(hydro_feature_file)
 
+        ! evaporation
+        call evaporation%init(ambient_temperature, evaporation_file)
+        call evaporation%reset_release_profile(point_sources)
+
         ! set module_setup
         module_setup = .true.
 
-        ! write a log
-        open(unit=funit, file="landspill.log", action="write")
-        write(funit, *) "Reference Dynamic Viscosity (cP): ", ref_mu
-        write(funit, *) "Reference Temperature (K): ", ref_temperature
-        write(funit, *) "Ambient Temperature (K): ", ambient_temperature
-        write(funit, *) "Density (kg / m^3): ", density
-        write(funit, *) "Calculated kinematic viscosity (m^2 / s)", nu
-        close(funit)
+        call landspill_log()
 
     end subroutine set_landspill
 
@@ -130,8 +137,8 @@ contains
     function get_kinematic_viscosity(mu_ref, T_ref, T, rho) result(nu)
         implicit none
         real(kind=8), intent(in):: mu_ref ! cP, i.e., 1e-3 kg / m /s
-        real(kind=8), intent(in):: T_ref ! K
-        real(kind=8), intent(in):: T ! K
+        real(kind=8), intent(in):: T_ref ! Celsius
+        real(kind=8), intent(in):: T ! Celsius
         real(kind=8), intent(in):: rho ! kg / m^3
         real(kind=8):: nu
 
@@ -146,5 +153,41 @@ contains
         ! get kinematic viscosity (m^2 / s)
         nu = nu / rho
     end function get_kinematic_viscosity
+
+    !> @brief output a log
+    subroutine landspill_log()
+        implicit none
+        integer(kind=4), parameter:: funit = 199
+        integer(kind=4):: i, npts, nt
+        real(kind=8), allocatable, dimension(:):: times, rates
+
+        open(unit=funit, file="landspill.log", action="write")
+
+        write(funit, *) "Reference Dynamic Viscosity (cP): ", ref_mu
+        write(funit, *) "Reference Temperature (Celsius): ", ref_temperature
+        write(funit, *) "Ambient Temperature (Celsius): ", ambient_temperature
+        write(funit, *) "Density (kg / m^3): ", density
+        write(funit, *) "Calculated kinematic viscosity (m^2 / s): ", nu
+
+        write(funit, *) "Evaporation type: ", evaporation%get_type()
+        write(funit, *) "Remained percentage from 60min to 61min: ", &
+            evaporation%remained_percentage(36D2, 6D1)
+
+        npts = point_sources%get_n_points()
+        write(funit, *) "Number of point sources: ", npts
+
+        do i = 1, npts
+            nt = point_sources%get_n_stages(i)
+            write(funit, *) "Number of stages of the point ", i, ": ", nt
+
+            allocate(times(nt), rates(nt))
+            call point_sources%get_times(i, times)
+            call point_sources%get_v_rates(i, rates)
+            write(funit, *) "Stage times of the point ", i, ": ", times
+            write(funit, *) "Stage rates of the point ", i, ": ", rates
+            deallocate(times, rates)
+        end do
+        close(funit)
+    end subroutine landspill_log
 
 end module landspill_module

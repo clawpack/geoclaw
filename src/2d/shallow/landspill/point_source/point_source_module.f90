@@ -1,5 +1,5 @@
 !> @file point_source_module.f90
-!! @brief PointSource class. 
+!! @brief PointSource class.
 !! @author Pi-Yueh Chuang
 !! @version alpha
 !! @date 2018-09-12
@@ -36,6 +36,16 @@ module point_source_module
         procedure:: d_rate
         !> @brief Obtain the cell indices
         procedure:: cell_id
+        !> @brief Get number of profile stages.
+        procedure:: get_n_stages
+        !> @brief Get time information of releasing fluids.
+        procedure:: get_times
+        !> @brief Set new times.
+        procedure:: set_times
+        !> @brief Get volumetric rates.
+        procedure:: get_v_rates
+        !> @brief Set volumetric rates.
+        procedure:: set_v_rates
         !> @brief Write the information and data of this instance.
         procedure, private:: writef
         !> @brief Read the information and data of this instance.
@@ -295,5 +305,40 @@ contains
         endif
 
     end subroutine cell_id
+
+    ! get_n_stages
+    function get_n_stages(this) result(ans)
+        class(PointSource), intent(in):: this
+        integer(kind=4):: ans
+        ans = this%nt
+    end function get_n_stages
+
+    ! get_times
+    subroutine get_times(this, times)
+        class(PointSource), intent(in):: this
+        real(kind=8), dimension(this%nt), intent(inout):: times
+        times = this%t
+    end subroutine get_times
+
+    ! set_times
+    subroutine set_times(this, times)
+        class(PointSource), intent(inout):: this
+        real(kind=8), dimension(this%nt), intent(in):: times
+        this%t = times
+    end subroutine set_times
+
+    ! get_v_rates
+    subroutine get_v_rates(this, rates)
+        class(PointSource), intent(in):: this
+        real(kind=8), dimension(this%nt), intent(inout):: rates
+        rates = this%v_rate
+    end subroutine get_v_rates
+
+    ! set_v_rates
+    subroutine set_v_rates(this, rates)
+        class(PointSource), intent(inout):: this
+        real(kind=8), dimension(this%nt), intent(in):: rates
+        this%v_rate = rates
+    end subroutine set_v_rates
 
 end module point_source_module
