@@ -138,14 +138,13 @@ subroutine update (level, nvar, naux)
                                 huf= alloc(iaddf(2,iff+ico-1,jff+jco-1,locf,mi))*capa 
                                 hvf= alloc(iaddf(3,iff+ico-1,jff+jco-1,locf,mi))*capa 
 
-                                !if (hf > dry_tolerance) then
-                                if (hf > 0D0) then
+                                if (hf > dry_tolerance) then
                                     etaf = hf + bf
                                     nwet = nwet + 1
-                                !else
-                                !    etaf = 0.d0
-                                !    huf=0.d0
-                                !    hvf=0.d0
+                                else
+                                    etaf = 0.d0
+                                    huf=0.d0
+                                    hvf=0.d0
                                 endif
 
                                 hsum   = hsum + hf
@@ -158,7 +157,7 @@ subroutine update (level, nvar, naux)
                         if (nwet > 0) then
                             etaav = etasum/dble(nwet)
                             hav = hsum/dble(nwet)
-                            hc = min(hav, (max(etaav-bc*capac, 0.0d0)))
+                            hc = min(hav, (max(etaav-bc*capac, dry_tolerance)))
                             huc = (min(hav, hc) / hsum) * husum
                             hvc = (min(hav, hc) / hsum) * hvsum
                         else
