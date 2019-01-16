@@ -381,25 +381,29 @@ def setgeo(rundata):
     # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
     #  ioutarrivaltimes,ioutsurfacemax]
 
+    # Land-spill module settings
+    from clawpack.geoclaw.data import LandSpillData
+    rundata.add_data(LandSpillData(), 'landspill_data')
+    landspill = rundata.landspill_data
+    landspill.ref_mu = 332. # cP @ 15 degree C
+    landspill.ref_temperature = 15. + 273.
+    landspill.ambient_temperature = 298.
+    landspill.density = 9.266e2 # kg / m^3 @ 15 degree C; will overwrite rho in GeoClaw
+
     # Point sources
-    from clawpack.geoclaw.data import PointSourceData
-    rundata.add_data(PointSourceData(), 'pointsource_data')
-    ptsources_data = rundata.pointsource_data
+    ptsources_data = landspill.point_sources
     ptsources_data.n_point_sources = 1
     ptsources_data.point_sources.append(
         [[-12459650., 4986000.], 2, [1800., 12600.], [0.5, 0.1]])
 
-    from clawpack.geoclaw.data import DarcyWeisbachData
-    rundata.add_data(DarcyWeisbachData(), 'darcy_weisbach_data')
-    darcy_weisbach_data = rundata.darcy_weisbach_data
+
+    # Darcy-Weisbach friction
+    darcy_weisbach_data = landspill.darcy_weisbach_friction
     darcy_weisbach_data.type = 4
     darcy_weisbach_data.dry_tol = 1e-5
     darcy_weisbach_data.friction_tol = 1e6
     darcy_weisbach_data.default_roughness = 0.0
     darcy_weisbach_data.filename = "roughness.txt"
-
-    from clawpack.geoclaw.data import HydroFeatureData
-    rundata.add_data(HydroFeatureData(), 'hydro_feature_data')
 
     return rundata
     # end of function setgeo

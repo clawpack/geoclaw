@@ -63,11 +63,13 @@ module darcy_weisbach_two_regimes_module
 contains
 
     ! implementation of init_from_funit_two_regimes
-    subroutine init_from_funit_two_regimes(this, funit)
+    subroutine init_from_funit_two_regimes(this, funit, kin_vis)
         class(DarcyWeisbachTwoRegimes), intent(inout):: this
         integer(kind=4), intent(in):: funit
+        real(kind=8), intent(in):: kin_vis
 
         this%name = "Three-regime Darcy-Weisbach"
+        this%nu = kin_vis
         read(funit, *) this%friction_tol
         read(funit, *) this%dry_tol
         read(funit, *) this%filename
@@ -99,7 +101,6 @@ contains
 
     ! implementation of get_coefficient_two_regimes
     function get_coefficient_two_regimes(this, x, y, q) result(coef)
-        use geoclaw_module, only: nu
         class(DarcyWeisbachTwoRegimes), intent(in):: this
         real(kind=8), intent(in):: x, y, q(3)
         real(kind=8):: coef, roughness, Re
@@ -111,7 +112,7 @@ contains
         ! *********************************************************************
 
         ! calculate local Reynolds number (defined by hydraulic radius, i.e., h)
-        Re = dsqrt(q(2)**2+q(3)**2) / nu ! depth h is included in q(2) & q(3)
+        Re = dsqrt(q(2)**2+q(3)**2) / this%nu ! depth h is included in q(2) & q(3)
 
         ! static cell, no friction
         if (dabs(Re) <= 1D-7) return

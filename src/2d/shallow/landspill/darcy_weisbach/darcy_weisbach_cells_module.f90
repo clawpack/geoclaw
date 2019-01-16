@@ -55,11 +55,13 @@ module darcy_weisbach_cells_module
 contains
 
     ! implementation of init_from_funit_cells
-    subroutine init_from_funit_cells(this, funit)
+    subroutine init_from_funit_cells(this, funit, kin_vis)
         class(DarcyWeisbachCells), intent(inout):: this
         integer(kind=4), intent(in):: funit
+        real(kind=8), intent(in):: kin_vis
 
         this%name = "Cell-wide Darcy-Weisbach"
+        this%nu = kin_vis
         read(funit, *) this%friction_tol
         read(funit, *) this%dry_tol
         read(funit, *) this%filename

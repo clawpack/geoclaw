@@ -55,11 +55,13 @@ module darcy_weisbach_churchill_module
 contains
 
     ! implementation of init_from_funit_churchill
-    subroutine init_from_funit_churchill(this, funit)
+    subroutine init_from_funit_churchill(this, funit, kin_vis)
         class(DarcyWeisbachChurchill), intent(inout):: this
         integer(kind=4), intent(in):: funit
+        real(kind=8), intent(in):: kin_vis
 
         this%name = "Churchill Darcy-Weisbach"
+        this%nu = kin_vis
         read(funit, *) this%friction_tol
         read(funit, *) this%dry_tol
         read(funit, *) this%filename
@@ -91,7 +93,6 @@ contains
 
     ! implementation of get_coefficient_churchill
     function get_coefficient_churchill(this, x, y, q) result(coef)
-        use geoclaw_module, only: nu
         class(DarcyWeisbachChurchill), intent(in):: this
         real(kind=8), intent(in):: x, y, q(3)
         real(kind=8):: coef, roughness, Re, theta1, theta2
@@ -103,7 +104,7 @@ contains
         ! *********************************************************************
 
         ! calculate local Reynolds number (defined by hydraulic radius, i.e., h)
-        Re = dsqrt(q(2)**2+q(3)**2) / nu ! depth h is included in q(2) & q(3)
+        Re = dsqrt(q(2)**2+q(3)**2) / this%nu ! depth h is included in q(2) & q(3)
 
         ! initialize roughness with default value
         roughness = this%default_roughness

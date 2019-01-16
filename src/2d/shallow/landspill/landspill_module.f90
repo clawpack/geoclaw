@@ -15,11 +15,38 @@ module landspill_module
     !> @brief The state of this module.
     logical, private:: module_setup = .false.
 
+    !> @brief Kinematic viscosity (m^2/s).
+    real(kind=8):: nu = 0D0
+
+    !> @brief Reference dynamic viscosity (mPa-s = 1e-3 kg/s/m = cP).
+    real(kind=8):: ref_mu = 0D0
+
+    !> @brief Reference temperature (K).
+    real(kind=8):: ref_temperature = 0D0
+
+    !> @brief Ambient temperature (K).
+    real(kind=8):: ambient_temperature = 0D0
+
+    !> @brief Density at reference temperature.
+    real(kind=8):: density = 0D0
+
+
+    !> @brief File name of point source settings.
+    character(len=:), allocatable:: point_source_file
+
     !> @brief Object for a collection of point sources.
     type(PointSourceCollection):: point_sources
 
+
+    !> @brief File name of Darcy-Weisbach settings.
+    character(len=:), allocatable:: darcy_weisbach_file
+
     !> @brief Object for Darcy-Weisbach.
     type(DarcyWeisbach):: darcy_weisbach
+
+
+    !> @brief File name of hydrological feature settings.
+    character(len=:), allocatable:: hydro_feature_file
 
     !> @brief Object for a collection of hydro features.
     type(HydroFeatureCollection):: hydro_features
@@ -27,49 +54,97 @@ module landspill_module
 contains
 
     !> @brief Initialize landspill module
-    !! @param[in] point_source_file an optional arg; file for point sources
-    !! @param[in] darcy_weisbach_file an optional arg; file for Darcy-Weisbach
-    !! @param[in] hydro_feature_file an optional arg; file for hydro features
-    subroutine set_landspill(&
-        point_source_file, darcy_weisbach_file, hydro_feature_file)
+    !! @param[in] landspill_file an optional arg; file for landspill module
+    subroutine set_landspill(landspill_file)
+        use geoclaw_module, only: geo_module_setup => coordinate_system 
         use geoclaw_module, only: geo_friction => friction_forcing 
+        use geoclaw_module, only: geo_rho => rho 
 
         ! arguments
-        character(len=*), intent(in), optional:: point_source_file 
-        character(len=*), intent(in), optional:: darcy_weisbach_file 
-        character(len=*), intent(in), optional:: hydro_feature_file 
+        character(len=*), intent(in), optional:: landspill_file 
+        integer(kind=4), parameter:: funit = 200
+
+        ! We ASSUME that coordinate_system in GeoClaw is initially zero.
+        ! So if the geoclaw module is set, then coordinate_system should be > 0.
+        if (geo_module_setup == 0) then
+            print *, "Error: geoclaw module should be set up " // &
+                "before setting landspill module"
+            stop
+        end if
+
+        ! open module configuration file
+        if (present(landspill_file)) then
+            call opendatafile(funit, landspill_file)
+        else
+            call opendatafile(funit, "landspill.data")
+        endif
+
+        ! read data
+        read(funit, *) ref_mu
+        read(funit, *) ref_temperature
+        read(funit, *) ambient_temperature
+        read(funit, *) density
+        read(funit, *) point_source_file
+        read(funit, *) darcy_weisbach_file
+        read(funit, *) hydro_feature_file
+
+        ! close file
+        close(funit)
+
+        ! overwrite the density in geoclaw module
+        geo_rho = density
+
+        ! get kinematic viscosity at ambient temperature
+        nu = get_kinematic_viscosity( &
+            ref_mu, ref_temperature, ambient_temperature, density)
+
 
         ! point source collection
-        if (present(point_source_file)) then
-            call point_sources%init(point_source_file)
-        else
-            call point_sources%init("point_source.data")
-        endif
+        call point_sources%init(point_source_file)
 
         ! Darcy-Weisbach
-        if (present(darcy_weisbach_file)) then
-            call darcy_weisbach%init(darcy_weisbach_file)
-        else
-            call darcy_weisbach%init("darcy_weisbach.data")
-        endif
+        call darcy_weisbach%init(nu, darcy_weisbach_file)
 
         ! Disable Manning's friction in GeoClaw
-        ! Warning: this assumes geoclaw module has been set up!
         ! TODO: this is just a temporary workaround. Need to integrate to GeoClaw.
-        if (darcy_weisbach%get_type() > 0) then
-            geo_friction = .false.
-        endif
+        if (darcy_weisbach%get_type() .gt. 0) geo_friction = .false.
 
         ! hydro feature collection
-        if (present(hydro_feature_file)) then
-            call hydro_features%init(hydro_feature_file)
-        else
-            call hydro_features%init("hydro_feature.data")
-        endif
+        call hydro_features%init(hydro_feature_file)
 
         ! set module_setup
         module_setup = .true.
 
+        ! write a log
+        open(unit=funit, file="landspill.log", action="write")
+        write(funit, *) "Reference Dynamic Viscosity (cP): ", ref_mu
+        write(funit, *) "Reference Temperature (K): ", ref_temperature
+        write(funit, *) "Ambient Temperature (K): ", ambient_temperature
+        write(funit, *) "Density (kg / m^3): ", density
+        write(funit, *) "Calculated kinematic viscosity (m^2 / s)", nu
+        close(funit)
+
     end subroutine set_landspill
+
+    !> @brief Calculate kinematic viscosity.
+    function get_kinematic_viscosity(mu_ref, T_ref, T, rho) result(nu)
+        implicit none
+        real(kind=8), intent(in):: mu_ref ! cP, i.e., 1e-3 kg / m /s
+        real(kind=8), intent(in):: T_ref ! K
+        real(kind=8), intent(in):: T ! K
+        real(kind=8), intent(in):: rho ! kg / m^3
+        real(kind=8):: nu
+
+        ! get dynamic viscosity at ambient temperature (unit: cP)
+        nu = mu_ref**(-0.2661D0) + (T - T_ref) / 233D0
+        nu = - dlog(nu) / 0.2661D0
+        nu = dexp(nu)
+
+        ! convert to kg / s / m
+        nu = nu * 1D-3
+
+        ! get kinematic viscosity (m^2 / s)
+        nu = nu / rho
+    end function get_kinematic_viscosity
 
 end module landspill_module
