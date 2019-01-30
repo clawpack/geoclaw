@@ -3,12 +3,20 @@ python:
   - 2.7
   - 3.5
 before_install:
+  - sudo apt-get update
+  - sudo apt-get install gfortran liblapack-pic liblapack-dev
   # Print NumPy version that is already installed by Travis CI:
   - python -c "import numpy; print(numpy.__version__)"
-  - sudo apt-get update -qq
-  - sudo apt-get install -qq gfortran liblapack-pic
-  - pip install matplotlib
-  - pip install yolk3k
+  # - pip install matplotlib
+  # - python -c "import matplotlib; print(matplotlib.__version__)"
+  - pip install netCDF4
+  - pip install xarray
+  - git clone --branch=master --depth=100 --quiet git://github.com/clawpack/clawpack
+  - cd clawpack
+  - git submodule init
+  - git submodule update
+  - rm -rf geoclaw
+  - ln -s ../ geoclaw
   
 install:
   - pip install -e .

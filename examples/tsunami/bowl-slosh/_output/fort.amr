@@ -1,0 +1,359 @@
+  total flagged points counted on level            1  is          515
+ this may include double counting buffer cells on  multiple grids
+  max threads set to            1
+
+ amrclaw parameters:
+
+ error tol            -0.10000E+01
+ spatial error tol     0.50000E-01
+ order of integrator             2
+ error checking interval         3
+ buffer zone size                2
+ nghost                          2
+ volume ratio cutoff   0.70000E+00
+ max. refinement level           2
+ user sub. calling times 999999999
+ cfl # (if var. delt)  0.75000E+00
+
+ xupper(upper corner)  0.20000E+01
+ yupper(upper corner)  0.20000E+01
+ xlower(lower corner) -0.20000E+01
+ ylower(lower corner) -0.20000E+01
+ nx = no. cells in x dir.       41
+ ny = no. cells in y dir.       41
+ refinement ratios       
+ refinement ratios:           4    0
+ refinement ratios:           4    0
+ no. auxiliary vars.             1
+       var     1 of type center    
+ the subtree is
+ +---------------------------------------------------------------------------+
+ ! grid no:     1                                                            !
+ ! nestlevel=  1, time mult=    0.000000000000000E+00, level ptr =     0     !
+ ! storage locs =       8101          1  bndry locs =      62232          0  !
+ ! corners of rectangle:                                                     !
+ !           (  -2.0000000,    2.0000000)(   2.0000000,    2.0000000)        !
+ !           (  -2.0000000,   -2.0000000)(   2.0000000,   -2.0000000)        !
+ ! integer index space :                                                     !
+ !                   (       0,       40)(      40,       40)                !
+ !                   (       0,        0)(      40,        0)                !
+ ! hrow=      0.09756097561, hcol=      0.09756097561, ktime=     0.000100000!
+ +---------------------------------------------------------------------------+
+
+    1 grids at level     1 go from         0        0 to       40       40
+
+ +---------------------------------------------------------------------------+
+ ! grid no:     5                                                            !
+ ! nestlevel=  2, time mult=    0.000000000000000E+00, level ptr =     4     !
+ ! storage locs =      48288          0  bndry locs =          0      60832  !
+ ! corners of rectangle:                                                     !
+ !           (   0.4390244,    1.2195122)(   1.7073171,    1.2195122)        !
+ !           (   0.4390244,   -0.0487805)(   1.7073171,   -0.0487805)        !
+ ! integer index space :                                                     !
+ !                   (     100,      131)(     151,      131)                !
+ !                   (     100,       80)(     151,       80)                !
+ ! hrow=      0.02439024390, hcol=      0.02439024390, ktime=     0.000100000!
+ +---------------------------------------------------------------------------+
+ +---------------------------------------------------------------------------+
+ ! grid no:     4                                                            !
+ ! nestlevel=  2, time mult=    0.000000000000000E+00, level ptr =     3     !
+ ! storage locs =      24992          0  bndry locs =          0      61196  !
+ ! corners of rectangle:                                                     !
+ !           (  -0.7317073,    1.2195122)(   0.4390244,    1.2195122)        !
+ !           (  -0.7317073,   -0.0487805)(   0.4390244,   -0.0487805)        !
+ ! integer index space :                                                     !
+ !                   (      52,      131)(      99,      131)                !
+ !                   (      52,       80)(      99,       80)                !
+ ! hrow=      0.02439024390, hcol=      0.02439024390, ktime=     0.000100000!
+ +---------------------------------------------------------------------------+
+ +---------------------------------------------------------------------------+
+ ! grid no:     3                                                            !
+ ! nestlevel=  2, time mult=    0.000000000000000E+00, level ptr =     2     !
+ ! storage locs =      36640          0  bndry locs =          0      61546  !
+ ! corners of rectangle:                                                     !
+ !           (   0.4390244,   -0.0487805)(   1.7073171,   -0.0487805)        !
+ !           (   0.4390244,   -1.2195122)(   1.7073171,   -1.2195122)        !
+ ! integer index space :                                                     !
+ !                   (     100,       79)(     151,       79)                !
+ !                   (     100,       32)(     151,       32)                !
+ ! hrow=      0.02439024390, hcol=      0.02439024390, ktime=     0.000100000!
+ +---------------------------------------------------------------------------+
+ +---------------------------------------------------------------------------+
+ ! grid no:     2                                                            !
+ ! nestlevel=  2, time mult=    0.000000000000000E+00, level ptr =     0     !
+ ! storage locs =      14176          0  bndry locs =          0      61896  !
+ ! corners of rectangle:                                                     !
+ !           (  -0.7317073,   -0.0487805)(   0.4390244,   -0.0487805)        !
+ !           (  -0.7317073,   -1.2195122)(   0.4390244,   -1.2195122)        !
+ ! integer index space :                                                     !
+ !                   (      52,       79)(      99,       79)                !
+ !                   (      52,       32)(      99,       32)                !
+ ! hrow=      0.02439024390, hcol=      0.02439024390, ktime=     0.000100000!
+ +---------------------------------------------------------------------------+
+
+    4 grids at level     2 go from        52       32 to      151      131
+
+   original total mass ...
+time t =  0.00000E+00,  total mass =  0.156548570583433E+00  diff =  0.0000E+00
+time t =  0.10000E-03,  total mass =  0.156548398557030E+00  diff = -0.1720E-06
+time t =  0.43399E-01,  total mass =  0.156513779777363E+00  diff = -0.3479E-04
+time t =  0.86699E-01,  total mass =  0.156462140293887E+00  diff = -0.8643E-04
+  total flagged points counted on level            1  is          508
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.13004E+00,  total mass =  0.156365326485662E+00  diff = -0.1832E-03
+time t =  0.17349E+00,  total mass =  0.156334239165140E+00  diff = -0.2143E-03
+time t =  0.21709E+00,  total mass =  0.156361936571427E+00  diff = -0.1866E-03
+  total flagged points counted on level            1  is          505
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.26092E+00,  total mass =  0.156220509930572E+00  diff = -0.3281E-03
+time t =  0.28036E+00,  total mass =  0.156196944062749E+00  diff = -0.3516E-03
+time t =  0.32488E+00,  total mass =  0.156282807272807E+00  diff = -0.2658E-03
+  total flagged points counted on level            1  is          502
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.36959E+00,  total mass =  0.156250599689340E+00  diff = -0.2980E-03
+time t =  0.41482E+00,  total mass =  0.156072397877445E+00  diff = -0.4762E-03
+time t =  0.46065E+00,  total mass =  0.156055060450186E+00  diff = -0.4935E-03
+  total flagged points counted on level            1  is          516
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.50712E+00,  total mass =  0.156081786788743E+00  diff = -0.4668E-03
+time t =  0.55433E+00,  total mass =  0.156014415166426E+00  diff = -0.5342E-03
+time t =  0.56071E+00,  total mass =  0.155974678147358E+00  diff = -0.5739E-03
+  total flagged points counted on level            1  is          504
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.60985E+00,  total mass =  0.155899433838459E+00  diff = -0.6491E-03
+time t =  0.65912E+00,  total mass =  0.155738191721571E+00  diff = -0.8104E-03
+time t =  0.70738E+00,  total mass =  0.155801729934573E+00  diff = -0.7468E-03
+  total flagged points counted on level            1  is          506
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.75470E+00,  total mass =  0.155741091405038E+00  diff = -0.8075E-03
+time t =  0.80122E+00,  total mass =  0.155571680807924E+00  diff = -0.9769E-03
+time t =  0.84107E+00,  total mass =  0.155473723689184E+00  diff = -0.1075E-02
+  total flagged points counted on level            1  is          500
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.88626E+00,  total mass =  0.155538079433383E+00  diff = -0.1010E-02
+time t =  0.93099E+00,  total mass =  0.155423106460836E+00  diff = -0.1125E-02
+time t =  0.97528E+00,  total mass =  0.155334958400055E+00  diff = -0.1214E-02
+  total flagged points counted on level            1  is          510
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.10192E+01,  total mass =  0.155344595372482E+00  diff = -0.1204E-02
+time t =  0.10628E+01,  total mass =  0.155282979461529E+00  diff = -0.1266E-02
+time t =  0.11062E+01,  total mass =  0.155188474866951E+00  diff = -0.1360E-02
+  total flagged points counted on level            1  is          510
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.11214E+01,  total mass =  0.155144357471349E+00  diff = -0.1404E-02
+time t =  0.11646E+01,  total mass =  0.155184088119239E+00  diff = -0.1364E-02
+time t =  0.12078E+01,  total mass =  0.155108712248744E+00  diff = -0.1440E-02
+  total flagged points counted on level            1  is          507
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.12511E+01,  total mass =  0.155005959551257E+00  diff = -0.1543E-02
+time t =  0.12944E+01,  total mass =  0.155023472275422E+00  diff = -0.1525E-02
+time t =  0.13379E+01,  total mass =  0.154980887951700E+00  diff = -0.1568E-02
+  total flagged points counted on level            1  is          504
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.13816E+01,  total mass =  0.154868619876934E+00  diff = -0.1680E-02
+time t =  0.14018E+01,  total mass =  0.154845996883146E+00  diff = -0.1703E-02
+time t =  0.14461E+01,  total mass =  0.154940494422910E+00  diff = -0.1608E-02
+  total flagged points counted on level            1  is          502
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.14907E+01,  total mass =  0.154914038622648E+00  diff = -0.1635E-02
+time t =  0.15359E+01,  total mass =  0.154784997047954E+00  diff = -0.1764E-02
+time t =  0.15819E+01,  total mass =  0.154823720120681E+00  diff = -0.1725E-02
+  total flagged points counted on level            1  is          522
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10400 cells at level   2
+time t =  0.16285E+01,  total mass =  0.154765288855918E+00  diff = -0.1783E-02
+time t =  0.16755E+01,  total mass =  0.154776696398386E+00  diff = -0.1772E-02
+time t =  0.16821E+01,  total mass =  0.154714899221990E+00  diff = -0.1834E-02
+  total flagged points counted on level            1  is          505
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.17310E+01,  total mass =  0.154535827679676E+00  diff = -0.2013E-02
+time t =  0.17799E+01,  total mass =  0.154456738628458E+00  diff = -0.2092E-02
+time t =  0.18279E+01,  total mass =  0.154507459188826E+00  diff = -0.2041E-02
+  total flagged points counted on level            1  is          501
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.18748E+01,  total mass =  0.154457684243396E+00  diff = -0.2091E-02
+time t =  0.19210E+01,  total mass =  0.154337462087204E+00  diff = -0.2211E-02
+time t =  0.19625E+01,  total mass =  0.154240420598356E+00  diff = -0.2308E-02
+  total flagged points counted on level            1  is          498
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.20072E+01,  total mass =  0.154288496486495E+00  diff = -0.2260E-02
+time t =  0.20515E+01,  total mass =  0.154219004021083E+00  diff = -0.2330E-02
+time t =  0.20953E+01,  total mass =  0.154135886827748E+00  diff = -0.2413E-02
+  total flagged points counted on level            1  is          510
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.21388E+01,  total mass =  0.154121631424084E+00  diff = -0.2427E-02
+time t =  0.21820E+01,  total mass =  0.154095446593841E+00  diff = -0.2453E-02
+time t =  0.22252E+01,  total mass =  0.153957294937762E+00  diff = -0.2591E-02
+  total flagged points counted on level            1  is          509
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.22429E+01,  total mass =  0.153939176268903E+00  diff = -0.2609E-02
+time t =  0.22860E+01,  total mass =  0.153963976898096E+00  diff = -0.2585E-02
+time t =  0.23291E+01,  total mass =  0.153895231281299E+00  diff = -0.2653E-02
+  total flagged points counted on level            1  is          505
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.23723E+01,  total mass =  0.153811353997076E+00  diff = -0.2737E-02
+time t =  0.24158E+01,  total mass =  0.153834263140207E+00  diff = -0.2714E-02
+time t =  0.24596E+01,  total mass =  0.153816350722705E+00  diff = -0.2732E-02
+  total flagged points counted on level            1  is          503
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.25037E+01,  total mass =  0.153705022624447E+00  diff = -0.2844E-02
+time t =  0.25232E+01,  total mass =  0.153644579340462E+00  diff = -0.2904E-02
+time t =  0.25679E+01,  total mass =  0.153750681229580E+00  diff = -0.2798E-02
+  total flagged points counted on level            1  is          501
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.26128E+01,  total mass =  0.153737730530965E+00  diff = -0.2811E-02
+time t =  0.26583E+01,  total mass =  0.153619778579946E+00  diff = -0.2929E-02
+time t =  0.27046E+01,  total mass =  0.153603227329055E+00  diff = -0.2945E-02
+  total flagged points counted on level            1  is          508
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.27511E+01,  total mass =  0.153628503385226E+00  diff = -0.2920E-02
+time t =  0.27982E+01,  total mass =  0.153611934507646E+00  diff = -0.2937E-02
+time t =  0.28036E+01,  total mass =  0.153617809189224E+00  diff = -0.2931E-02
+  total flagged points counted on level            1  is          501
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.28524E+01,  total mass =  0.153432249665122E+00  diff = -0.3116E-02
+time t =  0.29013E+01,  total mass =  0.153323017212379E+00  diff = -0.3226E-02
+time t =  0.29493E+01,  total mass =  0.153438295489519E+00  diff = -0.3110E-02
+  total flagged points counted on level            1  is          500
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.29963E+01,  total mass =  0.153451228557205E+00  diff = -0.3097E-02
+time t =  0.30426E+01,  total mass =  0.153284272044574E+00  diff = -0.3264E-02
+time t =  0.30839E+01,  total mass =  0.153176068768267E+00  diff = -0.3373E-02
+  total flagged points counted on level            1  is          499
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.31288E+01,  total mass =  0.153241385159175E+00  diff = -0.3307E-02
+time t =  0.31731E+01,  total mass =  0.153111526421252E+00  diff = -0.3437E-02
+time t =  0.32170E+01,  total mass =  0.153024174441759E+00  diff = -0.3524E-02
+  total flagged points counted on level            1  is          508
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.32607E+01,  total mass =  0.153053029570695E+00  diff = -0.3496E-02
+time t =  0.33040E+01,  total mass =  0.152959694359931E+00  diff = -0.3589E-02
+time t =  0.33473E+01,  total mass =  0.152851489699586E+00  diff = -0.3697E-02
+  total flagged points counted on level            1  is          508
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.33643E+01,  total mass =  0.152894744144257E+00  diff = -0.3654E-02
+time t =  0.34076E+01,  total mass =  0.152915914671229E+00  diff = -0.3633E-02
+time t =  0.34509E+01,  total mass =  0.152787006922511E+00  diff = -0.3762E-02
+  total flagged points counted on level            1  is          503
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.34944E+01,  total mass =  0.152746345919516E+00  diff = -0.3802E-02
+time t =  0.35381E+01,  total mass =  0.152792557962355E+00  diff = -0.3756E-02
+time t =  0.35820E+01,  total mass =  0.152744263440892E+00  diff = -0.3804E-02
+  total flagged points counted on level            1  is          504
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.36262E+01,  total mass =  0.152614078030945E+00  diff = -0.3934E-02
+time t =  0.36446E+01,  total mass =  0.152636875948131E+00  diff = -0.3912E-02
+time t =  0.36895E+01,  total mass =  0.152695211132250E+00  diff = -0.3853E-02
+  total flagged points counted on level            1  is          506
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.37345E+01,  total mass =  0.152655310004543E+00  diff = -0.3893E-02
+time t =  0.37801E+01,  total mass =  0.152559594704733E+00  diff = -0.3989E-02
+time t =  0.38262E+01,  total mass =  0.152543033909686E+00  diff = -0.4006E-02
+  total flagged points counted on level            1  is          506
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9600 cells at level   2
+time t =  0.38728E+01,  total mass =  0.152572795054745E+00  diff = -0.3976E-02
+time t =  0.39199E+01,  total mass =  0.152588601182503E+00  diff = -0.3960E-02
+time t =  0.39250E+01,  total mass =  0.152581603527942E+00  diff = -0.3967E-02
+  total flagged points counted on level            1  is          501
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.39740E+01,  total mass =  0.152389929489433E+00  diff = -0.4159E-02
+time t =  0.40229E+01,  total mass =  0.152267483040645E+00  diff = -0.4281E-02
+time t =  0.40708E+01,  total mass =  0.152370506834274E+00  diff = -0.4178E-02
+  total flagged points counted on level            1  is          501
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.41178E+01,  total mass =  0.152385576794879E+00  diff = -0.4163E-02
+time t =  0.41640E+01,  total mass =  0.152245354246515E+00  diff = -0.4303E-02
+time t =  0.42053E+01,  total mass =  0.152227817125990E+00  diff = -0.4321E-02
+  total flagged points counted on level            1  is          500
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with       9216 cells at level   2
+time t =  0.42501E+01,  total mass =  0.152203729498938E+00  diff = -0.4345E-02
+time t =  0.42943E+01,  total mass =  0.152055319906637E+00  diff = -0.4493E-02
+time t =  0.43380E+01,  total mass =  0.151966339758386E+00  diff = -0.4582E-02
+  total flagged points counted on level            1  is          505
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.43814E+01,  total mass =  0.151974265157609E+00  diff = -0.4574E-02
+time t =  0.44245E+01,  total mass =  0.151896717084244E+00  diff = -0.4652E-02
+time t =  0.44674E+01,  total mass =  0.151812494350446E+00  diff = -0.4736E-02
+  total flagged points counted on level            1  is          505
+ this may include double counting buffer cells on  multiple grids
+there are      4 grids with      10000 cells at level   2
+time t =  0.44857E+01,  total mass =  0.151821293658712E+00  diff = -0.4727E-02
+
+============================== Timing Data ==============================
+
+Integration Time (stepgrid + BC + overhead)
+Level           Wall Time (seconds)    CPU Time (seconds)   Total Cell Updates
+  1                     0.490                  0.477            0.183E+06
+  2                    17.164                 16.726            0.490E+07
+total                  17.654                 17.204            0.508E+07
+
+All levels:
+stepgrid               16.931                 16.487    
+BC/ghost cells          0.715                  0.706
+Regridding              0.080                  0.072  
+Output (valout)         1.170                  0.000  
+
+Total time:            18.960                 18.427  
+Using  1 thread(s)
+
+Note: The CPU times are summed over all threads.
+      Total time includes more than the subroutines listed above
+
+=========================================================================
+
+
+
+for level   1 average num. grids =       1.00 over          1 regridding steps
+for level   1  current num. grids =       1
+for level   2 average num. grids =       4.00 over         37 regridding steps
+for level   2  current num. grids =       4
+
+
+current  space usage =        63231
+maximum  space usage =       107487
+need space dimension =       120976
+
+number of cells advanced for time integration =       5079725.000000
+   # cells advanced on level    1 =            183229.00
+   # cells advanced on level    2 =           4896496.00
+number of cells advanced for error estimation =             0.000000
+
+ percentage of cells advanced in time  =     100.00
+ maximum Courant number seen =       0.77
+
+
+ ------  end of AMRCLAW integration --------  

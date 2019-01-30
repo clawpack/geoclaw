@@ -1,0 +1,188 @@
+
+<center><h3><a href=_PlotIndex.html>Plot Index</a></h3>
+
+<script language="javascript">
+  /* Define the Animation class */
+  function Animation(frames, img_id, slider_id, frame_id, interval, loop_select_id){
+    this.img_id = img_id;
+    this.slider_id = slider_id;
+    this.frame_id = frame_id;
+    this.loop_select_id = loop_select_id;
+    this.interval = interval;
+    this.current_frame = 0;
+    this.direction = 0;
+    this.timer = null;
+    this.frames = new Array(frames.length);
+
+    for (var i=0; i<frames.length; i++)
+    {
+     this.frames[i] = new Image();
+     this.frames[i].src = frames[i];
+    }
+    document.getElementById(this.slider_id).max = this.frames.length - 1;
+    this.set_frame(this.current_frame);
+  }
+
+  Animation.prototype.get_loop_state = function(){
+    var button_group = document[this.loop_select_id].state;
+    for (var i = 0; i < button_group.length; i++) {
+        var button = button_group[i];
+        if (button.checked) {
+            return button.value;
+        }
+    }
+    return undefined;
+  }
+
+  Animation.prototype.set_frame = function(frame){
+    this.current_frame = frame;
+    document.getElementById(this.img_id).src = this.frames[this.current_frame].src;
+    document.getElementById(this.slider_id).value = this.current_frame;
+    document.getElementById(this.frame_id).value = this.current_frame;
+  }
+
+  Animation.prototype.next_frame = function()
+  {
+    this.set_frame(Math.min(this.frames.length - 1, this.current_frame + 1));
+  }
+
+  Animation.prototype.previous_frame = function()
+  {
+    this.set_frame(Math.max(0, this.current_frame - 1));
+  }
+
+  Animation.prototype.first_frame = function()
+  {
+    this.set_frame(0);
+  }
+
+  Animation.prototype.last_frame = function()
+  {
+    this.set_frame(this.frames.length - 1);
+  } 
+
+  Animation.prototype.slower = function()
+  {
+    this.interval /= 0.7;
+    if(this.direction > 0){this.play_animation();}
+    else if(this.direction < 0){this.reverse_animation();}
+  }
+
+  Animation.prototype.faster = function()
+  {
+    this.interval *= 0.7;
+    if(this.direction > 0){this.play_animation();}
+    else if(this.direction < 0){this.reverse_animation();}
+  }
+
+  Animation.prototype.anim_step_forward = function()
+  {
+    this.current_frame += 1;
+    if(this.current_frame < this.frames.length){
+      this.set_frame(this.current_frame);
+    }else{
+      var loop_state = this.get_loop_state();
+      if(loop_state == "loop"){
+        this.first_frame();
+      }else if(loop_state == "reflect"){
+        this.last_frame();
+        this.reverse_animation();
+      }else{
+        this.pause_animation();
+        this.last_frame();
+      }
+    }
+  }
+
+  Animation.prototype.anim_step_reverse = function()
+  {
+    this.current_frame -= 1;
+    if(this.current_frame >= 0){
+      this.set_frame(this.current_frame);
+    }else{
+      var loop_state = this.get_loop_state();
+      if(loop_state == "loop"){
+        this.last_frame();
+      }else if(loop_state == "reflect"){
+        this.first_frame();
+        this.play_animation();
+      }else{
+        this.pause_animation();
+        this.first_frame();
+      }
+    }
+  }
+
+  Animation.prototype.pause_animation = function()
+  {
+    this.direction = 0;
+    if (this.timer){
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+
+  Animation.prototype.play_animation = function()
+  {
+    this.pause_animation();
+    this.direction = 1;
+    var t = this;
+    if (!this.timer) this.timer = setInterval(function(){t.anim_step_forward();}, this.interval);
+  }
+
+  Animation.prototype.reverse_animation = function()
+  {
+    this.pause_animation();
+    this.direction = -1;
+    var t = this;
+    if (!this.timer) this.timer = setInterval(function(){t.anim_step_reverse();}, this.interval);
+  }
+</script>
+
+<div class="animation" align="center">
+    <img id="_anim_img5f71154aaa2a0872" style="width:500px">
+    <br>
+    <input id="_anim_slider5f71154aaa2a0872" type="range" style="width:350px" name="points" min="0" max="1" step="1" value="0" onchange="anim5f71154aaa2a0872.set_frame(parseInt(this.value));"></input>
+    <br>
+    
+    <button onclick="anim5f71154aaa2a0872.slower()">&#8211;</button>
+    <button onclick="anim5f71154aaa2a0872.first_frame()"><img class="anim_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAAXNSR0IArs4c6QAAAAJiS0dEAP+Hj8y/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QURCAgaeZk4EQAAASlJREFUKM/dkj9LQnEUhp9zr3bpj1uBcKGiJWxzLWivKAIRjIhcCqcgqJbKRagPICiVSVEuNTu0tLYGUg4tkRGUdxLJ0u79Ndxr5FfwTO/L+xzO4XCgO+v2T70AFU+/A/Dhmlzg6Pr0DKAMwOH4zQxAAbAkv2xNeF2RoQUVc1ytgttXUbWVdN1dOPE8pz4j4APQsdFtKA0WY6vpKjqvVciHnvZTS6Ja4HgggJLs7MHxl9nCh8NYcO+iGG0agiaC4h9oa6Vsw2yiK+QHSZT934YoEQABNBcTNDszsrhm1m1B+bFS86PT6QFppx6oeSaeOwlMXRp1h4aK13Y2kuHhUo9ykPboPvFjeEvsrhTMt3ylHyB0r8KZyYdCrbfj4OveoHMANjuyx+76rV+/blxKMZUnLgAAAABJRU5ErkJggg=="></button>
+    <button onclick="anim5f71154aaa2a0872.previous_frame()"><img class="anim_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAAXNSR0IArs4c6QAAAAJiS0dEAP+Hj8y/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QURCAgyTCyQ6wAAANRJREFUKM9jYBjO4AiUfgzFGGAp4+yayUvX6jMwMDCsYmBgOCS4OAOrSYmMgcc8/pd5Q3irC+Neh/1AlmeBMVgZmP8yMLD8/c/cqv9r90whzv/MX7Eq/MfAwMDIwCuZdfSV8U8WDgZGRmYGrAoZGRgY/jO8b3sj/J2F6T8j4z80pzEhmIwMjAxsSbqqlkeZGP//Z8SlkJnhPwMjwx/Guoe1NhmRwk+YGH5jV8jOwMPHzcDBysAwh8FrxQwtPU99HrwBXsnAwMDAsJiBgYGBoZ1xmKYqALHhMpn1o7igAAAAAElFTkSuQmCC"></button>
+    <button onclick="anim5f71154aaa2a0872.reverse_animation()"><img class="anim_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAAXNSR0IArs4c6QAAAAJiS0dEAP+Hj8y/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QURCAgmVvZElgAAAVFJREFUKM+t0k8ow3EYx/H3s/2aLDUSZctFkgsHEi1XLi5ukpPSWsuJklwclsPSsDKFi7MSJ0I5qF2GHO2m0FY7+BdNv7Y9DpuxDSt5vsfvq+fT9/k+8D8VBxIAWH6H0ead4Qb5BRwCENoceZi5Stl/6BgCBmtWhjzxg4mUQ02rAhil7JgB9tze7aTLxFAKsUUd14B9ZzCyFUk401gQyQJaDNcBHwv7t7ETd0ZVQFEEzcNCdE/1wtj15imGWlEB8qkf2QaAWjbG/bPSamIDyX65/iwDIFx7tWjUvWCoSo5oGbYATN7PORt7W9IZEQXJH8ohuN7C0VVX91KNqYhq4a1lEGJI0j892tazXCWQRUpwAbYDcHczPxXuajq3mbnhfANz5eOJxsuNvs7+jud0UcuyL3QAkuEMx4rnIvBYq1JhEwPAUb3fG7x8tVdc292/7Po7f2VqA+Yz7ZwAAAAASUVORK5CYII="></button>
+    <button onclick="anim5f71154aaa2a0872.pause_animation()"><img class="anim_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAAXNSR0IArs4c6QAAAAJiS0dEAP+Hj8y/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QURCAkR91DQ2AAAAKtJREFUKM9jYCANTEVib2K4jcRbzQihGWEC00JuNjN8Z2Q0Zo3VYWA4lL005venH9+c3ZK5IfIsMIXMBtc12Bj+MMgxMDAwMPzWe2TBzPCf4SLcZCYY4/9/RgZGBiaYFf8gljFhKiQERhUOeoX/Gf8y/GX4y/APmlj+Mfxj+MfwH64Qnnq0zr9fyfLrPzP3eQYGBobvk5x4GX4xMIij23gdib0cRWYHiVmAAQDK5ircshCbHQAAAABJRU5ErkJggg=="></button>
+    <button onclick="anim5f71154aaa2a0872.play_animation()"><img class="anim_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAAXNSR0IArs4c6QAAAAJiS0dEAP+Hj8y/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QURCAkEmo00MwAAAS9JREFUKM+tkj1IQmEUhp9j94LQj0FD4RRBLdLQ3ftb26PRcCiQIIiIDFwKC0OhaAiam5wVDBpqCKohQojMLYzaAiUatOtpuQrKVQl64fu+4Xt4OLwc+Fs+nNM16jsPAWS6gZXggoZfXmfhog3hcZ6aTXF87Sp68OmH4/YggAo8bmfyyeh6Z1AAKPVldyO1+Iz2uILq3AriJSe3l+H7aj+cuRnrTsVDxSxay+VYbMDnCtZxxQOU9G4nlU9E1HQBxRkCQMRGRnIbpxMARkvxCIoAorYMMrq0mJ0qu4COUW3xyVDqJC4P+86P0ewDQbQqgevhlc2C8ETApXAEFLzvwa3EXG9BoIE1GQUbv1h7k4fTXxBu6cKgUbX5M3ZzNC+a7rQ936HV56SlRpcle+Mf8wvgJ16zo/4BtQAAAABJRU5ErkJggg=="></button>
+    <button onclick="anim5f71154aaa2a0872.next_frame()"><img class="anim_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAAXNSR0IArs4c6QAAAAJiS0dEAP+Hj8y/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QURCAkd/uac8wAAAMhJREFUKM9jYBie4DEUQ8B+fEq3+3UrMzAwMFxjYGBgYJizYubaOUxYFUaXh/6vWfRfEMIL/+//P5gZJoei4/f/7wxnY1PeNUXdE2RgYGZgYoCrY2BBVsjKwMDAwvCS4f3SG/dXxm5gYESSQ1HIwvCPgZmB8f8Pxv+Kxxb/YfiPJIdi9T8GJgaG/38ZFd4Fx0xUYsZt4h8GBgb2D2bLy7KnMTAwMEIxFoVCXIYr1IoDnkF4XAysqNIwUMDAwMDAsADKS2NkGL4AAIARMlfNIfZMAAAAAElFTkSuQmCC"></button>
+    <button onclick="anim5f71154aaa2a0872.last_frame()"><img class="anim_icon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAAXNSR0IArs4c6QAAAAJiS0dEAP+Hj8y/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QURCAknOOpFQQAAAS9JREFUKM/dkrEvQ3EQxz/33mtoQxiYpANbLU26NAabSCcSUouGBVNDjYQaOiDpIEiKjURIw2Kx04hEYmkHEpGoJpSISaXq9Wd4P03/ht5y98197/u9XA4aK4rAWw3lgWddZ3S+/G9mEovtAB8AHE4pgTQAx8PbJweRmsq6GimmNpxaNYXVzMNNCI6A2figimwCGACK786zuWgh3qcsKf/w0pM4X0m/doNVFVzVGlEQsdRj193VxEWpH0RsdRu+zi3tVMqCAsDShoiYqiSV4OouVDFEqS9Pbiyg7vV62lpQ2BJ4Gg0meg0MbNpkYG/e+540NNFyrE1a8qHk5BaAjfnrzUaHfAWImVrLIXbgnx4/9X06s35cweWsVACa3a24PVp0X+rPv1aHFnSONdiL8Qci0lzwpOM5sQAAAABJRU5ErkJggg=="></button>
+    <button onclick="anim5f71154aaa2a0872.faster()">+</button>
+  <form action="#n" name="_anim_loop_select5f71154aaa2a0872" class="anim_control">
+
+    <input id="_frame_no5f71154aaa2a0872" type="textbox" size="1" onchange="anim5f71154aaa2a0872.set_frame(parseInt(this.value));" onpaste="this.onchange();" oninput="this.onchange();"></input>
+    
+    <input type="radio" name="state" value="once" checked> Once </input>
+    <input type="radio" name="state" value="loop" > Loop </input>
+    <input type="radio" name="state" value="reflect" > Reflect </input>
+  </form>
+
+</div>
+
+
+<script language="javascript">
+  /* Instantiate the Animation class. */
+  /* The IDs given should match those used in the template above. */
+  (function() {
+    var img_id = "_anim_img5f71154aaa2a0872";
+    var slider_id = "_anim_slider5f71154aaa2a0872";
+    var frame_id = "_frame_no5f71154aaa2a0872"
+    var loop_select_id = "_anim_loop_select5f71154aaa2a0872";
+    var frames = new Array(0);
+    
+  frames = ['frame0000fig0.png', 'frame0001fig0.png', 'frame0002fig0.png', 'frame0003fig0.png', 'frame0004fig0.png', 'frame0005fig0.png', 'frame0006fig0.png', 'frame0007fig0.png', 'frame0008fig0.png', 'frame0009fig0.png', 'frame0010fig0.png', 'frame0011fig0.png', 'frame0012fig0.png', 'frame0013fig0.png', 'frame0014fig0.png', 'frame0015fig0.png', 'frame0016fig0.png', 'frame0017fig0.png', 'frame0018fig0.png']
+
+
+    /* set a timeout to make sure all the above elements are created before
+       the object is initialized. */
+    setTimeout(function() {
+        anim5f71154aaa2a0872 = new Animation(frames, img_id, slider_id, frame_id, 100, loop_select_id);
+    }, 0);
+  })()
+</script>
