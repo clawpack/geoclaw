@@ -143,7 +143,7 @@ def setrun(claw_pkg='geoclaw'):
         clawdata.output_t0 = True
         
 
-    clawdata.output_format = 'ascii'      # 'ascii' or 'netcdf' 
+    clawdata.output_format = 'ascii'      # 'ascii' or 'binary' 
 
     clawdata.output_q_components = 'all'   # need all
     clawdata.output_aux_components = 'none'  # eta=h+B is in q
@@ -260,15 +260,15 @@ def setrun(claw_pkg='geoclaw'):
         # Do not checkpoint at all
         pass
 
-    elif clawdata.checkpt_style == 1:
+    elif np.abs(clawdata.checkpt_style) == 1:
         # Checkpoint only at tfinal.
         pass
 
-    elif clawdata.checkpt_style == 2:
+    elif np.abs(clawdata.checkpt_style) == 2:
         # Specify a list of checkpoint times.  
         clawdata.checkpt_times = [0.1,0.15]
 
-    elif clawdata.checkpt_style == 3:
+    elif np.abs(clawdata.checkpt_style) == 3:
         # Checkpoint every checkpt_interval timesteps (on Level 1)
         # and at the final time.
         clawdata.checkpt_interval = 5
@@ -423,6 +423,9 @@ def setgeo(rundata):
 if __name__ == '__main__':
     # Set up run-time parameters and write all data files.
     import sys
+    from clawpack.geoclaw import kmltools
+
     rundata = setrun(*sys.argv[1:])
     rundata.write()
 
+    kmltools.make_input_data_kmls(rundata)

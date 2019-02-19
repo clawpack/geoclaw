@@ -6,7 +6,7 @@ that will be read in by the Fortran code.
 
 from __future__ import absolute_import
 from __future__ import print_function
-import numpy as numpy
+import numpy
 
 import clawpack.geoclaw.data
 import clawpack.geoclaw.topotools as tt
@@ -104,7 +104,6 @@ def setrun(claw_pkg='geoclaw'):
     # Set single grid parameters first.
     # See below for AMR parameters.
 
-
     # ---------------
     # Spatial domain:
     # ---------------
@@ -119,8 +118,6 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.lower[1] = -2.0       # south latitude
     clawdata.upper[1] = 4.0         # north latitude
 
-
-
     # Number of grid cells: Coarsest grid
     clawdata.num_cells[0] = 80
     clawdata.num_cells[1] = 80
@@ -133,23 +130,22 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_eqn = 6
 
     # Number of auxiliary variables in the aux array (initialized in setaux)
-    clawdata.num_aux = 4 + rundata.multilayer_data.num_layers
+    # bathy == 1
+    # layer-depths = 2:3
+    clawdata.num_aux = 1 + rundata.multilayer_data.num_layers
 
     # Index of aux array corresponding to capacity function, if there is one:
     clawdata.capa_index = 0
 
-    
-    
     # -------------
     # Initial time:
     # -------------
 
     clawdata.t0 = 0.0
 
-
     # Restart from checkpoint file of a previous run?
     # If restarting, t0 above should be from original run, and the
-    # restart_file 'fort.chkNNNNN' specified below should be in 
+    # restart_file 'fort.chkNNNNN' specified below should be in
     # the OUTDIR indicated in Makefile.
 
     clawdata.restart = False               # True to restart from prior results
@@ -304,15 +300,15 @@ def setrun(claw_pkg='geoclaw'):
         # Do not checkpoint at all
         pass
 
-    elif clawdata.checkpt_style == 1:
+    elif numpy.abs(clawdata.checkpt_style) == 1:
         # Checkpoint only at tfinal.
         pass
 
-    elif clawdata.checkpt_style == 2:
+    elif numpy.abs(clawdata.checkpt_style) == 2:
         # Specify a list of checkpoint times.  
         clawdata.checkpt_times = [0.1,0.15]
 
-    elif clawdata.checkpt_style == 3:
+    elif numpy.abs(clawdata.checkpt_style) == 3:
         # Checkpoint every checkpt_interval timesteps (on Level 1)
         # and at the final time.
         clawdata.checkpt_interval = 5
@@ -417,7 +413,7 @@ def setgeo(rundata):
     except:
         print("*** Error, this rundata has no geo_data attribute")
         raise AttributeError("Missing geo_data attribute")
-       
+
     # == Physics ==
     geo_data.gravity = 9.81
     geo_data.coordinate_system = 1
@@ -469,8 +465,8 @@ def set_multilayer(rundata):
     data.eigen_method = 2
     data.inundation_method = 2
     data.richardson_tolerance = 0.95
-    data.wave_tolerance = [1e-3,1e-2]
-    # data.dry_limit = True
+    data.wave_tolerance = [1e-3, 1e-2]
+    data.layer_index = 1
 
     rundata.replace_data('qinit_data', QinitMultilayerData())
     rundata.qinit_data.qinit_type = 6
