@@ -15,6 +15,7 @@ import numpy
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
+import make_fgmax_grid
 
 
 class BowlSloshTest(test.GeoClawRegressionTest):
@@ -37,7 +38,7 @@ class BowlSloshTest(test.GeoClawRegressionTest):
         topo.write(os.path.join(self.temp_path, "bowl.topotype2"), \
                 topo_type=2, Z_format="%22.15e")
 
-        from . import make_fgmax_grid 
+        # from . import make_fgmax_grid 
         make_fgmax_grid.make_fgmax_grid1(self.temp_path)
 
 
