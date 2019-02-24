@@ -569,6 +569,7 @@ class Storm(object):
             # info.
             # TODO: add more detailed info for storms that have it
             self.max_wind_speed = units.convert(ds[wind_src],'knots','m/s').values
+            print(ds[pres_src])
             self.central_pressure = units.convert(ds[pres_src],'mbar','Pa').values
             self.max_wind_radius = numpy.where(ds.usa_rmw >= 0,
                 units.convert(ds.usa_rmw,'nmi','m'),-1)
