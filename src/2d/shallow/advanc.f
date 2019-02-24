@@ -234,6 +234,12 @@ c
      3            naux,alloc(locaux),alloc(locx1d),delt,mptr)
       endif
 
+      if (num_gauges > 0 .and. abs(time - t0) < 1d-8) then
+          call update_gauges(alloc(locnew:locnew+nvar*mitot*mjtot),
+     .                       alloc(locaux:locnew+nvar*mitot*mjtot),
+     .                       xlow,ylow,nvar,mitot,mjtot,naux,mptr)
+      endif
+
 c        # See if the grid about to be advanced has gauge data to output.
 c        # This corresponds to previous time step, but output done
 c        # now to make linear interpolation easier, since grid
