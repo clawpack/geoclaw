@@ -67,7 +67,7 @@ program amr2
     use amr_module, only: max1d, maxvar, maxlv
 
     use amr_module, only: method, mthlim, use_fwaves, numgrids
-    use amr_module, only: nghost, mwaves, mcapa, auxtype
+    use amr_module, only: nghost, mwaves, mcapa, auxtype, dimensional_split
     use amr_module, only: tol, tolsp, flag_richardson, flag_gradient
 
     use amr_module, only: nghost, mthbc
@@ -108,7 +108,7 @@ program amr2
 
     ! Local variables
     integer :: i, iaux, mw, level
-    integer :: ndim, nvar, naux, mcapa1, mindim, dimensional_split
+    integer :: ndim, nvar, naux, mcapa1, mindim
     integer :: nstart, nsteps, nv1, nx, ny, lentotsave, num_gauge_SAVE
     integer :: omp_get_max_threads, maxthreads
     real(kind=8) :: time, ratmet, cut, dtinit, dt_max
@@ -244,11 +244,6 @@ program amr2
     read(inunit,*) method(3)  ! order_trans
 
     read(inunit,*) dimensional_split
-    if (dimensional_split > 0) then
-        print *, '*** ERROR ***  dimensional_split = ', dimensional_split
-        print *, ' dimensional splitting not supported in amrclaw'
-        stop
-    endif
 
     read(inunit,*) method(4)   ! verbosity
     read(inunit,*) method(5)   ! src_split

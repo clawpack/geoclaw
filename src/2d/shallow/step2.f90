@@ -1,3 +1,9 @@
+!> Compute all fluxes at cell edges 
+!! \param qold[in] solution array for computing fluxes. It is not changed in this subroutine
+!! \param fm[out] fluxes on the left side of each vertical edge
+!! \param fp[out] fluxes on the right side of each vertical edge
+!! \param gm[out] fluxes on the lower side of each horizontal edge
+!! \param gp[out] fluxes on the upper side of each horizontal edge
 subroutine step2(maxm,meqn,maux,mbc,mx,my, &
                  qold,aux,dx,dy,dt,cflgrid, &
                  fm,fp,gm,gp,rpn2,rpt2)

@@ -21,8 +21,9 @@ c
 !! \param[out] fp fluxes on the right side of each vertical edge
 !! \param[out] gm fluxes on the lower side of each horizontal edge
 !! \param[out] gp fluxes on the upper side of each horizontal edge
-      subroutine stepgrid(q,fm,fp,gm,gp,mitot,mjtot,mbc,dt,dtnew,dx,dy,
-     &                  nvar,xlow,ylow,time,mptr,maux,aux)
+      subroutine stepgrid_dimSplit(q,fm,fp,gm,gp,
+     &    mitot,mjtot,mbc,dt,dtnew,dx,dy,
+     &    nvar,xlow,ylow,time,mptr,maux,aux)
 c
 c
 c ::::::::::::::::::: STEPGRID ::::::::::::::::::::::::::::::::::::
@@ -51,7 +52,7 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
       use fixedgrids_module
       implicit double precision (a-h,o-z)
 
-      external rpn2,rpt2
+      external rpn2
 
 
 c      parameter (msize=max1d+4)
@@ -61,7 +62,6 @@ c      parameter (mwork=msize*(maxvar*maxvar + 13*maxvar + 3*maxaux +2))
       dimension fp(nvar,mitot,mjtot),gp(nvar,mitot,mjtot)
       dimension fm(nvar,mitot,mjtot),gm(nvar,mitot,mjtot)
       dimension aux(maux,mitot,mjtot)
-c      dimension work(mwork)
 
       logical :: debug = .false.
       logical :: dump = .false.
@@ -234,10 +234,10 @@ c:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 c
 c     # take one step on the conservation law:
 c
-      call step2(mbig,nvar,maux,
+      call step2x(mbig,nvar,maux,
      &           mbc,mx,my,
-     &              q,aux,dx,dy,dt,cflgrid,
-     &              fm,fp,gm,gp,rpn2,rpt2)
+     &              q,aux,dx,dt,cflgrid,
+     &              fm,fp,rpn2)
 c
 c            
         mptr_level = node(nestlevel,mptr)
@@ -246,45 +246,60 @@ c       write(outunit,811) mptr, mptr_level, cflgrid
 c811    format(" Courant # of grid ",i5," level",i3," is ",d12.4)
 c
 
-!$OMP  CRITICAL (cflm)
+!$OMP  CRITICAL (cflmx)
 
         cflmax = dmax1(cflmax,cflgrid)
         cfl_level = dmax1(cfl_level,cflgrid)
 
-!$OMP END CRITICAL (cflm)
+!$OMP END CRITICAL (cflmx)
 
-c
-!        write(outunit,*)" updating grid ", mptr
-c       # update q
+c       # update q with x fluxes first. all rows in y  get updated
         dtdx = dt/dx
-        dtdy = dt/dy
+        do 50 j=1,mjtot
+        do 50 i=mbc+1,mitot-mbc
+        do 50 m=1,nvar
          if (mcapa.eq.0) then
-          do 50 j=mbc+1,mjtot-mbc
-          do 50 i=mbc+1,mitot-mbc
-          do 50 m=1,nvar
 c
 c            # no capa array.  Standard flux differencing:
 
-           q(m,i,j) = q(m,i,j)
-     &           - dtdx * (fm(m,i+1,j) - fp(m,i,j))
-     &           - dtdy * (gm(m,i,j+1) - gp(m,i,j))
- 50       continue
-         else
-          do 51 j=mbc+1,mjtot-mbc
-          do 51 i=mbc+1,mitot-mbc
-          do 51 m=1,nvar
-c            # with capa array.
-           q(m,i,j) = q(m,i,j)
-     &           - (dtdx * (fm(m,i+1,j) - fp(m,i,j))
-     &           +  dtdy * (gm(m,i,j+1) - gp(m,i,j))) / aux(mcapa,i,j)
- 51       continue
-!           write(outunit,543) m,i,j,q(m,i,j),fm(m,i+1,j),fp(m,i,j),
-!     .        gm(m,i,j+1), gp(m,i,j)
-543       format(3i4,5e25.16)
+           q(m,i,j) = q(m,i,j)  - dtdx * (fm(m,i+1,j) - fp(m,i,j)) 
 
+         else
+c            # with capa array.
+           q(m,i,j) = q(m,i,j) 
+     &          - dtdx * (fm(m,i+1,j) - fp(m,i,j)) / aux(mcapa,i,j)
          endif
 
-c 50      continue
+ 50      continue
+
+      call step2y(mbig,nvar,maux, mbc,mx,my,q,aux,dy,dt,cflgrid,
+     &              gm,gp,rpn2)
+
+!$OMP  CRITICAL (cflmy)
+
+        cflmax = dmax1(cflmax,cflgrid)
+        cfl_level = dmax1(cfl_level,cflgrid)
+
+!$OMP END CRITICAL (cflmy)
+
+c       # update q
+        dtdy = dt/dy
+        do 51 j=mbc+1,mjtot-mbc
+        do 51 i=mbc+1,mitot-mbc
+        do 51 m=1,nvar
+         if (mcapa.eq.0) then
+c
+c            # no capa array.  Standard flux differencing:
+
+           q(m,i,j) = q(m,i,j) - dtdy * (gm(m,i,j+1) - gp(m,i,j)) 
+         else
+c            # with capa array.
+           q(m,i,j) = q(m,i,j) 
+     &          - dtdy * (gm(m,i,j+1) - gp(m,i,j)) / aux(mcapa,i,j)
+         endif
+
+ 51      continue
+c
 c
 c     # Copied here from b4step2 since need to do before saving to qc1d:
       forall(i=1:mitot, j=1:mjtot, q(1,i,j) < dry_tolerance)
