@@ -157,32 +157,51 @@ def setplot(plotdata=None):
 
     # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes()
+    # Convert to days
+    plotaxes.time_scale = 1.0 / (3600.0 * 24.0)
     plotaxes.xlimits = [-2, 1]
-    # plotaxes.xlabel = "Days from landfall"
-    # plotaxes.ylabel = "Surface (m)"
     plotaxes.ylimits = [-1, 5]
-    plotaxes.title = 'Surface'
 
     def gauge_afteraxes(cd):
-
         axes = plt.gca()
-        surgeplot.plot_landfall_gauge(cd.gaugesoln, axes)
-
-        # Fix up plot - in particular fix time labels
+        # Fix up plot
         axes.set_title('Station %s' % cd.gaugeno)
         axes.set_xlabel('Days relative to landfall')
         axes.set_ylabel('Surface (m)')
-        axes.set_xlim([-2, 1])
-        axes.set_ylim([-1, 5])
-        axes.set_xticks([-2, -1, 0, 1])
-        axes.set_xticklabels([r"$-2$", r"$-1$", r"$0$", r"$1$"])
         axes.grid(True)
     plotaxes.afteraxes = gauge_afteraxes
 
     # Plot surface as blue curve:
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    # plotitem.plot_var = 3
-    # plotitem.plotstyle = 'b-'
+    plotitem.plot_var = 3
+    plotitem.plotstyle = 'b-'
+
+    # Plot wind at gauges
+    plotfigure = plotdata.new_plotfigure(name='Gauge Pressure', figno=301,
+                                         type='each_gauge')
+    plotfigure.show = True
+    plotfigure.clf_each_gauge = True
+
+    # Set up for axes in this figure:
+    plotaxes = plotfigure.new_plotaxes()
+    # Convert to days
+    plotaxes.time_scale = 1.0 / (3600.0 * 24.0)
+    plotaxes.xlimits = [-2, 1]
+    plotaxes.ylimits = pressure_limits
+
+    def gauge_afteraxes(cd):
+        axes = plt.gca()
+        # Fix up plot
+        axes.set_title('Station %s' % cd.gaugeno)
+        axes.set_xlabel('Days relative to landfall')
+        axes.set_ylabel('Pressure (Pa)')
+        axes.grid(True)
+    plotaxes.afteraxes = gauge_afteraxes
+
+    # Plot surface as blue curve:
+    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
+    plotitem.plot_var = 6
+    plotitem.plotstyle = 'b-'
 
     #
     #  Gauge Location Plot
