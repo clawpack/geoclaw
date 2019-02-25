@@ -9,17 +9,22 @@ that will be read in by the Fortran code.
 
 from __future__ import absolute_import
 from __future__ import print_function
+
 import os
 import datetime
+import gzip
 
 import numpy as np
+from clawpack.geoclaw.surge.storm import Storm
+import clawpack.clawutil as clawutil
 
-# Need to adjust the date a bit due to weirdness with leap year (I think)
-ike_landfall = datetime.datetime(2008,9,13 - 1,7) - datetime.datetime(2008,1,1,0)
 
-#                           days   s/hour    hours/day            
-days2seconds = lambda days: days * 60.0**2 * 24.0
-seconds2days = lambda seconds: seconds / (60.0**2 * 24.0)
+# Time Conversions
+def days2seconds(days):
+    return days * 60.0**2 * 24.0
+
+# Scratch directory for storing topo and dtopo files:
+scratch_dir = os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
 
 #------------------------------
 def setrun(claw_pkg='geoclaw'):
@@ -99,8 +104,7 @@ def setrun(claw_pkg='geoclaw'):
     # -------------
     # Initial time:
     # -------------
-    clawdata.t0 = days2seconds(ike_landfall.days - 3) + ike_landfall.seconds
-    # clawdata.t0 = days2seconds(ike_landfall.days - 1) + ike_landfall.seconds
+    clawdata.t0 = -days2seconds(3)
 
     # Restart from checkpoint file of a previous run?
     # Note: If restarting, you must also change the Makefile to set:
@@ -128,7 +132,7 @@ def setrun(claw_pkg='geoclaw'):
         # Full test
         # clawdata.tfinal = days2seconds(ike_landfall.days + 0.75) + ike_landfall.seconds
         # Short test - Do 12 hours of simulation
-        clawdata.tfinal = days2seconds(ike_landfall.days - 2.75) + ike_landfall.seconds
+        clawdata.tfinal = -days2seconds(2.5)
         recurrence = 2
         clawdata.num_output_times = int((clawdata.tfinal - clawdata.t0) 
                                             * recurrence / (60**2 * 24))
@@ -345,6 +349,9 @@ def setrun(claw_pkg='geoclaw'):
     rundata.gaugedata.gauges.append([4, -82.5, 30.00, 
                                   rundata.clawdata.t0, rundata.clawdata.tfinal])
 
+    # Force the gauges to also record the wind and pressure fields
+    rundata.gaugedata.aux_out_fields = [4, 5, 6]
+
     #------------------------------------------------------------------
     # GeoClaw specific parameters:
     #------------------------------------------------------------------
@@ -402,8 +409,14 @@ def setgeo(rundata):
     #   [topotype, minlevel, maxlevel, t1, t2, fname]
     # See regions for control over these regions, need better bathy data for the
     # smaller domains
-    topo_data.topofiles.append([3, 1, 5, rundata.clawdata.t0, rundata.clawdata.tfinal, 
-                              'gulf_caribbean.tt3'])
+    # Note this is replaced in the regression_tests.py
+    clawutil.data.get_remote_file(
+           "http://www.columbia.edu/~ktm2132/bathy/gulf_caribbean.tt3.tar.bz2")
+    topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
+    topo_data.topofiles.append([3, 1, 5, rundata.clawdata.t0,
+                                rundata.clawdata.tfinal,
+                                topo_path])
+
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     dtopo_data.dtopofiles = []
@@ -422,55 +435,70 @@ def setgeo(rundata):
     # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
     #  ioutarrivaltimes,ioutsurfacemax]
 
-    return rundata
-    # end of function setgeo
-    # ----------------------
+    # ================
+    #  Set Surge Data
+    # ================
+    data = rundata.surge_data
 
-
-def set_storm(rundata):
-
-    data = rundata.stormdata
-
-    # Source term controls - These are currently not respected
+    # Source term controls
     data.wind_forcing = True
     data.drag_law = 1
     data.pressure_forcing = True
 
-    # AMR parameters
-    data.wind_refine = [20.0,40.0,60.0] # m/s
-    data.R_refine = [60.0e3,40e3,20e3]  # m
-    
-    # Storm parameters
-    data.storm_type = 1 # Type of storm
-    data.landfall = days2seconds(ike_landfall.days) + ike_landfall.seconds
     data.display_landfall_time = True
 
-    # Storm type 2 - Idealized storm track
-    data.storm_file = 'ike.storm'
+    # AMR parameters, m/s and m respectively
+    data.wind_refine = [20.0, 40.0, 60.0]
+    data.R_refine = [60.0e3, 40e3, 20e3]
 
-    return data
+    # Storm parameters - Parameterized storm (Holland 1980)
+    data.storm_specification_type = 'holland80'  # (type 1)
+    data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
+                                         'ike.storm'))
 
+    # Convert ATCF data to GeoClaw format
+    clawutil.data.get_remote_file(
+                   "http://ftp.nhc.noaa.gov/atcf/archive/2008/bal092008.dat.gz")
+    atcf_path = os.path.join(scratch_dir, "bal092008.dat")
+    # Note that the get_remote_file function does not support gzip files which
+    # are not also tar files.  The following code handles this
+    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+            open(atcf_path, 'w') as atcf_unzipped_file:
+        atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
 
-def set_friction(rundata):
+    # Uncomment/comment out to use the old version of the Ike storm file
+    # ike = Storm(path="old_ike.storm", file_format="ATCF")
+    ike = Storm(path=atcf_path, file_format="ATCF")
 
-    data = rundata.frictiondata
+    # Calculate landfall time - Need to specify as the file above does not
+    # include this info (9/13/2008 ~ 7 UTC)
+    ike.time_offset = datetime.datetime(2008, 9, 13, 7)
+
+    ike.write(data.storm_file, file_format='geoclaw')
+
+    # =======================
+    #  Set Variable Friction
+    # =======================
+    data = rundata.friction_data
 
     # Variable friction
     data.variable_friction = True
 
     # Region based friction
     # Entire domain
-    data.friction_regions.append([rundata.clawdata.lower, 
+    data.friction_regions.append([rundata.clawdata.lower,
                                   rundata.clawdata.upper,
-                                  [np.infty,0.0,-np.infty],
+                                  [np.infty, 0.0, -np.infty],
                                   [0.030, 0.022]])
 
     # La-Tex Shelf
     data.friction_regions.append([(-98, 25.25), (-90, 30),
-                                  [np.infty,-10.0,-200.0,-np.infty],
+                                  [np.infty, -10.0, -200.0, -np.infty],
                                   [0.030, 0.012, 0.022]])
 
-    return data
+    return rundata
+    # end of function setgeo
+    # ----------------------
 
 
 if __name__ == '__main__':
