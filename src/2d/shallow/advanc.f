@@ -241,8 +241,8 @@ c     NOW changed, mjb 2/6/2015.
 c     NOTE that gauge subr called before stepgrid, so never get
 c     the very last gauge time at end of run.
       if (num_gauges > 0) then
-           call update_gauges(alloc(locnew:locnew+nvar*mitot*mjtot),
-     .                       alloc(locaux:locaux+nvar*mitot*mjtot),
+           call update_gauges(alloc(locnew:locnew+nvar*mitot*mjtot), 
+     .                       alloc(locaux:locnew+nvar*mitot*mjtot),
      .                       xlow,ylow,nvar,mitot,mjtot,naux,mptr)
            endif
 
