@@ -236,7 +236,7 @@ c
 
       if (num_gauges > 0 .and. abs(time - t0) < 1d-8) then
           call update_gauges(alloc(locnew:locnew+nvar*mitot*mjtot),
-     .                       alloc(locaux:locnew+nvar*mitot*mjtot),
+     .                       alloc(locaux),
      .                       xlow,ylow,nvar,mitot,mjtot,naux,mptr)
       endif
 
@@ -272,7 +272,7 @@ c     should change the way print_gauges does io - right now is critical section
 c     NOW changed, mjb 2/6/2015.
       if (num_gauges > 0) then
           call update_gauges(alloc(locnew:locnew+nvar*mitot*mjtot),
-     .                       alloc(locaux:locnew+nvar*mitot*mjtot),
+     .                       alloc(locaux),
      .                       xlow,ylow,nvar,mitot,mjtot,naux,mptr)
       endif
 c
