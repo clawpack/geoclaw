@@ -1,6 +1,6 @@
 #get the directory of this makefile
 AMRLIB:=$(CLAW)/amrclaw/src/2d
-GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
+GEOLIB:=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 
 #list of common sources for amr 2d codes
