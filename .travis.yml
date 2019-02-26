@@ -41,7 +41,7 @@ script:
   - nosetests -sv
 
 after_failure:
- - for failed_test_path in *_output ; do cat $failed_test_path/run_output.txt ; cat $failed_test_path/error_output.txt ; done
+ - for failed_test_path in *_output ; do cat $failed_test_path/run_output.txt ; cat $failed_test_path/error_output.txt ; cat $failed_test_path/gauge00001.txt ; done
   
 notifications:
   email: false
