@@ -412,35 +412,41 @@ contains
                 cycle
             end if
 
-            if (INTERPOLATE) then
-                ! Compute indexing and bilinear interpolant weights
-                ! Note: changed 0.5 to  0.5d0 etc.
-                iindex =  int(.5d0 + (gauges(i)%x - xlow) / hx)
-                jindex =  int(.5d0 + (gauges(i)%y - ylow) / hy)
-                if ((iindex < 1 .or. iindex > mitot) .or. &
-                    (jindex < 1 .or. jindex > mjtot)) then
+            ! Compute indexing and bilinear interpolant weights
+            ! and check if gauge is outside patch
+            iindex =  int(.5d0 + (gauges(i)%x - xlow) / hx)
+            jindex =  int(.5d0 + (gauges(i)%y - ylow) / hy)
+            if ((iindex < 1 .or. iindex > mitot) .or. &
+                (jindex < 1 .or. jindex > mjtot)) then
+                    if (gauges(i)%gtype == 2) then
+                        ! Lagrangian gauge outside domain, ignore
+                        ! (maybe should flag so never checked again??)
+                        cycle
+                    else
+                        ! standard gauge so should be in domain
                         write(6,601) gauges(i)%gauge_num
-  601                   format("ERROR in output of Gauge Data: Gauge ", &
-                                 i6, " outside patch -- Skipping")
+601                     format("ERROR in output of Gauge Data: Gauge ", &
+                             i6, " outside patch -- Skipping")
                         !write(6,*) '+++ gauges(i)%gauge_num', gauges(i)%gauge_num
                         !print *, "iindex, mitot, jindex, mjtot: ", &
                         !        iindex, mitot, jindex, mjtot
                         !print *, "gauges(i)%x = ",gauges(i)%x
                         cycle
-                else if ((iindex < nghost .or. iindex > mitot-nghost) .or. &
-                    (jindex < nghost .or. jindex > mjtot-nghost)) then
+                    endif
+            else if ((iindex < nghost .or. iindex > mitot-nghost) .or. &
+                (jindex < nghost .or. jindex > mjtot-nghost)) then
+                    ! might want to suppress this warning...
+                    if (gauges(i)%gtype == 2) then
                         write(6,602) gauges(i)%gauge_num
-  602                   format("WARNING in output of Gauge Data: Gauge ", &
-                                 i6, " in ghost cells")
-                        if (gauges(i)%gtype == 2) then
-                            print *,'    Will reset patch '
-                            !print *, "iindex, mitot, jindex, mjtot: ", &
-                                    !iindex, mitot, jindex, mjtot
-                            ! Lagrangian gauge moved into ghost cells, 
-                            ! so reset this gauge after updating
-                            need_to_reset_patch = .true.
-                            endif
-                end if
+602                     format("WARNING in output of Gauge Data: Gauge ", &
+                             i6, " in ghost cells, will reset patch")
+                        ! Lagrangian gauge moved into ghost cells, 
+                        ! so reset this gauge after updating
+                        need_to_reset_patch = .true.
+                        endif
+            end if
+
+            if (INTERPOLATE) then
 
                 xcent  = xlow + (iindex - 0.5d0) * hx
                 ycent  = ylow + (jindex - 0.5d0) * hy
