@@ -66,7 +66,7 @@ module gauges_module
         real(kind=8) :: last_time
 
         ! Output settings
-        integer :: file_format
+        integer :: file_format, gtype
         real(kind=8) :: min_time_increment
         character(len=10) :: display_format
         logical, allocatable :: q_out_vars(:)
@@ -143,6 +143,17 @@ contains
             read(UNIT, *)
             read(UNIT, *)
             read(UNIT, *) (gauges(i)%min_time_increment, i=1, num_gauges)
+            read(UNIT, *)
+            read(UNIT, *)
+            read(UNIT, *) (gauges(i)%gtype, i=1, num_gauges)
+
+            do i=1,num_gauges
+                if (gauges(i)%gtype == 2) then
+                    write(6,*) "*** ERROR: Lagrangian gauges not supported"
+                    write(6,*) "***        in multilayer code"
+                    stop
+                end if
+            end do
 
             ! Read in q fields
             read(UNIT, *)
