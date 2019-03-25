@@ -12,7 +12,7 @@ module landspill_module
     implicit none
     save
     public
-    private::  get_kinematic_viscosity, landspill_log
+    private:: get_kinematic_viscosity, landspill_log
 
     !> @brief The state of this module.
     logical, private:: module_setup = .false.

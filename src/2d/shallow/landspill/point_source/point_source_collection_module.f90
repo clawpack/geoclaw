@@ -80,13 +80,6 @@ contains
         integer(kind=4), parameter:: funit = 256 ! local file unit
         integer(kind=4):: i, id
 
-        ! so far, we only support xy coordinates (Cartesian)
-        if (coordinate_system .ne. 1) then
-            print *, "Point source functionality now only works with &
-                Cartesian coordinates."
-            stop
-        endif
-
         ! open data file
         if (present(filename)) then
             call opendatafile(funit, filename)
@@ -113,6 +106,13 @@ contains
 
         ! close the file
         close(funit)
+
+        ! so far, we only support xy coordinates (Cartesian)
+        if (coordinate_system .ne. 1) then
+            print *, "Point source functionality now only works with &
+                Cartesian coordinates."
+            stop
+        endif
     end subroutine init
 
     ! implementation of destructor

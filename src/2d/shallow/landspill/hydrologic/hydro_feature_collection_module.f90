@@ -93,13 +93,6 @@ contains
         integer(kind=4):: i
         character(len=255):: feat_file
 
-        ! so far, we only support xy coordinates (Cartesian)
-        if (coordinate_system .ne. 1) then
-            print *, "Hydrological functionality now only works with &
-                Cartesian coordinates."
-            stop
-        endif
-
         ! open data file
         if (present(filename)) then
             call opendatafile(funit, filename)
@@ -127,6 +120,13 @@ contains
 
         ! close the file
         close(funit)
+
+        ! so far, we only support xy coordinates (Cartesian)
+        if (coordinate_system .ne. 1) then
+            print *, "Hydrological functionality now only works with &
+                Cartesian coordinates."
+            stop
+        endif
 
         ! set index in aux
         call this%set_aux_index()
