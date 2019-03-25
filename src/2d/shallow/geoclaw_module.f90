@@ -46,6 +46,10 @@ module geoclaw_module
     ! Method parameters    
     real(kind=8) :: dry_tolerance
 
+    ! parameters that should hidden from normal users
+    real(kind=8) :: update_tol ! tolerance value used in update.f90
+    real(kind=8) :: refine_tol ! used in flag2refine2.f90
+
 contains
 
     ! ========================================================================
@@ -115,6 +119,9 @@ contains
             endif
             read(unit,*)
             read(unit,*) dry_tolerance
+            read(unit,*)
+            read(unit,*) update_tol
+            read(unit,*) refine_tol
             
             close(unit)
 
@@ -153,6 +160,10 @@ contains
 
             write(GEO_PARM_UNIT,*) ' '
             write(GEO_PARM_UNIT,*) '   dry_tolerance:', dry_tolerance
+
+            write(GEO_PARM_UNIT,*) ' '
+            write(GEO_PARM_UNIT,*) '   update_tol:', update_tol
+            write(GEO_PARM_UNIT,*) '   refine_tol:', refine_tol
 
             module_setup = .true.
         end if

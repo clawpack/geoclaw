@@ -24,7 +24,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                        tolsp,q,aux,amrflags)
 
     use amr_module, only: mxnest, t0, DOFLAG, UNSET
-    use geoclaw_module, only:dry_tolerance, sea_level
+    use geoclaw_module, only: refine_tol, sea_level
     use geoclaw_module, only: spherical_distance, coordinate_system
 
     use topo_module, only: tlowtopo,thitopo,xlowtopo,xhitopo,ylowtopo,yhitopo
@@ -173,7 +173,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
             ! if flag == DOFLAG checking is not needed
             if (allowflag(x_c,y_c,t,level) .and. amrflags(i,j) == UNSET) then
 
-                if (q(1,i,j) > dry_tolerance) then
+                if (q(1,i,j) > refine_tol) then
                     eta = q(1,i,j) + aux(1,i,j)
 
                     ! Check wave criteria
