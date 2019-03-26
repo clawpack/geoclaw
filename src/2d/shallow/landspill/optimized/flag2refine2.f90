@@ -24,24 +24,8 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                        tolsp,q,aux,amrflags)
 
     use amr_module, only: mxnest, t0, DOFLAG, UNSET
-    use geoclaw_module, only:dry_tolerance, sea_level
-    use geoclaw_module, only: spherical_distance, coordinate_system
-
     use topo_module, only: tlowtopo,thitopo,xlowtopo,xhitopo,ylowtopo,yhitopo
     use topo_module, only: minleveltopo,mtopofiles
-
-    use topo_module, only: tfdtopo,xlowdtopo,xhidtopo,ylowdtopo,yhidtopo
-    use topo_module, only: minleveldtopo,num_dtopo
-
-    use qinit_module, only: x_low_qinit,x_hi_qinit,y_low_qinit,y_hi_qinit
-    use qinit_module, only: min_level_qinit,qinit_type
-
-    use storm_module, only: storm_specification_type, wind_refine, R_refine
-    use storm_module, only: storm_location, wind_forcing, wind_index, wind_refine
-
-    use regions_module, only: num_regions, regions
-    use refinement_module
-
     use landspill_module, only: point_sources
 
     implicit none
@@ -62,10 +46,6 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     ! Generic locals
     integer :: i,j,m
     real(kind=8) :: x_c,y_c,x_low,y_low,x_hi,y_hi
-    real(kind=8) :: speed, eta, ds
-
-    ! Storm specific variables
-    real(kind=8) :: R_eye(2), wind_speed
 
     ! Don't initialize flags, since they were already
     ! flagged by flagregions2
