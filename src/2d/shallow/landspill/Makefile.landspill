@@ -1,7 +1,7 @@
 #get the directory of this makefile
 AMRLIB:=$(CLAW)/amrclaw/src/2d
 LANDSPILLLIB:=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-GEOLIB:=$(dir $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+GEOLIB:=$(abspath $(LANDSPILLLIB)/../)
 
 
 #list of common sources for amr 2d codes
@@ -24,12 +24,6 @@ COMMON_MODULES += \
  $(GEOLIB)/surge/storm_module.f90 \
  $(GEOLIB)/multilayer/multilayer_module.f90 \
  $(GEOLIB)/friction_module.f90 \
- $(LANDSPILLLIB)/amr2.f90 \
- $(LANDSPILLLIB)/flag2refine2.f90  \
- $(LANDSPILLLIB)/setaux.f90 \
- $(LANDSPILLLIB)/src2.f90 \
- $(LANDSPILLLIB)/stepgrid.f \
- $(LANDSPILLLIB)/tick.f \
  $(LANDSPILLLIB)/point_source/point_source_module.f90 \
  $(LANDSPILLLIB)/point_source/point_source_collection_module.f90 \
  $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_abstract_module.f90 \
@@ -170,3 +164,9 @@ COMMON_SOURCES += \
   $(GEOLIB)/fgmax_finalize.f90 \
   $(GEOLIB)/check.f \
   $(GEOLIB)/restrt.f \
+  $(LANDSPILLLIB)/amr2.f90 \
+  $(LANDSPILLLIB)/flag2refine2.f90  \
+  $(LANDSPILLLIB)/setaux.f90 \
+  $(LANDSPILLLIB)/src2.f90 \
+  $(LANDSPILLLIB)/stepgrid.f \
+  $(LANDSPILLLIB)/tick.f
