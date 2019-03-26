@@ -189,7 +189,7 @@ contains
         ! code
         do pti = 1, this%npts
             ! get indices of this point source on provided mesh
-            call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
+            call this%pts(pti)%cell_id(mbc, mx, my, xlower, ylower, dx, dy, i, j)
 
             ! if this point source located outside this mesh, we skip this point
             if (i == -999) cycle
@@ -225,7 +225,7 @@ contains
         ! code
         do pti = 1, this%npts
             ! get indices of this point source on provided mesh
-            call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
+            call this%pts(pti)%cell_id(mbc, mx, my, xlower, ylower, dx, dy, i, j)
 
             ! if this point source located outside this mesh, we skip this point
             if (i == -999) cycle
@@ -252,7 +252,7 @@ contains
         ! code
         do pti = 1, this%npts
             ! get indices of this point source on provided mesh
-            call this%pts(pti)%cell_id(mx, my, xlower, ylower, dx, dy, i, j)
+            call this%pts(pti)%cell_id(mbuff, mx, my, xlower, ylower, dx, dy, i, j)
 
             ! if this point source located outside this mesh, we skip this point
             if (i == -999) cycle
