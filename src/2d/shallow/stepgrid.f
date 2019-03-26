@@ -29,7 +29,6 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
       use geoclaw_module
       use amr_module
       use fixedgrids_module
-      use landspill_module, only: hydro_features
       implicit double precision (a-h,o-z)
 
       external rpn2,rpt2
@@ -277,12 +276,6 @@ c
 c        # with source term:   use Godunov splitting
          call src2(nvar,mbc,mx,my,xlowmbc,ylowmbc,dx,dy,
      &             q,maux,aux,time,dt)
-
-c        ! remove fluid from hydro cells
-         call hydro_features%remove_fluid(level, nvar, mbc, 
-     &             mx, my, xlowmbc, ylowmbc, dx, dy, 
-     &             q, maux, aux, time)
-c        ! End of removing fluid from hydro cells
          endif
 
 !$OMP CRITICAL (FixedGrids)

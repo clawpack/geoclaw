@@ -25,8 +25,6 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
 
     use topo_module
 
-    use landspill_module, only: hydro_features
-
     implicit none
 
     ! Arguments
@@ -171,8 +169,6 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
         endif
     enddo
 
-    ! update hydro cell markers
-    call hydro_features%update_aux(mbc, mx, my, xlow, ylow, dx, dy, maux, aux)
 
     do ii=1-mbc,mx+mbc
         x =  xlower + (ilo+ii-.5d0) * dx

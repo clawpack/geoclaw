@@ -103,7 +103,6 @@ program amr2
     use regions_module, only: set_regions
     use fgmax_module, only: set_fgmax, FG_num_fgrids
     use multilayer_module, only: set_multilayer
-    use landspill_module, only: set_landspill, hydro_features, evaporation
 
     implicit none
 
@@ -481,7 +480,6 @@ program amr2
         call set_storm()                  ! Set storm parameters
         call set_regions()                ! Set refinement regions
         call set_gauges(rest, nvar, naux) ! Set gauge output
-        call set_landspill()              ! set land spill module
 
     else
 
@@ -518,7 +516,6 @@ program amr2
         call set_regions()                ! Set refinement regions
         call set_gauges(rest, nvar, naux) ! Set gauge output
         call set_fgmax()
-        call set_landspill()              ! set land spill module
 
         cflmax = 0.d0   ! otherwise use previously heckpointed val
 
@@ -643,10 +640,6 @@ program amr2
     
 
     call system_clock(clock_finish,clock_rate)
-
-    ! output removed fluid data and evaporated volume data
-    call hydro_features%output_removed_fluid()
-    call evaporation%output()
     
     !output timing data
     open(timing_unit, file=timing_base_name//"txt", status='unknown',       &

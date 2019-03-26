@@ -14,8 +14,6 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     use friction_module, only: variable_friction, friction_index
 
-    use landspill_module, only: point_sources, darcy_weisbach, evaporation
-
     implicit none
     
     ! Input parameters
@@ -75,16 +73,6 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
         enddo
     endif
     ! End of friction source term
-
-    ! Darcy-Weisbach
-    call darcy_weisbach%apply_to_grid(&
-        meqn, mbc, mx, my, xlower, ylower, dx, dy, q, dt)
-    ! End of Darcy-Weisbach
-
-    ! Point source term
-    call point_sources%apply_point_sources(&
-        meqn, mbc, mx, my, xlower, ylower, dx, dy, q, t, dt)
-    ! End of point source term
 
     ! Coriolis source term
     ! TODO: May want to remove the internal calls to coriolis as this could 
@@ -173,8 +161,5 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     !         enddo
     !     enddo
     ! endif
-
-    call evaporation%apply_to_grid(meqn, mbc, mx, my, xlower, &
-                                    ylower, dx, dy, q, maux, aux, t, dt)
 
 end subroutine src2

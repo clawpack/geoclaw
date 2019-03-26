@@ -42,8 +42,6 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     use regions_module, only: num_regions, regions
     use refinement_module
 
-    use landspill_module, only: point_sources
-
     implicit none
 
     ! Subroutine arguments
@@ -70,12 +68,6 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     ! Don't initialize flags, since they were already
     ! flagged by flagregions2
     ! amrflags = DONTFLAG
-
-    ! if t == t0, flag the cells containing point sources
-    if (t .eq. t0) then ! should we use abs(...) .lt. some tolerance?
-        call point_sources%flag_cells( &
-            mbuff, mx, my, xlower, ylower, dx, dy, amrflags)
-    endif
 
     ! Loop over interior points on this grid
     ! (i,j) grid cell is [x_low,x_hi] x [y_low,y_hi], cell center at (x_c,y_c)

@@ -13,7 +13,6 @@ c
       use gauges_module, only: print_gauges_and_reset_nextLoc
 
       use storm_module, only: landfall, display_landfall_time
-      use landspill_module, only: hydro_features, evaporation
 
 
       implicit double precision (a-h,o-z)
@@ -171,10 +170,6 @@ c
 C       do i = 1, maxlv
 C          dtnew(i)  = rinfinity
 C       enddo
-
-c         # evaporation of removed fluid
-      call evaporation%evap_hydro_fluid(hydro_features, time, possk(1))
-
 
 c     We should take at least one step on all levels after any
 c     moving topography (dtopo) has been finalized to insure that
