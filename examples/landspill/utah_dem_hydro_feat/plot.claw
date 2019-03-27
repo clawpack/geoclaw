@@ -1,3 +1,0 @@
-DIR=./_output
-TIME_FILES_SCANF=fort.t%04d
-GRID_FILES_SCANF=fort.q%04d

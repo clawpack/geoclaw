@@ -1,0 +1,8 @@
+1           mx
+1           my
+-12461650.  xlower
+4984000.    ylower
+4000        cellsize
+-9999       nodatavalue
+
+0.1
