@@ -12,7 +12,6 @@ from __future__ import print_function
 
 import os
 import datetime
-import shutil
 import gzip
 
 import numpy as np

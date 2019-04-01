@@ -8,6 +8,7 @@ import os
 import unittest
 import gzip
 import nose
+import datetime
 
 try:
     # For Python 3.0 and later
@@ -20,6 +21,7 @@ import numpy
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools
+import clawpack.geoclaw.surge.storm as storm
 
 class IkeTest(test.GeoClawRegressionTest):
 
@@ -29,21 +31,47 @@ class IkeTest(test.GeoClawRegressionTest):
 
         super(IkeTest, self).setUp()
 
-        # Download storm data
+        # Fetch storm data
         remote_url = "http://ftp.nhc.noaa.gov/atcf/archive/2008/bal092008.dat.gz"
+        atcf_path = os.path.join(self.temp_path, "bal092008.dat")
+        storm_path = os.path.join(os.path.dirname(self.temp_path), 'ike.storm')
+        
         try:
             path = self.get_remote_file(remote_url, unpack=False)
         except URLError:
             raise nose.SkipTest("Could not fetch remote file, skipping test.")
-        
-        storm_path = os.path.join(os.path.dirname(path), 'ike.storm')
 
         # Need to additionally deal with the fact the file is gzipped
         with gzip.GzipFile(path, 'r') as gzip_file:
             file_content = gzip_file.read()
         
-        with open(storm_path, 'wb') as out_file:
+        with open(atcf_path, 'wb') as out_file:
             out_file.write(file_content)
+        
+        ike = storm.Storm(path=atcf_path, file_format="ATCF")
+        ike.time_offset = datetime.datetime(2008, 9, 13, 7)
+        ike.write(storm_path, file_format="geoclaw")
+
+        
+
+        # # Convert ATCF data to GeoClaw format
+        # clawutil.data.get_remote_file(
+        #                "http://ftp.nhc.noaa.gov/atcf/archive/2008/bal092008.dat.gz")
+        # atcf_path = os.path.join(scratch_dir, "bal092008.dat")
+        # # Note that the get_remote_file function does not support gzip files which
+        # # are not also tar files.  The following code handles this
+        # with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+        #         open(atcf_path, 'w') as atcf_unzipped_file:
+        #     atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
+
+        # # Uncomment/comment out to use the old version of the Ike storm file
+        # ike = Storm(path=atcf_path, file_format="ATCF")
+
+        # # Calculate landfall time - Need to specify as the file above does not
+        # # include this info (9/13/2008 ~ 7 UTC)
+        # ike.time_offset = datetime.datetime(2008, 9, 13, 7)
+
+        # ike.write(data.storm_file, file_format='geoclaw')
 
         # Download file
         #self.get_remote_file(
@@ -72,6 +100,9 @@ class IkeTest(test.GeoClawRegressionTest):
 
         # Write out data files
         self.load_rundata()
+        self.rundata.surge_data.storm_file = os.path.join(
+                                  os.path.dirname(self.temp_path), 'ike.storm')
+
         self.write_rundata_objects()
 
         # Run code
@@ -87,39 +118,6 @@ class IkeTest(test.GeoClawRegressionTest):
         self.success = True
 
 
-    # def check_gauges(self, save=False, indices=(2, 3)):
-    #     r"""Basic test to assert gauge equality
-
-    #     :Input:
-    #      - *save* (bool) - If *True* will save the output from this test to 
-    #        the file *regresion_data.txt*.  Default is *False*.
-    #      - *indices* (tuple) - Contains indices to compare in the gague 
-    #        comparison.  Defaults to *(2, 3)*.
-    #     """
-
-    #     # Get gauge data
-    #     data = numpy.loadtxt(os.path.join(self.temp_path, 'fort.gauge'))
-    #     data_sum = []
-    #     for index in indices:
-    #         data_sum.append(data[:, index].sum())
-
-    #     # Get (and save) regression comparison data
-    #     regression_data_file = os.path.join(self.test_path, "regression_data.txt")
-    #     if save:
-    #         numpy.savetxt(regression_data_file, data)
-    #     regression_data = numpy.loadtxt(regression_data_file)
-    #     regression_sum = []
-    #     for index in indices:
-    #         regression_sum.append(regression_data[:, index].sum())
-    #     # regression_sum = regression_data
-
-    #     # Compare data
-    #     tolerance = 1e-14
-    #     assert numpy.allclose(data_sum, regression_sum, tolerance), \
-    #             "\n data: %s, \n expected: %s" % (data_sum, regression_sum)
-    #     # assert numpy.allclose(data, regression_data, tolerance), \
-    #     #         "Full gauge match failed."
-
 if __name__=="__main__":
     if len(sys.argv) > 1:
         if bool(sys.argv[1]):
@@ -132,3 +130,4 @@ if __name__=="__main__":
                 test.tearDown()
             sys.exit(0)
     unittest.main()
+    
