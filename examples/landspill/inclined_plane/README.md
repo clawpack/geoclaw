@@ -1,36 +1,43 @@
 # Land-spill example: inclined_plane
 
-This folder contains an example of overland flow with one point source that
-continues leaking fluid into the computational domain.
+This example simulates the overland flow with one point source, which continues 
+leaking fluid into the computational domain.
 
 The domain is an inclined plane with an angle of 2.5 degree. The working fluid
-is silicon oil (kinematic viscosity 1.13e-3 m^2 / sec). And the volumetric rate
+is silicone oil (kinematic viscosity 1.13e-3 m^2 / sec). And the volumetric rate
 of the point source is 1.48e-6 m^3 / sec.
+
+Note, the grid resolution of this simulation is much higher than other exmaples, 
+so it may take a long time to finish the run on a personal computer or a laptop. 
+On a personal computer with Intel i7-5930K (6 physical cores @ 3.5GHz), it takes 
+about 30 hours to finish.
 
 ## Build and run the example
 
-First, set up the environment variables necessary for using Clawpack. 
-For example
+First, set up the necessary environment variables. For example
 
 ```shell
 $ export FC=gfortran 
-$ export CLAW=$HOME/Sync/repos/clawpack-git
-$ export PYTHONPATH=$HOME/Sync/repos/clawpack-git:$PYTHONPATH
+$ export CLAW=$HOME/clawpack
+$ export PYTHONPATH=$HOME/clawpack:$PYTHONPATH
 ```
 
 Next, a simple `$ make all` will create the topography file, compile the 
-program, setup input parameters, and then run the simulation.
+program, setup input parameters, and then run the simulation. Environment
+variable `FFLAGS` can be used for optimization, and `OMP_NUM_THREADS` is used 
+to specify number of threads used if OpenMP is enabled. For example, to enable
+OpenMP and machine-specific optimization, and to use 6 threads: 
 
-After the simulation, open the file `plot.claw` with 
-[VisIt](https://wci.llnl.gov/simulation/computer-codes/visit/)
-to visualize the results.
+```
+$ FFLAGS="-O2 -fopenmp -march=native" OMP_NUM_THREADS=6 make all
+```
 
-Alternatively, the Python script `plotresults.py` can be used to plot the flow
-at each output time step. The generated plots will be in the folder `_plots`.
+After simulation, execute `$ python plotresults.py` to plot the flow at each 
+output time frame. The generated plots will be in the folder `_plots`.
 
 In the folder `lister_1992`, there are `.csv` files for the experimental data
-obtained from Lister's paper (1992). If one uses `plotresults.py` to plot the 
-flow, the experimental data will also be plotted.
+obtained from Lister's paper (1992). The experimental data are plotted in the
+plots created by `plotresults.py`.
 
 Instead of a simple `$ make all`, users can do a fine control of the process 
 with the following steps:
@@ -53,7 +60,7 @@ tested.
 
 Use
 ```
-$ FFLAGS=<compiler flags> make .exe
+$ OMP_NUM_THREADS=<# of threads> FFLAGS=<compiler flags> make .exe
 ```
 to compile and build the executable with customized flags and additional 
 libraries.
@@ -63,12 +70,12 @@ $ FFLAGS="-O2 -fopenmp -DNETCDF -lnetcdff -I${NETCDF_INCLUDE_DIR}" make .exe
 ```
 Both compiler flags and linker flags go to `FFLAGS`.
 
-(Depends on your system, the flag for Fortran binding of NetCDF may be `-lnetcdf`
+(Depending on the system, the flag for Fortran binding of NetCDF may be `-lnetcdf`
 instead of `-lnetcdff`.)
 
 #### 3. Set up input parameters
 
-The input parameters for the simulation is in `setrun.py`. 
+The input parameters for the simulation are in `setrun.py`. 
 After setting up or modifying `setrun.py`, use
 ```
 $ make .data
@@ -99,4 +106,5 @@ in proper locations.
 
 ## Reference
 
-Lister, J. R. (1992). Viscous flows down an inclined plane from point and line sources. Journal of Fluid Mechanics, 242, 631-653.
+Lister, J. R. (1992). Viscous flows down an inclined plane from point and line 
+sources. Journal of Fluid Mechanics, 242, 631-653.

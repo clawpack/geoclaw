@@ -29,6 +29,7 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
       use geoclaw_module
       use amr_module
       use fixedgrids_module
+      use landspill_module, only: hydro_features
       implicit double precision (a-h,o-z)
 
       external rpn2,rpt2
@@ -154,6 +155,12 @@ c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
        call b4step2(mbc,mx,my,nvar,q,
      &             xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux)
+
+c     # this is a dry grid patch, skip updating conservation law
+      if (.not. any(q(1, :, :) > dry_tolerance)) then
+        cflgrid = 0D0
+        goto 77
+      end if
       
 c::::::::::::::::::::::::FIXED GRID DATA before step:::::::::::::::::::::::
 c     # fill in values at fixed grid points effected at time tc0
@@ -271,11 +278,20 @@ c     # Copied here from b4step2 since need to do before saving to qc1d:
         q(1,i,j) = max(q(1,i,j),0.d0)
         q(2:meqn,i,j) = 0.d0
       end forall
-c
+
+c     # for dry grid pathces, the solver will jump to here directly
+ 77   continue
+
       if (method(5).eq.1) then
 c        # with source term:   use Godunov splitting
          call src2(nvar,mbc,mx,my,xlowmbc,ylowmbc,dx,dy,
      &             q,maux,aux,time,dt)
+
+c        ! remove fluid from hydro cells
+         call hydro_features%remove_fluid(level, nvar, mbc, 
+     &             mx, my, xlowmbc, ylowmbc, dx, dy, 
+     &             q, maux, aux, time)
+c        ! End of removing fluid from hydro cells
          endif
 
 !$OMP CRITICAL (FixedGrids)

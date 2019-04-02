@@ -274,6 +274,7 @@ contains
     !! located in this mesh.
     !!
     !! @param[in] this an instance of PointSource
+    !! @param[in] mbuff the number of buffer layers.
     !! @param[in] mx the number of cells in x direction.
     !! @param[in] my the number of cells in y direction.
     !! @param[in] xlower the lower limit in x direction of this mesh.
@@ -282,25 +283,27 @@ contains
     !! @param[in] dy the cell size in y direction.
     !! @param[out] i the cell index in x direction.
     !! @param[out] j the cell index in y direction.
-    subroutine cell_id(this, mx, my, xlower, ylower, dx, dy, i, j)
+    subroutine cell_id(this, mbuff, mx, my, xlower, ylower, dx, dy, i, j)
         ! declaration
         class(PointSource), intent(in):: this
-        integer(kind=4), intent(in):: mx, my
+        integer(kind=4), intent(in):: mbuff, mx, my
         real(kind=8), intent(in):: xlower, ylower, dx, dy
         integer(kind=4), intent(out):: i, j
-        real(kind=8):: xupper, yupper
+        real(kind=8):: xleft, xright, ybot, ytop
 
         ! code
         i = -999
         j = -999
 
-        xupper = xlower + mx * dx
-        yupper = ylower + my * dy
+        xleft = xlower - mbuff * dx - dx * 1d-6
+        xright = xlower + (mx + mbuff) * dx + dx * 1d-6
+        ybot = ylower - mbuff * dy - dx * 1d-6
+        ytop = ylower + (my + mbuff) * dy + dx * 1d-6
 
-        if ((this%coord(1) >= xlower) .and. (this%coord(1) < xupper)) then
-            if ((this%coord(2) >= ylower) .and. (this%coord(2) < yupper)) then
-                i = int((this%coord(1)-xlower)/dx) + 1
-                j = int((this%coord(2)-ylower)/dy) + 1
+        if ((this%coord(1) >= xleft) .and. (this%coord(1) < xright)) then
+            if ((this%coord(2) >= ybot) .and. (this%coord(2) < ytop)) then
+                i = int((this%coord(1)-xleft)/dx) + 1 - mbuff
+                j = int((this%coord(2)-ybot)/dy) + 1 - mbuff
             endif
         endif
 

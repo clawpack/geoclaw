@@ -12,7 +12,7 @@
 
 subroutine update (level, nvar, naux)
 
-    use geoclaw_module, only: dry_tolerance
+    use geoclaw_module, only: dry_tolerance, update_tol
     use amr_module
     implicit none
     ! modified for shallow water on topography to use surface level eta
@@ -52,7 +52,7 @@ subroutine update (level, nvar, naux)
 !$OMP                    etaf,etaav,hav,nwet,hc,huc,hvc, String), &
 !$OMP             SHARED(numgrids,listOfGrids,level,intratx,intraty, &
 !$OMP                   nghost,uprint,nvar,naux,mcapa,node,listsp, &
-!$OMP                   alloc,lstart,dry_tolerance,listStart,lget), &
+!$OMP                   alloc,lstart,dry_tolerance,update_tol,listStart,lget), &
 !$OMP            DEFAULT(none)
 
     ! need to set up data structure for parallel distribution of grids
@@ -157,7 +157,7 @@ subroutine update (level, nvar, naux)
                         if (nwet > 0) then
                             etaav = etasum/dble(nwet)
                             hav = hsum/dble(nwet)
-                            hc = min(hav, (max(etaav-bc*capac, 0.0d0)))
+                            hc = min(hav, (max(etaav-bc*capac, update_tol)))
                             huc = (min(hav, hc) / hsum) * husum
                             hvc = (min(hav, hc) / hsum) * hvsum
                         else

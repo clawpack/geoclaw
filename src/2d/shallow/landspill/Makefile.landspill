@@ -1,6 +1,7 @@
 #get the directory of this makefile
 AMRLIB:=$(CLAW)/amrclaw/src/2d
-GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
+LANDSPILLLIB:=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+GEOLIB:=$(abspath $(LANDSPILLLIB)/../)
 
 
 #list of common sources for amr 2d codes
@@ -22,7 +23,24 @@ COMMON_MODULES += \
  $(GEOLIB)/surge/data_storm_module.f90 \
  $(GEOLIB)/surge/storm_module.f90 \
  $(GEOLIB)/multilayer/multilayer_module.f90 \
- $(GEOLIB)/friction_module.f90
+ $(GEOLIB)/friction_module.f90 \
+ $(LANDSPILLLIB)/point_source/point_source_module.f90 \
+ $(LANDSPILLLIB)/point_source/point_source_collection_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_abstract_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_constant_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_block_constants_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_cells_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_three_regimes_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_churchill_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_two_regimes_module.f90 \
+ $(LANDSPILLLIB)/darcy_weisbach/darcy_weisbach_module.f90 \
+ $(LANDSPILLLIB)/hydrologic/spm_module.f90 \
+ $(LANDSPILLLIB)/hydrologic/hydro_feature_module.f90 \
+ $(LANDSPILLLIB)/hydrologic/hydro_feature_collection_module.f90 \
+ $(LANDSPILLLIB)/evaporation/evap_base_module.f90 \
+ $(LANDSPILLLIB)/evaporation/fingas1996_module.f90 \
+ $(LANDSPILLLIB)/evaporation/evap_module.f90 \
+ $(LANDSPILLLIB)/landspill_module.f90
 
 # list of source files from AMR library. 
 COMMON_SOURCES += \
@@ -122,8 +140,6 @@ COMMON_SOURCES += \
   $(GEOLIB)/cellgridintegrate2.f \
   $(GEOLIB)/topointegral.f \
   $(GEOLIB)/bilinearintegral.f \
-  $(GEOLIB)/stepgrid.f \
-  $(GEOLIB)/src2.f90 \
   $(GEOLIB)/src1d.f90 \
   $(GEOLIB)/step2.f90 \
   $(GEOLIB)/flux2fw.f \
@@ -133,18 +149,14 @@ COMMON_SOURCES += \
   $(GEOLIB)/filpatch.f90 \
   $(GEOLIB)/bc2amr.f90 \
   $(GEOLIB)/update.f90 \
-  $(GEOLIB)/setaux.f90 \
-  $(GEOLIB)/flag2refine2.f90  \
   $(GEOLIB)/allowflag.f90  \
   $(GEOLIB)/b4step2.f90 \
   $(GEOLIB)/upbnd.f  \
-  $(GEOLIB)/tick.f \
   $(GEOLIB)/setgrd.f \
   $(GEOLIB)/gfixup.f \
   $(GEOLIB)/ginit.f \
   $(GEOLIB)/getmaxspeed.f90 \
   $(GEOLIB)/advanc.f \
-  $(GEOLIB)/amr2.f90 \
   $(GEOLIB)/fgmax_read.f90 \
   $(GEOLIB)/fgmax_frompatch.f90 \
   $(GEOLIB)/fgmax_interpolate0.f90 \
@@ -152,3 +164,9 @@ COMMON_SOURCES += \
   $(GEOLIB)/fgmax_finalize.f90 \
   $(GEOLIB)/check.f \
   $(GEOLIB)/restrt.f \
+  $(LANDSPILLLIB)/amr2.f90 \
+  $(LANDSPILLLIB)/flag2refine2.f90  \
+  $(LANDSPILLLIB)/setaux.f90 \
+  $(LANDSPILLLIB)/src2.f90 \
+  $(LANDSPILLLIB)/stepgrid.f \
+  $(LANDSPILLLIB)/tick.f

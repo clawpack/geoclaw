@@ -1,33 +1,31 @@
 # Land-spill example: utah_dem
 
-This folder contains an example of overland flow with one point source that
-continues leaking fluid into the computational domain.
+This example simulates the overland flow with one point source, and the point
+source continues leaking fluid into the computational domain. The working
+fluid is Maya crude.
 
 ## Build and run the example
 
-First, set up the environment variables necessary for using Clawpack. 
-For example
+First, set up the necessary environment variables. For example
 
 ```shell
 $ export FC=gfortran 
-$ export CLAW=$HOME/Sync/repos/clawpack-git
-$ export PYTHONPATH=$HOME/Sync/repos/clawpack-git:$PYTHONPATH
+$ export CLAW=$HOME/clawpack
+$ export PYTHONPATH=$HOME/clawpack:$PYTHONPATH
 ```
 
-Next, a simple `$ make all` will download the topography file, compile the 
-program, setup input parameters, and then run the simulation.
+Next, a simple `$ make all` will create the topography file, compile the 
+program, setup input parameters, and then run the simulation. Environment
+variable `FFLAGS` can be used for optimization, and `OMP_NUM_THREADS` is used 
+to specify number of threads used if OpenMP is enabled. For example, to enable
+OpenMP and machine-specific optimization, and to use 6 threads: 
 
-After the simulation, open the file `plot.claw` with 
-[VisIt](https://wci.llnl.gov/simulation/computer-codes/visit/)
-to visualize the results.
-
-Alternatively, the Python script `plotframes.py` can be used to plot the flow
-at each output time step. The generated plots will be in the folder `_plots`.
+After simulation, execute `$ python plotframes.py` to plot the flow at each 
+output time frame. The generated plots will be in the folder `_plots`.
 
 If GIS software will be used to visualize the result, users can use the script
 `writenc.py` to create a multidimension NetCDF file. The output NetCDF file has
-been tested with [QGIS](https://www.qgis.org/) 
-and [ArcGIS Pro](https://pro.arcgis.com/).
+been tested with [QGIS](https://www.qgis.org/) and [ArcGIS Pro](https://pro.arcgis.com/).
 
 Instead of a simple `$ make all`, users can do a fine control of the process 
 with the following steps:
@@ -60,12 +58,12 @@ $ FFLAGS="-O2 -fopenmp -DNETCDF -lnetcdff -I${NETCDF_INCLUDE_DIR}" make .exe
 ```
 Both compiler flags and linker flags go to `FFLAGS`.
 
-(Depends on your system, the flag for Fortran binding of NetCDF may be `-lnetcdf`
+(Depending on the system, the flag for Fortran binding of NetCDF may be `-lnetcdf`
 instead of `-lnetcdff`.)
 
 #### 3. Set up input parameters
 
-The input parameters for the simulation is in `setrun.py`. 
+The input parameters for the simulation are in `setrun.py`. 
 After setting up or modifying `setrun.py`, use
 ```
 $ make .data

@@ -64,6 +64,13 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('friction_depth',1.0e6)
         self.add_attribute('sea_level',0.0)
 
+        # extra parameters to hack the AMR algorithms for landspill applications
+        self.add_attribute("update_tol", 0.0)
+        self.add_attribute("refine_tol", None)
+
+        # landspill data
+        self.add_attribute("landspill_data", LandSpillData())
+
 
     def write(self,data_source='setrun.py'):
 
@@ -100,7 +107,17 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
 
         self.data_write('dry_tolerance')
 
+        if self.refine_tol is None:
+            self.refine_tol = self.dry_tolerance
+
+        self.data_write()
+        self.data_write("update_tol")
+        self.data_write("refine_tol")
+
         self.close_data_file()
+
+        # output landspill-related data
+        self.landspill_data.write()
 
 
 
