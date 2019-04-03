@@ -368,6 +368,7 @@ contains
         allocate(current_j(this%n_rows))
 
         ! note that Fortran is 1-based, not 0-based, so it's a little tricky
+        this%rows = 0
         this%rows(1) = 1
 
         ! fisrt loop to get nnz in each row
