@@ -1,12 +1,12 @@
 ! ==============================================================================
-! model_storm_module 
+! model_storm_module
 !
 ! Module contains routines for constructing a wind and pressure field based on
-! the a parameterized model of the wind and pressure fields.  
-! 
+! the a parameterized model of the wind and pressure fields.
+!
 ! ==============================================================================
 !                   Copyright (C) Clawpack Developers 2017
-!  Distributed under the terms of the Berkeley Software Distribution (BSD) 
+!  Distributed under the terms of the Berkeley Software Distribution (BSD)
 !  license
 !                     http://www.opensource.org/licenses/
 ! ==============================================================================
@@ -56,7 +56,7 @@ module model_storm_module
     real(kind=8), parameter :: atmos_boundary_layer = 0.9d0
 
     ! Sampling adjustment from 1 min to 10 min winds
-    real(kind=8), parameter :: sampling_time = 0.88d0 
+    real(kind=8), parameter :: sampling_time = 0.88d0
 
     ! Storm field ramping width - Represents crudely the ramping radial area
     real(kind=8), parameter :: RAMP_WIDTH = 100.0d3
@@ -94,7 +94,7 @@ contains
                  action='read', iostat=io_status)
             if (io_status /= 0) then
                 print *, "Error opening storm data file. status = ", io_status
-                stop 
+                stop
             endif
 
             read(data_file, "(i4)") storm%num_casts
@@ -110,7 +110,7 @@ contains
             allocate(storm%central_pressure(storm%num_casts))
             allocate(storm%radius(storm%num_casts))
 
-            ! Now read in the storm data - note that the units are expected to 
+            ! Now read in the storm data - note that the units are expected to
             ! be consistent with:
             ! max_wind_speed = m/s
             ! max_wind_radius = m
@@ -124,7 +124,7 @@ contains
                                    storm%radius(i)
             enddo
 
-            ! Calculate storm speed 
+            ! Calculate storm speed
             allocate(storm%velocity(2, storm%num_casts))
             do i=1,storm%num_casts - 1
                 ! Calculate velocity based on great circle distance between
@@ -139,7 +139,7 @@ contains
                     ds = spherical_distance(x(1), 0.5d0 * (x(2) + y(2)), &
                                             y(1), 0.5d0 * (x(2) + y(2)))
                     storm%velocity(1,i) = sign(ds / dt, y(1) - x(1))
-                
+
                     ds = spherical_distance(0.5d0 * (x(1) + y(1)), x(2), &
                                             0.5d0 * (x(1) + y(1)), y(2))
                     storm%velocity(2, i) = sign(ds / dt, y(2) - x(2))
@@ -250,7 +250,7 @@ contains
 
         ! Figure out where we are relative to the last time we checked for the
         ! index (stored in last_storm_index)
-        
+
         ! Check if we are already beyond the end of the last forecast time
         if (last_storm_index == storm%num_casts + 1) then
             index = storm%num_casts + 1
@@ -263,7 +263,7 @@ contains
             if ((abs(t0 - t) < TRACKING_TOLERANCE) .or.   &
                 (abs(t1 - t) < TRACKING_TOLERANCE) .or.   &
                 (t0 < t .and. t < t1)) then
-                
+
                 index = last_storm_index
             else if ( t1 < t ) then
                 found = .false.
@@ -323,7 +323,7 @@ contains
 
         ! List of possible error conditions
         if (i <= 1) then
-            if (i == 0) then        
+            if (i == 0) then
                 print *,"Invalid storm forecast requested for t = ",t
                 print *,"Time requested is before any forecast data."
                 print *,"    first time = ",storm%track(1,1)
@@ -346,7 +346,7 @@ contains
             ! the pre-calculated m/s velocities from before
             x = latlon2xy(storm%track(2:3,i),storm%track(2:3,i))
             x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
-            
+
             fn = [xy2latlon(x,storm%track(2:3,i)), &
                   storm%velocity(:,i), storm%max_wind_radius(i), &
                   storm%max_wind_speed(i), storm%central_pressure(i), &
@@ -424,7 +424,7 @@ contains
 
         ! Convert wind speed (10 m) to top of atmospheric boundary layer
         mod_mws = mod_mws / atmos_boundary_layer
-        
+
         ! Calculate central pressure difference
         dp = Pa - Pc
         ! Limit central pressure deficit due to bad ambient pressure,
@@ -438,7 +438,7 @@ contains
 
         if (DEBUG) print "('Holland B = ',d16.8)", B
         if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
-        
+
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
@@ -451,14 +451,23 @@ contains
                 r = spherical_distance(x, y, sloc(1), sloc(2))
                 theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
 
-                ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                ! use a threshold of 10 to prevent underflow
+                IF ((mwr/r) > 10) THEN
+                    ! Set pressure field
+                    aux(pressure_index,i,j) = Pc
 
-                ! Speed of wind at this point
-                wind = sqrt((mwr / r)**B &
-                        * exp(1.d0 - (mwr / r)**B) * mws**2.d0 &
-                        + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
-                
+                    ! Speed of wind at this point
+                    wind = sqrt((r * f)**2.d0 / 4.d0) - r * f / 2.d0
+                ELSE
+                    ! Set pressure field
+                    aux(pressure_index,i,j) = Pc + dp * exp(-(mwr/r)**B)
+
+                    ! Speed of wind at this point
+                    wind = sqrt((mwr/r)**B &
+                            * exp(1.d0 - (mwr/r)**B) * mws**2.d0 &
+                            + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
+                END IF
+
                 ! Convert wind velocity from top of atmospheric boundary layer
                 ! (which is what the Holland curve fit produces) to wind
                 ! velocity at 10 m above the earth's surface
