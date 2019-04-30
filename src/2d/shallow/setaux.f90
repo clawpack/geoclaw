@@ -39,6 +39,8 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
     use friction_module, only: set_friction_field
 
     use topo_module
+    
+    use adjoint_module, only : adjoint_flagging,innerprod_index
 
     implicit none
 
@@ -88,11 +90,6 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
         end do
     end if
 
-    ! If using a variable friction field initialize the coefficients to 0
-    if (variable_friction) then
-        call set_friction_field(mx, my, mbc, maux, xlow, ylow, dx, dy, aux)
-    endif
-
     ! Storm fields if used
     if (wind_forcing) then
         aux(wind_index, :, :) = 0.d0
@@ -101,6 +98,18 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
     if (pressure_forcing) then
         aux(pressure_index, :, :) = ambient_pressure
     endif
+
+    ! Innerproduct field if used
+    if (adjoint_flagging) then
+        do jj=1-mbc,my+mbc
+            do ii=1-mbc,mx+mbc
+                if (aux(1,ii,jj) .eq. NEEDS_TO_BE_SET) then
+                    aux(innerprod_index,ii,jj) = 0.d0
+                    endif
+                enddo
+            enddo
+    endif
+
 
     ! ==========================================================================
     !  Set Bathymetry
@@ -210,6 +219,11 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
                 enddo
             endif
         enddo
+    endif
+    
+    ! If using a variable friction field initialize the coefficients to 0
+    if (variable_friction) then
+        call set_friction_field(mx, my, mbc, maux, xlow, ylow, dx, dy, aux)
     endif
 
 contains
