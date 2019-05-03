@@ -1281,17 +1281,12 @@ def load_emanuel_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
                          mask_coordinate[1])**2)
             inlcude_storm = numpy.any(distance < mask_distance)
         if mask_category is not None:
-            if (mask_dist = numpy.any(distance < mask_distance)*(storm['category'] > mask_category)):  
-                storm_no.append(n) 
-                storms.append(storm)
-            inlcude_storm = numpy.any(distance < mask_distance)
+            include_storm = numpy.any(storm['category'] > mask_category) 
 
-            #raise NotImplementedError("Category masking not implemented.")
-        
         if include_storm:
             storms.append(storm)
 
-    print("Length of storms:", len(storms))
+    #print("Length of storms:", len(storms))
     return storms
 
 
