@@ -709,13 +709,13 @@ contains
         ! Additional quantities of interest 
         i = storm_index(t, storm)
         f = coriolis(sloc(2))
-        !tv = storm%velocity(:, i)
-        !Pa = ambient_pressure
-        !sloc = cle_storm_location(t, storm)
-        !f = coriolis(sloc(2))
-        !Pc = storm%central_pressure(i)
-        !mws = storm%max_wind_speed(i)
-        !mwr = storm%max_wind_radius(i)
+        tv = storm%velocity(:, i)
+        Pa = ambient_pressure
+        sloc = storm_location(t, storm)
+        f = coriolis(sloc(2))
+        Pc = storm%central_pressure(i)
+        mws = storm%max_wind_speed(i)
+        mwr = storm%max_wind_radius(i)
 
         ! Calculate CLE parameters 
         ! Subtract translational speed of storm from maximum wind speed 
