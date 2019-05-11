@@ -14,15 +14,15 @@ Installation instructions for this GPU version:
     git remote add xinshengqin https://github.com/xinshengqin/visclaw.git
 
 3) cd $CLAW and checkout following tags for each submodule:
-    cd ./amrclaw  && git fetch xinshengqin && git checkout geo_gpu_paper && cd ../
-    cd ./clawutil && git fetch xinshengqin && git checkout geo_gpu_paper && cd ../
-    cd ./riemann  && git fetch xinshengqin && git checkout geo_gpu_paper && cd ../
-    cd ./geoclaw  && git fetch xinshengqin && git checkout geo_gpu_paper && cd ../
-    cd ./classic  && git fetch xinshengqin && git checkout geo_gpu_paper && cd ../
-    cd ./pyclaw   && git fetch xinshengqin && git checkout geo_gpu_paper && cd ../
-    cd ./visclaw  && git fetch xinshengqin && git checkout geo_gpu_paper && cd ../
+    cd ./amrclaw  && git fetch xinshengqin --no-tags refs/tags/geo_gpu_paper:refs/tags/geo_gpu_paper && git checkout geo_gpu_paper && cd ../
+    cd ./clawutil && git fetch xinshengqin --no-tags refs/tags/geo_gpu_paper:refs/tags/geo_gpu_paper && git checkout geo_gpu_paper && cd ../
+    cd ./riemann  && git fetch xinshengqin --no-tags refs/tags/geo_gpu_paper:refs/tags/geo_gpu_paper && git checkout geo_gpu_paper && cd ../
+    cd ./geoclaw  && git fetch xinshengqin --no-tags refs/tags/geo_gpu_paper:refs/tags/geo_gpu_paper && git checkout geo_gpu_paper && cd ../
+    cd ./classic  && git fetch xinshengqin --no-tags refs/tags/geo_gpu_paper:refs/tags/geo_gpu_paper && git checkout geo_gpu_paper && cd ../
+    cd ./pyclaw   && git fetch xinshengqin --no-tags refs/tags/geo_gpu_paper:refs/tags/geo_gpu_paper && git checkout geo_gpu_paper && cd ../
+    cd ./visclaw  && git fetch xinshengqin --no-tags refs/tags/geo_gpu_paper:refs/tags/geo_gpu_paper && git checkout geo_gpu_paper && cd ../
 
 4) Now one can run an example at geoclaw/examples/GPU/tsunami/chile2010/
 
-Note that the code need PGI fortran compiler and CUDA (>=9.2) installed in the environment.
+Note that the code needs PGI fortran compiler and CUDA (>=9.2) installed in the environment.
 
