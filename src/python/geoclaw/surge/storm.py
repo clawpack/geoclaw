@@ -42,6 +42,8 @@ import argparse
 import datetime
 
 import numpy
+#import xarray
+import netCDF4
 
 import clawpack.geoclaw.units as units
 import clawpack.clawutil.data
@@ -750,7 +752,7 @@ class Storm(object):
         getattr(self, 'write_%s' % file_format.lower())(path, **kwargs)
 
     def write_geoclaw(self, path, verbose=False, max_wind_radius_fill=None,
-                            storm_radius_fill=None, seconds_exit=False):
+                            storm_radius_fill=None, seconds_exist=False):
         r"""Write out a GeoClaw formatted storm file
 
         GeoClaw storm files are read in by the GeoClaw Fortran code.
@@ -796,10 +798,13 @@ class Storm(object):
 
             format_string = ("{:19,.8e} " * 7)[:-1] + "\n"
             data = []
+    
             if seconds_exist: 
                 data.append(self.t[n] - self.time_offset)
             else: 
                 data.append((self.t[n] - self.time_offset).total_seconds())
+            
+            #data.append((self.t[n] - self.time_offset).total_seconds())
             data.append(self.eye_location[n, 0])
             data.append(self.eye_location[n, 1])
             data.append(self.max_wind_speed[n])
@@ -1260,7 +1265,7 @@ def load_emanuel_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
                                      day[n, i],
                                      hour[n, i]) for i in range(m)]
         
-        storm.time_offset = storm.t[0] 
+        storm.time_offset = storm.t[0]
         
         storm.eye_location = numpy.empty((m, 2))
         storm.max_wind_speed = numpy.empty(m)
@@ -1319,31 +1324,33 @@ def load_chaz_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
 
 
     # Load the mat file and extract pertinent data
-    data = xarray.open_dataset(path)
+    #data = xarray.open_dataset(path)
+    data = netCDF4.Dataset(path)
     
     # Days from 1-1-1950
     # start_date = datetime.datetime(1950, 1, 1)
+    #stormIDs = data.variables['time']['stormID'][:]
     
-    stormIDs = data['time']['stormID']
+    #stormIDs = data['time']['stormID']
     storms = []
     
     time_length = data['Mwspd'].shape[0]
-    #print(time_length)
     num_tracks = data['Mwspd'].shape[1]
     num_intensities = data['Mwspd'].shape[2]
     
     for i in range(num_tracks):
     
         # Extract initial data ranges
-        t = numpy.array(data['time'][:, i])
-        #print(t)
-        x = numpy.array(data['longitude'][:, i])
-        y = numpy.array(data['latitude'][:, i])
+        #print(numpy.array(data['time'].shape))
+        #print(numpy.array(data.variables['time'].shape))
+        t = numpy.array(data.variables['time'][:, i])
+        x = numpy.array(data.variables['longitude'][:, i])
+        y = numpy.array(data.variables['latitude'][:, i])
     
         for n in range(num_intensities):
     
             # Use intensity to find non-nans and extract correct arrays
-            max_wind_speed = numpy.array(data['Mwspd'][:, i, n])
+            max_wind_speed = numpy.array(data.variables['Mwspd'][:, i, n])
             index_set = (numpy.isnan(max_wind_speed) - 1).nonzero()[0]
     
             # Remove zero-length intensities
@@ -1369,18 +1376,21 @@ def load_chaz_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
     
                 # TODO: Convert from knots
                 storm.max_wind_speed = max_wind_speed[index_set]
+                storm.max_wind_speed = units.convert(storm.max_wind_speed,
+                                                     'm/s', 'knots')
     
                 # Assumed values
                 storm.storm_radius = 1000e3 * numpy.ones(len(index_set))
 
                 # Calculate Radius of Max Wind 
-                v_max = units.convert(storm.max_wind_speed, 'm/s', 'knots') 
                 C0 = 218.3784 * numpy.ones(len(index_set))
-                storm.max_wind_radius = C0 - 1.2014 * v_max + \
-                                        (v_max / 10.9884)**2 - \
-                                        (v_max / 35.3052)**3 - \
+                storm.max_wind_radius = C0 - 1.2014 * storm.max_wind_speed + \
+                                        (storm.max_wind_speed / 10.9884)**2 - \
+                                        (storm.max_wind_speed / 35.3052)**3 - \
                                         145.5090 * \
-                                        storm.eye_location[1, :]  
+                                        storm.eye_location[1, :] 
+
+                # Define maximum radius for all sotrms  
                 storm.max_wind_radius = 50e3 * numpy.ones(len(index_set))
     
                 # From Kossin, J. P. WAF 2015
