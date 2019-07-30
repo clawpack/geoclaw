@@ -1286,7 +1286,8 @@ def load_emanuel_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
                          mask_coordinate[1])**2)
             inlcude_storm = numpy.any(distance < mask_distance)
         if mask_category is not None:
-            include_storm = numpy.any(storm['category'] > mask_category) 
+            category = storm.category(categorization=categorization)
+            include_storm = numpy.any(category > mask_category) 
 
         if include_storm:
             storms.append(storm)
@@ -1337,21 +1338,44 @@ def load_chaz_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
     time_length = data['Mwspd'].shape[0]
     num_tracks = data['Mwspd'].shape[1]
     num_intensities = data['Mwspd'].shape[2]
+    print(num_tracks)
+    print(num_intensities) 
     
     for i in range(num_tracks):
     
         # Extract initial data ranges
         #print(numpy.array(data['time'].shape))
         #print(numpy.array(data.variables['time'].shape))
-        t = numpy.array(data.variables['time'][:, i])
-        x = numpy.array(data.variables['longitude'][:, i])
-        y = numpy.array(data.variables['latitude'][:, i])
+        #print(data.variables['time'][:, i])
+        #print("") 
+        #print(data.variables['longitude'][:, i])
+
+
+        #index_set = (numpy.isnan(max_wind_speed) - 1).nonzero()[0]
+        #
+        #
+        #t = numpy.array(data.variables['time'][:, i])
+        #x = numpy.array(data.variables['longitude'][:, i])
+        #y = numpy.array(data.variables['latitude'][:, i])
     
         for n in range(num_intensities):
     
             # Use intensity to find non-nans and extract correct arrays
             max_wind_speed = numpy.array(data.variables['Mwspd'][:, i, n])
             index_set = (numpy.isnan(max_wind_speed) - 1).nonzero()[0]
+            #print("")
+            #print("Max Wind speed") 
+            #print(max_wind_speed)
+
+            index = len(index_set) 
+            t = numpy.array(data.variables['time'][0:index, i])
+            x = numpy.array(data.variables['longitude'][0:index, i])
+            y = numpy.array(data.variables['latitude'][0:index, i])
+
+            #print("")
+            #print(x)
+            #print("")
+            #print(y)
     
             # Remove zero-length intensities
             if len(index_set) > 0:
@@ -1359,39 +1383,58 @@ def load_chaz_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
                 storm = clawpack.geoclaw.surge.storm.Storm()
                 storm.ID = i * num_intensities + n
     
-                # Add fields with proper non-nan values
-                storm.t = t[index_set]
-                storm.t -= storm.t[0]
-                storm.t *= 24.0 * 60.0**2
+                # Initialize the date set 
+ 
+                storm.t = [datetime.datetime(2000, 1, 1, 0) + \
+                           datetime.timedelta(hours=6) * i 
+                           for i in range(len(index_set))]
+                storm.time_offset = storm.t[0] 
+                #storm.t = t[index_set]
+                ## Add fields with proper non-nan values
+                #storm.t[0] = datetime.datetime(2007, 1, 1, 0)
+                #for i in range(1, index_set): 
+                #    storm.t[i] = storm.t[i-1] + datetime.timedelta(hours = 6)
+                
+                #storm.t = t[index_set]
+                #storm.t -= storm.t[0]
+                #storm.t *= 24.0 * 60.0**2
     
-                # Check for missing last time point and adjust index set
-                if storm.t[-1] < 0:
-                    index_set = index_set[:-1]
-                    #print(index_set)
-                    storm.t = storm.t[:-1]
+                ## Check for missing last time point and adjust index set
+                #if storm.t[-1] < 0:
+                #    index_set = index_set[:-1]
+                #    #print(index_set)
+                #    storm.t = storm.t[:-1]
     
-                storm.eye_location = numpy.empty((2, len(index_set)))
-                storm.eye_location[0, :] = x[index_set]
-                storm.eye_location[1, :] = y[index_set]
+                storm.eye_location = numpy.empty((len(index_set), 2))
+                x[index_set] = x[index_set] - 360.0 * numpy.ones(len(index_set)) 
+                storm.eye_location[:, 0] = x[index_set] 
+                storm.eye_location[:, 1] = y[index_set]
+                
+                #storm.eye_location = numpy.empty((2, len(index_set)))
+                #storm.eye_location[0, :] = x[index_set]
+                #storm.eye_location[1, :] = y[index_set]
     
                 # TODO: Convert from knots
                 storm.max_wind_speed = max_wind_speed[index_set]
+                #print(storm.max_wind_speed)
                 storm.max_wind_speed = units.convert(storm.max_wind_speed,
-                                                     'm/s', 'knots')
+                                                     'knots', 'm/s')
     
                 # Assumed values
-                storm.storm_radius = 1000e3 * numpy.ones(len(index_set))
+                storm.storm_radius = 500000 * numpy.ones(len(index_set))
 
                 # Calculate Radius of Max Wind 
                 C0 = 218.3784 * numpy.ones(len(index_set))
-                storm.max_wind_radius = C0 - 1.2014 * storm.max_wind_speed + \
-                                        (storm.max_wind_speed / 10.9884)**2 - \
-                                        (storm.max_wind_speed / 35.3052)**3 - \
+                storm.max_wind_radius = C0 - 1.2014 * max_wind_speed[index_set] + \
+                                        (max_wind_speed[index_set] / 10.9884)**2 - \
+                                        (max_wind_speed[index_set] / 35.3052)**3 - \
                                         145.5090 * \
-                                        storm.eye_location[1, :] 
+                                        numpy.cos(storm.eye_location[:, 1])
+                storm.max_wind_radius = units.convert(storm.max_wind_radius, 
+                                                            'nmi', 'm')  
 
                 # Define maximum radius for all sotrms  
-                storm.max_wind_radius = 50e3 * numpy.ones(len(index_set))
+                #storm.storm_radius = 50e3 * numpy.ones(len(index_set))
     
                 # From Kossin, J. P. WAF 2015
                 a = -0.0025
@@ -1404,12 +1447,15 @@ def load_chaz_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
                 include_storm = True 
                 if mask_distance is not None:
                     distance = numpy.sqrt((storm.eye_location[:, 0] - 
-                                           mask_coord[0])**2 +
+                                           mask_coordinate[0])**2 +
                                           (storm.eye_location[:, 1] - 
-                                           mask_coord[1])**2)
+                                           mask_coordinate[1])**2)
                     inlcude_storm = numpy.any(distance < mask_distance)
+                    
                 if mask_category is not None:
-                    raise NotImplementedError("Category masking not implemented.")
+                    category = storm.category(categorization=categorization)
+                    include_storm = numpy.any(category > mask_category) 
+                    #raise NotImplementedError("Category masking not implemented.")
                 
                 if include_storm:
                     storms.append(storm)
