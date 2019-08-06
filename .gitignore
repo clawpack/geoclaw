@@ -15,5 +15,3 @@ build
 
 # ignore silly .pyc, log, and egg files
 *.pyc
-*.log
-*.egg-info
