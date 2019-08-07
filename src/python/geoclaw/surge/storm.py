@@ -42,6 +42,8 @@ import argparse
 import datetime
 
 import numpy
+#import xarray
+import netCDF4
 
 import clawpack.geoclaw.units as units
 import clawpack.clawutil.data
@@ -845,7 +847,7 @@ class Storm(object):
         getattr(self, 'write_%s' % file_format.lower())(path, **kwargs)
 
     def write_geoclaw(self, path, verbose=False, max_wind_radius_fill=None,
-                            storm_radius_fill=None):
+                            storm_radius_fill=None, seconds_exist=False):
         r"""Write out a GeoClaw formatted storm file
 
         GeoClaw storm files are read in by the GeoClaw Fortran code.
@@ -891,7 +893,13 @@ class Storm(object):
 
             format_string = ("{:19,.8e} " * 7)[:-1] + "\n"
             data = []
-            data.append((self.t[n] - self.time_offset).total_seconds())
+    
+            if seconds_exist: 
+                data.append(self.t[n] - self.time_offset)
+            else: 
+                data.append((self.t[n] - self.time_offset).total_seconds())
+            
+            #data.append((self.t[n] - self.time_offset).total_seconds())
             data.append(self.eye_location[n, 0])
             data.append(self.eye_location[n, 1])
             
@@ -1391,6 +1399,257 @@ def available_models():
         output = "".join((output, "%s: %s %s\n" % (values[0], model,
                                                    values[1])))
     return output
+
+# Ensmeble Storm Formats
+def load_emanuel_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
+                               mask_category=None, categorization="NHC"):
+    r"""Load storms from a Matlab file containing storms
+
+    This format is based on the format Prof. Emmanuel uses to generate storms.
+
+    :Input:
+     - *path* (string) Path to the file to be read in
+     - *mask_distance* (float) Distance from *mask_coordinate* at which a storm
+       needs to in order to be returned in the list of storms.  If
+       *mask_distance* is *None* then no masking is used.  Default is to
+       use no *mask_distance*.
+     - *mask_coordinate* (tuple) Longitude and latitude coordinates to measure
+       the distance from.  Default is *(0.0, 0.0)*.
+     - *mask_category* (int) Category or highter a storm needs to be to be
+       included in the returned list of storms.  If *mask_category* is *None*
+       then no masking occurs.  The categorization used is controlled by
+       *categorization*.  Default is to use no *mask_category*.
+     - *categorization* (string) Categorization to be used for the
+       *mask_category* filter.  Default is "NHC".
+
+    :Output:
+     - (list) List of Storm objects that have been read in and were not
+       filtered out.
+    """                                
+
+
+    # Load the mat file and extract pertinent data
+    import scipy.io
+    mat = scipy.io.loadmat(path)
+
+    lon = mat['longstore']
+    lat = mat['latstore']
+    hour = mat['hourstore']
+    day = mat['daystore']
+    month = mat['monthstore']
+    year = mat['yearstore']
+    max_wind_radius = mat['rmstore']
+    max_wind_speed = mat['vstore']
+    central_pressure = mat['pstore']
+
+    # Convert into storms and truncate zeros
+    storms = []
+    for n in range(lon.shape[0]):
+        m = len(lon[n].nonzero()[0])
+
+
+        storm = Storm()
+        storm.t = [datetime.datetime(year[0, n],
+                                     month[n, i],
+                                     day[n, i],
+                                     hour[n, i]) for i in range(m)]
+        
+        storm.time_offset = storm.t[0]
+        
+        storm.eye_location = numpy.empty((m, 2))
+        storm.max_wind_speed = numpy.empty(m)
+        storm.max_wind_radius = numpy.empty(m)
+        storm.central_pressure = numpy.empty(m)
+        
+        storm.eye_location[:, 0] = lon[n, :m]
+        storm.eye_location[:, 1] = lat[n, :m]
+        storm.max_wind_speed = max_wind_speed[n, :m]
+        storm.max_wind_radius = units.convert(max_wind_radius[n, :m], 'km', 'm') 
+        storm.central_pressure = units.convert(central_pressure[n, :m], 'hPa', 'Pa')
+        storm.storm_radius = numpy.ones(m) * 300e3
+    
+        include_storm = True 
+        if mask_distance is not None:
+            distance = numpy.sqrt((storm.eye_location[:, 0] - \
+                         mask_coordinate[0])**2 + (storm.eye_location[:, 1] - \
+                         mask_coordinate[1])**2)
+            inlcude_storm = numpy.any(distance < mask_distance)
+        if mask_category is not None:
+            category = storm.category(categorization=categorization)
+            include_storm = numpy.any(category > mask_category) 
+
+        if include_storm:
+            storms.append(storm)
+
+    #print("Length of storms:", len(storms))
+    return storms
+
+
+# Ensmeble Storm Formats
+def load_chaz_storms(path, mask_distance=None, mask_coordinate=(0.0, 0.0),
+                               mask_category=None, categorization="NHC"):
+    r"""Load storms from a Matlab file containing storms
+
+    This format is based on the format Prof. Emmanuel uses to generate storms.
+
+    :Input:
+     - *path* (string) Path to the file to be read in
+     - *mask_distance* (float) Distance from *mask_coordinate* at which a storm
+       needs to in order to be returned in the list of storms.  If
+       *mask_distance* is *None* then no masking is used.  Default is to
+       use no *mask_distance*.
+     - *mask_coordinate* (tuple) Longitude and latitude coordinates to measure
+       the distance from.  Default is *(0.0, 0.0)*.
+     - *mask_category* (int) Category or highter a storm needs to be to be
+       included in the returned list of storms.  If *mask_category* is *None*
+       then no masking occurs.  The categorization used is controlled by
+       *categorization*.  Default is to use no *mask_category*.
+     - *categorization* (string) Categorization to be used for the
+       *mask_category* filter.  Default is "NHC".
+
+    :Output:
+     - (list) List of Storm objects that have been read in and were not
+       filtered out.
+    """                                
+
+
+    # Load the mat file and extract pertinent data
+    #data = xarray.open_dataset(path)
+    data = netCDF4.Dataset(path)
+    
+    # Days from 1-1-1950
+    # start_date = datetime.datetime(1950, 1, 1)
+    #stormIDs = data.variables['time']['stormID'][:]
+    
+    #stormIDs = data['time']['stormID']
+    storms = []
+    
+    time_length = data['Mwspd'].shape[0]
+    num_tracks = data['Mwspd'].shape[1]
+    num_intensities = data['Mwspd'].shape[2]
+    print(num_tracks)
+    print(num_intensities) 
+    
+    for i in range(num_tracks):
+    
+        # Extract initial data ranges
+        #print(numpy.array(data['time'].shape))
+        #print(numpy.array(data.variables['time'].shape))
+        #print(data.variables['time'][:, i])
+        #print("") 
+        #print(data.variables['longitude'][:, i])
+
+
+        #index_set = (numpy.isnan(max_wind_speed) - 1).nonzero()[0]
+        #
+        #
+        #t = numpy.array(data.variables['time'][:, i])
+        #x = numpy.array(data.variables['longitude'][:, i])
+        #y = numpy.array(data.variables['latitude'][:, i])
+    
+        for n in range(num_intensities):
+    
+            # Use intensity to find non-nans and extract correct arrays
+            max_wind_speed = numpy.array(data.variables['Mwspd'][:, i, n])
+            index_set = (numpy.isnan(max_wind_speed) - 1).nonzero()[0]
+            #print("")
+            #print("Max Wind speed") 
+            #print(max_wind_speed)
+
+            index = len(index_set) 
+            t = numpy.array(data.variables['time'][0:index, i])
+            x = numpy.array(data.variables['longitude'][0:index, i])
+            y = numpy.array(data.variables['latitude'][0:index, i])
+
+            #print("")
+            #print(x)
+            #print("")
+            #print(y)
+    
+            # Remove zero-length intensities
+            if len(index_set) > 0:
+                # Create storm object
+                storm = clawpack.geoclaw.surge.storm.Storm()
+                storm.ID = i * num_intensities + n
+    
+                # Initialize the date set 
+ 
+                storm.t = [datetime.datetime(2000, 1, 1, 0) + \
+                           datetime.timedelta(hours=6) * i 
+                           for i in range(len(index_set))]
+                storm.time_offset = storm.t[0] 
+                #storm.t = t[index_set]
+                ## Add fields with proper non-nan values
+                #storm.t[0] = datetime.datetime(2007, 1, 1, 0)
+                #for i in range(1, index_set): 
+                #    storm.t[i] = storm.t[i-1] + datetime.timedelta(hours = 6)
+                
+                #storm.t = t[index_set]
+                #storm.t -= storm.t[0]
+                #storm.t *= 24.0 * 60.0**2
+    
+                ## Check for missing last time point and adjust index set
+                #if storm.t[-1] < 0:
+                #    index_set = index_set[:-1]
+                #    #print(index_set)
+                #    storm.t = storm.t[:-1]
+    
+                storm.eye_location = numpy.empty((len(index_set), 2))
+                x[index_set] = x[index_set] - 360.0 * numpy.ones(len(index_set)) 
+                storm.eye_location[:, 0] = x[index_set] 
+                storm.eye_location[:, 1] = y[index_set]
+                
+                #storm.eye_location = numpy.empty((2, len(index_set)))
+                #storm.eye_location[0, :] = x[index_set]
+                #storm.eye_location[1, :] = y[index_set]
+    
+                # TODO: Convert from knots
+                storm.max_wind_speed = max_wind_speed[index_set]
+                #print(storm.max_wind_speed)
+                storm.max_wind_speed = units.convert(storm.max_wind_speed,
+                                                     'knots', 'm/s')
+    
+                # Assumed values
+                storm.storm_radius = 500000 * numpy.ones(len(index_set))
+
+                # Calculate Radius of Max Wind 
+                C0 = 218.3784 * numpy.ones(len(index_set))
+                storm.max_wind_radius = C0 - 1.2014 * max_wind_speed[index_set] + \
+                                        (max_wind_speed[index_set] / 10.9884)**2 - \
+                                        (max_wind_speed[index_set] / 35.3052)**3 - \
+                                        145.5090 * \
+                                        numpy.cos(storm.eye_location[:, 1])
+                storm.max_wind_radius = units.convert(storm.max_wind_radius, 
+                                                            'nmi', 'm')  
+
+                # Define maximum radius for all sotrms  
+                #storm.storm_radius = 50e3 * numpy.ones(len(index_set))
+    
+                # From Kossin, J. P. WAF 2015
+                a = -0.0025
+                b = -0.36
+                c = 1021.36
+                storm.central_pressure = (  a * storm.max_wind_speed**2
+                                          + b * storm.max_wind_speed
+                                          + c)
+    
+                include_storm = True 
+                if mask_distance is not None:
+                    distance = numpy.sqrt((storm.eye_location[:, 0] - 
+                                           mask_coordinate[0])**2 +
+                                          (storm.eye_location[:, 1] - 
+                                           mask_coordinate[1])**2)
+                    inlcude_storm = numpy.any(distance < mask_distance)
+                    
+                if mask_category is not None:
+                    category = storm.category(categorization=categorization)
+                    include_storm = numpy.any(category > mask_category) 
+                    #raise NotImplementedError("Category masking not implemented.")
+                
+                if include_storm:
+                    storms.append(storm)
+    return storms 
+
 
 
 if __name__ == '__main__':

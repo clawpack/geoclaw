@@ -1,3 +1,3 @@
 # encoding: utf-8
 
-__all__ = ['plot']
+__all__ = ['plot', 'storm']

@@ -349,7 +349,12 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                                None: 0,
                                'holland80': 1,
                                'holland10': 2,
-                               'CLE': 3}
+                               'CLE': 3, 
+                               'SLOSH': 4,                     
+                               'rankine': 5,           
+                               'modified-rankine': 6, 
+                               'DeMaria': 7     
+                              }
 
     def __init__(self):
         super(SurgeData,self).__init__()
