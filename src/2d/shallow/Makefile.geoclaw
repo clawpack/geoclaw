@@ -170,6 +170,36 @@ ifeq ($(USE_CUDA), TRUE)
     $(GEOLIB)/GPU/update.f90 \
     $(GEOLIB)/GPU/valout.f90
 
+
+else
+    COMMON_MODULES += \
+    $(GEOLIB)/amr2.f90 \
+    $(GEOLIB)/auxcoarsen.f \
+    $(GEOLIB)/b4step2.f90 \
+    $(GEOLIB)/coarsen.f \
+    $(GEOLIB)/errest.f \
+    $(GEOLIB)/errf1.f \
+    $(GEOLIB)/flag2refine2.f90 \
+    $(GEOLIB)/geoclaw_module.f90 \
+    $(GEOLIB)/gfixup.f \
+    $(GEOLIB)/ginit.f \
+    $(GEOLIB)/multilayer/update.f90 \
+    $(GEOLIB)/prepbigstep.f \
+    $(GEOLIB)/prepregstep.f \
+    $(GEOLIB)/qad.f \
+    $(GEOLIB)/restrt.f \
+    $(GEOLIB)/setaux.f90 \
+    $(GEOLIB)/setgrd.f \
+    $(GEOLIB)/setprob.f90 \
+    $(GEOLIB)/setprob_module.f90 \
+    $(GEOLIB)/stepgrid.f \
+    $(GEOLIB)/tick.f \
+    $(GEOLIB)/upbnd.f \
+    $(GEOLIB)/update.f90 \
+    $(GEOLIB)/valout.f90
+endif
+
+# USE_CPP is only used when USE_CUDA is set to TRUE
 ifeq ($(USE_CPP), TRUE)
 
 CPP_SOURCES += \
@@ -201,31 +231,3 @@ CPP_HEADERS += \
 INCLUDE += $(AMRLIB)/cudaclaw
 
 endif # USE_CPP
-
-else
-    COMMON_MODULES += \
-    $(GEOLIB)/amr2.f90 \
-    $(GEOLIB)/auxcoarsen.f \
-    $(GEOLIB)/b4step2.f90 \
-    $(GEOLIB)/coarsen.f \
-    $(GEOLIB)/errest.f \
-    $(GEOLIB)/errf1.f \
-    $(GEOLIB)/flag2refine2.f90 \
-    $(GEOLIB)/geoclaw_module.f90 \
-    $(GEOLIB)/gfixup.f \
-    $(GEOLIB)/ginit.f \
-    $(GEOLIB)/multilayer/update.f90 \
-    $(GEOLIB)/prepbigstep.f \
-    $(GEOLIB)/prepregstep.f \
-    $(GEOLIB)/qad.f \
-    $(GEOLIB)/restrt.f \
-    $(GEOLIB)/setaux.f90 \
-    $(GEOLIB)/setgrd.f \
-    $(GEOLIB)/setprob.f90 \
-    $(GEOLIB)/setprob_module.f90 \
-    $(GEOLIB)/stepgrid.f \
-    $(GEOLIB)/tick.f \
-    $(GEOLIB)/upbnd.f \
-    $(GEOLIB)/update.f90 \
-    $(GEOLIB)/valout.f90
-endif
