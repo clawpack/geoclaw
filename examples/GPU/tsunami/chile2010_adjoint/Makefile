@@ -77,19 +77,19 @@ EXCLUDE_SOURCES = \
 # ----------------------------------------
 
 MODULES = \
-  $(CLAW)/riemann/src/shallow_topo_device_module.f90
+  $(CLAW)/riemann/src/GPU/shallow_topo_device_module.f90
 
 SOURCES = \
   $(CLAW)/riemann/src/rpn2_geoclaw.f \
   $(CLAW)/riemann/src/rpt2_geoclaw.f \
-  $(CLAW)/riemann/src/geoclaw_riemann_utils.f90
+  $(CLAW)/riemann/src/GPU/geoclaw_riemann_utils.f90
 
 ifeq ($(USE_CUDA), TRUE) 
     CPP_SOURCES += stepgrid_cuda.cu
 endif
 
 # case specific dependency
-$(CLAW)/riemann/src/shallow_topo_device_module.f90:$(CLAW)/amrclaw/src/2d/cudaclaw/arrayIndex.H
+$(CLAW)/riemann/src/GPU/shallow_topo_device_module.f90:$(CLAW)/amrclaw/src/2d/GPU/solver/arrayIndex.H
 
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:
