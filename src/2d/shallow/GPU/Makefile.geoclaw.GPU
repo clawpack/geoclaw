@@ -1,0 +1,256 @@
+#list of common sources for amr 2d codes
+COMMON_MODULES += \
+    $(AMRLIB)/regions_module.f90 \
+    $(AMRLIB)/adjoint_module.f90
+
+
+#list of common sources needed for geoclaw codes (subset of amr dependencies)
+COMMON_MODULES += \
+    $(GEOLIB)/utility_module.f90 \
+    $(GEOLIB)/gauges_module.f90 \
+    $(GEOLIB)/topo_module.f90 \
+    $(GEOLIB)/qinit_module.f90 \
+    $(GEOLIB)/refinement_module.f90 \
+    $(GEOLIB)/fixedgrids_module.f90 \
+    $(GEOLIB)/fgmax_module.f90 \
+    $(GEOLIB)/surge/model_storm_module.f90 \
+    $(GEOLIB)/surge/data_storm_module.f90 \
+    $(GEOLIB)/surge/storm_module.f90 \
+    $(GEOLIB)/friction_module.f90 \
+    $(GEOLIB)/multilayer/multilayer_module.f90 \
+    $(GEOLIB)/adjointsup_module.f90 
+
+# list of source files from AMR library. 
+COMMON_SOURCES += \
+    $(AMRLIB)/prefilp.f90 \
+    $(AMRLIB)/trimbd.f90 \
+    $(AMRLIB)/bound.f90 \
+    $(AMRLIB)/intfil.f90 \
+    $(AMRLIB)/flagregions2.f90  \
+    $(AMRLIB)/quick_sort1.f \
+    $(AMRLIB)/estdt.f \
+    $(AMRLIB)/check4nans.f90 \
+    $(AMRLIB)/init_iflags.f \
+    $(AMRLIB)/igetsp.f \
+    $(AMRLIB)/reclam.f \
+    $(AMRLIB)/birect.f90 \
+    $(AMRLIB)/colate2.f \
+    $(AMRLIB)/bufnst2.f90 \
+    $(AMRLIB)/flagger.f \
+    $(AMRLIB)/fixcapaq.f \
+    $(AMRLIB)/flglvl2.f \
+    $(AMRLIB)/grdfit2.f \
+    $(AMRLIB)/moment.f \
+    $(AMRLIB)/nestck2.f \
+    $(AMRLIB)/projec2.f \
+    $(AMRLIB)/signs.f \
+    $(AMRLIB)/findcut.f \
+    $(AMRLIB)/smartbis.f \
+    $(AMRLIB)/putnod.f \
+    $(AMRLIB)/regrid.f \
+    $(AMRLIB)/setuse.f90 \
+    $(AMRLIB)/stst1.f \
+    $(AMRLIB)/nodget.f \
+    $(AMRLIB)/basic.f \
+    $(AMRLIB)/outval.f \
+    $(AMRLIB)/copysol.f \
+    $(AMRLIB)/outvar.f \
+    $(AMRLIB)/outtre.f \
+    $(AMRLIB)/domain.f  \
+    $(AMRLIB)/cellave.f \
+    $(AMRLIB)/fdisc.f \
+    $(AMRLIB)/fss.f \
+    $(AMRLIB)/zeroin.f \
+    $(AMRLIB)/setflags.f \
+    $(AMRLIB)/shiftset2.f \
+    $(AMRLIB)/conck.f \
+    $(AMRLIB)/domshrink.f \
+    $(AMRLIB)/domprep.f \
+    $(AMRLIB)/domup.f \
+    $(AMRLIB)/domcopy.f \
+    $(AMRLIB)/setdomflags.f \
+    $(AMRLIB)/setIndices.f \
+    $(AMRLIB)/coarseGridFlagSet.f \
+    $(AMRLIB)/addflags.f \
+    $(AMRLIB)/baseCheck.f \
+    $(AMRLIB)/drivesort.f \
+    $(AMRLIB)/flagcheck.f \
+    $(AMRLIB)/domgrid.f \
+    $(AMRLIB)/setPhysBndryFlags.f \
+    $(AMRLIB)/griddomup.f \
+    $(AMRLIB)/griddomcopy.f \
+    $(AMRLIB)/griddomshrink.f \
+    $(AMRLIB)/intcopy.f \
+    $(AMRLIB)/preintcopy.f \
+    $(AMRLIB)/icall.f \
+    $(AMRLIB)/preicall.f \
+    $(AMRLIB)/cstore.f \
+    $(AMRLIB)/opendatafile.f \
+    $(AMRLIB)/init_bndryList.f \
+    $(AMRLIB)/resize_bndryList.f \
+    $(AMRLIB)/restrt_alloc.f90
+
+#   list of source files from GEOCLAW library. 
+COMMON_SOURCES += \
+    $(GEOLIB)/qinit.f90 \
+    $(GEOLIB)/topo_update.f90 \
+    $(GEOLIB)/cellgridintegrate2.f \
+    $(GEOLIB)/topointegral.f \
+    $(GEOLIB)/bilinearintegral.f \
+    $(GEOLIB)/src2.f90 \
+    $(GEOLIB)/src1d.f90 \
+    $(GEOLIB)/step2.f90 \
+    $(GEOLIB)/flux2fw.f \
+    $(GEOLIB)/filval.f90 \
+    $(GEOLIB)/filpatch.f90 \
+    $(GEOLIB)/bc2amr.f90 \
+    $(GEOLIB)/allowflag.f90  \
+    $(GEOLIB)/getmaxspeed.f90 \
+    $(GEOLIB)/fgmax_read.f90 \
+    $(GEOLIB)/fgmax_frompatch.f90 \
+    $(GEOLIB)/fgmax_interpolate0.f90 \
+    $(GEOLIB)/fgmax_values.f90 \
+    $(GEOLIB)/fgmax_finalize.f90 \
+    $(GEOLIB)/check.f \
+
+
+ifeq ($(USE_CUDA),TRUE)
+    #list of common sources for amr 2d code if GPU is used
+    COMMON_MODULES += \
+    $(AMRLIB)/GPU/amr_module.f90 \
+    $(AMRLIB)/GPU/cuda_module.f90 \
+    $(AMRLIB)/GPU/memory_module.f90 \
+    $(AMRLIB)/GPU/profiling_module.f90 \
+    $(AMRLIB)/GPU/reflux_module.f90 \
+    $(AMRLIB)/GPU/stepgrid_module.f90 \
+    $(AMRLIB)/GPU/timer_module.f90
+
+    COMMON_SOURCES += \
+    $(AMRLIB)/GPU/fluxad.f90 \
+    $(AMRLIB)/GPU/fluxsv.f90 \
+    $(AMRLIB)/GPU/inlinelimiter.f90 \
+    $(AMRLIB)/GPU/prepc.f90 \
+    $(AMRLIB)/GPU/prepf.f90 \
+    $(AMRLIB)/GPU/putsp.f90 \
+    $(AMRLIB)/GPU/quick_sort_reals.f \
+    $(AMRLIB)/GPU/init_alloc.f90 \
+    $(AMRLIB)/GPU/init_nodes.f90 \
+    $(AMRLIB)/GPU/outmsh.f \
+    $(AMRLIB)/GPU/resize_alloc.f90 \
+    $(AMRLIB)/GPU/resize_nodes.f90 \
+    $(AMRLIB)/GPU/restrt_nodes.f90 \
+    $(AMRLIB)/GPU/saveqc.f \
+    $(AMRLIB)/GPU/cleanup.f \
+    $(AMRLIB)/GPU/advanc.f90
+
+    #list of common sources for geoclaw 2d code if GPU is used
+    COMMON_MODULES += \
+    $(GEOLIB)/GPU/geoclaw_module.f90 \
+    $(GEOLIB)/GPU/setprob_module.f90
+
+    COMMON_SOURCES += \
+    $(GEOLIB)/GPU/amr2.f90 \
+    $(GEOLIB)/GPU/auxcoarsen.f \
+    $(GEOLIB)/GPU/b4step2.f90 \
+    $(GEOLIB)/GPU/coarsen.f \
+    $(GEOLIB)/GPU/errest.f \
+    $(GEOLIB)/GPU/errf1.f \
+    $(GEOLIB)/GPU/flag2refine2.f90 \
+    $(GEOLIB)/GPU/gfixup.f \
+    $(GEOLIB)/GPU/ginit.f \
+    $(GEOLIB)/GPU/prepbigstep.f \
+    $(GEOLIB)/GPU/prepregstep.f \
+    $(GEOLIB)/GPU/qad.f \
+    $(GEOLIB)/GPU/restrt.f \
+    $(GEOLIB)/GPU/setaux.f90 \
+    $(GEOLIB)/GPU/setgrd.f \
+    $(GEOLIB)/GPU/stepgrid.f90 \
+    $(GEOLIB)/GPU/tick.f \
+    $(GEOLIB)/GPU/upbnd.f \
+    $(GEOLIB)/GPU/update.f90 \
+    $(GEOLIB)/GPU/valout.f90
+
+
+else
+    COMMON_SOURCES += \
+    $(AMRLIB)/fluxad.f90 \
+    $(AMRLIB)/fluxsv.f90 \
+    $(AMRLIB)/inlinelimiter.f90 \
+    $(AMRLIB)/prepc.f90 \
+    $(AMRLIB)/prepf.f90 \
+    $(AMRLIB)/putsp.f90 \
+    $(AMRLIB)/quick_sort_reals.f \
+    $(AMRLIB)/init_alloc.f90 \
+    $(AMRLIB)/init_nodes.f90 \
+    $(AMRLIB)/outmsh.f \
+    $(AMRLIB)/resize_alloc.f90 \
+    $(AMRLIB)/resize_nodes.f90 \
+    $(AMRLIB)/restrt_nodes.f90 \
+    $(AMRLIB)/saveqc.f \
+    $(AMRLIB)/cleanup.f \
+
+    COMMON_MODULES += \
+    $(AMRLIB)/amr_module.f90 \
+    $(GEOLIB)/amr2.f90 \
+    $(GEOLIB)/auxcoarsen.f \
+    $(GEOLIB)/b4step2.f90 \
+    $(GEOLIB)/coarsen.f \
+    $(GEOLIB)/errest.f \
+    $(GEOLIB)/errf1.f \
+    $(GEOLIB)/flag2refine2.f90 \
+    $(GEOLIB)/geoclaw_module.f90 \
+    $(GEOLIB)/gfixup.f \
+    $(GEOLIB)/ginit.f \
+    $(GEOLIB)/multilayer/update.f90 \
+    $(GEOLIB)/prepbigstep.f \
+    $(GEOLIB)/prepregstep.f \
+    $(GEOLIB)/qad.f \
+    $(GEOLIB)/restrt.f \
+    $(GEOLIB)/setaux.f90 \
+    $(GEOLIB)/setgrd.f \
+    $(GEOLIB)/setprob.f90 \
+    $(GEOLIB)/setprob_module.f90 \
+    $(GEOLIB)/stepgrid.f \
+    $(GEOLIB)/tick.f \
+    $(GEOLIB)/upbnd.f \
+    $(GEOLIB)/update.f90 \
+    $(GEOLIB)/valout.f90
+endif
+
+# USE_CPP is only used when USE_CUDA is set to TRUE
+ifeq ($(USE_CPP),TRUE)
+
+CPP_SOURCES += \
+    $(AMRLIB)/GPU/clawpack_mempool.cpp \
+    $(AMRLIB)/GPU/clawpack_MemoryManager.cpp \
+    $(AMRLIB)/GPU/clawpack_CPUPinnedMemoryManager.cpp \
+    $(AMRLIB)/GPU/clawpack_GPUMemoryManager.cpp \
+    $(AMRLIB)/GPU/solver/advance.cu \
+    $(AMRLIB)/GPU/solver/params.cu
+
+CPP_HEADERS += \
+    $(AMRLIB)/GPU/clawpack_MemoryManager.H \
+    $(AMRLIB)/GPU/clawpack_CPUPinnedMemoryManager.H \
+    $(AMRLIB)/GPU/clawpack_mempool.H \
+    $(AMRLIB)/GPU/clawpack_CUDA_helper.H \
+    $(AMRLIB)/GPU/clawpack_GPUMemoryManager.H \
+    $(AMRLIB)/GPU/amr_macros.H \
+    $(AMRLIB)/GPU/clawpack_device.H \
+    $(AMRLIB)/GPU/solver/advance.H \
+    $(AMRLIB)/GPU/solver/common.H \
+    $(AMRLIB)/GPU/solver/arrayIndex.H \
+    $(AMRLIB)/GPU/solver/params.H \
+    $(AMRLIB)/GPU/solver/real.H \
+    $(AMRLIB)/GPU/solver/reduce_Max.H \
+    $(AMRLIB)/GPU/solver/sharedMemory.H \
+    $(AMRLIB)/GPU/solver/staticArray.H \
+    $(AMRLIB)/GPU/solver/fused-solvers_headers.H \
+    $(AMRLIB)/GPU/solver/acoustics_riemann_solver.H \
+    $(AMRLIB)/GPU/solver/shallow_water_riemann_solver.H \
+    $(AMRLIB)/GPU/solver/shallow_topo_riemann_solver.H \
+    $(AMRLIB)/GPU/solver/burger_riemann_solver.H
+
+INCLUDE += $(AMRLIB)/GPU
+INCLUDE += $(AMRLIB)/GPU/solver
+
+endif # USE_CPP
