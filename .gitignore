@@ -13,36 +13,3 @@ build
 
 # ignore silly .pyc, log, and egg files
 *.pyc
-#<<<<<<< HEAD
-#*.log
-#*.egg-info
-#=======
-#*.o
-#*.mod
-#*.data
-#.output
-#.data
-#.plots
-#xclaw
-#xamr
-#xgeoclaw
-#*.html
-#_output/
-#_plots/
-#*~
-#*.asc
-#*.tt3
-#*.tt1
-#*.xyz
-#scratch/*
-#!scratch/README.txt
-#
-## log files
-#*.log
-#
-## py3k cache directories
-#__pycache__
-#
-## ipython
-#.ipynb_checkpoints
-#>>>>>>> upstream/master
