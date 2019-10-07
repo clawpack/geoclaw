@@ -2,7 +2,9 @@
 AMRLIB:=$(CLAW)/amrclaw/src/2d
 GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
 
-
+ifeq ($(USE_CUDA),TRUE)
+    include $(GEOLIB)/GPU/Makefile.geoclaw.GPU
+else
 #list of common sources for amr 2d codes
 COMMON_MODULES += \
  $(AMRLIB)/amr_module.f90 \
@@ -151,4 +153,5 @@ COMMON_SOURCES += \
   $(GEOLIB)/fgmax_values.f90 \
   $(GEOLIB)/fgmax_finalize.f90 \
   $(GEOLIB)/check.f \
-  $(GEOLIB)/restrt.f \
+  $(GEOLIB)/restrt.f
+endif

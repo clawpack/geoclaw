@@ -19,11 +19,14 @@ OUTDIR = _output               # Directory for output
 SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
+OVERWRITE ?= True                   # False ==> make a copy of OUTDIR first
+RESTART ?= False                    # Should = clawdata.restart in setrun
+GIT_STATUS = True
+
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 
 # Compiler flags can be specified here or set as an environment variable
-FFLAGS ?= -O3 -fopenmp
-
+FFLAGS = -O2 -fopenmp
 
 # ---------------------------------
 # package sources for this program:
@@ -46,11 +49,12 @@ EXCLUDE_SOURCES = \
 # List of custom sources for this program:
 # ----------------------------------------
 
+
 MODULES = \
 
 SOURCES = \
-  $(CLAW)/riemann/src/rpn2_geoclaw.f \
-  $(CLAW)/riemann/src/rpt2_geoclaw.f \
+  $(CLAW)/riemann/src/rpn2_geoclaw_adjoint.f \
+  $(CLAW)/riemann/src/rpt2_geoclaw_adjoint.f \
   $(CLAW)/riemann/src/geoclaw_riemann_utils.f \
 
 #-------------------------------------------------------------------

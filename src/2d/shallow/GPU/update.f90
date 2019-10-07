@@ -1,3 +1,11 @@
+
+#define IADD(IVAR,I,J,LOC,NVAR,MITOT) LOC+IVAR-1+NVAR*((J-1)*MITOT+I-1)
+#define IADDF(IVAR,I,J,LOCF,NVAR,MI) LOCF+IVAR-1+NVAR*((J-1)*MI+I-1)
+#define IADDFAUX(I,J,LOCFAUX,MCAPA,NAUX,MI) LOCFAUX+MCAPA-1+NAUX*((J-1)*MI+(I-1))
+#define IADDCAUX(I,J,LOCCAUX,MCAPA,NAUX,MITOT) LOCCAUX+MCAPA-1+NAUX*((J-1)*MITOT+(I-1))
+#define IADDFTOPO(I,J,LOCFAUX,NAUX,MI) LOCFAUX+NAUX*((J-1)*MI+(I-1)) 
+#define IADDCTOPO(I,J,LOCCAUX,NAUX,MITOT) LOCCAUX+NAUX*((J-1)*MITOT+(I-1)) 
+
 !
 ! :::::::::::::::::::::::::: UPDATE :::::::::::::::::::::::::::::::::
 ! update - update all grids at level 'level'.
@@ -12,11 +20,8 @@
 
 subroutine update (level, nvar, naux)
 
-    use geoclaw_module, only: sea_level, rho
+    use geoclaw_module, only: dry_tolerance
     use amr_module
-
-    use multilayer_module, only: num_layers, dry_tolerance, eta_init
-
     implicit none
     ! modified for shallow water on topography to use surface level eta
     ! rather than depth h = q(i,j,1) 
@@ -24,16 +29,15 @@ subroutine update (level, nvar, naux)
 
     ! inputs
     integer, intent(in) :: nvar, naux, level
+!     real(kind=8), intent(in) :: level
 
     integer :: ng, levSt, mptr, loc, locaux, nx, ny, mitot, mjtot
     integer :: ilo, jlo, ihi, jhi, mkid, iclo, jclo, ichi, jchi
     integer :: mi, mj, locf, locfaux, iplo, jplo, iphi, jphi
-    integer :: iff, jff, nwet(num_layers), ico, jco, i, j, ivar, loccaux, lget
-    integer :: listgrids(numgrids(level)), layer, i_layer
-    real(kind=8) :: dt, totrat, bc, etasum(num_layers), hsum(num_layers)
-    real(kind=8) :: husum(num_layers), hvsum(num_layers)
-    real(kind=8) :: hf, bf, huf, hvf, etaf, hav(num_layers), hc(num_layers)
-    real(kind=8) :: huc(num_layers), hvc(num_layers), capa, etaav(num_layers)
+    integer :: iff, jff, nwet, ico, jco, i, j, ivar, loccaux
+    integer :: listgrids(numgrids(level)), lget
+    real(kind=8) :: dt, totrat, bc, etasum, hsum, husum, hvsum
+    real(kind=8) :: hf, bf, huf, hvf, etaf, hav, hc, huc, hvc, capa, etaav
     real(kind=8) :: capac
     character(len=80) :: String
 
@@ -47,10 +51,21 @@ subroutine update (level, nvar, naux)
 
     dt = possk(lget)
 
-    ! need to set up data structure for parallel distribution of grids
-!     call prepgrids(listgrids, numgrids(level), level)
-
-
+#ifdef CUDA
+!$OMP PARALLEL DO PRIVATE(ng,mptr,loc,loccaux,nx,ny,mitot,mjtot, &
+!$OMP                     ilo,jlo,ihi,jhi,mkid,iclo,jclo, &
+!$OMP                     ichi,jchi,mi,mj,locf,locfaux, &
+!$OMP                     iplo,jplo,iphi,jphi,iff,jff,totrat,i,j, &
+!$OMP                     capac,bc,etasum,hsum,husum,hvsum, &
+!$OMP                     hf,bf,huf,hvf, &
+!$OMP                     etaf,etaav,hav,nwet,hc,huc,hvc, &
+!$OMP                     ivar,ico,jco,capa,levSt, &
+!$OMP                     String), &
+!$OMP          SHARED(lget,numgrids,listsp,alloc,nvar,naux, &
+!$OMP                    intratx,intraty,nghost,uprint,mcapa,node, &
+!$OMP                    listOfGrids,listStart,lstart,level,cflux_hh,dry_tolerance), &
+!$OMP          DEFAULT(none)
+#else
 !$OMP PARALLEL DO PRIVATE(ng,mptr,loc,loccaux,nx,ny,mitot,mjtot, &
 !$OMP                    ilo,jlo,ihi,jhi,mkid,iclo,ichi, &
 !$OMP                    jclo,jchi,mi,mj,locf,locfaux,iplo,iphi, &
@@ -60,10 +75,12 @@ subroutine update (level, nvar, naux)
 !$OMP                    etaf,etaav,hav,nwet,hc,huc,hvc, String), &
 !$OMP             SHARED(numgrids,listOfGrids,level,intratx,intraty, &
 !$OMP                   nghost,uprint,nvar,naux,mcapa,node,listsp, &
-!$OMP                   alloc,lstart,dry_tolerance,listStart,lget, &
-!$OMP                   num_layers, rho, eta_init), &
+!$OMP                   alloc,lstart,dry_tolerance,listStart,lget), &
 !$OMP            DEFAULT(none)
+#endif
 
+    ! need to set up data structure for parallel distribution of grids
+    ! call prepgrids(listgrids, numgrids(level), level)
 
     do ng = 1, numgrids(lget)
         levSt   = listStart(lget)
@@ -79,9 +96,19 @@ subroutine update (level, nvar, naux)
         ihi     = node(ndihi,mptr)
         jhi     = node(ndjhi,mptr)
 
+#ifdef CUDA
+        if (associated(cflux_hh(mptr)%ptr)) then
+#else
         if (node(cfluxptr, mptr) /= 0) then
+#endif
+
+#ifdef CUDA
+            call upbnd(cflux_hh(mptr)%ptr,alloc(loc),nvar, &
+                    naux,mitot,mjtot,listsp(lget),mptr)
+#else
             call upbnd(alloc(node(cfluxptr,mptr)),alloc(loc),nvar,naux,mitot, &
                     mjtot,listsp(lget),mptr)
+#endif
         endif
 
         mkid = lstart(lget+1)
@@ -114,16 +141,16 @@ subroutine update (level, nvar, naux)
                             write(outunit,String) i,j,mptr,iff,jff,mkid                
                             
                             String = "(' old vals: ',4e25.15)"
-                            write(outunit,String)(alloc(iadd(ivar,i,j,loc,mitot)),ivar=1,nvar)
+                            write(outunit,String)(alloc(IADD(ivar,i,j,loc,nvar,mitot)),ivar=1,nvar)
                         endif
                         
                         if (mcapa == 0) then
                             capac = 1.0d0
                         else
-                            capac = alloc(iaddcaux(i,j,loccaux,mcapa,mitot))
+                            capac = alloc(IADDCAUX(i,j,loccaux,mcapa,naux,mitot))
                         endif
 
-                        bc = alloc(iaddctopo(i,j,loccaux,mitot))
+                        bc = alloc(IADDCTOPO(i,j,loccaux,naux,mitot))
 
                         etasum = 0.d0
                         hsum = 0.d0
@@ -134,65 +161,52 @@ subroutine update (level, nvar, naux)
 
                         do jco = 1, intraty(lget)
                             do ico = 1, intratx(lget)
-                                    
                                 if (mcapa == 0) then
                                     capa = 1.0d0
                                 else
-                                    capa = alloc(iaddfaux(iff+ico-1,jff+jco-1,locfaux,mcapa,mi))
+                                    capa = alloc(IADDFAUX(iff+ico-1,jff+jco-1,locfaux,mcapa,naux,mi))
                                 endif
-                                
-                                bf = alloc(iaddftopo(iff+ico-1,jff+jco-1,locfaux,mi))*capa
-                                
-                                do layer = num_layers, 1, -1
 
-                                    hf = alloc(iaddf(3*layer-2,iff+ico-1,jff+jco-1,locf,mi))*capa / rho(layer)
-                                    huf= alloc(iaddf(3*layer-1,iff+ico-1,jff+jco-1,locf,mi))*capa 
-                                    hvf= alloc(iaddf(3*layer,iff+ico-1,jff+jco-1,locf,mi))*capa 
+                                hf = alloc(IADDF(1,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
+                                bf = alloc(IADDFTOPO(iff+ico-1,jff+jco-1,locfaux,naux,mi))*capa
+                                huf= alloc(IADDF(2,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
+                                hvf= alloc(IADDF(3,iff+ico-1,jff+jco-1,locf,nvar,mi))*capa 
 
-                                    if ( alloc(iaddf(3*layer-2,iff+ico-1,jff+jco-1,locf,mi))/rho(layer) &
-                                        > dry_tolerance(layer)) then
-                                        etaf = hf + bf
-                                        nwet(layer) = nwet(layer) + 1
-                                    else
-                                        ! Set to zero for correct averages below.
-                                        etaf = 0.d0
-                                        huf=0.d0
-                                        hvf=0.d0
-                                    endif
+                                if (alloc(IADDF(1,iff+ico-1,jff+jco-1,locf,nvar,mi)) > dry_tolerance) then
+                                    etaf = hf + bf
+                                    nwet = nwet + 1
+                                else
+                                    etaf = 0.d0
+                                    huf=0.d0
+                                    hvf=0.d0
+                                endif
 
-                                    hsum(layer)   = hsum(layer) + hf
-                                    husum(layer)  = husum(layer) + huf
-                                    hvsum(layer)  = hvsum(layer) + hvf
-                                    etasum(layer) = etasum(layer) + etaf  
-
-                                    bf = bf + hf   
-                                enddo
+                                hsum   = hsum + hf
+                                husum  = husum + huf
+                                hvsum  = hvsum + hvf
+                                etasum = etasum + etaf     
                             enddo
                         enddo
 
-                        do layer = num_layers, 1, -1
-                            if (nwet(layer) > 0) then
-                                etaav(layer) = etasum(layer)/dble(nwet(layer))
-                                hav(layer) = hsum(layer)/dble(nwet(layer))
-                                hc(layer) = min(hav(layer), (max(etaav(layer)-bc*capac, 0.0d0)))
-                                huc(layer) = (min(hav(layer), hc(layer)) / hsum(layer) * husum(layer))
-                                hvc(layer) = (min(hav(layer), hc(layer)) / hsum(layer) * hvsum(layer))
-                            else
-                                hc(layer) = 0.0d0
-                                huc(layer) = 0.0d0
-                                hvc(layer) = 0.0d0
-                            endif
+                        if (nwet > 0) then
+                            etaav = etasum/dble(nwet)
+                            hav = hsum/dble(nwet)
+                            hc = min(hav, (max(etaav-bc*capac, 0.0d0)))
+                            huc = (min(hav, hc) / hsum) * husum
+                            hvc = (min(hav, hc) / hsum) * hvsum
+                        else
+                            hc = 0.0d0
+                            huc = 0.0d0
+                            hvc = 0.0d0
+                        endif
 
-                            alloc(iadd(3*layer-2,i,j,loc,mitot)) = hc(layer) / capac * rho(layer)
-                            alloc(iadd(3*layer-1,i,j,loc,mitot)) = huc(layer) / capac 
-                            alloc(iadd(3*layer,i,j,loc,mitot)) = hvc(layer) / capac 
-
-                            bc = bc + hc(layer)
-                        enddo
+                        alloc(IADD(1,i,j,loc,nvar,mitot)) = hc / capac 
+                        alloc(IADD(2,i,j,loc,nvar,mitot)) = huc / capac 
+                        alloc(IADD(3,i,j,loc,nvar,mitot)) = hvc / capac 
 
                         if (uprint) then
                             String = "(' new vals: ',4e25.15)"
-                            write(outunit, String)(alloc(iadd(ivar, i, j,loc,mitot)), ivar=1, nvar)
+                            write(outunit, String)(alloc(IADD(ivar, i, j, loc, nvar,mitot)), ivar=1, nvar)
                         endif
 
                         jff = jff + intraty(lget)
@@ -207,41 +221,9 @@ subroutine update (level, nvar, naux)
             mkid = node(levelptr, mkid)
 
         enddo
+        continue
     enddo
 !$OMP END PARALLEL DO
+
     return
-
-
-contains
-
-    integer pure function iadd(ivar,i,j,loc,mitot)
-        integer, intent(in) :: i, j, ivar, loc, mitot
-        iadd = loc + ivar-1 + nvar*((j-1)*mitot+i-1)
-    end function iadd
-
-    integer pure function iaddf(ivar,i,j,locf,mi)
-        integer, intent(in) :: i, j, ivar, locf, mi
-        iaddf = locf   + ivar-1 + nvar*((j-1)*mi+i-1)
-    end function iaddf
-
-    integer pure function iaddfaux(i,j,locfaux,mcapa,mi)
-        integer, intent(in) :: i, j, locfaux, mcapa, mi
-        iaddfaux = locfaux + mcapa-1 + naux*((j-1)*mi + (i-1))
-    end function iaddfaux
-
-    integer pure function iaddcaux(i,j,loccaux,mcapa,mitot)
-        integer, intent(in) :: i, j, loccaux, mcapa, mitot
-        iaddcaux = loccaux + mcapa-1 + naux*((j-1)*mitot+(i-1))
-    end function iaddcaux
-
-    integer pure function iaddftopo(i,j,locfaux,mi)
-        integer, intent(in) :: i, j, locfaux, mi
-        iaddftopo = locfaux + naux*((j-1)*mi + (i-1))
-    end function iaddftopo
-
-    integer pure function iaddctopo(i,j,loccaux, mitot)
-        integer, intent(in) :: i, j, loccaux, mitot
-        iaddctopo = loccaux + naux*((j-1)*mitot+(i-1))
-    end function iaddctopo
-
 end subroutine

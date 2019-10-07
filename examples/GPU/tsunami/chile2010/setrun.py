@@ -83,8 +83,8 @@ def setrun(claw_pkg='geoclaw'):
 
 
     # Number of grid cells: Coarsest grid
-    clawdata.num_cells[0] = 30
-    clawdata.num_cells[1] = 30
+    clawdata.num_cells[0] = 60
+    clawdata.num_cells[1] = 60
 
     # ---------------
     # Size of system:
@@ -143,7 +143,7 @@ def setrun(claw_pkg='geoclaw'):
         clawdata.output_t0 = True
         
 
-    clawdata.output_format = 'ascii'      # 'ascii' or 'binary' 
+    clawdata.output_format = 'ascii'      # 'ascii' or 'netcdf' 
 
     clawdata.output_q_components = 'all'   # need all
     clawdata.output_aux_components = 'none'  # eta=h+B is in q
@@ -172,7 +172,7 @@ def setrun(claw_pkg='geoclaw'):
 
     # Initial time step for variable dt.
     # If dt_variable==0 then dt=dt_initial for all steps:
-    clawdata.dt_initial = 0.2
+    clawdata.dt_initial = 0.1
 
     # Max time step to be allowed if variable dt used:
     clawdata.dt_max = 1e+99
@@ -297,7 +297,6 @@ def setrun(claw_pkg='geoclaw'):
 
     # Flag using refinement routine flag2refine rather than richardson error
     amrdata.flag_richardson = False    # use Richardson?
-    amrdata.flag_richardson_tol = 0.002  # Richardson tolerance
     amrdata.flag2refine = True
 
     # steps to take on each level L between regriddings of level L+1:
@@ -313,6 +312,15 @@ def setrun(claw_pkg='geoclaw'):
 
     # print info about each regridding up to this level:
     amrdata.verbosity_regrid = 0  
+
+    # ---------------
+    # All parameters for GPU computing:
+    # ---------------
+
+    gpudata = rundata.gpudata
+    # which gpu you would like to use
+    # must between 0 and num_of_total_gpus-1
+    gpudata.which_gpu = 0
 
     #  ----- For developers ----- 
     # Toggle debugging print statements:
@@ -424,9 +432,6 @@ def setgeo(rundata):
 if __name__ == '__main__':
     # Set up run-time parameters and write all data files.
     import sys
-    from clawpack.geoclaw import kmltools
-
     rundata = setrun(*sys.argv[1:])
     rundata.write()
 
-    kmltools.make_input_data_kmls(rundata)
