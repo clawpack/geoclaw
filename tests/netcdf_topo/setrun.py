@@ -61,8 +61,8 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.lower[0] = -2.0
     clawdata.upper[0] = 2.0
 
-    clawdata.lower[1] = -2.0
-    clawdata.upper[1] = 2.0
+    clawdata.lower[1] = 0.0
+    clawdata.upper[1] = 4.0
 
 
 

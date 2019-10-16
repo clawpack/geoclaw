@@ -16,11 +16,14 @@ import tempfile
 import time
 
 import numpy
+import xarray as xr
 import nose
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 
+build_failure_str = ("NetCDF topography test skipped due to failure to build " 
+                     "test program.")
 class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
     r"""NetCDF regression test for GeoClaw based on the bowl-slosh example"""
@@ -67,20 +70,27 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         # Make topography
         a = 1.
         h0 = 0.1
-        topo_func = lambda x,y: h0 * (x**2 + y**2) / a**2 - h0
+        z = lambda x,y: h0 * (x**2 + y**2) / a**2 - h0
 
-        topo = topotools.Topography(topo_func=topo_func)
+        topo = topotools.Topography(topo_func=z)
         topo.x = numpy.linspace(-3.1, 3.1, 310)
-        topo.y = numpy.linspace(-3.1, 3.1, 310)
+        topo.y = numpy.linspace(0, 6.2, 310)
         try:
-            topo.write(os.path.join(self.temp_path, "bowl.nc"))
+            this_path = os.path.join(self.temp_path, 'bowl.nc')
+            topo.write(this_path)
+            
+            # now mess with the dimension order of the elevation var
+            with xr.open_dataset(this_path) as new:
+                new.load()
+                new['elevation'] = new.elevation.transpose()
+            new.to_netcdf(this_path)
+
 
         except ImportError:
             # Assume that NetCDF is not installed and move on
             self.netcdf_passed = False
             self.success = True
-            raise nose.SkipTest("NetCDF topography test skipped due to " +
-                                "failure to build test program.")
+            raise nose.SkipTest(build_failure_str)
 
         except RuntimeError as e:
             print(e.message)
@@ -100,10 +110,8 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
                                                                 shell=True)
         except subprocess.CalledProcessError:
 
-            self.stdout.write("NetCDF topography test skipped due to failure" +
-                              "to build test program.")
-            self.success = True
-            self.netcdf_passed = False
+            self.stdout.write(build_failure_str)
+            raise nose.SkipTest(build_failure_str)
 
         else:
             # Force recompilation of topo_module to add NetCDF flags
