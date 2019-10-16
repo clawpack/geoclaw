@@ -1532,6 +1532,32 @@ end subroutine intersection
         end if
 
     end subroutine check_netcdf_error
+
+    subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &
+        y_dim_id, y_dim_name, my)
+        use netcdf
+        implicit none
+        integer, intent(in) :: nc_file, ndims
+        integer, intent(out) :: x_dim_id, y_dim_id, mx, my
+        character (len = *), intent(out) :: x_dim_name, y_dim_name
+        integer :: m_tmp, n
+        character(20) :: dim_name_tmp
+
+        ! get indices to start at for reading netcdf within domain
+        do n=1, ndims
+            call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                n, dim_name_tmp, m_tmp))
+            if (ANY((/ 'LON      ','LONGITUDE','X        ' /) == Upper(dim_name_tmp))) then
+                x_dim_name = dim_name_tmp
+                mx = m_tmp
+                x_dim_id = n
+            else if (ANY((/ 'LAT     ','LATITUDE','Y       ' /) == Upper(dim_name_tmp))) then
+                y_dim_name = dim_name_tmp
+                my = m_tmp
+                y_dim_id = n
+            end if
+        end do
+    end subroutine get_dim_info
 #endif
 
 function Upper(s1)  RESULT (s2)
@@ -1547,31 +1573,5 @@ function Upper(s1)  RESULT (s2)
        s2(i:i) = ch
     END DO
 END function Upper
-
-subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &
-    y_dim_id, y_dim_name, my)
-    use netcdf
-    implicit none
-    integer, intent(in) :: nc_file, ndims
-    integer, intent(out) :: x_dim_id, y_dim_id, mx, my
-    character (len = *), intent(out) :: x_dim_name, y_dim_name
-    integer :: m_tmp, n
-    character(20) :: dim_name_tmp
-
-    ! get indices to start at for reading netcdf within domain
-    do n=1, ndims
-        call check_netcdf_error(nf90_inquire_dimension(nc_file, &
-            n, dim_name_tmp, m_tmp))
-        if (ANY((/ 'LON      ','LONGITUDE','X        ' /) == Upper(dim_name_tmp))) then
-            x_dim_name = dim_name_tmp
-            mx = m_tmp
-            x_dim_id = n
-        else if (ANY((/ 'LAT     ','LATITUDE','Y       ' /) == Upper(dim_name_tmp))) then
-            y_dim_name = dim_name_tmp
-            my = m_tmp
-            y_dim_id = n
-        end if
-    end do
-end subroutine get_dim_info
 
 end module topo_module
