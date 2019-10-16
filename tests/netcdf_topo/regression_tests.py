@@ -84,7 +84,6 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
                 new.load()
                 new['elevation'] = new.elevation.transpose()
             new.to_netcdf(this_path)
-            new.to_netcdf('/home/jovyan/bowl.nc')
 
 
         except ImportError:
