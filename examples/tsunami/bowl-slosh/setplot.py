@@ -127,7 +127,7 @@ def setplot(plotdata=None):
         dy = current_data.dy
         q = current_data.q
 
-        ij = where((y <= dy/2.) & (y > -dy/2.))[0]
+        ij = where((y <= dy/2.) & (y > -dy/2.))
         x_slice = ravel(x)[ij]
         eta_slice = ravel(q[3,:,:])[ij]
         return x_slice, eta_slice
