@@ -74,16 +74,24 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
         topo = topotools.Topography(topo_func=z)
         topo.x = numpy.linspace(-3.1, 3.1, 310)
-        topo.y = numpy.linspace(0, 6.2, 310)
+        topo.y = numpy.linspace(-3.5,2.5, 300)
+        
         try:
+            import netCDF4
             this_path = os.path.join(self.temp_path, 'bowl.nc')
-            topo.write(this_path)
             
-            # now mess with the dimension order of the elevation var
-            with xr.open_dataset(this_path) as new:
-                new.load()
-                new['elevation'] = new.elevation.transpose()
-            new.to_netcdf(this_path)
+            # now mess with the order of the dimension IDs (lat, then lon)
+            with netCDF4.Dataset(this_path,'w') as out:
+                lat = out.createDimension('lat',len(topo.y))
+                lon = out.createDimension('lon',len(topo.x))
+
+                # create latitude first
+                latitudes = out.createVariable('lat','f8',("lat",))
+                longitudes = out.createVariable('lon','f8',("lon",))
+                elevations = out.createVariable('elevation','f8',("lat","lon"))
+                latitudes[:] = topo.y
+                longitudes[:] = topo.x
+                elevations[:] = topo.Z
 
 
         except ImportError:

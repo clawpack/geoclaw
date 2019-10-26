@@ -61,7 +61,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.lower[0] = -2.0
     clawdata.upper[0] = 2.0
 
-    clawdata.lower[1] = -3.0
+    clawdata.lower[1] = -2.0
     clawdata.upper[1] = 2.0
 
 
@@ -94,8 +94,6 @@ def setrun(claw_pkg='geoclaw'):
 
 
     # Restart from checkpoint file of a previous run?
-    # Note: If restarting, you must also change the Makefile to set:
-    #    RESTART = True
     # If restarting, t0 above should be from original run, and the
     # restart_file 'fort.chkNNNNN' specified below should be in 
     # the OUTDIR indicated in Makefile.
@@ -115,8 +113,8 @@ def setrun(claw_pkg='geoclaw'):
 
     if clawdata.output_style == 1:
         # Output nout frames at equally spaced times up to tfinal:
-        clawdata.num_output_times = 1
-        clawdata.tfinal = 0.5
+        clawdata.num_output_times = 16
+        clawdata.tfinal = 4.4857014654663745
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:
@@ -130,7 +128,7 @@ def setrun(claw_pkg='geoclaw'):
         clawdata.output_t0 = True
         
 
-    clawdata.output_format = 'ascii'      # 'ascii' or 'netcdf' 
+    clawdata.output_format = 'ascii'      # 'ascii' or 'binary' 
 
     clawdata.output_q_components = 'all'   # could be list such as [True,True]
     clawdata.output_aux_components = 'none'  # could be list
@@ -241,15 +239,15 @@ def setrun(claw_pkg='geoclaw'):
         # Do not checkpoint at all
         pass
 
-    elif clawdata.checkpt_style == 1:
+    elif np.abs(clawdata.checkpt_style) == 1:
         # Checkpoint only at tfinal.
         pass
 
-    elif clawdata.checkpt_style == 2:
+    elif np.abs(clawdata.checkpt_style) == 2:
         # Specify a list of checkpoint times.  
         clawdata.checkpt_times = [0.1,0.15]
 
-    elif clawdata.checkpt_style == 3:
+    elif np.abs(clawdata.checkpt_style) == 3:
         # Checkpoint every checkpt_interval timesteps (on Level 1)
         # and at the final time.
         clawdata.checkpt_interval = 5
@@ -317,7 +315,7 @@ def setrun(claw_pkg='geoclaw'):
 
     # == setgauges.data values ==
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
-    rundata.gaugedata.gauges.append([1,0.5,0.5,0,1e10])
+    # rundata.gaugedata.gauges.append([])
 
     return rundata
     # end of function setrun
@@ -366,7 +364,6 @@ def setgeo(rundata):
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
     topo_data.topofiles.append([4, 1, 10, 0., 1.e10, 'bowl.nc'])
-    # topo_data.topofiles.append([2, 1, 10, 0., 1.e10, 'bowl.tt2'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
@@ -384,10 +381,6 @@ def setgeo(rundata):
     # for fixed grids append lines of the form
     # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
     #  ioutarrivaltimes,ioutsurfacemax]
-    
-    # == fgmax.data values ==
-    fgmax_files = rundata.fgmax_data.fgmax_files
-    # for fixed grids append to this list names of any fgmax input files
 
     return rundata
     # end of function setgeo
