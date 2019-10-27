@@ -123,7 +123,7 @@ def setplot(plotdata=None):
         # Return x value and surface eta at this point, along y=0
         from pylab import ravel
         x = current_data.x
-        y = current_data.y
+        y = ravel(current_data.y)
         dy = current_data.dy
         q = current_data.q
 

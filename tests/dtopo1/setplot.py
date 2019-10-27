@@ -108,13 +108,13 @@ def setplot(plotdata):
 
     def xsec(current_data):
         # Return x value and surface eta at this point, along y=0
-        from pylab import find,ravel
+        from pylab import where,ravel
         x = current_data.x
-        y = current_data.y
+        y = ravel(current_data.y)
         dy = current_data.dy
         q = current_data.q
 
-        ij = find((y <= y0+dy/2.+1e-8) & (y > y0-dy/2.))
+        ij = where((y <= y0+dy/2.+1e-8) & (y > y0-dy/2.))[0]
         x_slice = ravel(x)[ij]
         eta_slice = ravel(q[3,:,:])[ij]
         return x_slice, eta_slice
@@ -125,16 +125,16 @@ def setplot(plotdata):
     plotitem.amr_show = [1]  # plot on all levels
 
     def add_dtopo_plot(current_data):
-        from pylab import find, plot, legend
+        from pylab import where, plot, legend
         for dtopo in [dtopo1,dtopo2]:
-            j = max(find(dtopo.y <= y0))
+            j = max(where(dtopo.y <= y0)[0])
             j1 = min(j+1, len(dtopo.y)-1)
             beta = (y0 - dtopo.y[j])/(dtopo.y[1] - dtopo.y[0])
     
             t = current_data.t
-            itlist = find(dtopo.times <= t)
+            itlist = where(dtopo.times <= t)[0]
             if len(itlist) > 0:
-                it = max(find(dtopo.times <= t))
+                it = max(where(dtopo.times <= t)[0])
                 #print "+++ t, it, dtopo.times[it]: ",t, it, dtopo.times[it]
                 dz = dtopo.dZ[it,:,:]
                 dzj = dz[j,:]
