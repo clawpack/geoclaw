@@ -16,13 +16,12 @@ import tempfile
 import time
 
 import numpy
-import xarray as xr
 import nose
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 
-build_failure_str = ("NetCDF topography test skipped due to failure to build " 
+build_failure_str = ("NetCDF topography test skipped due to failure to build "
                      "test program.")
 class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
@@ -75,11 +74,11 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         topo = topotools.Topography(topo_func=z)
         topo.x = numpy.linspace(-3.1, 3.1, 310)
         topo.y = numpy.linspace(-3.5,2.5, 300)
-        
+
         try:
             import netCDF4
             this_path = os.path.join(self.temp_path, 'bowl.nc')
-            
+
             # now mess with the order of the dimension IDs (lat, then lon)
             with netCDF4.Dataset(this_path,'w') as out:
                 lat = out.createDimension('lat',len(topo.y))
