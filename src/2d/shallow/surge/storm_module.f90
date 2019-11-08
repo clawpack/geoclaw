@@ -51,7 +51,7 @@ module storm_module
     type(data_storm_type), save :: data_storm
 
     ! Wind drag limit
-    real(kind=8) :: wind_drag_limit = 3.5d-3
+    real(kind=8) :: WIND_DRAG_LIMIT = 3.5d-3
 
     ! Interface to each of the parameterized models
     abstract interface
@@ -262,7 +262,12 @@ contains
         real(kind=8) :: weight(3), drag(3)
 
         weight = 0.d0
-        drag = garret_wind_drag_limit(wind_speed, wind_drag_limit)
+        
+        ! Calculate Garret speeds for use in sector- and speed-specific Cd
+        ! calculation. Note that WIND_DRAG_LIMIT is not binding in this case
+        ! because there are stricter upper bounds imposed in the 
+        ! sector-specfic drag below
+        drag = garret_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
 
         ! Calculate sector weights
         if (0.d0 <= theta .and. theta <= 40.d0) then
@@ -336,7 +341,7 @@ contains
         ! Input
         real(kind=8), intent(in) :: wind_speed, theta
 
-        wind_drag = garret_wind_drag_limit(wind_speed, wind_drag_limit)
+        wind_drag = garret_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
 
     end function garret_wind_drag
 
