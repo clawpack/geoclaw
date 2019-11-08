@@ -141,7 +141,7 @@ contains
                 case(0)
                     wind_drag => no_wind_drag
                 case(1)
-                    wind_drag => garret_wind_drag
+                    wind_drag => garratt_wind_drag
                 case(2)
                     wind_drag => powell_wind_drag
                 case default
@@ -262,12 +262,12 @@ contains
         real(kind=8) :: weight(3), drag(3)
 
         weight = 0.d0
-        
-        ! Calculate Garret speeds for use in sector- and speed-specific Cd
+
+        ! Calculate Garratt speeds for use in sector- and speed-specific Cd
         ! calculation. Note that WIND_DRAG_LIMIT is not binding in this case
-        ! because there are stricter upper bounds imposed in the 
+        ! because there are stricter upper bounds imposed in the
         ! sector-specfic drag below
-        drag = garret_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
+        drag = garratt_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
 
         ! Calculate sector weights
         if (0.d0 <= theta .and. theta <= 40.d0) then
@@ -331,25 +331,24 @@ contains
 
 
     ! ========================
-    !  Garret Based Wind Drag
+    !  Garratt Based Wind Drag
     ! ========================
     !  This version is a simple limited version of the wind drag
-    real(kind=8) pure function garret_wind_drag(wind_speed, theta) result(wind_drag)
+    real(kind=8) pure function garratt_wind_drag(wind_speed, theta) result(wind_drag)
 
         implicit none
 
         ! Input
         real(kind=8), intent(in) :: wind_speed, theta
 
-        wind_drag = garret_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
+        wind_drag = garratt_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
 
-    end function garret_wind_drag
+    end function garratt_wind_drag
 
 
     ! ===================================
-    !  Helper for Garret Based Wind Drag
-    ! ===================================
-    real(kind=8) pure function garret_wind_drag_limit(wind_speed,      &
+    !  Helper for Garratt==================
+    real(kind=8) pure function garratt_wind_drag_limit(wind_speed,      &
                                                       wind_drag_limit) &
                                                result(wind_drag)
 
@@ -361,7 +360,7 @@ contains
         wind_drag = min(wind_drag_limit,                               &
                         1.d-3 * (0.75d0 + 0.067d0 * wind_speed))
 
-    end function garret_wind_drag_limit
+    end function garratt_wind_drag_limit
 
 
     ! ==================================================================
