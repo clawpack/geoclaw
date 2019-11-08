@@ -471,7 +471,7 @@ contains
                 ! tapers to zero toward the eye of the storm and at long
                 ! distances from the storm
                 TransSpdX = (abs(wind) / mod_mws) * tv(1)
-                TransSpdY = (abs(wind) / mws) * tv(2)
+                TransSpdY = (abs(wind) / mod_mws) * tv(2)
 
                 ! Convert wind velocity from top of atmospheric boundary layer
                 ! (which is what the Holland curve fit produces) to wind
