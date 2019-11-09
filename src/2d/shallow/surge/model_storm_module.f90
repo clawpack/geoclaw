@@ -407,7 +407,7 @@ contains
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
         real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius
-        real(kind=8) :: mod_mws, trans_speed, ramp, TransSpdX, TransSpdY
+        real(kind=8) :: mod_mws, ramp, trans_speed_x, trans_speed_y
         integer :: i,j
 
         ! Get interpolated storm data
@@ -419,8 +419,7 @@ contains
         ! Calculate Holland parameters
         ! Subtract translational speed of storm from maximum wind speed
         ! to avoid distortion in the Holland curve fit.  Added back later
-        trans_speed = sqrt(tv(1)**2 + tv(2)**2)
-        mod_mws = mws - trans_speed
+        mod_mws = mws - sqrt(tv(1)**2 + tv(2)**2)
 
         ! Convert wind speed (10 m) to top of atmospheric boundary layer
         mod_mws = mod_mws / atmos_boundary_layer
@@ -470,8 +469,8 @@ contains
                 ! storm wind speed.  This is tapered to zero as the storm wind
                 ! tapers to zero toward the eye of the storm and at long
                 ! distances from the storm
-                TransSpdX = (abs(wind) / mod_mws) * tv(1)
-                TransSpdY = (abs(wind) / mod_mws) * tv(2)
+                trans_speed_x = (abs(wind) / mod_mws) * tv(1)
+                trans_speed_y = (abs(wind) / mod_mws) * tv(2)
 
                 ! Convert wind velocity from top of atmospheric boundary layer
                 ! (which is what the Holland curve fit produces) to wind
@@ -482,8 +481,8 @@ contains
 
                 ! Velocity components of storm (assumes perfect vortex shape)
                 ! including addition of translation speed
-                aux(wind_index,i,j)   = -wind * sin(theta) + TransSpdX
-                aux(wind_index+1,i,j) =  wind * cos(theta) + TransSpdY
+                aux(wind_index,i,j)   = -wind * sin(theta) + trans_speed_x
+                aux(wind_index+1,i,j) =  wind * cos(theta) + trans_speed_y
 
                 ! Apply distance ramp down(up) to fields to limit scope
                 ramp = 0.5d0 * (1.d0 - tanh((r - radius) / RAMP_WIDTH))
