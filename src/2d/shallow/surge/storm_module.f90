@@ -196,7 +196,7 @@ contains
                         set_model_fields => set_holland_1980_fields
                     case(2) ! Holland 2010 model
                         set_model_fields => set_holland_2010_fields
-                    case(3) ! Chavas, Lin, Emmanuel model
+                    case(3) ! Chavas, Lin, Emanuel model
                         set_model_fields => set_CLE_fields
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
