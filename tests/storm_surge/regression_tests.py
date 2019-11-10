@@ -20,6 +20,7 @@ import numpy
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools
+from clawpack.geoclaw.surge import storm
 
 class IkeTest(test.GeoClawRegressionTest):
 
@@ -42,9 +43,13 @@ class IkeTest(test.GeoClawRegressionTest):
         with gzip.GzipFile(path, 'r') as gzip_file:
             file_content = gzip_file.read()
         
-        with open(storm_path, 'wb') as out_file:
+        with open(storm_path+'.atcf', 'wb') as out_file:
             out_file.write(file_content)
-
+            
+        # now convert to geoclaw format
+        ike_storm = storm.Storm(storm_path+'.atcf', file_format='ATCF', verbose=True)
+        ike_storm.write(storm_path)
+        
         # Download file
         #self.get_remote_file(
         #   "http://www.columbia.edu/~ktm2132/bathy/gulf_caribbean.tt3.tar.bz2")
@@ -79,9 +84,6 @@ class IkeTest(test.GeoClawRegressionTest):
 
         # Perform tests
         self.check_gauges(save=save, gauge_id=1, indices=indices)
-        self.check_gauges(save=save, gauge_id=2, indices=indices)
-        self.check_gauges(save=save, gauge_id=3, indices=indices)
-        self.check_gauges(save=save, gauge_id=4, indices=indices)
 
         # If we have gotten here then we do not need to copy the run results
         self.success = True

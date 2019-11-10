@@ -14,9 +14,6 @@ import datetime
 
 import numpy as np
 
-# Need to adjust the date a bit due to weirdness with leap year (I think)
-ike_landfall = datetime.datetime(2008,9,13 - 1,7) - datetime.datetime(2008,1,1,0)
-
 #                           days   s/hour    hours/day            
 days2seconds = lambda days: days * 60.0**2 * 24.0
 seconds2days = lambda seconds: seconds / (60.0**2 * 24.0)
@@ -99,8 +96,9 @@ def setrun(claw_pkg='geoclaw'):
     # -------------
     # Initial time:
     # -------------
-    clawdata.t0 = days2seconds(ike_landfall.days - 3) + ike_landfall.seconds
-    # clawdata.t0 = days2seconds(ike_landfall.days - 1) + ike_landfall.seconds
+    # read_atcf currently just assumes a time_offset of the first recorded time
+    # so this is done manually
+    clawdata.t0 = 9.5e5
 
     # Restart from checkpoint file of a previous run?
     # Note: If restarting, you must also change the Makefile to set:
@@ -124,11 +122,7 @@ def setrun(claw_pkg='geoclaw'):
 
     if clawdata.output_style == 1:
         # Output nout frames at equally spaced times up to tfinal:
-        # clawdata.tfinal = days2seconds(date2days('2008091400'))
-        # Full test
-        # clawdata.tfinal = days2seconds(ike_landfall.days + 0.75) + ike_landfall.seconds
-        # Short test - Do 12 hours of simulation
-        clawdata.tfinal = days2seconds(ike_landfall.days - 2.75) + ike_landfall.seconds
+        clawdata.tfinal = 9.8e5
         recurrence = 2
         clawdata.num_output_times = int((clawdata.tfinal - clawdata.t0) 
                                             * recurrence / (60**2 * 24))
@@ -335,21 +329,20 @@ def setrun(claw_pkg='geoclaw'):
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
 
-    # Gauges from Ike AWR paper (2011 Dawson et al)
-    rundata.gaugedata.gauges.append([1, -90.0, 25.00, 
-                                  rundata.clawdata.t0, rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([2, -87.5, 26.25, 
-                                  rundata.clawdata.t0, rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([3, -85.0, 27.50, 
-                                  rundata.clawdata.t0, rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([4, -82.5, 30.00, 
+    # Gauge for testing
+    rundata.gaugedata.gauges.append([1, -90., 25., 
                                   rundata.clawdata.t0, rundata.clawdata.tfinal])
 
     #------------------------------------------------------------------
     # GeoClaw specific parameters:
     #------------------------------------------------------------------
     rundata = setgeo(rundata)
-
+    
+    #------------------------------------------------------------------
+    # storm surge specific parameters:
+    #------------------------------------------------------------------
+    rundata = set_storm(rundata)
+    
     return rundata
     # end of function setrun
     # ----------------------
@@ -429,9 +422,9 @@ def setgeo(rundata):
 
 def set_storm(rundata):
 
-    data = rundata.stormdata
+    data = rundata.surge_data
 
-    # Source term controls - These are currently not respected
+    # Source term controls
     data.wind_forcing = True
     data.drag_law = 1
     data.pressure_forcing = True
@@ -442,13 +435,12 @@ def set_storm(rundata):
     
     # Storm parameters
     data.storm_type = 1 # Type of storm
-    data.landfall = days2seconds(ike_landfall.days) + ike_landfall.seconds
     data.display_landfall_time = True
 
     # Storm type 2 - Idealized storm track
     data.storm_file = 'ike.storm'
 
-    return data
+    return rundata
 
 
 def set_friction(rundata):
