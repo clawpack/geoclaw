@@ -20,6 +20,7 @@ import re
 import string
 
 import numpy
+import matplotlib.pyplot as plt
 
 # Poisson ratio for Okada 
 from clawpack.geoclaw.util import DEG2RAD, LAT2METER
@@ -353,7 +354,7 @@ def rise_fraction(t, t0, t_rise, t_rise_ending=None):
     t1 = t0+t_rise
     t2 = t1+t_rise_ending
 
-    rf = where(t<=t0, 0., 1.)
+    rf = numpy.where(t<=t0, 0., 1.)
     if t2==t0:
         return rf
 
@@ -364,8 +365,8 @@ def rise_fraction(t, t0, t_rise, t_rise_ending=None):
     c1 = t21 / (t20*t10*t21) 
     c2 = t10 / (t20*t10*t21) 
 
-    rf = where((t>t0) & (t<=t1), c1*(t-t0)**2, rf)
-    rf = where((t>t1) & (t<=t2), 1. - c2*(t-t2)**2, rf)
+    rf = numpy.where((t>t0) & (t<=t1), c1*(t-t0)**2, rf)
+    rf = numpy.where((t>t1) & (t<=t2), 1. - c2*(t-t2)**2, rf)
 
     return rf
 
@@ -373,10 +374,10 @@ def test_rise_fraction(t0=0,t_rise=5,t_rise_ending=20):
     t2 = t0 + 2.*t_rise 
     t = numpy.linspace(t0-10., t2+10., 1001)
     rf = rise_fraction(t,t0,t_rise, t_rise_ending)
-    figure(0)
-    clf()
-    plot(t, rf, 'b')
-    ylim(-.1, 1.1)
+    plt.figure(0)
+    plt.clf()
+    plt.plot(t, rf, 'b')
+    plt.ylim(-.1, 1.1)
 
 def write_dtopo_header(dtopo_params):
     """
@@ -495,8 +496,8 @@ def make_dtopo_from_subfaults(subfaults, dtopo_params):
         t_prev = -1.e99
         for t in times:
             if plot_rupture:
-                figure(5)
-                clf()
+                plt.figure(5)
+                plt.clf()
             for k,subfault in enumerate(subfaults):
                 t0 = subfault.get('rupture_time',0)
                 t1 = subfault.get('rise_time',0.5)
