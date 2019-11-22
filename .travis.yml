@@ -27,6 +27,8 @@ before_install:
   - conda update -q conda
   # Useful for debugging any issues with conda
   - conda info -a
+  - conda create -q -n test-env python=$TRAVIS_PYTHON_VERSION
+  - conda activate test-env
   - conda install compilers netcdf4 netcdf-fortran xarray scipy matplotlib
   - git clone --branch=master --depth=100 --quiet git://github.com/clawpack/clawpack
   - cd clawpack
@@ -55,6 +57,7 @@ before_script:
   
 script:
   - cd $CLAW/geoclaw
+  - conda activate test-env
   - nosetests -sv
 
 after_failure:
