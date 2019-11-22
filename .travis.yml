@@ -5,13 +5,28 @@ python:
 env:
   - BUILD_TYPE="Release"
   
+install:
+  - sudo apt-get update
+  # We do this conditionally because it saves us some downloading if the
+  # version is the same.
+
+  
 before_install:
   - sudo apt-get update
   - sudo apt-get install gfortran liblapack-pic liblapack-dev
-  - pip install netCDF4
-  - pip install xarray
-  - pip install scipy
-  - pip install matplotlib
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
+    else
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    fi
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - source "$HOME/miniconda/etc/profile.d/conda.sh"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no --add channels conda-forge
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+  - conda install compilers netcdf4 netcdf-fortran xarray scipy matplotlib
   - git clone --branch=master --depth=100 --quiet git://github.com/clawpack/clawpack
   - cd clawpack
   - git submodule init
@@ -25,6 +40,7 @@ install:
   - export PYTHONPATH=${PWD}:$PYTHONPATH
   - export CLAW=${PWD}
   - export FC=gfortran
+  - export NETCDF4_DIR="$HOME/miniconda"
   - cd geoclaw
   
 before_script:
