@@ -35,6 +35,8 @@ before_script:
   - echo "PYTHONPATH="$PYTHONPATH
   - echo "CLAW="$CLAW
   - echo "FC="$FC
+  - ls /usr/local/lib
+  - ls /usr/share/lib
   - find ${HOME} -name netcdf.mod  
 script:
   - cd $CLAW/geoclaw
