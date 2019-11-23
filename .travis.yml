@@ -24,7 +24,7 @@ install:
   - export PYTHONPATH=${PWD}:$PYTHONPATH
   - export CLAW=${PWD}
   - export FC=gfortran
-  - export NETCDF4_DIR=/usr/local
+  - export NETCDF4_DIR=/usr/lib/x86_64-linux-gnu
   - cd geoclaw
   
 before_script:
