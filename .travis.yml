@@ -35,7 +35,7 @@ before_script:
   - echo "PYTHONPATH="$PYTHONPATH
   - echo "CLAW="$CLAW
   - echo "FC="$FC
-  
+  - find ${HOME} --name netcdf.mod  
 script:
   - cd $CLAW/geoclaw
   - nosetests -sv
