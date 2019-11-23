@@ -119,7 +119,8 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         except subprocess.CalledProcessError:
 
             self.stdout.write(build_failure_str)
-            raise nose.SkipTest(build_failure_str)
+            raise
+            #raise nose.SkipTest(build_failure_str)
 
         else:
             # Force recompilation of topo_module to add NetCDF flags
