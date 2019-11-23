@@ -25,7 +25,6 @@ install:
   - export CLAW=${PWD}
   - export FC=gfortran
   - export NETCDF4_DIR=/usr
-  - cd geoclaw
 
 before_script:
   # Print CPU info for debugging purposes:
@@ -35,8 +34,8 @@ before_script:
   - echo "PYTHONPATH="$PYTHONPATH
   - echo "CLAW="$CLAW
   - echo "FC="$FC
-  - ls /usr/lib
-  - find /usr -name netcdf*
+  - echo "NETCDF4_DIR="$NETCDF4_DIR
+
 script:
   - cd $CLAW/geoclaw
   - nosetests -sv
