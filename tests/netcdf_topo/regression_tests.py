@@ -22,7 +22,7 @@ import nose
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 
-build_failure_str = ("NetCDF topography test skipped due to failure to build " 
+build_failure_str = ("NetCDF topography test skipped due to failure to build "
                      "test program.")
 class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
@@ -31,8 +31,6 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
     def __init__(self, methodName="runTest"):
 
         super(NetCDFBowlSloshTest, self).__init__(methodName=methodName)
-
-        self.netcdf_passed = False
 
 
     def setUp(self):
@@ -75,11 +73,11 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         topo = topotools.Topography(topo_func=z)
         topo.x = numpy.linspace(-3.1, 3.1, 310)
         topo.y = numpy.linspace(-3.5,2.5, 300)
-        
+
         try:
             import netCDF4
             this_path = os.path.join(self.temp_path, 'bowl.nc')
-            
+
             # now mess with the order of the dimension IDs (lat, then lon)
             with netCDF4.Dataset(this_path,'w') as out:
                 lat = out.createDimension('lat',len(topo.y))
@@ -96,14 +94,10 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
         except ImportError:
             # Assume that NetCDF is not installed and move on
-            self.netcdf_passed = False
-            self.success = True
             raise nose.SkipTest(build_failure_str)
 
         except RuntimeError as e:
             print(e.message)
-            self.netcdf_passed = False
-            self.success = True
             raise nose.SkipTest("NetCDF topography test skipped due to " +
                                 "runtime failure.")
         else:
@@ -132,7 +126,6 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
             if os.path.exists(obj_path):
                 os.remove(obj_path)
 
-            self.netcdf_passed = True
             super(NetCDFBowlSloshTest, self).build_executable()
 
 
@@ -141,19 +134,16 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
         """
 
-        # Check to see if NetCDF has been built
-        if self.netcdf_passed:
-            # Write out data files
-            self.load_rundata()
-            self.write_rundata_objects()
+        # Write out data files
+        self.load_rundata()
+        self.write_rundata_objects()
 
-            # Run code
-            self.run_code()
+        # Run code
+        self.run_code()
 
-            # Perform tests
-            self.check_gauges(save=save, gauge_id=1, indices=(2, 3),
-                              tolerance=1e-4)
-        self.success = True
+        # Perform tests
+        self.check_gauges(save=save, gauge_id=1, indices=(2, 3),
+                          tolerance=1e-4)
 
 
     def tearDown(self):
