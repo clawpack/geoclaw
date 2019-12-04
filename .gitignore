@@ -11,5 +11,8 @@ clawpack/version.py
 # ignore build directory
 build
 
-# ignore silly .pyc, log, and egg files
-*.pyc
+# ipython
+.ipynb_checkpoints
+
+# macOS
+*.DS_Store

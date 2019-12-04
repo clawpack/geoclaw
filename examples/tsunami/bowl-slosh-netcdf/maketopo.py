@@ -4,10 +4,11 @@ Module to create topo and qinit data files for this example.
 """
 
 from __future__ import absolute_import
-from clawpack.geoclaw.topotools import topo1writer, topo2writer
-from clawpack.geoclaw import topotools
+from clawpack.geoclaw.topotools import Topography
 from numpy import *
 
+#from pyclaw.data import Data
+#probdata = Data('setprob.data')
 
 a = 1.
 sigma = 0.5
@@ -25,13 +26,13 @@ def maketopo():
     yupper=2.e0
     xlower = -2.e0
     ylower = -2.e0
-    outfile= "bowl.topotype2"
-    topo2writer(outfile,topo,xlower,xupper,ylower,yupper,nxpoints,nypoints)
+    outfile= "bowl.nc"
 
-    # convert to netcdf form:
-    topo4 = topotools.Topography()
-    topo4.read(outfile,2)
-    topo4.write("bowl.nc",topo_type=4)
+    topography = Topography(topo_func=topo)
+    topography.x = linspace(xlower,xupper,nxpoints)
+    topography.y = linspace(ylower,yupper,nypoints)
+    topography.write(outfile, Z_format="%22.15e")
+
 
 def topo(x,y):
     """
