@@ -331,7 +331,6 @@ program amr2
     call opendatafile(inunit, amrfile)
 
     read(inunit,*) max1d  ! max size of each grid patch
-    write(6,*) '+++ max1d = ',max1d
 
     read(inunit,*) mxnest
     if (mxnest <= 0) then
