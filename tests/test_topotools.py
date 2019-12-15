@@ -520,8 +520,40 @@ def test_integral(func, mfile, funcflag, plotflag):
     
     # Whether make plots
     if plotflag == True:
-        plot(patch_x, patch_y, real_value, calculated_value)
-        
+        test_integral_plot(patch_x, patch_y, real_value, calculated_value)
+ 
+def test_integral_plot(x, y, accurate, calculated):
+    r"""
+    Plot function for `test_integral`.
+    
+    :Input:
+     - *x* (ndarray(:)).
+     - *y* (ndarray(:)).
+     - *real* (ndarray(:, :)) Accurate cell value.
+     - *calculated* (ndarray(:, :)) Cell value calculated by functions.
+     
+    :Output:
+     - *fig1* (figure) Figure for accurate cell value.
+     - *fig2* (figure) Figure for calculated cell value.
+     - *fig3* (figure) Figure for error.
+    """
+
+    fig1, plot1 = plt.subplots(figsize=(4,3))
+    im1 = plot1.pcolor(x, y, accurate)
+    plot1.set_title("accurate value")
+    plt.colorbar(im1, ax = plot1)
+    
+    fig2, plot2 = plt.subplots(figsize=(4,3))
+    im2 = plot2.pcolor(x, y, calculated)
+    plot2.set_title("calculated value")
+    plt.colorbar(im2, ax = plot2)
+    
+    fig3, plot3 = plt.subplots(figsize=(4,3))
+    im3 = plot3.pcolor(x, y, numpy.abs(calculated - accurate))
+    plot3.set_title("Error")
+    plt.colorbar(im3, ax = plot3)
+    
+    return fig1, fig2, fig3
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
