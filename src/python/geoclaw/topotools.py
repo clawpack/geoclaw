@@ -1935,6 +1935,36 @@ class Topography(object):
                     return topoint
         return topoint
        
+    def patch_value(self, patch, mtopoorder, mtopofiles, topo):
+        r"""
+        Compute every cell's topo density on the specific path given by "patch".
+        
+        :Input:
+        - *patch* (object) Patch.
+        - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
+        - *mtopofiles* (int) The number of the topo objects.
+        - *topo* (list) The list of topo objects.
+
+        :Output:
+        - *cell_value* (ndarray(:, :)) Patch's cells' topo density.
+        """
+    
+        x_num = patch.x.shape[0] - 1
+        y_num = patch.y.shape[0] - 1
+        cell_value = numpy.empty((y_num, x_num))
+        
+        for i in range(y_num):
+            for j in range(x_num):
+                
+                # Set cell's parameter
+                cell = [patch.x[j], patch.x[j+1], patch.y[i], patch.y[i+1]]
+                area = (patch.x[j+1] - patch.x[j]) * (patch.y[i+1] - patch.y[i])
+                
+                # Calculate cell's topo density
+                cell_value[i, j] = self.cellintegral(cell, mtopoorder, mtopofiles, topo) / area
+                
+        return cell_value 
+
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
 remote_topo_urls = {}
 
