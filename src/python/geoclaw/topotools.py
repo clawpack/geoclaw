@@ -1685,6 +1685,107 @@ class Topography(object):
 
         return bilinearintegral_s
 
+    def topointegral(self, domain, topoparam, z, intmethod, coordinate_system):
+        r"""
+        topointegral integrates a surface over a rectangular region which is
+        the intersection of the domain and topo which is defined by "topoparam".
+        The surface integrated is defined by a function gotten by bilinear
+        interpolation through corners of the Cartesian grid.
+        
+        :Input:
+         - *domain* (ndarray(:))
+         - *topoparam* (ndarray(:)) topoparam includes topo's x and y coordinates'
+           minimum and maximum, and topo's grid size, dx and dy.
+         - *z* (ndarray(:, :)) Topo data of domain represented by topoparam.
+         - *intmethod* (int) The method of integral.
+         - *coordinate_system* (int) The type of coordinate system.
+
+        :Output:
+         - *theintegral* (float) The integral of a surface over a rectangular
+           region which is the intersection of the domain and "topoparam".
+        """
+        
+        theintegral = 0.0
+        
+        # Set topo's parameter
+        x1 = topoparam[0]; x2 = topoparam[1]
+        y1 = topoparam[2]; y2 = topoparam[3]
+        topodx = topoparam[4]; topody = topoparam[5]
+        topomx = numpy.array(z).shape[0]
+        topomy = numpy.array(z).shape[1]
+        
+        # Find the intersection of the domain and topo
+        bound = self.intersection(domain, topoparam)[2]
+        xlow = bound[0]; xhi = bound[1]
+        ylow = bound[2]; yhi = bound[3]
+        
+        if intmethod == 1:
+            
+            # Find topo's start and end points for integral
+            # The x coodinate of the topo's start point
+            istart = -1
+            for i in range(topomx):
+                if (x1 + i * topodx) > xlow:
+                    istart = i
+                    break
+            
+            # The y coodinate of the topo's start point
+            jstart = -1
+            for j in range(topomy):
+                if (y1 + j * topody)  > ylow:
+                    jstart = j
+                    break
+            
+            # The x coodinate of the topo's end point
+            iend = topomx
+            for m in range(topomx):
+                if (x1 + m * topodx) >= xhi:
+                    iend = m
+                    break
+            
+            # The y coodinate of the topo's end point
+            jend = topomy
+            for n in range(topomy):
+                if (y1 + n * topody) >= yhi:
+                    jend = n
+                    break
+                            
+            # Prevent overflow
+            jstart = max(jstart, 1)
+            istart = max(istart, 1)
+            jend = min(jend, topomy - 1)
+            iend = min(iend, topomx - 1)
+            
+            # Topo integral
+            for jj in range(jstart, jend + 1):
+                yint1 = y1 + (jj - 1.0) * topody
+                yint2 = y1 + jj * topody
+
+                for ii in range(istart, iend + 1):
+                    xint1 = x1 + (ii - 1.0) * topodx
+                    xint2 = x1 + ii * topodx
+
+                    # Four corners of topo's grid
+                    corners = numpy.empty((2, 2))
+                    corners[0][0] = z[ii-1][topomy - jj]
+                    corners[0][1] = z[ii-1][topomy - 1 - jj]
+                    corners[1][0] = z[ii][topomy - jj]
+                    corners[1][1] = z[ii][topomy - 1 - jj]
+
+                    # Parameters of topo's grid integral
+                    topointparam = [xint1, xint2, yint1, yint2]
+
+                    if coordinate_system == 1:
+                        theintegral += self.bilinearintegral(domain, topointparam, corners)
+                    elif coordinate_system == 2:
+                        theintegral += self.bilinearintegral_s(domain, topointparam, corners)
+                    else:
+                         print("TOPOINTEGRAL: coordinate_system error")
+
+        else:
+            print("TOPOINTEGRAL: only intmethod = 1,2 is supported")
+
+        return theintegral
 
 
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
