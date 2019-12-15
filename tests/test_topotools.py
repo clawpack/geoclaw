@@ -427,6 +427,101 @@ def plot_kahului():
     plt.savefig(fname)
     print("Created ",fname)
 
+def test_integral(func, mfile, funcflag, plotflag):
+    r"""
+    test_integral is used to test a set of functions which compute 
+    cell integrals and cell density in topotools.py.
+    
+    :Input:
+     - *func* (function).
+     - *mfile* (int) The number of the topo objects.
+     - *funcflag* (bool) Whether the function, "func" is discontinuous.
+     - *plotflag* (bool) Whether make plots.
+    """
+
+    dx = []
+    data = []
+    topo = []
+    mtopoorder = []
+    
+    # Set boundary for coarsest topo
+    xlow = numpy.random.random() * 10
+    xhi = xlow + 3
+    xarray = numpy.linspace(xlow, xhi, 100)
+    ylow = numpy.random.random() * 10
+    yhi = ylow + 3
+    yarray = numpy.linspace(ylow, yhi, 100)
+    
+    # Set topo data randomly
+    for i in range(mfile):
+        if i == 0:
+            
+            # Set the topo data set which covers the whole patch
+            x = numpy.linspace(xlow, xhi, 100)
+            y = numpy.linspace(ylow, yhi, 100)
+            dx.append(x[1] - x[0])
+        else:
+            
+            # Set x coordinate of the topo data set randomly
+            n1 = int(numpy.random.random() * 70)
+            n2 = n1 + 10 + int(numpy.random.random() * (85 - n1))
+            x1 = xarray[n1]; x2 = xarray[n2]
+            dx.append(dx[i-1] - 0.0012)
+            mx = int((x2 - x1) / dx[i])
+            x2 = x1 + dx[i] * (mx - 1)
+            x = numpy.linspace(x1, x2, mx)
+
+            # Set y coordinate of the topo data set randomly
+            m1 = int(numpy.random.random() * 70)
+            m2 = m1 + 10 + int(numpy.random.random() * (85 - m1))
+            y1 = yarray[m1]; y2 = yarray[m2]
+            my = int((y2 - y1) / dx[i])
+            y2 = y1 + dx[i] * (my - 1)
+            y = numpy.linspace(y1, y2, my)
+        
+        # Set Topography objects parameters
+        topo1 = Topography()
+        
+        # Whether the function is discontinuous function
+        if funcflag == True:
+            z = numpy.empty((len(x), len(y)))
+            for m in range(len(x)):
+                for n in range(len(y)):
+                    z[m][n] = func(x[m], y[n])
+            topo1.Z = z
+        else:
+            topo1.x = numpy.flip(y)
+            topo1.y = x
+            topo1.Z = func(topo1.Y, topo1.X)
+        topo1.x = x; topo1.y = y
+        mtopoorder.append(mfile - 1 - i)
+        topo.append(topo1)
+    
+    # Set patch data
+    patch_x = numpy.linspace(xlow + 1, xhi - 1, 5)
+    patch_y = numpy.linspace(ylow + 1, yhi - 1, 4)
+    patch_dx = patch_x[1] - patch_x[0]
+    patch_dy = patch_y[1] - patch_y[0]
+    patch1 = Topography.patch(patch_x, patch_y, patch_dx, patch_dy)
+    
+    # Accurate cell value
+    real_value = numpy.empty((len(patch1.y) - 1, len(patch1.x) - 1))
+    for i in range(len(patch1.y) - 1):
+        for j in range(len(patch1.x) - 1):
+            area = (patch1.x[j+1] - patch1.x[j]) * (patch1.y[i+1] - patch1.y[i])
+            real_value[i][j] = dblquad(func, patch1.y[i], patch1.y[i+1], 
+                                             patch1.x[j], patch1.x[j+1])[0] / float(area)
+    
+    # Cell value calculated by functions
+    calculated_value = Topography().patch_value(patch1, mtopoorder, mfile, topo)
+        
+    # Whether calculated value achieve the expected resolution
+    npt.assert_almost_equal(real_value, calculated_value, decimal=3)
+    
+    # Whether make plots
+    if plotflag == True:
+        plot(patch_x, patch_y, real_value, calculated_value)
+        
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
