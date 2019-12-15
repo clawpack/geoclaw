@@ -1828,6 +1828,67 @@ class Topography(object):
             bound = [-1, -1, -1, -1]
 
         return mark, area, bound
+
+    def recurintegral(self, domain, mtopoorder, mtopofiles, m, topo):
+        r"""
+        Compute the integral of topo over the rectangle domain define by "domain".
+        Find the index of the topo whose resolution is m by mtopoorder. Use this
+        index to find corrosponding topo object in the list "topo".
+
+        The main call to this recursive function has corners of a grid cell for the
+        rectangle and m = 1 in order to compute the integral over the cell
+        using all topo objects.
+
+        The recursive strategy is to first compute the integral using only the topo
+        object of m+1 resolution. Then apply corrections due to adding m resolution
+        topo object.
+         
+        Corrections are needed if the new topo object intersects the grid cell.
+        Let the intersection be represented by mark2[2]. Two corrections are needed.
+        First, subtract out the integral over the rectangle "mark2[2]" computed using
+        topo objects mtopoorder(mtopofiles) to mtopoorder(m+1), and then adding in
+        the integral over this same region using the topo object mtopoorder(m).
+        
+        :Input:
+         - *domain* (ndarray(:)) The specific surface where the integral is computed.
+         - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
+         - *mtopofiles* (int) The number of the topo objects.
+         - *m* (int) Resolution of the topo objects.
+         - *topo* (list) The list of topo objects.
+
+        :Output:
+         - *integral* (float) Integral.
+        """
+        
+        # The index of the topo object whose resolution is m
+        mfid = mtopoorder[m]
+        
+        # The parameters of the m resolution topo object
+        topoparam_mfid = [topo[mfid].extent[0], topo[mfid].extent[1], topo[mfid].extent[2],
+                          topo[mfid].extent[3], topo[mfid].delta[0], topo[mfid].delta[1]]
+        
+        # Innermost step of recursion reaches this point, only using coarsest topo grid
+        # compute directly
+        if m == mtopofiles - 1:
+            mark1 = self.intersection(domain, topoparam_mfid)
+            if mark1[0]:
+                integral = self.topointegral(mark1[2], topoparam_mfid, topo[mfid].Z, 1, 1)
+            else:
+                integral = 0.0
+        else:
+            int1 = self.recurintegral(domain, mtopoorder, mtopofiles, m+1, topo)
+
+            # Whether new topo object intersects the grid cell
+            mark2 = self.intersection(domain, topoparam_mfid)
+            
+            # The new topo object intersects the grid cell. Corrections are needed
+            if mark2[1] > 0:
+                int2 = self.recurintegral(mark2[2], mtopoorder, mtopofiles, m+1, topo)
+                int3 = self.topointegral(mark2[2], topoparam_mfid, topo[mfid].Z, 1, 1)
+                integral = int1 - int2 + int3
+            else:
+                integral = int1
+        return integral
        
 
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
