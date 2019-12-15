@@ -21,7 +21,6 @@ import nose
 import clawpack.geoclaw.topotools as topotools
 import clawpack.clawutil.data
 import numpy.testing as npt
-import matplotlib.pyplot as plt
 from six.moves import range
 from clawpack.geoclaw.topotools import Topography
 from scipy.integrate import dblquad
@@ -542,6 +541,11 @@ def test_integral_plot(x, y, accurate, calculated):
      - *fig3* (figure) Figure for error.
     """
 
+    try:
+        import matplotlib
+    except ImportError:
+        raise nose.SkipTest("Skipping test since matplotlib not found.")
+    
     fig1, plot1 = plt.subplots(figsize=(4,3))
     im1 = plot1.pcolor(x, y, accurate)
     plot1.set_title("accurate value")
