@@ -1633,7 +1633,57 @@ class Topography(object):
                             0.25 * c * sumxi * sumeta + d) * area
     
         return bilinearintegral
-   
+
+    def bilinearintegral_s(self, domain, topodomain, corners):
+        r"""
+        Suppose corners are (x1, y1), (x1, y2), (x2, y1), (x1, y2). Get a function,
+        f(theta, phi) = a * (theta - x1) + b * (phi - y1)
+                        + c * (theta - x1) * (phi - y1) + d,
+        where theta is longitute and phi is latitude, to represent the topo of
+        topomain by bilinear interpolation with four corner points. Then integrate
+        f(theta, phi) on the domain which is the intersection of the domain
+        and the topodomain on the sphere.
+        
+        :Input:
+         - *domain* (ndarray(:))
+         - *topodomain* (ndarray(:))
+         - *corners* (ndarray(:, :)) Four corner points of the topodomain.
+
+        :Output:
+         - *bilinearintegral* (float) The integral of the function, f(xi, eta), on
+           the intersection of domain and topodomain.
+        """
+    
+        #Set boundary parameter
+        bound = self.intersection(domain, topodomain)[2]
+
+        # Find terms for the integration
+        xdiffhi = bound[1] - topodomain[0]
+        xdifflow = bound[0] - topodomain[0]
+        ydiffhi = bound[3] - topodomain[2]
+        ydifflow = bound[2] - topodomain[2]
+        xdiff2 = 0.5 * (xdiffhi**2 - xdifflow**2)
+        intdx = bound[1] - bound[0]
+        deltax = topodomain[1] - topodomain[0]
+        deltay = topodomain[3] - topodomain[2]
+        
+        d2r = DEG2RAD; r2d = RAD2DEG
+
+        cbsinint = (r2d * numpy.cos(d2r * bound[3]) + ydiffhi * numpy.sin(d2r * bound[3]))
+        - (r2d * numpy.cos(d2r * bound[2]) + ydifflow * numpy.sin(d2r * bound[2]))
+
+        adsinint = r2d * (numpy.sin(d2r * bound[3]) - numpy.sin(d2r * bound[2]))
+
+        # Find coefficients of the function, f(theta, phi)
+        a = (corners[1][0] - corners[0][0]) / deltax
+        b = (corners[0][1] - corners[0][0]) / deltay
+        c = (corners[1][1] - corners[1][0] - corners[0][1] + corners[0][0]) / (deltax * deltay)
+        d = corners[0][0]
+
+        bilinearintegral_s = ((a * xdiff2 + d * intdx) * adsinint +
+                              r2d * (c * xdiff2 + b * intdx) * cbsinint) * (Rearth * d2r)**2
+
+        return bilinearintegral_s
 
 
 
