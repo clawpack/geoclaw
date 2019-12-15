@@ -41,6 +41,7 @@ import clawpack.clawutil.data
 import clawpack.geoclaw.data
 import six
 from six.moves import range
+from clawpack.geoclaw.data import Rearth, DEG2RAD, RAD2DEG
 
 # ==============================================================================
 #  Topography Related Functions
