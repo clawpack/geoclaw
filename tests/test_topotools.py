@@ -20,7 +20,11 @@ import nose
 
 import clawpack.geoclaw.topotools as topotools
 import clawpack.clawutil.data
+import numpy.testing as npt
+import matplotlib.pyplot as plt
 from six.moves import range
+from clawpack.geoclaw.topotools import Topography
+from scipy.integrate import dblquad
 
 # Set local test directory to get local files
 testdir = os.path.dirname(__file__)
