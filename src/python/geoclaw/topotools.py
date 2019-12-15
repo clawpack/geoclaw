@@ -1889,8 +1889,52 @@ class Topography(object):
             else:
                 integral = int1
         return integral
-       
 
+    def cellintegral(self, cell, mtopoorder, mtopofiles, topo):
+        r"""
+        Compute the integral on the surface defined by "cell" with the topo objects list
+        "topo".
+        
+        :Input:
+        - *cell* (ndarray(:)) The boundary of specific surface where the integral
+          is computed.
+        - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
+        - *mtopofiles* (int) The number of the topo objects.
+        - *topo* (list) The list of topo objects.
+
+        :Output:
+        - *topoint* (float) The integral on the cell, "cell".
+        """
+        
+        # Initialization
+        topoint = 0.0
+
+        for m in range(mtopofiles):
+        
+            # The index of the topo file object resolution is m
+            mfid = mtopoorder[m]
+            cellarea = (cell[1] - cell[0]) * (cell[3] - cell[2])
+            
+            # The parameters of this topo object
+            topoparam_mfid = [topo[mfid].extent[0], topo[mfid].extent[1], topo[mfid].extent[2],
+                              topo[mfid].extent[3], topo[mfid].delta[0], topo[mfid].delta[1]]
+            
+            # Whether m-th topo interects with cell
+            mark = self.intersection(cell, topoparam_mfid)
+            if mark[0]:
+                
+                # Whether the cell is completely overlapped by m-th topo
+                if mark[1] == cellarea:
+                    topoint = topoint + self.topointegral(mark[2], topoparam_mfid, topo[mfid].Z, 1, 1)
+                    return topoint
+                else:
+                    
+                    # If the cell is not completely overlapped by m-th topo, use recursion
+                    # to compute the integral on the cell
+                    topoint = self.recurintegral(cell, mtopoorder, mtopofiles, m, topo)
+                    return topoint
+        return topoint
+       
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
 remote_topo_urls = {}
 
