@@ -1941,13 +1941,13 @@ class Topography(object):
         Compute every cell's topo density on the specific path given by "patch".
         
         :Input:
-        - *patch* (object) Patch.
-        - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
-        - *mtopofiles* (int) The number of the topo objects.
-        - *topo* (list) The list of topo objects.
+         - *patch* (object) Patch.
+         - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
+         - *mtopofiles* (int) The number of the topo objects.
+         - *topo* (list) The list of topo objects.
 
         :Output:
-        - *cell_value* (ndarray(:, :)) Patch's cells' topo density.
+         - *cell_value* (ndarray(:, :)) Patch's cells' topo density.
         """
     
         x_num = patch.x.shape[0] - 1
