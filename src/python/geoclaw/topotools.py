@@ -1593,6 +1593,47 @@ class Topography(object):
             shoreline_xy = numpy.vstack((shoreline_xy, \
                            numpy.array([numpy.nan,numpy.nan]), c.allsegs[0][k]))
         return shoreline_xy
+       
+    def bilinearintegral(self, domain, topodomain, corners):
+        r"""
+        Suppose corners are (x1, y1), (x1, y2), (x2, y1), (x1, y2). Get a function,
+        f(xi, eta) = a * (xi - x1) / (x2 - x1) + b * (eta - y1) / (y2 - y1)
+                     + c * (xi - x1) * (eta - y1) / {(x2 - x1) * (y2 - y1)} + d,
+        to represent topo of topomain by bilinear interpolation with four corner
+        points. Then integrate f(xi, eta) on the rectangular domain which is the
+        intersection of domain and topodomain.
+        
+        :Input:
+         - *domain* (ndarray(:))
+         - *topodomain* (ndarray(:))
+         - *corners* (ndarray(:, :)) Four corner points of the topodomain.
+
+        :Output:
+         - *bilinearintegral* (float) The integral of the function, f(xi, eta), on
+           the intersection of domain and topodomain.
+        """
+    
+        # Set boundary for integral
+        bound = self.intersection(domain, topodomain)[2]
+        
+        # Find terms for the integration
+        deltax = topodomain[1] - topodomain[0]
+        deltay = topodomain[3] - topodomain[2]
+        area = (bound[3] - bound[2]) * (bound[1] - bound[0])
+        sumxi = (bound[1] + bound[0] - 2.0 * topodomain[0]) / deltax
+        sumeta = (bound[3] + bound[2] - 2.0 * topodomain[2]) / deltay
+        
+        # Find coefficients of the function, f(xi, eta)
+        a = corners[1][0] - corners[0][0]
+        b = corners[0][1] - corners[0][0]
+        c = corners[1][1] - corners[1][0] - corners[0][1] + corners[0][0]
+        d = corners[0][0]
+        
+        bilinearintegral = (0.5 * (a * sumxi + b * sumeta) +
+                            0.25 * c * sumxi * sumeta + d) * area
+    
+        return bilinearintegral
+   
 
 
 
