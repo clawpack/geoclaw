@@ -1787,6 +1787,48 @@ class Topography(object):
 
         return theintegral
 
+    def intersection(self, rect1, rect2):
+        r"""
+        Whether two domains, rect1 and rect2 intersect. If they intersect,
+        find the intersection's boundary and area.
+        
+        :Input:
+         - *rect1* (ndarray(:))
+         - *rect2* (ndarray(:))
+
+        :Output:
+         - *mark* (bool) If rect1 and rect2 intersect, mark = True. Otherwise,
+           mark = False.
+         - *area* (float) The area of the intersection of rect1 and rect2.
+         - *bound* (ndarray(:)) The boundary of the intersection of rect1 and rect2.
+        """
+        
+        # Set boundary for rect1
+        x1_low = rect1[0]; x1hi = rect1[1]
+        y1_low = rect1[2]; y1hi = rect1[3]
+        
+        # Set boundary for rect2
+        x2low = rect2[0]; x2hi = rect2[1]
+        y2low = rect2[2]; y2hi = rect2[3]
+        
+        # Boundary of the intersection part
+        xintlow = max(x1_low, x2low)
+        xinthi = min(x1hi, x2hi)
+        yintlow = max(y1_low, y2low)
+        yinthi = min(y1hi, y2hi)
+
+        # Whether rect1 and rect2 intersect
+        if xinthi > xintlow and yinthi > yintlow:
+            area = (xinthi - xintlow) * (yinthi - yintlow)
+            mark = True
+            bound = [xintlow, xinthi, yintlow, yinthi]
+        else:
+            area = 0.0
+            mark = False
+            bound = [-1, -1, -1, -1]
+
+        return mark, area, bound
+       
 
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
 remote_topo_urls = {}
