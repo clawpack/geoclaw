@@ -1964,6 +1964,13 @@ class Topography(object):
                 cell_value[i, j] = self.cellintegral(cell, mtopoorder, mtopofiles, topo) / area
                 
         return cell_value 
+    
+    class patch:
+        def __init__(self, x, y, dx, dy):
+            self.x = x
+            self.y = y
+            self.dx = dx
+            self.dy = dy
 
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
 remote_topo_urls = {}
