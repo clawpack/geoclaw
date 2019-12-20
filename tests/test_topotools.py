@@ -430,16 +430,15 @@ def plot_kahului():
     plt.savefig(fname)
     print("Created ",fname)
 
-def test_integral(func, mfile, funcflag, plotflag):
+def integral_topotool(func, mfile, funcflag):
     r"""
-    test_integral is used to test a set of functions which compute 
-    cell integrals and cell density in topotools.py.
+    integral_topotool is used for testing a set of functions which compute
+    cell integrals and cell averages in topotools.py.
     
     :Input:
      - *func* (function).
      - *mfile* (int) The number of the topo objects.
      - *funcflag* (bool) Whether the function, "func" is discontinuous.
-     - *plotflag* (bool) Whether make plots.
     """
 
     dx = []
@@ -448,35 +447,32 @@ def test_integral(func, mfile, funcflag, plotflag):
     mtopoorder = []
     
     # Set boundary for coarsest topo
-    xlow = numpy.random.random() * 10
-    xhi = xlow + 3
-    xarray = numpy.linspace(xlow, xhi, 100)
-    ylow = numpy.random.random() * 10
-    yhi = ylow + 3
-    yarray = numpy.linspace(ylow, yhi, 100)
+    xlow = 5; xhi = 8
+    xarray = numpy.linspace(xlow, xhi, mfile * 5)
+    ylow = 2; yhi = 5
+    yarray = numpy.linspace(ylow, yhi, mfile * 5)
     
-    # Set topo data randomly
+    # Set a set of topo data
     for i in range(mfile):
         if i == 0:
             
             # Set the topo data set which covers the whole patch
-            x = numpy.linspace(xlow, xhi, 100)
-            y = numpy.linspace(ylow, yhi, 100)
+            x = xarray; y = yarray
             dx.append(x[1] - x[0])
         else:
             
-            # Set x coordinate of the topo data set randomly
-            n1 = int(numpy.random.random() * 70)
-            n2 = n1 + 10 + int(numpy.random.random() * (85 - n1))
+            # Set x coordinate of the topo data set
+            n1 = int(3 * i)
+            n2 = int(3 * i + 1.2 * mfile)
             x1 = xarray[n1]; x2 = xarray[n2]
             dx.append(dx[i-1] - 0.0012)
             mx = int((x2 - x1) / dx[i])
             x2 = x1 + dx[i] * (mx - 1)
             x = numpy.linspace(x1, x2, mx)
 
-            # Set y coordinate of the topo data set randomly
-            m1 = int(numpy.random.random() * 70)
-            m2 = m1 + 10 + int(numpy.random.random() * (85 - m1))
+            # Set y coordinate of the topo data set
+            m1 = int(3 * i)
+            m2 = int(3 * i + 1.2 * mfile)
             y1 = yarray[m1]; y2 = yarray[m2]
             my = int((y2 - y1) / dx[i])
             y2 = y1 + dx[i] * (my - 1)
@@ -501,67 +497,51 @@ def test_integral(func, mfile, funcflag, plotflag):
         topo.append(topo1)
     
     # Set patch data
-    patch_x = numpy.linspace(xlow + 1, xhi - 1, 5)
-    patch_y = numpy.linspace(ylow + 1, yhi - 1, 4)
+    patch_x = numpy.linspace(xlow + 0.1, xhi - 0.1, 5)
+    patch_y = numpy.linspace(ylow + 0.1, yhi - 0.1, 4)
     patch_dx = patch_x[1] - patch_x[0]
     patch_dy = patch_y[1] - patch_y[0]
-    patch1 = Topography.patch(patch_x, patch_y, patch_dx, patch_dy)
+    patch1 = topotools.patch(patch_x, patch_y, patch_dx, patch_dy)
     
     # Accurate cell value
     real_value = numpy.empty((len(patch1.y) - 1, len(patch1.x) - 1))
     for i in range(len(patch1.y) - 1):
         for j in range(len(patch1.x) - 1):
             area = (patch1.x[j+1] - patch1.x[j]) * (patch1.y[i+1] - patch1.y[i])
-            real_value[i][j] = dblquad(func, patch1.y[i], patch1.y[i+1], 
-                                             patch1.x[j], patch1.x[j+1])[0] / float(area)
+            real_value[i][j] = dblquad(func=func, a=patch1.y[i], b=patch1.y[i+1],
+                                       gfun=lambda x: patch1.x[j],
+                                       hfun=lambda x: patch1.x[j+1])[0] / float(area)
     
     # Cell value calculated by functions
-    calculated_value = Topography().patch_value(patch1, mtopoorder, mfile, topo)
+    calculated_value = topotools.cell_average_patch(patch1, mtopoorder, mfile, topo)
         
     # Whether calculated value achieve the expected resolution
     npt.assert_almost_equal(real_value, calculated_value, decimal=3)
-    
-    # Whether make plots
-    if plotflag == True:
-        test_integral_plot(patch_x, patch_y, real_value, calculated_value)
- 
-def test_integral_plot(x, y, accurate, calculated):
-    r"""
-    Plot function for `test_integral`.
-    
-    :Input:
-     - *x* (ndarray(:)).
-     - *y* (ndarray(:)).
-     - *real* (ndarray(:, :)) Accurate cell value.
-     - *calculated* (ndarray(:, :)) Cell value calculated by functions.
-     
-    :Output:
-     - *fig1* (figure) Figure for accurate cell value.
-     - *fig2* (figure) Figure for calculated cell value.
-     - *fig3* (figure) Figure for error.
-    """
+    return None
 
-    try:
-        import matplotlib
-    except ImportError:
-        raise nose.SkipTest("Skipping test since matplotlib not found.")
+
+def testcontinuous():
+    r"""
+    testcontinuous is used to test continuous functions with `integral_topotool`.
+    """
     
-    fig1, plot1 = plt.subplots(figsize=(4,3))
-    im1 = plot1.pcolor(x, y, accurate)
-    plot1.set_title("accurate value")
-    plt.colorbar(im1, ax = plot1)
+    integral_topotool(lambda x, y: numpy.sin(x**2 + x * y) + x + y, 20, False)
+    integral_topotool(lambda x, y: numpy.exp(0.5 * x + 0.1 * y), 20, False)
+    integral_topotool(lambda x, y: x**2 + x * y + y**2 + 1, 20, False)
+    return None
     
-    fig2, plot2 = plt.subplots(figsize=(4,3))
-    im2 = plot2.pcolor(x, y, calculated)
-    plot2.set_title("calculated value")
-    plt.colorbar(im2, ax = plot2)
     
-    fig3, plot3 = plt.subplots(figsize=(4,3))
-    im3 = plot3.pcolor(x, y, numpy.abs(calculated - accurate))
-    plot3.set_title("Error")
-    plt.colorbar(im3, ax = plot3)
+def testdiscontinuous():
+    r"""
+    testdiscontinuous is used to test discontinuous function with `integral_topotool`.
+    """
     
-    return fig1, fig2, fig3
+    def fun(x, y):
+        for i in range(20):
+            if int(x * 100) % 20 == i:
+                return 9.99 + 0.001 * i
+    integral_topotool(fun, 20, True)
+    return None
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
