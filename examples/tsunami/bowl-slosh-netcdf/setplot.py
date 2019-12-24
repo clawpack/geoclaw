@@ -121,13 +121,13 @@ def setplot(plotdata=None):
 
     def xsec(current_data):
         # Return x value and surface eta at this point, along y=0
-        from pylab import where,ravel
+        from pylab import ravel
         x = current_data.x
         y = ravel(current_data.y)
         dy = current_data.dy
         q = current_data.q
 
-        ij = where((y <= dy/2.) & (y > -dy/2.))
+        ij = numpy.argwhere((y <= dy/2.) & (y > -dy/2.))
         x_slice = ravel(x)[ij]
         eta_slice = ravel(q[3,:,:])[ij]
         return x_slice, eta_slice

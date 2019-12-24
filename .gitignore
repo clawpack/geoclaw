@@ -8,6 +8,7 @@
 xclaw
 xamr
 xgeoclaw
+xgeoclaw.dSYM
 *.html
 _output/
 _plots/
@@ -27,3 +28,6 @@ __pycache__
 
 # ipython
 .ipynb_checkpoints
+
+# macOS
+*.DS_Store

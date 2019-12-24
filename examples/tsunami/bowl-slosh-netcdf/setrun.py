@@ -11,8 +11,6 @@ from __future__ import print_function
 import os
 import numpy as np
 
-import clawpack.geoclaw.data
-import clawpack.geoclaw.topotools as tt
 
 #------------------------------
 def setrun(claw_pkg='geoclaw'):
@@ -40,7 +38,6 @@ def setrun(claw_pkg='geoclaw'):
     # GeoClaw specific parameters:
     #------------------------------------------------------------------
     rundata = setgeo(rundata)
-    rundata = set_multilayer(rundata)
 
     #------------------------------------------------------------------
     # Standard Clawpack parameters to be written to claw.data:
@@ -61,17 +58,17 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_dim = num_dim
 
     # Lower and upper edge of computational domain:
-    clawdata.lower[0] = -100.0
-    clawdata.upper[0] = 100.0
+    clawdata.lower[0] = -2.0
+    clawdata.upper[0] = 2.0
 
-    clawdata.lower[1] = -100.0
-    clawdata.upper[1] = 100.0
+    clawdata.lower[1] = -2.0
+    clawdata.upper[1] = 2.0
 
 
 
     # Number of grid cells: Coarsest grid
-    clawdata.num_cells[0] = 40
-    clawdata.num_cells[1] = 40
+    clawdata.num_cells[0] = 41
+    clawdata.num_cells[1] = 41
 
 
     # ---------------
@@ -79,10 +76,10 @@ def setrun(claw_pkg='geoclaw'):
     # ---------------
 
     # Number of equations in the system:
-    clawdata.num_eqn = 6
+    clawdata.num_eqn = 3
 
     # Number of auxiliary variables in the aux array (initialized in setaux)
-    clawdata.num_aux = 1 + rundata.multilayer_data.num_layers
+    clawdata.num_aux = 1
 
     # Index of aux array corresponding to capacity function, if there is one:
     clawdata.capa_index = 0
@@ -114,10 +111,10 @@ def setrun(claw_pkg='geoclaw'):
 
     clawdata.output_style = 1
 
-    if clawdata.output_style==1:
+    if clawdata.output_style == 1:
         # Output nout frames at equally spaced times up to tfinal:
-        clawdata.num_output_times = 10
-        clawdata.tfinal = 30.0
+        clawdata.num_output_times = 16
+        clawdata.tfinal = 4.4857014654663745
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:
@@ -127,7 +124,7 @@ def setrun(claw_pkg='geoclaw'):
     elif clawdata.output_style == 3:
         # Output every iout timesteps with a total of ntot time steps:
         clawdata.output_step_interval = 1
-        clawdata.total_steps = 500
+        clawdata.total_steps = 1
         clawdata.output_t0 = True
         
 
@@ -146,7 +143,7 @@ def setrun(claw_pkg='geoclaw'):
     # The current t, dt, and cfl will be printed every time step
     # at AMR levels <= verbosity.  Set verbosity = 0 for no printing.
     #   (E.g. verbosity == 2 means print only on levels 1 and 2.)
-    clawdata.verbosity = 0
+    clawdata.verbosity = 3
 
 
 
@@ -160,16 +157,13 @@ def setrun(claw_pkg='geoclaw'):
 
     # Initial time step for variable dt.
     # If dt_variable==0 then dt=dt_initial for all steps:
-    clawdata.dt_initial = 0.016
+    clawdata.dt_initial = 0.0001
 
     # Max time step to be allowed if variable dt used:
     clawdata.dt_max = 1e+99
 
     # Desired Courant number if variable dt used, and max to allow without
     # retaking step with a smaller dt:
-    # clawdata.cfl_desired = 0.9
-    # clawdata.cfl_max = 1.0
-
     clawdata.cfl_desired = 0.75
     clawdata.cfl_max = 1.0
 
@@ -196,7 +190,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.transverse_waves = 2
 
     # Number of waves in the Riemann solution:
-    clawdata.num_waves = 6
+    clawdata.num_waves = 3
     
     # List of limiters to use for each wave family:  
     # Required:  len(limiter) == num_waves
@@ -206,7 +200,7 @@ def setrun(claw_pkg='geoclaw'):
     #   2 or 'superbee' ==> superbee
     #   3 or 'mc'       ==> MC limiter
     #   4 or 'vanleer'  ==> van Leer
-    clawdata.limiter = ['mc', 'mc', 'mc', 'mc', 'mc', 'mc']
+    clawdata.limiter = ['mc', 'mc', 'mc']
 
     clawdata.use_fwaves = True    # True ==> use f-wave version of algorithms
     
@@ -258,25 +252,26 @@ def setrun(claw_pkg='geoclaw'):
         # and at the final time.
         clawdata.checkpt_interval = 5
 
+
     # ---------------
     # AMR parameters:
     # ---------------
     amrdata = rundata.amrdata
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 3
+    amrdata.amr_levels_max = 2
 
     # List of refinement ratios at each level (length at least mxnest-1)
-    amrdata.refinement_ratios_x = [2,2,6]
-    amrdata.refinement_ratios_y = [2,2,6]
-    amrdata.refinement_ratios_t = [2,2,6]
+    amrdata.refinement_ratios_x = [4,4]
+    amrdata.refinement_ratios_y = [4,4]
+    amrdata.refinement_ratios_t = [2,6]
 
 
     # Specify type of each aux variable in amrdata.auxtype.
     # This must be a list of length maux, each element of which is one of:
     #   'center',  'capacity', 'xleft', or 'yleft'  (see documentation).
 
-    amrdata.aux_type = ['center','center','yleft','center','center','center']
+    amrdata.aux_type = ['center']
 
 
     # Flag using refinement routine flag2refine rather than richardson error
@@ -317,33 +312,10 @@ def setrun(claw_pkg='geoclaw'):
     regions = rundata.regiondata.regions
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
-    # regions.append([1, 1, 0., 1.e10, -100.,100., -100.,100.])
-    # regions.append([1, 2, 0., 1.e10,    0.,100.,    0.,100.])
-    # regions.append([2, 3, 3., 1.e10,   52., 72.,   52., 72.])
-    # regions.append([2, 3, 3., 1.e10,   75., 95.,   -10.,  10.])
-    # regions.append([2, 4, 3.4, 1.e10,   57., 68.,   57., 68.])
-    # regions.append([2, 4, 3.4, 1.e10,   83., 92.,   -4.,  4.])
 
     # == setgauges.data values ==
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
-    # rundata.gaugedata.add_gauge()
-
-    # gauges along x-axis:
-    gaugeno = 0
-    for r in np.linspace(56., 63., 9):
-        gaugeno = gaugeno+1
-        x = r + .001  # shift a bit away from cell corners
-        y = .001
-        rundata.gaugedata.gauges.append([gaugeno, x, y, 0., 1e10])
-
-    # gauges along diagonal:
-    gaugeno = 100
-    for r in np.linspace(56., 63., 9):
-        gaugeno = gaugeno+1
-        x = (r + .001) / np.sqrt(2.)
-        y = (r + .001) / np.sqrt(2.)
-        rundata.gaugedata.gauges.append([gaugeno, x, y, 0., 1e10])
-    
+    # rundata.gaugedata.gauges.append([])
 
     return rundata
     # end of function setrun
@@ -374,11 +346,11 @@ def setgeo(rundata):
     geo_data.coriolis_forcing = False
 
     # == Algorithm and Initial Conditions ==
-    geo_data.dry_tolerance = 1.e-1
-    geo_data.friction_forcing = True
-    geo_data.manning_coefficient = 0.025
-    geo_data.friction_depth = 20.0
-    geo_data.rho = [0.9, 1.0]
+    geo_data.sea_level = -10.0
+    geo_data.dry_tolerance = 1.e-3
+    geo_data.friction_forcing = False
+    geo_data.manning_coefficient = 0.0
+    geo_data.friction_depth = 1.e6
 
     # Refinement data
     refinement_data = rundata.refinement_data
@@ -391,23 +363,21 @@ def setgeo(rundata):
     topo_data = rundata.topo_data
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([2, 1, 3, 0., 1.e10, 'bowl.topotype2'])
+    topo_data.topofiles.append([4, 1, 10, 0., 1.e10, 'bowl.nc'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form :   (<= 1 allowed for now!)
     #   [topotype, minlevel,maxlevel,fname]
 
-
     # == setqinit.data values ==
-    rundata.qinit_data.qinit_type = 4
+    rundata.qinit_data.qinit_type = 0
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
     #   [minlev, maxlev, fname]
-    rundata.qinit_data.qinitfiles.append([1, 3, 'hump.xyz'])
 
     # == setfixedgrids.data values ==
-    fixedgrids = rundata.fixed_grid_data.fixedgrids
+    fixedgrids = rundata.fixed_grid_data
     # for fixed grids append lines of the form
     # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
     #  ioutarrivaltimes,ioutsurfacemax]
@@ -415,26 +385,6 @@ def setgeo(rundata):
     return rundata
     # end of function setgeo
     # ----------------------
-
-def set_multilayer(rundata):
-
-    data = rundata.multilayer_data
-
-    # Physics parameters
-    data.num_layers = 2
-    data.eta = [0.0, -20]
-    data.layer_index = 1
-    
-    # Algorithm parameters
-    data.eigen_method = 2
-    data.inundation_method = 2
-    data.richardson_tolerance = np.infty
-    data.wave_tolerance = [1e-3,1e-2]
-
-    rundata.qinit_data.qinit_type = 4
-
-
-    return rundata
 
 
 

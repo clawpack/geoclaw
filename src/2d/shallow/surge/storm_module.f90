@@ -4,7 +4,7 @@
 !    for specific implementations of storms such as the Holland model.
 ! ==============================================================================
 !                   Copyright (C) Clawpack Developers 2017
-!  Distributed under the terms of the Berkeley Software Distribution (BSD) 
+!  Distributed under the terms of the Berkeley Software Distribution (BSD)
 !  license
 !                     http://www.opensource.org/licenses/
 ! ==============================================================================
@@ -26,7 +26,7 @@ module storm_module
 
     ! Locations of wind and pressure fields
     integer :: wind_index, pressure_index
-    
+
     ! Source term control and parameters
     logical :: wind_forcing, pressure_forcing
 
@@ -37,7 +37,7 @@ module storm_module
             real(kind=8), intent(in) :: speed, theta
         end function drag_function
     end interface
-        
+
     ! Function pointer to wind drag requested
     procedure (drag_function), pointer :: wind_drag
 
@@ -49,6 +49,9 @@ module storm_module
     real(kind=8) :: landfall = 0.d0
     type(model_storm_type), save :: model_storm
     type(data_storm_type), save :: data_storm
+
+    ! Wind drag limit
+    real(kind=8) :: WIND_DRAG_LIMIT = 3.5d-3
 
     ! Interface to each of the parameterized models
     abstract interface
@@ -112,15 +115,15 @@ contains
         use utility_module, only: get_value_count
 
         implicit none
-        
+
         ! Input arguments
         character(len=*), optional, intent(in) :: data_file
-        
+
         ! Locals
         integer, parameter :: unit = 13
         integer :: i, drag_law
         character(len=200) :: storm_file_path, line
-        
+
         if (.not.module_setup) then
 
             ! Open file
@@ -138,7 +141,7 @@ contains
                 case(0)
                     wind_drag => no_wind_drag
                 case(1)
-                    wind_drag => garret_wind_drag
+                    wind_drag => garratt_wind_drag
                 case(2)
                     wind_drag => powell_wind_drag
                 case default
@@ -152,7 +155,7 @@ contains
             read(unit, '(i2)') pressure_index
             read(unit, *) display_landfall_time
             read(unit, *)
-            
+
             ! AMR parameters
             read(unit,'(a)') line
             if (line(1:1) == "F") then
@@ -171,11 +174,11 @@ contains
                 read(line,*) (R_refine(i),i=1,size(R_refine,1))
             end if
             read(unit,*)
-            
+
             ! Storm Setup
             read(unit, "(i1)") storm_specification_type
             read(unit, *) storm_file_path
-            
+
             close(unit)
 
             ! Print log messages
@@ -196,7 +199,7 @@ contains
                         set_model_fields => set_holland_1980_fields
                     case(2) ! Holland 2010 model
                         set_model_fields => set_holland_2010_fields
-                    case(3) ! Chavas, Lin, Emmanuel model
+                    case(3) ! Chavas, Lin, Emanuel model
                         set_model_fields => set_CLE_fields
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
@@ -231,7 +234,7 @@ contains
     !   real(kind=8) function *_wind_drag(wind_speed)
     ! ========================================================================
     !  Calculates the drag coefficient for wind given the given wind speed.
-    !  
+    !
     !  Input:
     !      wind_speed = Magnitude of the wind in the cell
     !      theta = Angle with primary hurricane direciton
@@ -243,8 +246,8 @@ contains
     !    wave direction interaction with wind.  This implementation is based on
     !    the parameterization used in ADCIRC.  For more information see
     !
-    !    M.D. Powell (2006). “Final Report to the National Oceanic and 
-    !      Atmospheric Administration (NOAA) Joint Hurricane Testbed (JHT) 
+    !    M.D. Powell (2006). “Final Report to the National Oceanic and
+    !      Atmospheric Administration (NOAA) Joint Hurricane Testbed (JHT)
     !      Program.” 26 pp.
     !
     real(kind=8) pure function powell_wind_drag(wind_speed, theta)     &
@@ -259,7 +262,12 @@ contains
         real(kind=8) :: weight(3), drag(3)
 
         weight = 0.d0
-        drag = garret_wind_drag_limit(wind_speed, 3.5d-3)
+
+        ! Calculate Garratt speeds for use in sector- and speed-specific Cd
+        ! calculation. Note that WIND_DRAG_LIMIT is not binding in this case
+        ! because there are stricter upper bounds imposed in the
+        ! sector-specfic drag below
+        drag = garratt_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
 
         ! Calculate sector weights
         if (0.d0 <= theta .and. theta <= 40.d0) then
@@ -323,25 +331,24 @@ contains
 
 
     ! ========================
-    !  Garret Based Wind Drag
+    !  Garratt Based Wind Drag
     ! ========================
     !  This version is a simple limited version of the wind drag
-    real(kind=8) pure function garret_wind_drag(wind_speed, theta) result(wind_drag)
-    
+    real(kind=8) pure function garratt_wind_drag(wind_speed, theta) result(wind_drag)
+
         implicit none
-        
+
         ! Input
         real(kind=8), intent(in) :: wind_speed, theta
-  
-        wind_drag = garret_wind_drag_limit(wind_speed, 2.d-3)
-    
-    end function garret_wind_drag
+
+        wind_drag = garratt_wind_drag_limit(wind_speed, WIND_DRAG_LIMIT)
+
+    end function garratt_wind_drag
 
 
     ! ===================================
-    !  Helper for Garret Based Wind Drag
-    ! ===================================
-    real(kind=8) pure function garret_wind_drag_limit(wind_speed,      &
+    !  Helper for Garratt==================
+    real(kind=8) pure function garratt_wind_drag_limit(wind_speed,      &
                                                       wind_drag_limit) &
                                                result(wind_drag)
 
@@ -353,7 +360,7 @@ contains
         wind_drag = min(wind_drag_limit,                               &
                         1.d-3 * (0.75d0 + 0.067d0 * wind_speed))
 
-    end function garret_wind_drag_limit
+    end function garratt_wind_drag_limit
 
 
     ! ==================================================================
@@ -397,9 +404,9 @@ contains
     end function storm_location
 
     real(kind=8) function storm_direction(t) result(theta)
-        
+
         use amr_module, only: rinfinity
-        use model_storm_module, only: model_direction => storm_direction 
+        use model_storm_module, only: model_direction => storm_direction
         use data_storm_module, only: data_direction => storm_direction
 
         implicit none
@@ -447,12 +454,12 @@ contains
         implicit none
 
         real(kind=8), intent(in) :: t
-        
+
         ! We open this here so that the file flushes and writes to disk
         open(unit=track_unit,file="fort.track",action="write",position='append')
 
         write(track_unit,"(4e26.16)") t, storm_location(t), storm_direction(t)
-        
+
         close(track_unit)
 
     end subroutine output_storm_location

@@ -34,8 +34,6 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
       external rpn2,rpt2
 
 
-c      parameter (msize=max1d+4)
-c      parameter (mwork=msize*(maxvar*maxvar + 13*maxvar + 3*maxaux +2))
 
       dimension q(nvar,mitot,mjtot)
       dimension fp(nvar,mitot,mjtot),gp(nvar,mitot,mjtot)

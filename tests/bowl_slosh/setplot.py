@@ -96,10 +96,9 @@ def setplot(plotdata):
     plotaxes.ylimits = [-0.15,0.3]
     plotaxes.title = 'Cross section at y=0'
     def plot_topo_xsec(current_data):
-        from pylab import plot, hold, cos,sin,where,legend,nan
+        from pylab import plot, cos,sin,where,legend,nan
         t = current_data.t
 
-        hold(True)
         x = linspace(-2,2,201)
         y = 0.
         B = h0*(x**2 + y**2)/a**2 - h0
@@ -111,20 +110,19 @@ def setplot(plotdata):
         ## plot([0],[-1],'bo',label="Level 2")  # but will produced desired legend
         plot([0],[-1],'bo',label="Computed")  ## need to fix plotstyle
         legend()
-        hold(False)
     plotaxes.afteraxes = plot_topo_xsec
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
 
     def xsec(current_data):
         # Return x value and surface eta at this point, along y=0
-        from pylab import find,ravel
+        from pylab import where,ravel
         x = current_data.x
-        y = current_data.y
+        y = ravel(current_data.y)
         dy = current_data.dy
         q = current_data.q
 
-        ij = find((y <= dy/2.) & (y > -dy/2.))
+        ij = where((y <= dy/2.) & (y > -dy/2.))
         x_slice = ravel(x)[ij]
         eta_slice = ravel(q[3,:,:])[ij]
         return x_slice, eta_slice

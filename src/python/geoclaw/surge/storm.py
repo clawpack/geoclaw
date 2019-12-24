@@ -112,6 +112,15 @@ missing_data_warning_str = """*** Cannot yet automatically determine the
     `max_wind_radius_fill` function passed as argument
     to the `write` function."""
 
+# Warning for not having any time points with both a max wind speed and central
+# pressure observation
+missing_necessary_data_warning_str = """No storm points in the input file 
+    had both a max wind speed and a central pressure observation."""
+
+class NoDataError(ValueError):
+    """Exception to raise when no valid data in input file"""
+    pass
+
 
 # =============================================================================
 #  Basic storm class
@@ -147,6 +156,9 @@ class Storm(object):
      - *time_offset* (datetime.datetime) A date time that as an offset for the
        simulation time.  This will default to the beginning of the first of the
        year that the first time point is found in.
+     - *wind_speeds* (ndarray(:, :)) Wind speeds defined in every record, such
+       as 34kt, 50kt, 64kt, etc and their radii. Default units are meters/second 
+       and meters.
 
     :Initialization:
      1. Read in existing file at *path*.
@@ -183,6 +195,7 @@ class Storm(object):
         self.max_wind_radius = None
         self.central_pressure = None
         self.storm_radius = None
+        self.wind_speeds = None
 
         # Storm descriptions - not all formats provide these
         self.name = None
@@ -313,6 +326,7 @@ class Storm(object):
         self.central_pressure = numpy.empty(num_lines)
         self.max_wind_radius = numpy.empty(num_lines)
         self.storm_radius = numpy.empty(num_lines)
+        self.wind_speeds = numpy.empty((num_lines, 2))
 
         for (i, data) in enumerate(data_block):
             # End at an empty lines - skips lines at the bottom of a file
@@ -373,6 +387,29 @@ class Storm(object):
                 self.max_wind_radius[i] = units.convert(float(data[19]), 'nmi', 'm')
             except (ValueError, IndexError):
                 self.max_wind_radius[i] = -1
+		
+	    # Wind profile (occasionally missing for older ATCF storms)
+	    # Wind speeds
+            try:
+                self.wind_speeds[i, 0] = units.convert(float(data[11]), 'knots', 'm/s')
+            except (ValueError, IndexError):
+                self.wind_speeds[i, 0] = -1
+		
+	    # Wind speeds' radii
+            try:
+                average = 0
+                n = 0
+                for j in range(13, 17):
+                    if float(data[j]) != 0:
+                        n = n + 1
+                        average = average + float(data[j])
+                if n != 0:
+                    average = average / float(n)
+                else:
+                    average = 0
+                self.wind_speeds[i, 1] = units.convert(average, 'nmi', 'm')
+            except (ValueError, IndexError):
+                self.wind_speeds[i, 1] = -1
                 
             if self.max_wind_speed.min() == -1:
                 warnings.warn('Some timesteps have missing max wind speed. These will not be written'
@@ -615,6 +652,8 @@ class Storm(object):
             ## THESE CANNOT BE MISSING SO DROP
             ## IF EITHER MISSING
             valid = pref_vals['wind'].notnull() & pref_vals['pres'].notnull()
+            if not valid.any():
+                raise NoDataError(missing_necessary_data_warning_str)
             ds = ds.sel(date_time=valid)
             for i in ['wind','pres']:
                 pref_vals[i] = pref_vals[i].sel(date_time=valid)

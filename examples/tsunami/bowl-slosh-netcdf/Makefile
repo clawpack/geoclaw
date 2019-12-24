@@ -1,3 +1,4 @@
+
 # Makefile for Clawpack code in this directory.
 # This version only sets the local files and frequently changed
 # options, and then includes the standard makefile pointed to by CLAWMAKE.
@@ -17,8 +18,6 @@ SETRUN_FILE = setrun.py        # File containing function to make data
 OUTDIR = _output               # Directory for output
 SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
-
-RESTART = False
 
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 
@@ -43,12 +42,10 @@ include $(GEOLIB)/Makefile.geoclaw
 EXCLUDE_MODULES = \
 
 EXCLUDE_SOURCES = \
-	$(GEOLIB)/qinit.f90
 
 # ----------------------------------------
 # List of custom sources for this program:
 # ----------------------------------------
-
 
 MODULES = \
 
@@ -56,14 +53,19 @@ SOURCES = \
   ./qinit.f90 \
   $(CLAW)/riemann/src/rpn2_geoclaw.f \
   $(CLAW)/riemann/src/rpt2_geoclaw.f \
-  $(CLAW)/riemann/src/geoclaw_riemann_utils.f
+  $(CLAW)/riemann/src/geoclaw_riemann_utils.f \
 
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
 
 # Construct the topography data
-.PHONY: netcdf_test
+.PHONY: topo all
+topo:
+	python maketopo.py
 
-netcdf_test: netcdf_test.f90
-	$(FC) netcdf_test.f90 $(FFLAGS) $(LFLAGS) -o netcdf_test
+all: 
+	$(MAKE) topo
+	$(MAKE) .plots
+	$(MAKE) .htmls
+

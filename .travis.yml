@@ -1,13 +1,13 @@
 language: python
 python:
   - 2.7
-  - 3.5
+  - 3.7
 env:
   - BUILD_TYPE="Release"
-  
+
 before_install:
   - sudo apt-get update
-  - sudo apt-get install gfortran liblapack-pic liblapack-dev
+  - sudo apt-get install gfortran liblapack-pic liblapack-dev libnetcdf-dev libnetcdff-dev
   - pip install netCDF4
   - pip install xarray
   - pip install scipy
@@ -19,13 +19,13 @@ before_install:
   - ln -s ../ geoclaw
   # Print NumPy version being used
   - python -c "import numpy; print(numpy.__version__)"
-  
+
 install:
   - export PYTHONPATH=${PWD}:$PYTHONPATH
   - export CLAW=${PWD}
   - export FC=gfortran
-  - cd geoclaw
-  
+  - export NETCDF4_DIR=/usr
+
 before_script:
   # Print CPU info for debugging purposes:
   - cat /proc/cpuinfo
@@ -34,13 +34,14 @@ before_script:
   - echo "PYTHONPATH="$PYTHONPATH
   - echo "CLAW="$CLAW
   - echo "FC="$FC
-  
+  - echo "NETCDF4_DIR="$NETCDF4_DIR
+
 script:
   - cd $CLAW/geoclaw
   - nosetests -sv
 
 after_failure:
  - for failed_test_path in *_output ; do cat $failed_test_path/run_output.txt ; cat $failed_test_path/error_output.txt ; done
-  
+
 notifications:
   email: false

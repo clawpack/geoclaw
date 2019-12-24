@@ -1,3 +1,4 @@
+
 # Makefile for Clawpack code in this directory.
 # This version only sets the local files and frequently changed
 # options, and then includes the standard makefile pointed to by CLAWMAKE.
@@ -18,14 +19,8 @@ OUTDIR = _output               # Directory for output
 SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
-RESTART = False
-
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
-
-# Compiler flags can be specified here or set as an environment variable
-FFLAGS += -DNETCDF -lnetcdf -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib
-LFLAGS += $(FFLAGS) -lnetcdff
-
+FFLAGS ?=
 
 # ---------------------------------
 # package sources for this program:
@@ -43,27 +38,22 @@ include $(GEOLIB)/Makefile.geoclaw
 EXCLUDE_MODULES = \
 
 EXCLUDE_SOURCES = \
-	$(GEOLIB)/qinit.f90
 
 # ----------------------------------------
 # List of custom sources for this program:
 # ----------------------------------------
 
+RIEMANN = $(CLAW)/riemann/src
 
 MODULES = \
 
 SOURCES = \
-  ./qinit.f90 \
-  $(CLAW)/riemann/src/rpn2_geoclaw.f \
-  $(CLAW)/riemann/src/rpt2_geoclaw.f \
-  $(CLAW)/riemann/src/geoclaw_riemann_utils.f
+  $(RIEMANN)/rpn2_geoclaw.f \
+  $(RIEMANN)/rpt2_geoclaw.f \
+  $(RIEMANN)/geoclaw_riemann_utils.f \
 
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
 
-# Construct the topography data
-.PHONY: netcdf_test
-
-netcdf_test: netcdf_test.f90
-	$(FC) netcdf_test.f90 $(FFLAGS) $(LFLAGS) -o netcdf_test
+### DO NOT remove this line - make depends on it ###
