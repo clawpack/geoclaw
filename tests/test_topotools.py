@@ -508,9 +508,15 @@ def integral_topotool(func, mfile, funcflag):
     for i in range(len(patch1.y) - 1):
         for j in range(len(patch1.x) - 1):
             area = (patch1.x[j+1] - patch1.x[j]) * (patch1.y[i+1] - patch1.y[i])
-            real_value[i][j] = dblquad(func=func, a=patch1.y[i], b=patch1.y[i+1],
-                                       gfun=lambda x: patch1.x[j],
-                                       hfun=lambda x: patch1.x[j+1])[0] / float(area)
+            if funcflag:
+                options = {'limit':1000}
+                real_value[i][j] = nquad(func=func, ranges=[[patch1.x[j], patch1.x[j+1]],
+                                         [patch1.y[i], patch1.y[i+1]]], args=None,
+                                         opts=[options,options])[0] / float(area)
+            else:
+                real_value[i][j] = dblquad(func=func, a=patch1.y[i], b=patch1.y[i+1],
+                                           gfun=patch1.x[j],
+                                           hfun=patch1.x[j+1])[0] / float(area)
     
     # Cell value calculated by functions
     calculated_value = topotools.cell_average_patch(patch1, mtopoorder, mfile, topo)
