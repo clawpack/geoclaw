@@ -446,7 +446,7 @@ def integral_topotool(func, mfile, funcflag):
     topo = []
     mtopoorder = []
     
-    # Set boundary for coarsest topo
+    # Set boundary for the coarsest topo
     xlow = 5; xhi = 8
     xarray = numpy.linspace(xlow, xhi, mfile * 5)
     ylow = 2; yhi = 5
@@ -499,27 +499,26 @@ def integral_topotool(func, mfile, funcflag):
     # Set patch data
     patch_x = numpy.linspace(xlow + 0.1, xhi - 0.1, 5)
     patch_y = numpy.linspace(ylow + 0.1, yhi - 0.1, 4)
-    patch_dx = patch_x[1] - patch_x[0]
-    patch_dy = patch_y[1] - patch_y[0]
-    patch1 = topotools.patch(patch_x, patch_y, patch_dx, patch_dy)
+    patch = {'x':patch_x, 'y':patch_y}
     
     # Accurate cell value
-    real_value = numpy.empty((len(patch1.y) - 1, len(patch1.x) - 1))
-    for i in range(len(patch1.y) - 1):
-        for j in range(len(patch1.x) - 1):
-            area = (patch1.x[j+1] - patch1.x[j]) * (patch1.y[i+1] - patch1.y[i])
+    real_value = numpy.empty((len(patch['y']) - 1, len(patch['x']) - 1))
+    for i in range(len(patch['y']) - 1):
+        for j in range(len(patch['x']) - 1):
+            area = (patch['x'][j+1] - patch['x'][j]) * (patch['y'][i+1] - patch['y'][i])
             if funcflag:
                 options = {'limit':1000}
-                real_value[i][j] = nquad(func=func, ranges=[[patch1.x[j], patch1.x[j+1]],
-                                         [patch1.y[i], patch1.y[i+1]]], args=None,
+                real_value[i][j] = nquad(func=func, ranges=[[patch['x'][j], patch['x'][j+1]],
+                                         [patch['y'][i], patch['y'][i+1]]], args=None,
                                          opts=[options,options])[0] / float(area)
             else:
-                real_value[i][j] = dblquad(func=func, a=patch1.y[i], b=patch1.y[i+1],
-                                           gfun=patch1.x[j],
-                                           hfun=patch1.x[j+1])[0] / float(area)
+                real_value[i][j] = dblquad(func=func, a=patch['y'][i], b=patch['y'][i+1],
+                                           gfun=patch['x'][j],
+                                           hfun=patch['x'][j+1])[0] / float(area)
+        
     
     # Cell value calculated by functions
-    calculated_value = topotools.cell_average_patch(patch1, mtopoorder, mfile, topo)
+    calculated_value = topotools.cell_average_patch(patch, mtopoorder, mfile, topo)
         
     # Whether calculated value achieve the expected resolution
     npt.assert_almost_equal(real_value, calculated_value, decimal=3)
