@@ -332,6 +332,7 @@ contains
                 else
                   print *, "ERROR in setting grid src for gauge number ",&
                       gauges(i)%gauge_num
+                  print *, "    x,y = ",gauges(i)%x, gauges(i)%y
                 endif
               endif
  40     continue 
@@ -608,7 +609,7 @@ contains
                   else
                     ! x,y in degrees, ug,vg in m/s
                     xg = gauges(i)%x + dt*ug / (earth_radius*deg2rad &
-                                             * cos(deg2rad*yg))
+                                             * cos(deg2rad*gauges(i)%y))
                     yg = gauges(i)%y + dt*vg / (earth_radius*deg2rad)
                   endif
                 !write(6,*) '+++ dt,ug,vg: ',dt,ug,vg
