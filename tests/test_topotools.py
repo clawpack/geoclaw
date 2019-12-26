@@ -23,7 +23,7 @@ import clawpack.clawutil.data
 import numpy.testing as npt
 from six.moves import range
 from clawpack.geoclaw.topotools import Topography
-from scipy.integrate import dblquad
+from scipy.integrate import dblquad, nquad
 
 # Set local test directory to get local files
 testdir = os.path.dirname(__file__)
@@ -482,7 +482,7 @@ def integral_topotool(func, mfile, funcflag):
         topo1 = Topography()
         
         # Whether the function is discontinuous function
-        if funcflag == True:
+        if funcflag:
             z = numpy.empty((len(x), len(y)))
             for m in range(len(x)):
                 for n in range(len(y)):
