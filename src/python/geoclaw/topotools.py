@@ -1953,20 +1953,12 @@ def cellintegral(cell, mtopoorder, mtopofiles, topo):
     return topoint
 
 
-class patch:
-    def __init__(self, x, y, dx, dy):
-        self.x = x
-        self.y = y
-        self.dx = dx
-        self.dy = dy
-
-
 def cell_average_patch(patch, mtopoorder, mtopofiles, topo):
     r"""
-    Compute every cell's average of the specific path given by "patch".
+    Compute every cell's average of the specific patch given by "patch".
 
     :Input:
-    - *patch* (object) Patch.
+    - *patch* (Dictionary) Patch.
     - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
     - *mtopofiles* (int) The number of the topo objects.
     - *topo* (list) The list of topo objects.
@@ -1975,16 +1967,16 @@ def cell_average_patch(patch, mtopoorder, mtopofiles, topo):
     - *cell_average* (ndarray(:, :)) Patch's every cell average.
     """
 
-    x_num = patch.x.shape[0] - 1
-    y_num = patch.y.shape[0] - 1
+    x_num = len(patch['x']) - 1
+    y_num = len(patch['y']) - 1
     cell_average = numpy.empty((y_num, x_num))
 
     for i in range(y_num):
         for j in range(x_num):
             
             # Set cell's parameter
-            cell = [patch.x[j], patch.x[j+1], patch.y[i], patch.y[i+1]]
-            area = (patch.x[j+1] - patch.x[j]) * (patch.y[i+1] - patch.y[i])
+            cell = [patch['x'][j], patch['x'][j+1], patch['y'][i], patch['y'][i+1]]
+            area = (patch['x'][j+1] - patch['x'][j]) * (patch['y'][i+1] - patch['y'][i])
             
             # Calculate every cell average
             cell_average[i, j] = cellintegral(cell, mtopoorder, mtopofiles, topo) / area
