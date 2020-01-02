@@ -86,7 +86,7 @@ def setplot(plotdata=None):
         hs = sqrt(q[1,:,:]**2 + q[2,:,:]**2)
         s = where(h>1e-3, hs/h, 0.)
         s = masked_where(h<1e-3, s)
-        s = s * 1.94384  # convert to knots
+        #s = s * 1.94384  # convert to knots
         return s
 
     speed_cmap = colormaps.make_colormap({0:[0,1,1], 0.5:[1,1,0], 1:[1,0,0]})
@@ -108,16 +108,13 @@ def setplot(plotdata=None):
 
     # Water
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
-    #plotitem.plot_var = geoplot.surface
-    #plotitem.plot_var = geoplot.surface_or_depth
     plotitem.plot_var = speed
-    #plotitem.pcolor_cmap = geoplot.tsunami_colormap
     plotitem.pcolor_cmap = speed_cmap
 
     plotitem.pcolor_cmin = 0. 
-    plotitem.pcolor_cmax = 20
+    plotitem.pcolor_cmax = 10
     plotitem.add_colorbar = True
-    plotitem.colorbar_label = 'knots'
+    plotitem.colorbar_label = 'm/s'
     plotitem.amr_celledges_show = [0,0,0]
     plotitem.amr_patchedges_show = [1]
     plotitem.amr_patchedges_color = ['m','g','w']
