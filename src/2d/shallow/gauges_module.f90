@@ -278,7 +278,7 @@ contains
         implicit none
 
         integer, intent(in), optional :: igauge
-        integer :: lev, mptr, i, k1, ki, i1, i2
+        integer :: lev, mptr, i, i1, i2
 
 !
 ! ##  set source grid for each loc from finest level to coarsest
@@ -286,7 +286,6 @@ contains
 
 ! ##  This modified version allows an optional igauge argument
 ! ##  to only update one gauge, for Lagrangian gauges (particle tracking)
-
 
         if (present(igauge)) then
             ! only loop over one gauge
@@ -384,7 +383,7 @@ contains
         ! Locals
         real(kind=8) :: var(maxvar + maxaux)
         real(kind=8) :: xcent, ycent, xoff, yoff, tgrid, hx, hy
-        integer :: level, i1, i2, icell, jcell, iindex, jindex
+        integer :: level, icell, jcell, iindex, jindex
         integer :: i, j, n, var_index, eta_index
         real(kind=8) :: h(4), mod_dry_tolerance, topo, h_interp
         real(kind=8) :: dt, xg, yg, ug, vg  ! for lagrangian gauges
@@ -590,11 +589,8 @@ contains
                 if (abs(var(j)) < 1d-90) var(j) = 0.d0
             end do
        
-            !write(6,*) '+++ gauges(i)%gauge_num', gauges(i)%gauge_num
-            !write(6,*) '+++ var_index: ', var_index
             if (gauges(i)%gtype == 2) then
                 ! Lagrangian gauge, update location
-                !write(6,*) '+++ xg,yg before update: ',gauges(i)%x,gauges(i)%y
                 if (var(1) < dry_tolerance) then
                     ug = 0.d0
                     vg = 0.d0
@@ -612,8 +608,6 @@ contains
                                              * cos(deg2rad*gauges(i)%y))
                     yg = gauges(i)%y + dt*vg / (earth_radius*deg2rad)
                   endif
-                !write(6,*) '+++ dt,ug,vg: ',dt,ug,vg
-                !write(6,*) '+++ xg,yg: ',xg,yg
                 
                 ! Update location and store new xg,yg in place of hu,hv 
                 gauges(i)%x = xg
