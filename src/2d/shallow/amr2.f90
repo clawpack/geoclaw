@@ -464,7 +464,11 @@ program amr2
 
         ! moved upt before restrt or won't properly initialize 
         call set_fgmax()   
+        ! Set gauge output, note that restrt might reset x,y for lagrangian:
+        call set_gauges(rest, nvar, naux) 
+
         call restrt(nsteps,time,nvar,naux)
+
         nstart  = nsteps
         tstart_thisrun = time
         print *, ' '
@@ -485,7 +489,6 @@ program amr2
         call set_multilayer()             ! Set multilayer SWE parameters
         call set_storm()                  ! Set storm parameters
         call set_regions()                ! Set refinement regions
-        call set_gauges(rest, nvar, naux) ! Set gauge output
         call read_adjoint_data()          ! Read adjoint solution
 
     else
