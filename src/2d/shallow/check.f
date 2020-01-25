@@ -9,7 +9,7 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;
 
       use amr_module
 c     !use gauges_module, only: OUTGAUGEUNIT, num_gauges
-      use gauges_module, only: num_gauges
+      use gauges_module, only: num_gauges, gauges
       use gauges_module, only: print_gauges_and_reset_nextLoc
       use fgmax_module
 
@@ -96,7 +96,6 @@ c     ### they contain allocatable arrays
      &          fg%arrival_time,fg%aux,fg%t_last_updated
       end do
 c
-      close(chkunit)
 
 c     # flush open running output files fort.amr, fort.gauge, fort.debug
 c     # so if code dies it will at least have output up to this checkpoint time
@@ -106,9 +105,19 @@ c     # so if code dies it will at least have output up to this checkpoint time
 
 c     now that gauge data is batched, need to write the last batch to file
 c    ! flush(OUTGAUGEUNIT)   ! defined in gauges_module.f90 
+
+
+      write(chkunit) num_gauges
+      ! write out last recorded x,y position,
+      ! needed on restart only for lagrangian gauges, but write them all
       do ii = 1, num_gauges
-         call print_gauges_and_reset_nextLoc(ii)
+         write(chkunit) gauges(ii)%gauge_num,
+     &                      gauges(ii)%t_last_written,
+     &                      gauges(ii)%x_last_written,
+     &                      gauges(ii)%y_last_written
       end do
+
+      close(chkunit)
 
 c     # write the time stamp file last so it's not updated until data is
 c     # all dumped, in case of crash mid-dump.

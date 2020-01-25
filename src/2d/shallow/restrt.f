@@ -6,12 +6,15 @@ c
 c
       use amr_module
       use fgmax_module
+      use gauges_module, only: gauges, num_gauges
       implicit double precision (a-h,o-z)
       logical   ee
  
       logical foundFile
       dimension intrtx(maxlv),intrty(maxlv),intrtt(maxlv)
       type(fgrid), pointer :: fg
+
+      integer :: num_gauges_previous, i, ii
 c
 c :::::::::::::::::::::::::::: RESTRT ::::::::::::::::::::::::::::::::
 c read back in the check point files written by subr. check.
@@ -82,6 +85,49 @@ c     # need to allocate for dynamic memory:
           read(rstunit) fg%x,fg%y,fg%valuemax,fg%tmax,
      &         fg%arrival_time,fg%aux,fg%t_last_updated
         end do
+      endif
+
+c     Check for any lagrangian gauges, and if present reset x,y location:
+
+      read(rstunit) num_gauges_previous
+
+      ! Note that it now works (?) to add new gauges for a restart that
+      ! were not previously there, but the old ones should still be there
+      ! with the same gauge numbers and order as before.
+      ! Also note that set_gauges is now called before restrt, so 
+      ! we have access to old gauge data, and can overwrite location
+      ! read from gauges.data for lagrangian gauges that have moved.
+
+      if (num_gauges_previous > num_gauges) then
+         write(6,*) '*** Number of gauges reduced, expect problems!'
+      else
+         do ii = 1, num_gauges
+            previous_gauge_num = gauges(ii)%gauge_num
+            read(rstunit) gauges(ii)%gauge_num,
+     &                    gauges(ii)%t_last_written,
+     &                    gauges(ii)%x_last_written,
+     &                    gauges(ii)%y_last_written
+            if (gauges(ii)%gauge_num .ne. previous_gauge_num) then
+                write(6,*) '*** Gauge number has changed!'
+                write(6,*) ii,gauges(ii)%gauge_num,previous_gauge_num
+                ! stop?
+            endif
+            if (gauges(ii)%gtype == 2) then
+                ! lagrangian gauge, reset x,y location:
+                gauges(ii)%x = gauges(ii)%x_last_written
+                gauges(ii)%y = gauges(ii)%y_last_written
+                if ((gauges(ii)%t_last_written .ne. NEEDS_TO_BE_SET)
+     &             .and. (gauges(ii)%t_last_written .ne. time)) then
+                    ! Note this always happens now since gauge is
+                    ! not written at final time.  Remove this warning
+                    ! until we fixt that?
+                    write(6,602) time, gauges(ii)%gauge_num, 
+     &                       gauges(ii)%t_last_written
+ 602                format('Restart at time ', e13.6,
+     &                 '  Gauge ', i8, ' is reset from time ', e13.6)
+                endif
+            endif
+         end do
       endif
 
 c
