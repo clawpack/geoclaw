@@ -65,8 +65,13 @@ module gauges_module
         ! Last time recorded
         real(kind=8) :: last_time
 
+        ! Last time and final (x,y) written to file 
+        ! (only needed for lagrangian gauges, for checkpointing)
+        real(kind=8) :: t_last_written, x_last_written, y_last_written
+
+
         ! Output settings
-        integer :: file_format
+        integer :: file_format, gtype
         real(kind=8) :: min_time_increment
         character(len=10) :: display_format
         logical, allocatable :: q_out_vars(:)
@@ -94,6 +99,7 @@ contains
     subroutine set_gauges(restart, num_eqn, num_aux, fname)
 
         use utility_module, only: get_value_count
+        use amr_module, only: NEEDS_TO_BE_SET
 
         implicit none
 
@@ -108,6 +114,7 @@ contains
         integer, parameter :: UNIT = 7
         character(len=128) :: header_1
         character(len=40) :: q_column, aux_column
+        logical :: foundOldGaugeFile
 
         if (.not.module_setup) then
 
@@ -129,8 +136,16 @@ contains
             do i=1,num_gauges
                 read(UNIT, *) gauges(i)%gauge_num, gauges(i)%x, gauges(i)%y, &
                               gauges(i)%t_start, gauges(i)%t_end
+                ! note that for lagrangian gauges, the x,y values read here 
+                ! might be overwritten if this is a restart
                 gauges(i)%buffer_index = 1
                 gauges(i)%last_time = gauges(i)%t_start
+                ! keep track of last position for lagrangian gauges,
+                ! initialize here in case checkpoint happens before 
+                ! ever writing this gauge:
+                gauges(i)%t_last_written = NEEDS_TO_BE_SET
+                gauges(i)%x_last_written = gauges(i)%x
+                gauges(i)%y_last_written = gauges(i)%y
             enddo
 
             ! Read in output formats
@@ -143,6 +158,9 @@ contains
             read(UNIT, *)
             read(UNIT, *)
             read(UNIT, *) (gauges(i)%min_time_increment, i=1, num_gauges)
+            read(UNIT, *)
+            read(UNIT, *)
+            read(UNIT, *) (gauges(i)%gtype, i=1, num_gauges)
 
             ! Read in q fields
             read(UNIT, *)
@@ -196,23 +214,36 @@ contains
                     num = num / 10
                 end do
 
-                ! Handle restart
-                if (restart) then
-                    open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name,       &
-                         status='unknown', position='append', form='formatted')
-                else
-                    open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name,       &
-                         status='unknown', position='append', form='formatted')
+                ! for restart, need to know if gauge file already exists,
+                ! since we now also allow specifying new gauges in restart:
+                inquire(file=gauges(i)%file_name, exist=foundOldGaugeFile)
+                
+                ! Open gauge file:
+                open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name,       &
+                     status='unknown', position='append', form='formatted')
+                     
+                if (.not. restart) then
                     rewind OUTGAUGEUNIT
+                endif
 
+                if ((.not. restart) .or. (.not. foundOldGaugeFile)) then
                     ! Write header
-                    header_1 = "('# gauge_id= ',i5,' " //                   &
-                               "location=( ',1e17.10,' ',1e17.10,' ) " //   &
+                    header_1 = "('# gauge_id= ',i5,' " //                 &
+                               "location=( ',1e17.10,' ',1e17.10,' ) " // &
                                "num_var= ',i2)"
-                    write(OUTGAUGEUNIT, header_1) gauges(i)%gauge_num,      &
-                                                  gauges(i)%x,              &
-                                                  gauges(i)%y,              &
+                    write(OUTGAUGEUNIT, header_1) gauges(i)%gauge_num,    &
+                                                  gauges(i)%x,            &
+                                                  gauges(i)%y,            &
                                                   gauges(i)%num_out_vars
+
+                    if (gauges(i)%gtype == 1) then
+                        ! Standard gauge
+                        write(OUTGAUGEUNIT, '(a)') "# Stationary gauge"
+                      else if (gauges(i)%gtype == 2) then
+                        ! Lagrangian gauge
+                        write(OUTGAUGEUNIT, '(a)') "# Lagrangian particle,"// &
+                                    " q[2,3] replaced by (x(t),y(t))"
+                      endif
 
                     ! Construct column labels
                     index = 0
@@ -253,7 +284,7 @@ contains
 !
 ! --------------------------------------------------------------------
 !
-    subroutine setbestsrc()
+    subroutine setbestsrc(igauge)
 !
 !     Called every time grids change, to set the best source grid patch
 !     for each gauge, i.e. the finest level patch that includes the gauge.
@@ -265,19 +296,32 @@ contains
         use amr_module
         implicit none
 
-        integer :: lev, mptr, i, k1, ki
+        integer, intent(in), optional :: igauge
+        integer :: lev, mptr, i, i1, i2
 
 !
-! ##  set source grid for each loc from coarsest level to finest.
-! ##  that way finest src grid left and old ones overwritten
-! ##  this code uses fact that grids do not overlap
+! ##  set source grid for each loc from finest level to coarsest
+! ##  and goes on to the next gauge once a patch is found.
 
-! # for debugging, initialize sources to 0 then check that all set
-        mbestsrc = 0
+! ##  This modified version allows an optional igauge argument
+! ##  to only update one gauge, for Lagrangian gauges (particle tracking)
+
+        if (present(igauge)) then
+            ! only loop over one gauge
+            i1 = igauge
+            i2 = igauge
+          else
+            ! normal case of setting for all gauges
+            i1 = 1
+            i2 = num_gauges
+          endif
+
+        ! for debugging, initialize sources to 0 then check that all set
+        mbestsrc(i1:i2) = 0
 
         !! reorder loop for better performance with O(10^5) grids
         !! for each gauge find best source grid for its data
-        do 40 i = 1, num_gauges
+        do 40 i = i1,i2
 
            do 30 lev = lfine, 1, -1
             mptr = lstart(lev)
@@ -299,8 +343,17 @@ contains
                  end if
  30        continue 
 
-          if (mbestsrc(i) .eq. 0) &
-              print *, "ERROR in setting grid src for gauge data", i
+          if (mbestsrc(i) .eq. 0) then
+              if ((gauges(i)%x < xlower) .or. (gauges(i)%x > xupper) .or. &
+                  (gauges(i)%y < ylower) .or. (gauges(i)%y > yupper)) then
+                  print *, "Gauge number ",gauges(i)%gauge_num, &
+                      " is outside domain"
+                else
+                  print *, "ERROR in setting grid src for gauge number ",&
+                      gauges(i)%gauge_num
+                  print *, "    x,y = ",gauges(i)%x, gauges(i)%y
+                endif
+              endif
  40     continue 
 
 !!!  NO MORE qsort and mbestg arrays. 
@@ -333,8 +386,9 @@ contains
 !     NO MORE mbestg1 and 2.  Loop through all gauges. No sorting too.
 
         use amr_module, only: nestlevel, nghost, timemult, rnode, node, maxvar
-        use amr_module, only: maxaux, hxposs, hyposs
+        use amr_module, only: maxaux, hxposs, hyposs, possk
         use geoclaw_module, only: dry_tolerance
+        use geoclaw_module, only: coordinate_system, earth_radius, deg2rad
         use geoclaw_module, only: ambient_pressure
         use storm_module, only: pressure_index
 
@@ -349,9 +403,11 @@ contains
         ! Locals
         real(kind=8) :: var(maxvar + maxaux)
         real(kind=8) :: xcent, ycent, xoff, yoff, tgrid, hx, hy
-        integer :: level, i1, i2, icell, jcell, iindex, jindex
+        integer :: level, icell, jcell, iindex, jindex
         integer :: i, j, n, var_index, eta_index
         real(kind=8) :: h(4), mod_dry_tolerance, topo, h_interp
+        real(kind=8) :: dt, xg, yg, ug, vg  ! for lagrangian gauges
+        logical :: need_to_reset_patch
 
         ! No gauges to record, exit
         if (num_gauges == 0) then
@@ -363,10 +419,12 @@ contains
         level = node(nestlevel, mptr)
         hx = hxposs(level)
         hy = hyposs(level)
+        dt = possk(level)
 
         ! Main Gauge Loop ======================================================
         do i = 1, num_gauges
             if (mptr .ne. mbestsrc(i)) cycle 
+            need_to_reset_patch = .false.  ! set to true if gauge in ghost cell
             if (tgrid < gauges(i)%t_start .or. tgrid > gauges(i)%t_end) then
                cycle
             endif
@@ -376,15 +434,42 @@ contains
                 cycle
             end if
 
+            ! Compute indexing and bilinear interpolant weights
+            ! and check if gauge is outside patch
+            iindex =  int(.5d0 + (gauges(i)%x - xlow) / hx)
+            jindex =  int(.5d0 + (gauges(i)%y - ylow) / hy)
+            if ((iindex < 1 .or. iindex > mitot) .or. &
+                (jindex < 1 .or. jindex > mjtot)) then
+                    if (gauges(i)%gtype == 2) then
+                        ! Lagrangian gauge outside domain, ignore
+                        ! (maybe should flag so never checked again??)
+                        cycle
+                    else
+                        ! standard gauge so should be in domain
+                        write(6,601) gauges(i)%gauge_num
+601                     format("ERROR in output of Gauge Data: Gauge ", &
+                             i6, " outside patch -- Skipping")
+                        !write(6,*) '+++ gauges(i)%gauge_num', gauges(i)%gauge_num
+                        !print *, "iindex, mitot, jindex, mjtot: ", &
+                        !        iindex, mitot, jindex, mjtot
+                        !print *, "gauges(i)%x = ",gauges(i)%x
+                        cycle
+                    endif
+            else if ((iindex < nghost .or. iindex > mitot-nghost) .or. &
+                (jindex < nghost .or. jindex > mjtot-nghost)) then
+                    ! might want to suppress this warning...
+                    if (gauges(i)%gtype == 2) then
+                        write(6,602) gauges(i)%gauge_num
+602                     format("WARNING in output of Gauge Data: Gauge ", &
+                             i6, " in ghost cells, will reset patch")
+                        ! Lagrangian gauge moved into ghost cells, 
+                        ! so reset this gauge after updating
+                        need_to_reset_patch = .true.
+                        endif
+            end if
+
             if (INTERPOLATE) then
-                ! Compute indexing and bilinear interpolant weights
-                ! Note: changed 0.5 to  0.5d0 etc.
-                iindex =  int(.5d0 + (gauges(i)%x - xlow) / hx)
-                jindex =  int(.5d0 + (gauges(i)%y - ylow) / hy)
-                if ((iindex < nghost .or. iindex > mitot-nghost) .or. &
-                    (jindex < nghost .or. jindex > mjtot-nghost)) then
-                        print *, "ERROR in output of Gauge Data "
-                end if
+
                 xcent  = xlow + (iindex - 0.5d0) * hx
                 ycent  = ylow + (jindex - 0.5d0) * hy
                 xoff   = (gauges(i)%x - xcent) / hx
@@ -524,6 +609,33 @@ contains
                 if (abs(var(j)) < 1d-90) var(j) = 0.d0
             end do
        
+            if (gauges(i)%gtype == 2) then
+                ! Lagrangian gauge, update location
+                if (var(1) < dry_tolerance) then
+                    ug = 0.d0
+                    vg = 0.d0
+                  else
+                    ug = var(2)/var(1)
+                    vg = var(3)/var(1)
+                  endif
+                if (coordinate_system == 1) then
+                    ! x,y in meters, ug,vg in m/s
+                    xg = gauges(i)%x + dt*ug
+                    yg = gauges(i)%y + dt*vg
+                  else
+                    ! x,y in degrees, ug,vg in m/s
+                    xg = gauges(i)%x + dt*ug / (earth_radius*deg2rad &
+                                             * cos(deg2rad*gauges(i)%y))
+                    yg = gauges(i)%y + dt*vg / (earth_radius*deg2rad)
+                  endif
+                
+                ! Update location and store new xg,yg in place of hu,hv 
+                gauges(i)%x = xg
+                gauges(i)%y = yg
+                var(2) = xg
+                var(3) = yg
+                endif
+                
             ! save info for this time 
             n = gauges(i)%buffer_index
      
@@ -543,6 +655,10 @@ contains
             endif
 
             gauges(i)%last_time = tgrid
+
+            if (need_to_reset_patch) then
+                call setbestsrc(i)
+                endif
 
         end do ! End of gauge loop =============================================
 
@@ -579,6 +695,16 @@ contains
             open(unit=myunit, file=gauges(gauge_num)%file_name, status='old', &
                               position='append', form='formatted')
           
+            !if (gauges(gauge_num)%gtype == 2) then
+                ! keep track of last x,y location written to gauge file
+                ! in case we are at a checkpoint time
+            j = gauges(gauge_num)%buffer_index - 1
+            if (j > 0) then
+                gauges(gauge_num)%t_last_written = gauges(gauge_num)%data(1, j)
+                gauges(gauge_num)%x_last_written = gauges(gauge_num)%data(3, j)
+                gauges(gauge_num)%y_last_written = gauges(gauge_num)%data(4, j)
+            endif
+
             ! Loop through gauge's buffer writing out all available data.  Also
             ! reset buffer_index back to beginning of buffer since we are emptying
             ! the buffer here

@@ -334,12 +334,12 @@ c                   adjust time steps for this and finer levels
                      write(6,1006) intratx(level-1),intraty(level-1),
      &                             kratio(level-1),level
                      write(6,*) "Writing checkpoint file at t = ",time
-                     call check(ncycle,time,nvar,naux)
                      if (num_gauges .gt. 0) then
                         do ii = 1, num_gauges
                            call print_gauges_and_reset_nextLoc(ii)
                         end do
                      endif
+                     call check(ncycle,time,nvar,naux)
                      stop
                  endif
 
@@ -399,13 +399,13 @@ c             ! use same alg. as when setting refinement when first make new fin
 
  201  if ((abs(checkpt_style).eq.3 .and. 
      &      mod(ncycle,checkpt_interval).eq.0) .or. dumpchk) then
-                call check(ncycle,time,nvar,naux)
-                dumpchk = .true.
                if (num_gauges .gt. 0) then
                   do ii = 1, num_gauges
                      call print_gauges_and_reset_nextLoc(ii)
                   end do
                endif
+               call check(ncycle,time,nvar,naux)
+               dumpchk = .true.
        endif
 
        if ((mod(ncycle,iout).eq.0) .or. dumpout) then
@@ -450,6 +450,7 @@ c
                  call print_gauges_and_reset_nextLoc(ii)
               end do
            endif
+           dumpout = .true.
       endif
 
 c  # checkpoint everything for possible future restart
@@ -464,14 +465,19 @@ c
 c  # checkpoint everything for possible future restart
 c  # (unless we just did it based on dumpchk)
 c
+      ! write gauges first in case lagrangian gauge x,y needed by check         
+      if (num_gauges .gt. 0) then
+         if (.not. dumpout) then
+             ! normally this was done already, unless nout = 0
+             do ii = 1, num_gauges
+                call print_gauges_and_reset_nextLoc(ii)
+             end do
+         endif
+      endif
+      
       if (checkpt_style .ne. 0) then  ! want a chckpt
          ! check if just did it so dont do it twice
          if (.not. dumpchk) call check(ncycle,time,nvar,naux)
-      endif
-      if (num_gauges .gt. 0) then
-         do ii = 1, num_gauges
-            call print_gauges_and_reset_nextLoc(ii)
-         end do
       endif
 
       write(6,*) "Done integrating to time ",time
