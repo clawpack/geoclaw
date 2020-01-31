@@ -840,6 +840,18 @@ class Topography(object):
                 # set extent based on data locations (not lower corner for 'llcorner')
                 self._extent = [self._x[0],self._x[-1],self._y[0],self._y[-1]]
 
+        elif abs(self.topo_type) == 4:
+            # netCDF
+            import netCDF4
+            f = netCDF4.Dataset(self.path, 'r')
+            self._x = f.variables['lon']
+            self._y = f.variables['lat']
+            self._extent = [self._x[0],self._x[-1],self._y[0],self._y[-1]]
+            dx = self._x[1] - self._x[0]
+            dy = self._y[1] - self._y[0]
+            self._delta = (dx, dy)
+            num_cells = (len(self._x), len(self._y))
+            
         else:
             raise IOError("Cannot read header for topo_type %s" % self.topo_type)
             
