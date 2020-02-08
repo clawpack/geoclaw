@@ -13,6 +13,8 @@ c
       use gauges_module, only: print_gauges_and_reset_nextLoc
 
       use storm_module, only: landfall, display_landfall_time
+      use fgmax_module, only: FG_num_fgrids, FG_fgrids, fgrid
+
 
 
       implicit double precision (a-h,o-z)
@@ -21,8 +23,10 @@ c
       dimension dtnew(maxlv), ntogo(maxlv), tlevel(maxlv)
       integer(kind=8) :: clock_start, clock_finish, clock_rate
       integer(kind=8) :: tick_clock_finish, tick_clock_rate
+      integer ifg
       character(len=128) :: time_format
       real(kind=8) cpu_start,cpu_finish
+      type(fgrid), pointer :: fg
 
 c
 c :::::::::::::::::::::::::::: TICK :::::::::::::::::::::::::::::
@@ -259,11 +263,46 @@ c integrate all grids at level 'level'.
 c
  90       continue
 
+          ! Only compute the mininum of fg%levelmax if necessary,
+          ! and only once per time step on each level, not on each patch:
+          do ifg=1,FG_num_fgrids
+              fg => FG_fgrids(ifg)
+              if (fg%min_level_check == mxnest) then
+                  fg%min_levelmax_checked = mxnest
+                else
+                  fg%min_levelmax_checked = minval(fg%levelmax)
+                endif
+                enddo
+c 
+c         ! time after step:
+          timenew = tlevel(level)+possk(level)
+
+          ! is it time to update fgmax grids on any level?
+          ! if so, set fg%update_now(level) to .true.
+          do ifg=1,FG_num_fgrids
+              fg => FG_fgrids(ifg)
+              if ((timenew >= fg%tstart_max) .and. 
+     &            (timenew <= fg%tend_max) .and.
+     &            (timenew >= fg%t_last_updated(level)  
+     &                         + fg%dt_check) .and.
+     &            (level >= fg%min_level_check) .and.
+     &            (level >= fg%min_levelmax_checked)) then 
+
+                      fg%update_now(level) = .true.
+                      fg%t_last_updated(level) = timenew
+                      !write(6,660) level, timenew
+ 660                  format('+++ update fgmax on level ',i1,
+     &                       ' at t = ',f12.2)
+              else
+                      fg%update_now(level) = .false.
+                      endif
+              enddo
+
 
           call advanc(level,nvar,dtlevnew,vtime,naux)
 
+
 c Output time info
-          timenew = tlevel(level)+possk(level)
           time_format = "(' AMRCLAW: level ',i2,'  CFL = ',e8.3," //
      &                  "'  dt = ',e10.4,  '  final t = ',e12.6)"
           if (display_landfall_time) then
