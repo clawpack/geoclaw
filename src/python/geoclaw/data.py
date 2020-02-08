@@ -223,13 +223,13 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         # File name for fgmax points and parameters:
         self.add_attribute('fgmax_files',[])
         self.add_attribute('num_fgmax_val',1)
-        self.add_attribute('fgmax_list',[])
+        self.add_attribute('fgmax_grids',[])
 
 
     def write(self,data_source='setrun.py', out_file='fgmax.data'):
         if len(self.fgmax_files) > 0:
             msg = '*** fgmax_files has been deprecated, ' \
-                  + 'use fgmax_list instead.'
+                  + 'use fgmax_grids instead.'
             raise ValueError(msg)
 
         # new style:
@@ -240,11 +240,11 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
             raise NotImplementedError( \
                     "Expecting num_fgmax_val in [1,2,5], got %s" % num_fgmax_val)
         self.data_write(value=num_fgmax_val,alt_name='num_fgmax_val')
-        num_fgmax_grids = len(self.fgmax_list)
+        num_fgmax_grids = len(self.fgmax_grids)
         self.data_write(value=num_fgmax_grids,alt_name='num_fgmax_grids')
         self.data_write()
         fgno = 0
-        for fg in self.fgmax_list:
+        for fg in self.fgmax_grids:
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
             if fg.xy_fname is not None:
