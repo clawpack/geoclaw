@@ -30,6 +30,10 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
     real(kind=8) :: x1,x2,y1,y2,x,y,xupper,yupper
     logical :: debug
 
+    write(6,*) '*** fgmax_interpolate.f90 has not yet been converted'
+    write(6,*) '*** Use fgmax_interpolate0.f90 instead'
+    stop
+
     debug = FG_DEBUG
     if (debug) then
         write(61,*) '========================================'
