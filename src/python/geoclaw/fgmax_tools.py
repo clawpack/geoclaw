@@ -13,9 +13,7 @@ import os
 from numpy import sqrt, ma
 import numpy
 from six.moves import range
-#from clawpack.geoclaw import topotools
-import topotools # local version with masked write
-
+from clawpack.geoclaw import topotools
 
 
 class FGmaxGrid(object):
