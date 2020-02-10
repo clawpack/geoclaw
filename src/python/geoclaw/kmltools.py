@@ -34,7 +34,10 @@ the full 8 digits if you want it transparent).
 from __future__ import absolute_import
 from __future__ import print_function
 from six.moves import range
-from importlib import reload
+try:
+    from importlib import reload
+except:
+    pass # assume python2, already has reload
 
 def f2s(x, num_digits=6):
     r"""
