@@ -8,7 +8,6 @@ and to read in the fgmax output after doing a GeoClaw run.
 
 from __future__ import absolute_import
 from __future__ import print_function
-from clawpack.geoclaw import kmltools
 import os
 from numpy import sqrt, ma
 import numpy
@@ -179,7 +178,7 @@ class FGmaxGrid(object):
 
     def write_to_fgmax_data(self, fid):
 
-        print("---------------------------------------------- ")
+        print("\n---------------------------------------------- ")
         point_style = self.point_style
         if point_style not in [0,1,2,3,4]:
             raise NotImplementedError("make_fgmax not implemented for point_style %i" \
@@ -256,10 +255,6 @@ class FGmaxGrid(object):
                     % npts)
             print("   (%g,%g)  to  (%g,%g)" % (x1,y1,x2,y2))
             
-            # not yet implemented:
-            #fname_root = os.path.splitext(self.input_file_name)[0]
-            #kml_file = fname_root + '.kml'
-            #kmltools.line2kml(xy, kml_file, fname_root, color='8888FF')
 
         if point_style == 2:
             # 2d grid of points
@@ -315,10 +310,6 @@ class FGmaxGrid(object):
             print("   upper right = (%15.10f,%15.10f)" % (x2,y2))
             print("   dx = %15.10e,  dy = %15.10e" % (dx,dy))
         
-            xy = [x1,x2,y1,y2]
-            fname_root = 'FGmaxGrid%s' % str(self.fgno).zfill(4)
-            kml_file = fname_root + '.kml'
-            kmltools.box2kml(xy, kml_file, fname_root, color='8888FF')
 
         elif point_style==3:
             # arbitrary quadrilateral
@@ -349,10 +340,6 @@ class FGmaxGrid(object):
             print("   corner 3 = (%15.10f,%15.10f)" % (x3,y3))
             print("   corner 4 = (%15.10f,%15.10f)" % (x4,y4))
             
-            xy = [x1,y1,x2,y2,x3,y3,x4,y4]
-            fname_root = os.path.splitext(self.input_file_name)[0]
-            kml_file = fname_root + '.kml'
-            kmltools.quad2kml(xy, kml_file, fname_root, color='8888FF')
             
         elif point_style == 4:
             if self.xy_fname is not None:
