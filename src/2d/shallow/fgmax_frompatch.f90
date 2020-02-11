@@ -142,13 +142,18 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             ! fgmax points are on masked grid giving index of each point,
             ! so we don't need to search through all fg%npts points.
             ! instead just loop over part of masked grid intersecting patch:
-            i1_fg = max(int((x1 - fg%xll + 0.5d0*fg%dx) / fg%dx), 1)
-            i2_fg = min(int((x2 - fg%xll + 0.5d0*fg%dx) / fg%dx) + 1, fg%nx)
-            j1_fg = max(int((y1 - fg%yll + 0.5d0*fg%dy) / fg%dy), 1)
-            j2_fg = min(int((y2 - fg%yll + 0.5d0*fg%dy) / fg%dy) + 1, fg%ny)
             
+            i1_fg = max(int((x1 - fg%xll) / fg%dx + 2), 1)
+            i2_fg = min(int((x2 - fg%xll) / fg%dx + 1), fg%nx)
+            j1_fg = max(int((y1 - fg%yll) / fg%dy + 2), 1)
+            j2_fg = min(int((y2 - fg%yll) / fg%dy + 1), fg%ny)
+            
+            
+            !write(6,602) x1,x2,y1,y2
             !write(6,602) xlower,xupper,ylower,yupper
             !write(6,602) fg%x1bb, fg%x2bb, fg%y1bb, fg%y2bb
+            !write(6,602) fg%xll, fg%xll+(fg%nx-1)*fg%dx, &
+            !             fg%yll, fg%yll+(fg%ny-1)*fg%dy
             !write(6,603) i1,i2,j1,j2, i1_fg, i2_fg, j1_fg, j2_fg
  602        format('+++ xy: ',4f10.3)
  603        format('+++ ij: ',8i7)
@@ -160,6 +165,8 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
                         k = fg%index(i_fg,j_fg)
                         fg_klist_length = fg_klist_length+1
                         fg%klist(fg_klist_length,mythread) = k
+                        !write(6,*) '++++ k, fg%x(k), fg%y(k): ',k, fg%x(k), fg%y(k)
+
                         endif
                     enddo
                 enddo
