@@ -37,8 +37,9 @@ class BowlSloshTest(test.GeoClawRegressionTest):
         topo.write(os.path.join(self.temp_path, "bowl.topotype2"), \
                 topo_type=2, Z_format="%22.15e")
 
-        from . import make_fgmax_grid 
-        make_fgmax_grid.make_fgmax_grid1(self.temp_path)
+        # fgmax_grids.data created by setrun.py now contains all info
+        #from . import make_fgmax_grid 
+        #make_fgmax_grid.make_fgmax_grid1(self.temp_path)
 
 
     def runTest(self, save=False, indices=(2, 3)):

@@ -1,54 +1,54 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/git/clawpack/geoclaw/tests/bowl_slosh/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/bowl_slosh/regression_data/claw_git_diffs.txt
 
-Tue, 20 Dec 2016 22:18:41 PST
-$CLAW = /Users/rjl/git/clawpack
+Mon, 10 Feb 2020 22:34:15 PST
+$CLAW = /Users/rjl/clawpack_src/clawpack_master
 $FC = gfortran
 
 
 ===========
 classic
 ===========
-/Users/rjl/git/clawpack/classic
+/Users/rjl/clawpack_src/clawpack_master/classic
 
 --- last commit ---
-8e6d0c2 make plotdata an optional argument in setplot
+5546fec Merge pull request #86 from ClimateImpactLab/gitignore
 
 --- branch and status ---
-## setplot_fixes
+## master...origin/master
 
 
 ===========
 amrclaw
 ===========
-/Users/rjl/git/clawpack/amrclaw
+/Users/rjl/clawpack_src/clawpack_master/amrclaw
 
 --- last commit ---
-5c81870 set xlimits and ylimits in quadrants example
+b7a68bf Merge pull request #256 from rjleveque/lagrangian_gauges
 
 --- branch and status ---
-## setplot_fixes
+## master...origin/master
 
 
 ===========
 clawutil
 ===========
-/Users/rjl/git/clawpack/clawutil
+/Users/rjl/clawpack_src/clawpack_master/clawutil
 
 --- last commit ---
-c3950d1 Fix call to StringIO to match new way it is imported
+a06d78a Merge pull request #138 from mandli/fix-python2-incompatibility
 
 --- branch and status ---
-## claw_git_status_StringIO
+## master...origin/master
 
 
 ===========
 pyclaw
 ===========
-/Users/rjl/git/clawpack/pyclaw
+/Users/rjl/clawpack_src/clawpack_master/pyclaw
 
 --- last commit ---
-695af06 Merge pull request #550 from clawpack/python3
+83f3fe4 Merge pull request #639 from rjleveque/lagrangian_gauges
 
 --- branch and status ---
 ## master...origin/master
@@ -57,10 +57,10 @@ pyclaw
 ===========
 visclaw
 ===========
-/Users/rjl/git/clawpack/visclaw
+/Users/rjl/clawpack_src/clawpack_master/visclaw
 
 --- last commit ---
-6833be6 Merge pull request #190 from clawpack/python3
+3acaa1a Merge pull request #253 from rjleveque/lagrangian_gauges
 
 --- branch and status ---
 ## master...origin/master
@@ -69,10 +69,10 @@ visclaw
 ===========
 riemann
 ===========
-/Users/rjl/git/clawpack/riemann
+/Users/rjl/clawpack_src/clawpack_master/riemann
 
 --- last commit ---
-b68d73d Merge pull request #111 from rjleveque/geoclaw_riemann_utils_update
+d7b4d72 Merge pull request #158 from ranocha/cubic
 
 --- branch and status ---
 ## master...origin/master
@@ -81,14 +81,15 @@ b68d73d Merge pull request #111 from rjleveque/geoclaw_riemann_utils_update
 ===========
 geoclaw
 ===========
-/Users/rjl/git/clawpack/geoclaw
+/Users/rjl/clawpack_src/clawpack_master/geoclaw
 
 --- last commit ---
-824ca39 fix regression data in tests/multilayer and remove claw_git_diffs.txt: full or recursive garbage
+fae703e fix i1_fg and other indices in fgmax_frompatch.f90
 
 --- branch and status ---
-## regression_data_update_riemann
- M examples/tsunami/bowl-radial/setplot.py
+## fgmax_improvements
+ M tests/bowl_slosh/Makefile
  M tests/bowl_slosh/regression_data/claw_git_status.txt
  M tests/bowl_slosh/regression_data/gauge00001.txt
  M tests/bowl_slosh/regression_tests.py
+ M tests/bowl_slosh/setrun.py
