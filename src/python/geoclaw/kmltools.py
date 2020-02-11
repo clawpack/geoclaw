@@ -384,7 +384,7 @@ def line2kml(xy,fname='line.kml',name='line',color='00FFFF',width=3,
 
     """
      
-    if type(xy[0]) is tuple:
+    if type(xy[0]) in [tuple,list]:
         x1,x2 = xy[0]
         y1,y2 = xy[1]
     else:
@@ -437,7 +437,7 @@ def box2kml(xy,fname=None,name='box',color='FF0000',width=3,verbose=True):
     if fname is None:
         fname = name + '.kml'
 
-    if type(xy[0]) is tuple:
+    if type(xy[0]) in [tuple,list]:
         x1,x2 = xy[0]
         y1,y2 = xy[1]
     else:
@@ -490,7 +490,7 @@ def quad2kml(xy,fname=None,name='quad',color='FF0000',width=3,verbose=True):
     if fname is None:
         fname = name + '.kml'
 
-    if type(xy[0]) is tuple:
+    if type(xy[0]) in [tuple,list]:
         x1,x2,x3,x4 = xy[0]
         y1,y2,y3,y4 = xy[1]
     else:
@@ -947,15 +947,16 @@ def fgmax2kml(rundata=None,fname='fgmax_grids.kml',verbose=True,combined=False):
     for fg in fgmax_grids:
         fname_root = 'fgmax%s' % str(fg.fgno).zfill(4)
         kml_file = fname_root + '.kml'
-        if fg.point_style==2:
-            xy = [fg.x1,fg.y1,fg.x2,fg.y2]
+        if fg.point_style==1:
+            xy = ([fg.x1,fg.x2], [fg.y1,fg.y2])
             line2kml(xy,kml_file, fname_root, color='8888FF', width=2)
         if fg.point_style==2:
-            xy = [fg.x1,fg.y1,fg.x2,fg.y2]
+            xy = ([fg.x1,fg.x2], [fg.y1,fg.y2])
             box2kml(xy, kml_file, fname_root, color='8888FF')
         elif fg.point_style==3:
-            xy = [fg.x1,fg.y1,fg.x2,fg.y2,fg.x3,fg.y3,fg.x4,fg.y4]
-            box2kml(xy, kml_file, fname_root, color='8888FF')
+            xy = ([fg.x1,fg.x2,fg.x3,fg.x4], 
+                  [fg.y1,fg.y2,fg.y3,fg.y4])
+            poly2kml(xy, kml_file, fname_root, color='8888FF')
         else:
             print('fgmax2kml not yet implemented for point_style = %i' \
                   % fg.point_style)
