@@ -111,6 +111,7 @@ c    ! flush(OUTGAUGEUNIT)   ! defined in gauges_module.f90
       ! write out last recorded x,y position,
       ! needed on restart only for lagrangian gauges, but write them all
       do ii = 1, num_gauges
+         
          write(chkunit) gauges(ii)%gauge_num,
      &                      gauges(ii)%t_last_written,
      &                      gauges(ii)%x_last_written,
