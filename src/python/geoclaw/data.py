@@ -226,14 +226,13 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         self.add_attribute('fgmax_grids',[])
 
 
-    def write(self,data_source='setrun.py', out_file='fgmax.data'):
+    def write(self,data_source='setrun.py', out_file='fgmax_grids.data'):
         if len(self.fgmax_files) > 0:
             msg = '*** fgmax_files has been deprecated, ' \
                   + 'use fgmax_grids instead.'
             raise ValueError(msg)
 
         # new style:
-        out_file = 'fgmax_grids.data'
         self.open_data_file(out_file, data_source)
         num_fgmax_val = self.num_fgmax_val
         if num_fgmax_val not in [1,2,5]:

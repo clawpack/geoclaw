@@ -87,14 +87,13 @@ class FGmaxGrid(object):
 
 
         
-    def read_fgmax_grids_data(self, fgno):
+    def read_fgmax_grids_data(self, fgno, data_file='fgmax_grids.data'):
         """
         Read input info for fgmax grid number fgno from the data file
         fgmax_grids.data, which should have been created by setrun.py.
         This file now contains info about all fgmax grids.
         """
         
-        data_file = 'fgmax_grids.data'
         lines = open(data_file).readlines()
         #print('+++ opened fgmax_new.data with %i lines' % len(lines))
         fgmax_input = None
