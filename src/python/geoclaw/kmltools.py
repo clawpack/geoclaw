@@ -18,6 +18,10 @@ the full 8 digits if you want it transparent).
  - poly2kml - create a kml outline for an arbitrary polygon
  - line2kml - create a kml line connecting 2 points
  - gauges2kml - create a kml marker for each gauge specified in setrun
+ - topo2kml - create a kml outline for each topo grid specified in setrun
+ - dtopo2kml - create a kml outline for each dtopo grid specified in setrun
+ - fgmax2kml - create a kml outline for each fgmax grid specified in setrun
+ - make_input_data_kmls - make kml files for many things specified in setrun
  - pcolorcells_for_kml - version of pcolormesh with appropriate dpi and size
  - png2kml - create kml file wrapping a png figure to be viewed on GE
  - kml_build_colorbar - create a colorbar to display on GE
@@ -898,8 +902,66 @@ def dtopo2kml(dtopo_file_name, dtopo_type, color='8888FF'):
     file_name = '%s.kml' % name
     box2kml(xy, file_name, name, color)
         
+        
 
-def make_input_data_kmls(rundata, combined=False):
+def fgmax2kml(rundata=None,fname='fgmax_grids.kml',verbose=True,combined=False):
+
+    """
+    Create a KML box for each fgmax grid specified for a GeoClaw run.
+
+    :Inputs:
+
+      - *rundata* - an object of class *ClawRunData* or None
+
+        If *rundata==None*, try to create based on executing function *setrun*
+        from the `setrun.py` file in the current directory.
+
+      - *fname* (str) - resulting kml file.
+
+      - *verbose* (bool) - If *True*, print out info about each region found
+
+      - *combined* (bool) - If *True*, combine into single kml file with
+        name given by *fname*.  NOT YET IMPLEMENTED.
+        If False, *fname* is ignored and individual files are created for
+        each fgmax grid.
+
+    """
+
+    from numpy import cos,pi,floor
+
+    if rundata is None:
+        try:
+            import setrun
+            reload(setrun)
+            rundata = setrun.setrun()
+        except:
+            raise IOError("*** cannot execute setrun file")
+
+    if combined:
+        fname_combined = 'fgmax_grids.kml'
+        print('*** combined fgmax kml files not yet supported')
+        print('    making a kml file for each fgmax grid')
+    
+    fgmax_grids = rundata.fgmax_data.fgmax_grids
+
+    for fg in fgmax_grids:
+        fname_root = 'fgmax%s' % str(fg.fgno).zfill(4)
+        kml_file = fname_root + '.kml'
+        if fg.point_style==2:
+            xy = [fg.x1,fg.y1,fg.x2,fg.y2]
+            line2kml(xy,kml_file, fname_root, color='8888FF', width=2)
+        if fg.point_style==2:
+            xy = [fg.x1,fg.y1,fg.x2,fg.y2]
+            box2kml(xy, kml_file, fname_root, color='8888FF')
+        elif fg.point_style==3:
+            xy = [fg.x1,fg.y1,fg.x2,fg.y2,fg.x3,fg.y3,fg.x4,fg.y4]
+            box2kml(xy, kml_file, fname_root, color='8888FF')
+        else:
+            print('fgmax2kml not yet implemented for point_style = %i' \
+                  % fg.point_style)
+
+
+def make_input_data_kmls(rundata=None, combined=False):
     """
     Produce kml files for the computational domain, all gauges and regions 
     specified, and all topo and dtopo files specified in rundata.
@@ -910,13 +972,26 @@ def make_input_data_kmls(rundata, combined=False):
 
     to the end of a `setrun.py` file so that `make data` will generate all
     kml files in addition to the `*.data` files.
+    
+    Or set *rundata==None*, in which case it will try to generate rundata
+    based on executing function *setrun*
+    from the `setrun.py` file in the current directory.
     """
     
     import os
     from clawpack.geoclaw import topotools, dtopotools
+    
+    if rundata is None:
+        try:
+            import setrun
+            reload(setrun)
+            rundata = setrun.setrun()
+        except:
+            raise IOError("*** cannot execute setrun file")
 
     regions2kml(rundata, combined=combined)
     gauges2kml(rundata)
+    fgmax2kml(rundata)
 
     topofiles = rundata.topo_data.topofiles
     for f in topofiles:
