@@ -480,7 +480,7 @@ def setrun(claw_pkg='geoclaw'):
     fg.dt_check = 20.      # how often to update max values
     # can specify that list of points is in a different file:
     fg.npts = 0
-    fg.xy_fname = 'fgmax_points_list.data'
+    fg.xy_fname = 'fgmax_ps0.txt'
     fgmax_grids.append(fg)  # written to fgmax_grids.data
     
     #  ----- For developers ----- 

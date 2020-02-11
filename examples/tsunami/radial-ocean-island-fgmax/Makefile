@@ -70,6 +70,7 @@ fgmax_plots:
 	python process_fgmax.py
 
 all: 
+	$(MAKE) .exe
 	$(MAKE) data
 	$(MAKE) input
 	$(MAKE) output
