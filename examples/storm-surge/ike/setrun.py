@@ -411,8 +411,8 @@ def setgeo(rundata):
     data.wind_refine = [20.0, 40.0, 60.0]
     data.R_refine = [60.0e3, 40e3, 20e3]
 
-    # Storm parameters - Parameterized storm (Holland 1980)
-    data.storm_specification_type = 'holland80'  # (type 1)
+    # Storm parameters - Parameterized storm (CLE)
+    data.storm_specification_type = 'CLE'  # (type 3)
     data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
                                          'ike.storm'))
 

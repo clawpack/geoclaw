@@ -204,9 +204,9 @@ contains
                     case(2) ! Holland 2010 model
                         set_model_fields => set_holland_2010_fields
                     case(3) ! Chavas, Lin, Emanuel model
-                        print *, "CLE model under construction." 
-                        stop 
-                        ! set_model_fields => set_CLE_fields
+                        !print *, "CLE model under construction." 
+                        !stop 
+                        set_model_fields => set_CLE_fields
                     case(4) ! SLOSH model
                         set_model_fields => set_SLOSH_fields
                     case(5) ! Rankine model
