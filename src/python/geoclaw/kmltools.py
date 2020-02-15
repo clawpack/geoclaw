@@ -630,7 +630,6 @@ def gauges2kml(rundata=None, fname='gauges.kml', verbose=True):
     Google Earth.
 
     """
-    from importlib import reload
 
     if rundata is None:
         try:
