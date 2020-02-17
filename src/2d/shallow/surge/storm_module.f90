@@ -108,6 +108,10 @@ contains
         use model_storm_module, only: set_holland_1980_fields
         use model_storm_module, only: set_holland_2010_fields
         use model_storm_module, only: set_CLE_fields
+        use model_storm_module, only: set_SLOSH_fields
+        use model_storm_module, only: set_rankine_fields
+        use model_storm_module, only: set_modified_rankine_fields
+        use model_storm_module, only: set_deMaria_fields
 
         ! use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
@@ -201,6 +205,14 @@ contains
                         set_model_fields => set_holland_2010_fields
                     case(3) ! Chavas, Lin, Emanuel model
                         set_model_fields => set_CLE_fields
+                    case(4) ! SLOSH model
+                        set_model_fields => set_SLOSH_fields
+                    case(5) ! rankine model
+                        set_model_fields => set_rankine_fields
+                    case(6) ! modified_ankine model
+                        set_model_fields => set_modified_rankine_fields
+                    case(7) ! deMaria model
+                        set_model_fields => set_deMaria_fields
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
