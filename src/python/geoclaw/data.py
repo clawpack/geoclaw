@@ -352,7 +352,13 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                                None: 0,
                                'holland80': 1,
                                'holland10': 2,
-                               'CLE': 3}
+                               'CLE': 3,  
+                               'SLOSH': 4,                     
+                               'rankine': 5,           
+                               'modified-rankine': 6, 
+                               'DeMaria': 7     
+                              }
+    storm_spec_not_implemented = ['CLE'] 
 
     def __init__(self):
         super(SurgeData,self).__init__()
@@ -423,7 +429,13 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         if type(self.storm_specification_type) is not int:
             if self.storm_specification_type in         \
                     self.storm_spec_dict_mapping.keys():
-                self.data_write("storm_specification_type",
+                if self.storm_specification_type in     \
+                    self.storm_spec_not_implemented: 
+                    raise NotImplementedError("%s has not been implemented." 
+                                %self.storm_specification_type) 
+                
+                else: 
+                    self.data_write("storm_specification_type",
                                 self.storm_spec_dict_mapping[
                                         self.storm_specification_type],
                                 description="(Storm specification)")
