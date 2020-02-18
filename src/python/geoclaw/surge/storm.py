@@ -1324,7 +1324,7 @@ def cle_2015(storm, r, t):
 
 # =============================================================================
 # Radius fill functions
-def fill_rad_w_other_source(t, storm_targ, storm_fill, var):
+def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
     r"""Fill in storm radius variable (*max_wind_radius* or \
     *storm_radius*) with values from another source. i.e.
     if you have missing radii in IBTrACS, you can fill with ATCF.
@@ -1346,6 +1346,8 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var):
     - *storm_fill* (:py:class:`clawpack.geoclaw.storm.Storm`) storm
         that has non-missing values you want to use to fill *storm_targ*
     - *var* (str) Either 'max_wind_radius' or 'storm_radius'
+    - *interp_kwargs* (dict) Additional keywords passed to scipy's
+        interpolator.
 
     :Returns:
     - (float) value to use to fill this time point in *storm_targ*. -1
@@ -1387,8 +1389,11 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var):
         #remove duplicates
         fill_da = fill_da.groupby('t').first()
 
+        # remove NaNs
+        fill_da = fill_da.dropna('t')
+
         # interpolate to point
-        fill_interp = fill_da.interp({'t':t}).item()
+        fill_interp = fill_da.interp(t=[t], kwargs=interp_kwargs).item()
 
         # try replacing with storm_fill
         # (assuming atcf has more data points than ibtracs)
@@ -1402,7 +1407,8 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var):
     targ_da = targ_da.where(targ_da>0,numpy.nan)
     if targ_da.notnull().any():
         targ_da = targ_da.groupby('t').first()
-        targ_interp = targ_da.interp({'t':t}).item()
+        targ_da = targ_da.dropna('t')
+        targ_interp = targ_da.interp(t=[t], kwargs=interp_kwargs).item()
         if not numpy.isnan(targ_interp):
             return targ_interp
         
