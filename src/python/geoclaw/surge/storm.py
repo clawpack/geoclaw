@@ -1386,6 +1386,9 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var):
 
         #remove duplicates
         fill_da = fill_da.groupby('t').first()
+	
+	# remove NaNs
+        fill_da = fill_da.dropna('t')
 
         # interpolate to point
         fill_interp = fill_da.interp({'t':t}).item()
