@@ -1,8 +1,8 @@
 !
 ! evap_base_module.f90
-! Copyright (C) 2018 Pi-Yueh Chuang <pychuang@gwu.edu>
+! Contributors: Pi-Yueh Chuang <pychuang@gwu.edu>
 !
-! Distributed under terms of the MIT license.
+! Distributed under terms of the BSD 3-Clause license.
 !
 
 !> @brief Evaporation abstract class module.
