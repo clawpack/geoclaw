@@ -1272,8 +1272,8 @@ class Topography(object):
         if not numpy.all(N[:] < numpy.ones((2)) * resolution_limit):
             ValueError("Calculated resolution too high, N=%s!" % str(N))
         self._X, self._Y = numpy.meshgrid( 
-                                     numpy.linspace(extent[0], extent[1], N[0]),
-                                     numpy.linspace(extent[2], extent[3], N[1]))
+                                     numpy.linspace(extent[0], extent[1], int(N[0])),
+                                     numpy.linspace(extent[2], extent[3], int(N[1])))
 
         # Add the unstructured points to the data
         points = numpy.array([self.x, self.y]).transpose()
