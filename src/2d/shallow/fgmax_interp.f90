@@ -8,9 +8,8 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
     ! If there are aux arrays, also set fg%aux at any points where it has
     ! not yet been set on this level.
 
-    ! This version uses piecewise constant interpolation, in other words the
-    ! cell value for the cell containing the fixed grid point is returned,
-    ! without using values in neighboring cells.
+    ! This version uses either piecewise constant or bilinear interpolation 
+    ! between neighboring cells, depending on fg%interp_method.
 
     use fgmax_module
 
@@ -29,7 +28,7 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
     integer :: i,j,k,mv,ma
     integer :: indexk
     real(kind=8), allocatable, dimension(:,:,:) :: values
-    real(kind=8) :: x,y
+    real(kind=8) :: x,y, ax,ay,aij,aipj,aijp,aipjp
     logical :: debug
 
     debug = FG_DEBUG
@@ -102,6 +101,20 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             write(61,62) k,fg%x(k),fg%y(k), i,j
 62          format(i4,2d16.6,2i6,2d16.6)
             endif
+            
+        if (fg%interp_method == 1) then
+            ! compute bilinear interpolation weights:
+            x = xlower + (i-0.5d0)*dx  ! grid cell center on patch
+            ax = (fg%x(k) - x) / dx    ! fraction of cell offset in x
+            y = ylower + (j-0.5d0)*dy  ! grid cell center on patch
+            ay = (fg%y(k) - y) / dy    ! fraction of cell offset in y
+            
+            ! weights:
+            aij = (1.d0 - ax)*(1.d0 - ay)
+            aipj = ax*(1.d0 - ay)
+            aijp = (1.d0 - ax)*ay
+            aipjp = ax*ay
+            endif 
 
         do mv=1,FG_NUM_VAL
             ! loop over the different values we want to monitor
@@ -117,7 +130,16 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             !    write(6,*) 'i,j,mx,my: ',i,j,mx,my
             !    endif
 
-            fg_values(mv,indexk) = values(mv,i,j) 
+            if (fg%interp_method == 0) then
+                ! for pw constant
+                fg_values(mv,indexk) = values(mv,i,j)
+              else
+                ! bilinear:
+                fg_values(mv,indexk) =   aij*values(mv,i,j) &
+                                       + aipj*values(mv,i+1,j) &
+                                       + aijp*values(mv,i,j+1) &
+                                       + aipjp*values(mv,i+1,j+1)
+              endif
             enddo
 
         ! Set the fg%aux(level,:,:) if this hasn't yet been set.
@@ -126,7 +148,17 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
 
             do ma=1,FG_NUM_AUX
                 if ((fg%aux(level,ma,k) == FG_NOTSET)) then
-                    fg%aux(level,ma,k) = aux(ma,i,j)
+                
+                    if (fg%interp_method == 0) then
+                        ! pw constant:
+                        fg%aux(level,ma,k) = aux(ma,i,j)
+                      else
+                        ! bilinear:
+                        fg%aux(level,ma,k) =   aij*aux(ma,i,j) &
+                                             + aipj*aux(ma,i+1,j) &
+                                             + aijp*aux(ma,i,j+1) &
+                                             + aipjp*aux(ma,i+1,j+1)
+                      endif
                     endif
                 enddo
             endif

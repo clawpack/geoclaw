@@ -70,6 +70,7 @@ subroutine fgmax_read(fgmax_unit,ifg)
     read(fgmax_unit,*) fg%dt_check  
     read(fgmax_unit,*) fg%min_level_check
     read(fgmax_unit,*) fg%arrival_tol
+    read(fgmax_unit,*) fg%interp_method
     read(fgmax_unit,*) point_style
     fg%point_style = point_style
     

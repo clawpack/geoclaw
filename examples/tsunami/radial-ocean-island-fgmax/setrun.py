@@ -432,6 +432,7 @@ def setrun(claw_pkg='geoclaw'):
     fg.tstart_max = tstart_max  # just before wave arrives
     fg.tend_max = 1.e10    # when to stop monitoring max values
     fg.dt_check = 20.      # how often to update max values
+    fg.interp_method = 0   # 0 ==> pw const in cells, recommended
     fgmax_grids.append(fg)  # written to fgmax_grids.data
 
     # Points on a 1d transect from (x1,y1) to (x2,y2):
@@ -446,6 +447,7 @@ def setrun(claw_pkg='geoclaw'):
     fg.tstart_max = tstart_max  # just before wave arrives
     fg.tend_max = 1.e10    # when to stop monitoring max values
     fg.dt_check = 20.      # how often to update max values
+    fg.interp_method = 0   # 0 ==> pw const in cells, recommended
     fgmax_grids.append(fg)  # written to fgmax_grids.data
 
     # fgmax grid point_style==4 means grid specified as topo_type==3 file:
@@ -455,6 +457,7 @@ def setrun(claw_pkg='geoclaw'):
     fg.tstart_max = tstart_max  # just before wave arrives
     fg.tend_max = 1.e10    # when to stop monitoring max values
     fg.dt_check = 20.      # how often to update max values
+    fg.interp_method = 0   # 0 ==> pw const in cells, recommended
     fg.xy_fname = 'fgmax_pts_island.data'  # file of 0/1 values in tt3 format
     fgmax_grids.append(fg)  # written to fgmax_grids.data
 
@@ -465,6 +468,7 @@ def setrun(claw_pkg='geoclaw'):
     fg.tstart_max = tstart_max  # just before wave arrives
     fg.tend_max = 1.e10    # when to stop monitoring max values
     fg.dt_check = 20.      # how often to update max values
+    fg.interp_method = 0   # 0 ==> pw const in cells, recommended
     # can set list of points here:
     fg.npts = 2
     fg.X = np.array([14.4, 14.5])
@@ -478,6 +482,7 @@ def setrun(claw_pkg='geoclaw'):
     fg.tstart_max = tstart_max  # just before wave arrives
     fg.tend_max = 1.e10    # when to stop monitoring max values
     fg.dt_check = 20.      # how often to update max values
+    fg.interp_method = 0   # 0 ==> pw const in cells, recommended
     # can specify that list of points is in a different file:
     fg.npts = 0
     fg.xy_fname = 'fgmax_ps0.txt'

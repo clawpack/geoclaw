@@ -37,6 +37,7 @@ class FGmaxGrid(object):
         self.dt_check = 10.     # target time (sec) increment between updating 
                                 # max values
         self.min_level_check = None    # which levels to monitor max on
+        self.interp_method = 0    # 0 for pw const, 1 for bilinear
         self.arrival_tol = 1.e-2       # tolerance for flagging arrival
         #self.input_file_name = 'fgmax.txt'  # file for GeoClaw input data
         self.fgno = 1  # FG number
@@ -113,13 +114,14 @@ class FGmaxGrid(object):
         self.dt_check = float(fgmax_input[2].split()[0])
         self.min_level_check = int(fgmax_input[3].split()[0])
         self.arrival_tol = float(fgmax_input[4].split()[0])
-        self.point_style = point_style = int(fgmax_input[5].split()[0])
+        self.interp_method = int(fgmax_input[5].split()[0])
+        self.point_style = point_style = int(fgmax_input[6].split()[0])
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 0:
-            self.npts = npts = int(fgmax_input[6].split()[0])
+            self.npts = npts = int(fgmax_input[7].split()[0])
             if npts == 0:
-                self.xy_fname = fgmax_input[7][1:-2]  # strip quotes
+                self.xy_fname = fgmax_input[8][1:-2]  # strip quotes
                 xy = numpy.loadtxt(self.xy_fname, skiprows=1)
                 self.X = xy[:,0]
                 self.Y = xy[:,1]
@@ -131,7 +133,7 @@ class FGmaxGrid(object):
                 print('Read %i x,y points from \n    %s' % (npts, self.xy_fname))
             else:
                 X = []; Y = []
-                for k in range(7,7+npts):
+                for k in range(8,8+npts):
                     xk = float(fgmax_input[k].split()[0])
                     yk = float(fgmax_input[k].split()[1])
                     X.append(xk)
@@ -139,31 +141,31 @@ class FGmaxGrid(object):
                 self.X = numpy.array(X)
                 self.Y = numpy.array(Y)
         elif point_style == 1:
-            self.npts = npts = int(fgmax_input[6].split()[0])
-            self.x1 = float(fgmax_input[7].split()[0])
-            self.y1 = float(fgmax_input[7].split()[1])
-            self.x2 = float(fgmax_input[8].split()[0])
-            self.y2 = float(fgmax_input[8].split()[1])
+            self.npts = npts = int(fgmax_input[7].split()[0])
+            self.x1 = float(fgmax_input[8].split()[0])
+            self.y1 = float(fgmax_input[8].split()[1])
+            self.x2 = float(fgmax_input[9].split()[0])
+            self.y2 = float(fgmax_input[9].split()[1])
         elif point_style == 2:
-            self.nx = nx = int(fgmax_input[6].split()[0])
-            self.ny = ny = int(fgmax_input[6].split()[1])
-            self.x1 = float(fgmax_input[7].split()[0])
-            self.y1 = float(fgmax_input[7].split()[1])
-            self.x2 = float(fgmax_input[8].split()[0])
-            self.y2 = float(fgmax_input[8].split()[1])
+            self.nx = nx = int(fgmax_input[7].split()[0])
+            self.ny = ny = int(fgmax_input[7].split()[1])
+            self.x1 = float(fgmax_input[8].split()[0])
+            self.y1 = float(fgmax_input[8].split()[1])
+            self.x2 = float(fgmax_input[9].split()[0])
+            self.y2 = float(fgmax_input[9].split()[1])
         elif point_style == 3:
-            self.n12 = n12 = int(fgmax_input[6].split()[0])
-            self.n23 = n23 = int(fgmax_input[6].split()[1])
-            self.x1 = float(fgmax_input[7].split()[0])
-            self.y1 = float(fgmax_input[7].split()[1])
-            self.x2 = float(fgmax_input[8].split()[0])
-            self.y2 = float(fgmax_input[8].split()[1])
-            self.x3 = float(fgmax_input[9].split()[0])
-            self.y3 = float(fgmax_input[9].split()[1])
-            self.x4 = float(fgmax_input[10].split()[0])
-            self.y4 = float(fgmax_input[10].split()[1])
+            self.n12 = n12 = int(fgmax_input[7].split()[0])
+            self.n23 = n23 = int(fgmax_input[7].split()[1])
+            self.x1 = float(fgmax_input[8].split()[0])
+            self.y1 = float(fgmax_input[8].split()[1])
+            self.x2 = float(fgmax_input[9].split()[0])
+            self.y2 = float(fgmax_input[9].split()[1])
+            self.x3 = float(fgmax_input[10].split()[0])
+            self.y3 = float(fgmax_input[10].split()[1])
+            self.x4 = float(fgmax_input[11].split()[0])
+            self.y4 = float(fgmax_input[11].split()[1])
         elif point_style == 4:
-            self.xy_fname = fgmax_input[6][1:-2]  # strip quotes
+            self.xy_fname = fgmax_input[7][1:-2]  # strip quotes
             ## Need to read in topotype 3 file and set self.npts
             # xy = numpy.loadtxt(self.xy_fname, skiprows=1)
             # self.X = xy[:,0]
@@ -195,6 +197,8 @@ class FGmaxGrid(object):
                             % (self.min_level_check,12*" "))
 
         fid.write("%16.10e            # arrival_tol\n" % self.arrival_tol)
+        fid.write("%i %s              # interp_method\n" \
+                            % (self.interp_method,12*" "))
         fid.write("%i %s              # point_style\n" \
                             % (self.point_style,12*" "))
 

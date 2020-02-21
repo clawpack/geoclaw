@@ -72,7 +72,8 @@ module fgmax_module
         integer :: nx,ny
         integer, allocatable, dimension(:,:) :: index
         
-        
+        ! interp_method = 0 for pw constant, 1 for bilinear:
+        integer :: interp_method
         
     end type
 
