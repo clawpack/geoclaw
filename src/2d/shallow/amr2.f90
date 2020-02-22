@@ -464,6 +464,11 @@ program amr2
 
         ! moved upt before restrt or won't properly initialize 
         call set_fgmax()   
+        
+        ! need these before set_gauges so num_out_vars set right for gauges
+        call set_geo()                    ! sets basic parameters g and coord system
+        call set_multilayer()             ! Set multilayer SWE parameters
+        
         ! Set gauge output, note that restrt might reset x,y for lagrangian:
         call set_gauges(rest, nvar, naux) 
 
@@ -475,18 +480,19 @@ program amr2
         print *, 'Restarting from previous run'
         print *, '   at time = ',time
         print *, ' '
+
         ! Call user routine to set up problem parameters:
         call setprob()
 
         ! Non-user defined setup routine
-        call set_geo()                    ! sets basic parameters g and coord system
+        !call set_geo()                    ! sets basic parameters g and coord system
         call set_refinement()             ! sets refinement control parameters
         call read_dtopo_settings()        ! specifies file with dtopo from earthquake
         call read_topo_settings()         ! specifies topography (bathymetry) files
         call set_qinit()                  ! specifies file with dh if this used instead
         call set_fixed_grids()            ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
-        call set_multilayer()             ! Set multilayer SWE parameters
+        !call set_multilayer()             ! Set multilayer SWE parameters
         call set_storm()                  ! Set storm parameters
         call set_regions()                ! Set refinement regions
         call read_adjoint_data()          ! Read adjoint solution
