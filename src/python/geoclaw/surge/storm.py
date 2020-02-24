@@ -357,11 +357,15 @@ class Storm(object):
             self.classification[i] = data[10]
 
             # Parse eye location - longitude/latitude order
-            if data[6][-1] == "N":
+            if data[6] == "0":
+                self.eye_location[i, 1] = 0.0
+            elif data[6][-1] == "N":
                 self.eye_location[i, 1] = float(data[6][0:-1]) / 10.0
             else:
                 self.eye_location[i, 1] = -float(data[6][0:-1]) / 10.0
-            if data[7][-1] == "E":
+            if data[7] == "0":
+                self.eye_location[i, 0] = 0.0
+            elif data[7][-1] == "E":
                 self.eye_location[i, 0] = float(data[7][0:-1]) / 10.0
             else:
                 self.eye_location[i, 0] = -float(data[7][0:-1]) / 10.0
