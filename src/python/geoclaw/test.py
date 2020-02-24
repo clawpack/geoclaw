@@ -53,7 +53,7 @@ class GeoClawRegressionTest(clawpack.clawutil.test.ClawpackRegressionTest):
                                                 executable_name=executable_name)
 
 
-    def check_fgmax(self, save=False):
+    def check_fgmax(self, fgno=1, save=False):
         r"""Basic test to assert fgmax equality
         Currently just records sum of fg.h and of fg.s.
 
@@ -65,8 +65,8 @@ class GeoClawRegressionTest(clawpack.clawutil.test.ClawpackRegressionTest):
         from clawpack.geoclaw import fgmax_tools
 
         fg = fgmax_tools.FGmaxGrid()
-        fname = os.path.join(self.temp_path, 'fgmax1.txt')
-        fg.read_input_data(fname)
+        fname = os.path.join(self.temp_path, 'fgmax_grids.data')
+        fg.read_fgmax_grids_data(fgno, fname)
         fg.read_output(outdir=self.temp_path)
 
         data_sum = numpy.array([fg.h.sum(), fg.s.sum()])

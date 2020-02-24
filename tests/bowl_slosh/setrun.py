@@ -11,6 +11,9 @@ from __future__ import print_function
 import os
 import numpy as np
 
+# needed in v5.7.0:
+from clawpack.geoclaw import fgmax_tools
+
 
 #------------------------------
 def setrun(claw_pkg='geoclaw'):
@@ -385,10 +388,28 @@ def setgeo(rundata):
     #  ioutarrivaltimes,ioutsurfacemax]
     
     # == fgmax.data values ==
-    fgmax_files = rundata.fgmax_data.fgmax_files
-    # for fixed grids append to this list names of any fgmax input files
-    fgmax_files.append('fgmax1.txt')
     rundata.fgmax_data.num_fgmax_val = 2
+    fgmax_grids = rundata.fgmax_data.fgmax_grids  # empty list to start
+    # Now append to this list objects of class fgmax_tools.FGmaxGrid
+    # specifying any fgmax grids.
+
+    fg = fgmax_tools.FGmaxGrid()
+    fg.point_style = 2       # will specify a 2d grid of points
+    fg.x1 = -2.
+    fg.x2 = 2.
+    fg.y1 = -2.
+    fg.y2 = 2.
+    fg.dx = 0.1
+    fg.tstart_max = 0.        # when to start monitoring max values
+    fg.tend_max = 1.e10       # when to stop monitoring max values
+    fg.dt_check = 0.1         # target time (sec) increment between updating
+                               # max values
+    fg.min_level_check = 2    # which levels to monitor max on
+    fg.arrival_tol = 1.e-2    # tolerance for flagging arrival
+
+    fgmax_grids.append(fg)  # written to fgmax_grids.data
+    
+    #fgmax_files.append('fgmax1.txt')  # no longer used in v5.7.0
 
     return rundata
     # end of function setgeo

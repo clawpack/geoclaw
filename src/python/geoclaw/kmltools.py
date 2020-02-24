@@ -18,10 +18,18 @@ the full 8 digits if you want it transparent).
  - poly2kml - create a kml outline for an arbitrary polygon
  - line2kml - create a kml line connecting 2 points
  - gauges2kml - create a kml marker for each gauge specified in setrun
+ - topo2kml - create a kml outline for each topo grid specified in setrun
+ - dtopo2kml - create a kml outline for each dtopo grid specified in setrun
+ - fgmax2kml - create a kml outline for each fgmax grid specified in setrun
+ - make_input_data_kmls - make kml files for many things specified in setrun
+ - pcolorcells_for_kml - version of pcolormesh with appropriate dpi and size
+ - png2kml - create kml file wrapping a png figure to be viewed on GE
+ - kml_build_colorbar - create a colorbar to display on GE
  - kml_header - used internally
  - kml_footer - used internally
  - kml_region - used internally
  - kml_gauge - used internally
+ - kml_png - used internally
 
  - strip_archive_extensions - strip off things like .tar or .gz
 """
@@ -30,6 +38,10 @@ the full 8 digits if you want it transparent).
 from __future__ import absolute_import
 from __future__ import print_function
 from six.moves import range
+try:
+    from importlib import reload
+except:
+    pass # assume python2, already has reload
 
 def f2s(x, num_digits=6):
     r"""
@@ -106,6 +118,8 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
         except:
             raise IOError("*** cannot execute setrun file")
 
+    fname_combined = 'FlagRegions.kml'
+    
     clawdata = rundata.clawdata
     x1,y1 = clawdata.lower[0:]
     x2,y2 = clawdata.upper[0:]
@@ -154,6 +168,8 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
     elev = 0.
     if not combined:
         fname = 'Domain.kml'
+    else:
+        fname = fname_combined
 
     kml_text = kml_header(fname)
 
@@ -244,13 +260,111 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
             if verbose:
                 print("Created ",fname)
 
+
+    try:
+        flagregions = rundata.flagregiondata.flagregions
+    except:
+        flagregions = []  # flagregions not yet in amrclaw
+
+    if len(flagregions)==0 and verbose:
+        print("No flagregions found in setrun.py")
+
+    for rnum,flagregion in enumerate(flagregions):
+        
+        name = flagregion.name
+        #print('+++ flagregion name = ',name)
+        
+        if not combined:
+            if name is '':
+                fname = 'FlagRegion_%s.kml' % str(rnum).zfill(2)
+            else:
+                fname = name + '.kml'
+            kml_text = kml_header(fname)
+            
+        #if flagregion.spatial_region is None:
+        #    flagregion.read_spatial_region()
+        if flagregion.spatial_region_type == 1:
+            x1,x2,y1,y2 = flagregion.spatial_region
+        else:
+            flagregion.read_spatial_region()
+            x1,x2,y1,y2 = flagregion.spatial_region.bounding_box()
+        minlevel = flagregion.minlevel
+        maxlevel = flagregion.maxlevel
+
+        if verbose:
+            print("Region ", flagregion.name)
+
+        mapping = {}
+        mapping['minlevel'] = flagregion.minlevel
+        mapping['maxlevel'] = flagregion.maxlevel
+        mapping['t1'] = flagregion.t1
+        mapping['t2'] = flagregion.t2
+        mapping['x1'] = x1
+        mapping['x2'] = x2
+        mapping['y1'] = y1
+        mapping['y2'] = y2
+        mapping['elev'] = elev
+        mapping['name'] = flagregion.name
+        description = "minlevel = %i, maxlevel = %i\n" \
+            % (flagregion.minlevel,flagregion.maxlevel) \
+            + "  t1 = %s, t2 = %s\n" % (f2s(flagregion.t1),f2s(flagregion.t2)) \
+            + "  Bounding box: \n" \
+            + "  x1_bb = %s, x2_bb = %s\n" % (f2s(x1),f2s(x2)) \
+            + "  y1_bb = %s, y2_bb = %s\n\n" % (f2s(y1),f2s(y2))
+        if len(dy_levels) >= minlevel:
+            dy = dy_levels[minlevel-1]
+            dy_deg,dy_min,dy_sec = deg2dms(dy)
+            dy_meters = dy*111e3
+            levtext = "Level %s resolution:  \ndy = %g deg, %g min, %g sec \n= %g meters\n" \
+                    % (minlevel,dy_deg,dy_min,dy_sec,dy_meters)
+            description = description + levtext
+        if (maxlevel > minlevel) and (len(dy_levels) >= maxlevel):
+            dy = dy_levels[maxlevel-1]
+            dy_deg,dy_min,dy_sec = deg2dms(dy)
+            dy_meters = dy*111e3
+            levtext = "\nLevel %s resolution:  \ndy = %g deg, %g min, %g sec \n= %g meters\n" \
+                    % (maxlevel,dy_deg,dy_min,dy_sec,dy_meters)
+            description = description + levtext
+        mapping['desc'] = description
+        mapping['color'] = "00FFFF"  # yellow
+        mapping['width'] = 2
+        
+        if flagregion.spatial_region_type == 1:
+            x1,x2,y1,y2 = flagregion.spatial_region
+            x = [x1,x1,x2,x2,x1]
+            y = [y1,y2,y2,y1,y1]
+        else:
+            x,y = flagregion.spatial_region.vertices()
+            
+        v = "\n"
+        for j in range(len(x)):
+            v = v + "%s,%s,%s\n" % (f2s(x[j]),f2s(y[j]),f2s(elev))
+        v = v + "%s,%s,%s\n" % (f2s(x[0]),f2s(y[0]),f2s(elev))
+        v.replace(' ','')
+        
+        region_text = kml_region(mapping, v)
+
+        fname = flagregion.name + '.kml'
+        region_text = kml_region(mapping, v)
+        kml_text = kml_text + region_text
+        
+        if not combined:
+            kml_text = kml_text + kml_footer()
+            kml_file = open(fname,'w')
+            kml_file.write(kml_text)
+            kml_file.close()
+            if verbose:
+                print("Created ",fname)
+        
     if combined:
+        fname = fname_combined
         kml_text = kml_text + kml_footer()
         kml_file = open(fname,'w')
         kml_file.write(kml_text)
         kml_file.close()
         if verbose:
             print("Created ",fname)
+
 
 
 def line2kml(xy,fname='line.kml',name='line',color='00FFFF',width=3,
@@ -270,7 +384,7 @@ def line2kml(xy,fname='line.kml',name='line',color='00FFFF',width=3,
 
     """
      
-    if type(xy[0]) is tuple:
+    if type(xy[0]) in [tuple,list]:
         x1,x2 = xy[0]
         y1,y2 = xy[1]
     else:
@@ -323,7 +437,7 @@ def box2kml(xy,fname=None,name='box',color='FF0000',width=3,verbose=True):
     if fname is None:
         fname = name + '.kml'
 
-    if type(xy[0]) is tuple:
+    if type(xy[0]) in [tuple,list]:
         x1,x2 = xy[0]
         y1,y2 = xy[1]
     else:
@@ -376,7 +490,7 @@ def quad2kml(xy,fname=None,name='quad',color='FF0000',width=3,verbose=True):
     if fname is None:
         fname = name + '.kml'
 
-    if type(xy[0]) is tuple:
+    if type(xy[0]) in [tuple,list]:
         x1,x2,x3,x4 = xy[0]
         y1,y2,y3,y4 = xy[1]
     else:
@@ -420,7 +534,7 @@ def quad2kml(xy,fname=None,name='quad',color='FF0000',width=3,verbose=True):
 
 
 def poly2kml(xy,fname=None,name='poly',color='00FF00', width=3,
-             verbose=True):
+             verbose=True, max_vertices_in_description=20):
     """
     Make a KML polygon with default color blue.
 
@@ -432,7 +546,8 @@ def poly2kml(xy,fname=None,name='poly',color='00FF00', width=3,
      - *color* (str) Color in format aabbggrr
      - *width* (str) line width
      - *verbose* (bool) - If *True*, print out info
-
+     - *max_vertices_in_description* (int) - if more than this number
+       of vertices, only list number in description box, not all vertices
     """
 
     if fname is None:
@@ -441,9 +556,10 @@ def poly2kml(xy,fname=None,name='poly',color='00FF00', width=3,
     x,y = xy
 
     if verbose:
-        print("Polygon:     %10.6f  %10.6f" % (x[0],y[0]))
-        for j in range(1,len(x)):
-            print("             %10.6f  %10.6f" % (x[j],y[j]))
+        print("Creating kml for polygon with %i vertices" % len(x))
+        if (len(x) <= max_vertices_in_description):
+            for j in range(len(x)):
+                print("             %10.6f  %10.6f" % (x[j],y[j]))            
 
     elev = 0.
     kml_text = kml_header(fname)
@@ -453,9 +569,11 @@ def poly2kml(xy,fname=None,name='poly',color='00FF00', width=3,
     mapping['y'] = y
     mapping['elev'] = elev
     mapping['name'] = name
-    d = "  x[0] = %s, y[0] = %s\n" % (x[0],y[0]) 
-    for j in range(1,len(x)):
-        d = d + "  x[%i] = %s, y[%i] = %s" % (j,f2s(x[j]),j,f2s(y[j]))
+    d = "  Polygon with %i vertices" % len(x)
+    if (len(x) <= max_vertices_in_description):
+        d = "  x[0] = %s, y[0] = %s\n" % (f2s(x[0]),f2s(y[0])) 
+        for j in range(1,len(x)):
+            d = d + "  x[%i] = %s, y[%i] = %s\n" % (j,f2s(x[j]),j,f2s(y[j]))
     mapping['desc'] = d
     mapping['color'] = color
     mapping['width'] = width
@@ -513,7 +631,6 @@ def gauges2kml(rundata=None, fname='gauges.kml', verbose=True):
 
     """
 
-
     if rundata is None:
         try:
             import setrun
@@ -563,7 +680,8 @@ def gauges2kml(rundata=None, fname='gauges.kml', verbose=True):
 
 def kml_header(name='GeoClaw kml file'):
     header = """<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
+<kml xmlns="http://www.opengis.net/kml/2.2"
+xmlns:gx="http://www.google.com/kml/ext/2.2">
 <Document><name>%s</name>
 """ % name
     return header
@@ -783,8 +901,67 @@ def dtopo2kml(dtopo_file_name, dtopo_type, color='8888FF'):
     file_name = '%s.kml' % name
     box2kml(xy, file_name, name, color)
         
+        
 
-def make_input_data_kmls(rundata):
+def fgmax2kml(rundata=None,fname='fgmax_grids.kml',verbose=True,combined=False):
+
+    """
+    Create a KML box for each fgmax grid specified for a GeoClaw run.
+
+    :Inputs:
+
+      - *rundata* - an object of class *ClawRunData* or None
+
+        If *rundata==None*, try to create based on executing function *setrun*
+        from the `setrun.py` file in the current directory.
+
+      - *fname* (str) - resulting kml file.
+
+      - *verbose* (bool) - If *True*, print out info about each region found
+
+      - *combined* (bool) - If *True*, combine into single kml file with
+        name given by *fname*.  NOT YET IMPLEMENTED.
+        If False, *fname* is ignored and individual files are created for
+        each fgmax grid.
+
+    """
+
+    from numpy import cos,pi,floor
+
+    if rundata is None:
+        try:
+            import setrun
+            reload(setrun)
+            rundata = setrun.setrun()
+        except:
+            raise IOError("*** cannot execute setrun file")
+
+    if combined:
+        fname_combined = 'fgmax_grids.kml'
+        print('*** combined fgmax kml files not yet supported')
+        print('    making a kml file for each fgmax grid')
+    
+    fgmax_grids = rundata.fgmax_data.fgmax_grids
+
+    for fg in fgmax_grids:
+        fname_root = 'fgmax%s' % str(fg.fgno).zfill(4)
+        kml_file = fname_root + '.kml'
+        if fg.point_style==1:
+            xy = ([fg.x1,fg.x2], [fg.y1,fg.y2])
+            line2kml(xy,kml_file, fname_root, color='8888FF', width=2)
+        if fg.point_style==2:
+            xy = ([fg.x1,fg.x2], [fg.y1,fg.y2])
+            box2kml(xy, kml_file, fname_root, color='8888FF')
+        elif fg.point_style==3:
+            xy = ([fg.x1,fg.x2,fg.x3,fg.x4], 
+                  [fg.y1,fg.y2,fg.y3,fg.y4])
+            poly2kml(xy, kml_file, fname_root, color='8888FF')
+        else:
+            print('fgmax2kml not yet implemented for point_style = %i' \
+                  % fg.point_style)
+
+
+def make_input_data_kmls(rundata=None, combined=False):
     """
     Produce kml files for the computational domain, all gauges and regions 
     specified, and all topo and dtopo files specified in rundata.
@@ -795,13 +972,26 @@ def make_input_data_kmls(rundata):
 
     to the end of a `setrun.py` file so that `make data` will generate all
     kml files in addition to the `*.data` files.
+    
+    Or set *rundata==None*, in which case it will try to generate rundata
+    based on executing function *setrun*
+    from the `setrun.py` file in the current directory.
     """
     
     import os
-    from . import topotools, dtopotools
+    from clawpack.geoclaw import topotools, dtopotools
+    
+    if rundata is None:
+        try:
+            import setrun
+            reload(setrun)
+            rundata = setrun.setrun()
+        except:
+            raise IOError("*** cannot execute setrun file")
 
-    regions2kml(rundata, combined=False)
+    regions2kml(rundata, combined=combined)
     gauges2kml(rundata)
+    fgmax2kml(rundata)
 
     topofiles = rundata.topo_data.topofiles
     for f in topofiles:
@@ -815,4 +1005,322 @@ def make_input_data_kmls(rundata):
         dtopo_type = f[0]
         dtopo2kml(dtopo_file_name, dtopo_type)
         
+
+def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15., 
+                        verbose=True, **kwargs):
+    
+    """
+    Wraps pcolormesh in a way that a png file is created that can be viewed
+    on Google Earth with proper alignment and with sharp grid cell edges.
+    Works if X,Y are cell centers or edges, and X,Y can be 2d or 1d arrays. 
+    
+    X,Y,Z is the data to be plotted.  It is assumed to be finite volume data
+    where Z[i,j] is a constant value over a grid cell.
+
+    Internally x,y are defined as 1d arrays since it is assumed the 
+    grids are Cartesian.
+    
+    If the length of the 1d arrays x and y match the dimensions of Z then 
+    these are assumed to be cell center values. In this case the arrays 
+    are expanded by one to obtain x_edge, y_edge as edge values,
+    as needed for proper alignment.  
+    
+    If the length of x,y is already one greater than the corresponding 
+    dimension of Z, then it is assumed that these are already edge values.
+
+    If png_filename is not None then a png file is written with appropriate dpi.
+
+    dpc is the desired "dots per cell", how many pixels to allot to each
+    to each grid cell.  This should be an integer to avoid interpolation
+    between cells that smears out the cell boundaries in the png file.
+    Increasing this will give sharper boundaries but also larger files that
+    load more slowly.
+    
+    max_inches is the desired size of the longer edge of the figure created.
+    This value is not very important unless you want to view the png file
+    on a screen outside of Google Earth.  Internally the dimensions of the
+    figure `x_inches` and `y_inches` are determined to be consistent
+    with the value `dpc` specified and a reasonable value of `dpi` for the
+    png file, as described below.
+
+    Internally the value `dpi` (dots per inch) for the png file is
+    determined so that it is at least 16 and so that:
+        dpi * x_inches = dcp * x_cells
+        dpi * y_inches = dcp * y_cells
+    where `x_cells`, `y_cells` are the number of cells in each direction.
+
+    `kwargs` are passed to `pcolormesh`, e.g. `cmap` and `norm` are
+    generally specified.
+
+    This function returns `fig, ax, png_extent, kml_dpi` so the user can further
+    annotate the figure befor saving it as a png file, which should then 
+    be done with:
+        plt.savefig(png_filename, transparent=True, dpi=kml_dpi)
+    The `png_extent` is needed in construcing a kml file to display the
+    png file on Google Earth, e.g. using the function `png2kml` in this
+    module.
+    """
+
+    from matplotlib import pyplot as plt
+    import numpy as np
+    
+    # If X is 2d extract proper 1d slice:
+    if X.ndim == 1:
+        x = X
+    elif X.ndim == 2:
+        if X[0,0] == X[0,1]:
+            x = X[:,0]
+        else:
+            x = X[0,:]
+            
+    # If Y is 2d extract proper 1d slice:
+    if Y.ndim == 1:
+        y = Y
+    elif Y.ndim == 2:
+        if Y[0,0] == Y[0,1]:
+            y = Y[:,0]
+        else:
+            y = Y[0,:]                    
+
+    dx = x[1]-x[0]
+    dy = y[1]-y[0]
+    if len(x) == Z.shape[1]:
+        # cell centers, so xedge should be expanded by dx/2 on each end:
+        xedge = np.arange(x[0]-0.5*dx, x[-1]+dx, dx)
+    elif len(x) == Z.shape[1]+1:
+        # assume x already contains edge values
+        xedge = x
+    else:
+        raise ValueError('x has unexpected length')
+
+    if len(y) == Z.shape[0]:
+        # cell centers, so xedge should be expanded by dx/2 on each end:
+        yedge = np.arange(y[0]-0.5*dy, y[-1]+dy, dy)
+    elif len(y) == Z.shape[0]+1:
+        # assume x already contains edge values
+        yedge = y
+    else:
+        raise ValueError('y has unexpected length')
         
+
+    x1 = xedge[0];  x2 = xedge[-1]
+    y1 = yedge[0];  y2 = yedge[-1]
+
+    # Number of grid cells:
+    x_cells = int(round((x2-x1)/dx))
+    y_cells = int(round((y2-y1)/dy))
+    max_cells = max(x_cells, y_cells)
+            
+    dots_per_cell = dpc
+    max_dots = dots_per_cell * max_cells
+
+    # determine dots per inch for png file, minimum 16:
+    kml_dpi = max(int(round(max_dots / max_inches)), 16)
+    dots_x = x_cells * dots_per_cell
+    dots_y = y_cells * dots_per_cell
+
+    # determine dimensions for figsize:
+    x_inches = dots_x / kml_dpi
+    y_inches = dots_y / kml_dpi
+    dpc_x = kml_dpi * x_inches / x_cells
+    dpc_y = kml_dpi * y_inches / y_cells
+
+    if verbose:
+        print('Using kml_dpi = %i,figure size %.6f by %.6f inches' \
+                % (kml_dpi,x_inches,y_inches))
+        print('Figure has %i by %i grid cells of uniform color' \
+                % (x_cells, y_cells))
+        print('Dots per cell in x: %.6f,  in y: %.6f' % (dpc_x,dpc_y))
+        print('       These should be integers')
+    
+        
+    # Create figure of appropriate size and pcolormesh plot
+    # with no margins, ticks, or labels:
+
+    fig = plt.figure(figsize=(x_inches,y_inches))
+    ax = plt.axes()
+    plt.axis('off')
+    pc = plt.pcolormesh(xedge, yedge, Z, **kwargs)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_frame_on(False)
+    fig.set_size_inches(x_inches,y_inches)
+    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, 
+                    hspace = 0, wspace = 0)
+    plt.margins(0,0)
+    
+    if png_filename is not None:
+        plt.savefig(png_filename, transparent=True, dpi=kml_dpi)
+        if verbose:
+            print('Created ',png_filename)
+
+    png_extent = [xedge[0], xedge[-1], yedge[0], yedge[-1]]
+    return fig, ax, png_extent, kml_dpi
+        
+
+
+def kml_png(mapping):
+    """
+    Create text for a png file overlay
+    """
+
+    kml_text = """
+<GroundOverlay>
+<name>{name:s}</name>
+<visibility>1</visibility>
+<gx:altitudeMode> clampToSeaFloor </gx:altitudeMode>
+<Icon>
+  <href>{png_file:s}</href>
+</Icon>
+<LatLonBox>
+  <north>{y2:.9f}</north>
+  <south>{y1:.9f}</south>
+  <east>{x2:.9f}</east>
+  <west>{x1:.9f}</west>
+</LatLonBox>
+</GroundOverlay>
+""".format(**mapping)
+
+    return kml_text
+    
+def kml_cb(mapping):
+    """
+    Create text for a colorbar png file overlay
+    """
+
+    kml_text = """
+<ScreenOverlay>
+  <name>{name:s}</name>
+  <Icon>
+    <href>{cb_file:s}</href>
+  </Icon>
+  <overlayXY x="{xfrac:.4f}" xunits="fraction" y="{yfrac:.4f}" yunits="fraction"/>
+  <screenXY x="{xfrac:.4f}" xunits="fraction" y="{yfrac:.4f}" yunits="fraction"/>
+</ScreenOverlay>
+""".format(**mapping)
+
+    return kml_text
+
+radio_style_text = """
+<Style id="folderStyle">
+<ListStyle>
+<listItemType>radioFolder</listItemType>
+</ListStyle>
+</Style>
+<styleUrl>#folderStyle</styleUrl>
+"""
+
+
+
+def png2kml(extent, png_files, png_names=None, name='png_files', fname=None, 
+            radio_style=False, cb_files=None, cb_names=None, 
+            cb_xfracs=None, cb_yfracs=None, verbose=True):
+    """
+    Create a kml file `fname` linking overlays for each png file in `png_files`.
+    
+    `extent` is [x1,x2,y1,y2] specifying where image should be overlaid.
+    
+    `png_names`, if present, will give the name for each image for the
+    Google Earth menu.
+    
+    If `radio_style` is True, set radio buttons so only one can be shown at a 
+    time, useful for combining plots of different quantities in same file.
+    """
+    
+    import os
+    
+    if fname is None:
+        fname = name + '.kml'
+
+
+    x1,x2,y1,y2 = extent
+
+    if verbose:
+        print("Extent:   %10.6f  %10.6f  %10.6f  %10.6f" % (x1,x2,y1,y2))
+
+    kml_text = kml_header(fname) + \
+        "<name>%s</name>\n" % name + "<open>1</open>\n"
+      
+
+    mapping = {}
+    mapping['x1'] = x1
+    mapping['x2'] = x2
+    mapping['y1'] = y1
+    mapping['y2'] = y2
+    
+    for k,png_file in enumerate(png_files):
+        
+        mapping['png_file'] = png_file
+        
+        try:
+            mapping['name'] = png_names[k]
+        except:
+            mapping['name'] =  'No name'
+
+        kml_text = kml_text + kml_png(mapping)
+        
+    if radio_style:
+        kml_text = kml_text + radio_style_text
+        
+    if cb_files:
+        # colorbars
+        for k,cb_file in enumerate(cb_files):
+            
+            mapping['cb_file'] = cb_file
+            try:
+                mapping['name'] = cb_names[k]
+            except:
+                mapping['name'] =  'Colorbar'
+                
+            try:
+                mapping['xfrac'] = cb_xfracs[k]
+            except:
+                mapping['xfrac'] = 0.025 + k*0.075
+            try:
+                mapping['yfrac'] = cb_yfracs[k]
+            except:
+                mapping['yfrac'] = 0.05
+                
+            kml_text = kml_text + kml_cb(mapping)
+        
+    kml_text = kml_text + kml_footer()
+    kml_file = open(fname,'w')
+    kml_file.write(kml_text)
+    kml_file.close()
+    
+    if verbose:
+        print("Created ",fname)
+
+
+def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None, 
+                       norm=None, label=None, title=None, extend='neither'):
+
+    """
+    Make a png file with a colorbar corresponding to cmap, norm.
+    cmin, cmax are used only if nrm is not provided.
+    """
+    
+    import matplotlib.pyplot as plt
+    import matplotlib as mpl
+
+    fig = plt.figure(figsize=(1.2,3))
+    ax1 = fig.add_axes([0.3, 0.075, 0.20, 0.80])
+    tick = ax1.yaxis.get_major_ticks()
+    plt.tick_params(axis='y', which='major', labelsize=8)
+
+    if norm is None:
+        norm = mpl.colors.Normalize(vmin=cmin,vmax=cmax)
+
+    cb1 = mpl.colorbar.ColorbarBase(ax1,cmap=cmap,
+                                    norm=norm,
+                                    extend=extend,
+                                    orientation='vertical')
+    if label:
+        cb1.set_label(label)
+    if title:
+        ax1.set_title(title)
+        
+        
+    # This is called from plotpages, in <plotdir>.
+    plt.savefig(cb_filename,Transparent=True)
+

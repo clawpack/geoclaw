@@ -310,11 +310,11 @@ program amr2
     read(inunit,*) rstfile
 
     read(inunit,*) checkpt_style
-    if (checkpt_style == 0) then
-        ! Never checkpoint:
-        checkpt_interval = iinfinity
 
-    else if (abs(checkpt_style) == 2) then
+    ! default value unless set by checkpt_style==3:
+    checkpt_interval = iinfinity
+
+    if (abs(checkpt_style) == 2) then
         read(inunit,*) nchkpt
         allocate(tchk(nchkpt))
         read(inunit,*) (tchk(i), i=1,nchkpt)

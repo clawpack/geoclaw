@@ -11,7 +11,7 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;
 c     !use gauges_module, only: OUTGAUGEUNIT, num_gauges
       use gauges_module, only: num_gauges, gauges
       use gauges_module, only: print_gauges_and_reset_nextLoc
-      use fgmax_module
+      use fgmax_module, only: FG_fgrids, FG_num_fgrids, fgrid
 
       implicit double precision (a-h,o-z)
       integer tchkunit, ifg, ii

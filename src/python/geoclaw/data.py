@@ -223,23 +223,35 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         # File name for fgmax points and parameters:
         self.add_attribute('fgmax_files',[])
         self.add_attribute('num_fgmax_val',1)
+        self.add_attribute('fgmax_grids',[])
 
 
-    def write(self,data_source='setrun.py', out_file='fgmax.data'):
+    def write(self,data_source='setrun.py', out_file='fgmax_grids.data'):
+        if len(self.fgmax_files) > 0:
+            msg = '*** fgmax_files has been deprecated, ' \
+                  + 'use fgmax_grids instead.'
+            raise ValueError(msg)
+
+        # new style:
         self.open_data_file(out_file, data_source)
         num_fgmax_val = self.num_fgmax_val
         if num_fgmax_val not in [1,2,5]:
             raise NotImplementedError( \
                     "Expecting num_fgmax_val in [1,2,5], got %s" % num_fgmax_val)
         self.data_write(value=num_fgmax_val,alt_name='num_fgmax_val')
-        num_fgmax_grids = len(self.fgmax_files)
+        num_fgmax_grids = len(self.fgmax_grids)
         self.data_write(value=num_fgmax_grids,alt_name='num_fgmax_grids')
         self.data_write()
-        for fgmax_file in self.fgmax_files:
+        fgno = 0
+        for fg in self.fgmax_grids:
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
-            fname = os.path.abspath(os.path.join(os.path.dirname(out_file),fgmax_file))
-            self._out_file.write("\n'%s' \n" % fname)
+            if fg.xy_fname is not None:
+                fg.xy_fname = os.path.abspath(os.path.join(\
+                              os.path.dirname(out_file),fg.xy_fname))
+            fgno += 1
+            fg.fgno = fgno
+            fg.write_to_fgmax_data(self._out_file)
         self.close_data_file()
 
 
