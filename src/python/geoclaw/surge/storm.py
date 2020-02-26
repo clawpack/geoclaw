@@ -303,7 +303,11 @@ class Storm(object):
          - *path* (string) Path to the file to be read.
          - *verbose* (bool) Output more info regarding reading.
         """
-        import pandas as pd
+        try:
+            import pandas as pd
+        except ImportError as e:
+            print("read_atcf currently requires pandas to work.")
+            raise e
 
         # See here for the ATCF format documentation:
         #   https://www.nrlmry.navy.mil/atcf_web/docs/database/new/abdeck.txt
@@ -391,7 +395,7 @@ class Storm(object):
         # Set NaNs to -1 to mark them as missing
         for ar in [self.max_wind_speed, self.central_pressure,
                    self.max_wind_radius, self.storm_radius, self.wind_speeds]:
-            ar[ar == numpy.nan] = -1.
+            ar[numpy.isnan(ar)] = -1.
 
         if self.max_wind_speed.min() == -1:
             warnings.warn('Some timesteps have missing max wind speed. These will not be written'
