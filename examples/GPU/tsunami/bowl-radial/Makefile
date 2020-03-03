@@ -21,26 +21,24 @@ PLOTDIR = _plots               # Directory for plots
 
 OVERWRITE ?= True                   # False ==> make a copy of OUTDIR first
 
-FC = pgi
 USE_CUDA = TRUE
-# FC = gfortran
-# USE_CUDA = FALSE
+FC = pgi
+CUDA_PATH ?= /usr/local/cuda-10.0
+CUDA_VERSION ?= 10.0
+CUDA_CC ?= cc60
  
  
-# DEBUG = TRUE
 DEBUG = FALSE
 
 CC = pgi
 USE_CPP = TRUE
 
 PROFILE = TRUE
-# PROFILE = FALSE 
 
 USE_OPENMP = TRUE
 
 VERBOSE = FALSE
 
-# USE_DOUBLE_PRECISION = FALSE
 USE_DOUBLE_PRECISION = TRUE
 
 DIM = 2
@@ -49,8 +47,6 @@ NUM_WAVES = 3
 NUM_COEFFS = 1
 USE_FWAVES = TRUE
 USE_CAPA = FALSE
-
-# Environment variable FC should be set to fortran compiler, e.g. gfortran
 
 # Compiler flags can be specified here or set as an environment variable
 FFLAGS ?= 
