@@ -22,8 +22,12 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
     use topo_module, only: aux_finalized
     use geoclaw_module, only: dry_tolerance, sea_level
     use refinement_module, only: varRefTime
-    use topo_module, only: aux_finalized
-
+    use qinit_module, only: variable_eta_init
+    use qinit_module, only: force_dry,use_force_dry,mx_fdry, my_fdry
+    use qinit_module, only: xlow_fdry, ylow_fdry, xhi_fdry, yhi_fdry
+    use qinit_module, only: dx_fdry, dy_fdry
+    use qinit_module, only: tend_force_dry
+    
     implicit none
 
     ! Input
@@ -49,6 +53,10 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
     real(kind=8) setflags(mitot,mjtot),maxauxdif
     integer :: jm, im, nm
     logical :: sticksoutxfine, sticksoutyfine,sticksoutxcrse,sticksoutycrse
+    real(kind=8) :: vetac(mic,mjc) ! for variable eta_init
+    real(kind=8) :: x,y, ddxy
+    logical :: use_force_dry_this_level
+
 
     ! External function definitions
     real(kind=8) :: get_max_speed
@@ -155,6 +163,24 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
     ! before interpolating:
     !-----------------------------
 
+    if (variable_eta_init) then
+        call set_eta_init(0,mic,mjc,xl,yb,dx_coarse,dy_coarse,time,vetac)
+      else
+        vetac = sea_level  ! same value everywhere
+      endif
+
+    
+    use_force_dry_this_level = use_force_dry
+    if (use_force_dry) then
+        ! check if force_dry resolution the same as this level:
+        ddxy = max(abs(dx-dx_fdry), abs(dy-dy_fdry))
+        use_force_dry_this_level = (ddxy < 0.01d0*min(dx_fdry,dy_fdry))
+        endif
+        
+    !if (use_force_dry_this_level .and. (time <= tend_force_dry)) then
+    !    write(6,*) '+++ using force_dry in filval, t = ',time
+    !    endif
+    
     ! Prepare slopes - use min-mod limiters
     do j=2, mjc-1
         do i=2, mic-1
@@ -163,7 +189,7 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
             do ii=-1,1
                 coarseval(2+ii) = valc(1,i+ii,j)  + auxc(1,i+ii,j)
                 if (valc(1,i+ii,j)  <= dry_tolerance) then
-                    coarseval(2+ii)=sea_level
+                    coarseval(2+ii) = vetac(i+ii,j)
                 end if
             end do
             s1p = coarseval(3) - coarseval(2)
@@ -175,7 +201,7 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
             do jj=-1,1
                 coarseval(2+jj) = valc(1,i,j+jj) + auxc(1,i,j+jj)
                 if (valc(1,i,j+jj) <= dry_tolerance) then
-                    coarseval(2+jj)=sea_level
+                    coarseval(2+jj) = vetac(i,j+jj)
                 end if
             end do
             s1p = coarseval(3) - coarseval(2)
@@ -197,13 +223,40 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
                                                           + yoff * slopey)
                        val(1,ifine,jfine) = max(0.d0, val(1,ifine,jfine)  &
                                                - aux(1,ifine,jfine))
+                                               
+                       x = xleft + (ifine-0.5d0)*dx
+                       y = ybot + (jfine-0.5d0)*dy
+
+                       ! Check cells newly initialized to wet using force_dry:
+                       if (use_force_dry_this_level .and. &
+                               (((coarseval(2) == vetac(i,j)) &
+                               .and. (val(1,ifine,jfine) > 0)) &
+                               .or. (time <= tend_force_dry))) then
+                           ! check if in force_dry region
+                           ii = int((x - xlow_fdry + 1d-7) / dx_fdry) + 1
+                           jj = int((y - ylow_fdry + 1d-7) / dy_fdry) + 1
+                           jj = my_fdry - jj  ! since index 1 corresponds to north edge
+                           if ((ii>=1) .and. (ii<=mx_fdry) .and. &
+                               (jj>=1) .and. (jj<=my_fdry)) then
+                               ! grid cell lies in region covered by force_dry,
+                               ! check if this cell is forced to be dry
+                               ! Otherwise don't change value set above:
+                               if (force_dry(ii,jj) == 1) then
+                                   val(1,ifine,jfine) = 0.d0
+                                   endif
+                               endif
+                                                              
+                           endif
+
+                                                    
                        finemass = finemass + val(1,ifine,jfine)
                        if (val(1,ifine,jfine) <= dry_tolerance) then
                           fineflag(1) = .true.
                           val(2,ifine,jfine) = 0.d0
                           val(3,ifine,jfine) = 0.d0
                        endif
-                    endif
+                       
+                    endif ! NEEDS_TO_BE_SET
                 end do
             end do
 

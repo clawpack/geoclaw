@@ -155,3 +155,4 @@ COMMON_SOURCES += \
   $(GEOLIB)/auxcoarsen.f \
   $(GEOLIB)/prepbigstep.f \
   $(GEOLIB)/prepregstep.f \
+  $(GEOLIB)/set_eta_init.f90 \
