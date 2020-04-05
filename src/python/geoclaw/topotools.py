@@ -971,6 +971,13 @@ class Topography(object):
         else:
             Z = self.Z
 
+        # check for NaNs:
+        num_nan = numpy.isnan(Z).sum()
+        if num_nan > 0:
+            print('*** Z contains %i nan values, replacing with %s' \
+                  % (num_nan, no_data_value))
+            Z = numpy.where(numpy.isnan(Z), no_data_value, Z)
+
         # also fill self.z in the same way for unstructured?
         
         if self.unstructured:
