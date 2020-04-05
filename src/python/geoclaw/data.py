@@ -242,15 +242,29 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         num_fgmax_grids = len(self.fgmax_grids)
         self.data_write(value=num_fgmax_grids,alt_name='num_fgmax_grids')
         self.data_write()
-        fgno = 0
+
+        fgno_unset = 0  # to use if fg.fgno not set by user
+        fgno_list = []  # to check for uniqueness of fgno's
+
         for fg in self.fgmax_grids:
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
             if fg.xy_fname is not None:
                 fg.xy_fname = os.path.abspath(os.path.join(\
                               os.path.dirname(out_file),fg.xy_fname))
-            fgno += 1
-            fg.fgno = fgno
+
+            if fg.fgno is None:
+                # not set by user in setrun
+                fgno_unset += 1
+                fg.fgno = fgno_unset
+
+            if fg.fgno in fgno_list:
+                msg = 'Trying to set fgmax grid number to fgno = %i' % fg.fgno \
+                      + '\n             but this fgno was already used' \
+                      + '\n             Set unique fgno for each fgmax grid' 
+                raise ValueError(msg)
+
+            fgno_list.append(fg.fgno)
             fg.write_to_fgmax_data(self._out_file)
         self.close_data_file()
 
