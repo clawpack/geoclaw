@@ -1,8 +1,23 @@
 
 subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
 
-    ! set variable eta_int in veta, based on dtopo subsidence or uplift.
-    ! called by qinit and also by filpatch and filval when refining.
+    ! This routine is called only if variable_eta_init = .true.
+    ! The input is a single grid patch at time t, as specified by
+    !     mbc,mx,my,xlow,ylow,dx,dy,t
+    ! The output is an array 
+    !     veta(1-mbc:mx+mbc,1-mbc:my+mbc)
+    ! with the desired initial surface elevation at all points on this patch.
+
+    ! This is called by qinit and also by filpatch and filval when refining.
+
+    ! This default version sets veta to the value sea_level everywhere and
+    ! then adjusts this based on any dtopo deformation that has occured
+    ! up to this time t, as determined by interpolation from the 
+    ! (possibly time-dependent) ! dtopo files.
+
+    ! There is also a commented-out section below indicating how you might set 
+    ! a higher value in some region that contains an onshore lake, for example.
+
 
     use topo_module
     use geoclaw_module, only: sea_level
@@ -18,8 +33,34 @@ subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
     integer :: i,j,i1,i2,j1,j2,idtopo,jdtopo,kdtopo, &
                index0_dtopowork,ij,m
     real(kind=8) :: x,y
+    real(kind=8) :: x1_lake,x2_lake,y1_lake,y2_lake, lake_level
 
     veta = sea_level  ! initialize to sea_level, update below at some (i,j)
+
+    if (.false.) then
+        ! This illustrates how you might set a higher value than sea_level
+        ! in a rectangle containing an onshore lake, as an example.
+        ! Depending on the geometry, a simple rectangle might not suffice.
+        ! What's below has been used for Lake Ozette on the Washington coast.
+        lake_level = 11.d0  ! meters relative to 0 datum of topofiles
+        x1_lake = -124.67d0
+        x2_lake = -124.58d0
+        y1_lake = 48.03d0
+        y2_lake = 48.16d0
+        i1 = max(int(floor((x1_lake - xlow)/dx)), 1)
+        i2 = min(int(floor((x2_lake - xlow)/dx)), mx)
+        j1 = max(int(floor((y1_lake - ylow)/dy)), 1)
+        j2 = min(int(floor((y2_lake - ylow)/dy)), my)
+
+        forall(i=i1:i2, j=j1:j2)
+            veta(i,j) = lake_level
+        end forall
+
+    endif
+
+    ! The code below adjusts veta values set above for any uplift or
+    ! subsidence found in this region at the current time t, which assumes
+    ! that the water surface moves with the grount initially.
 
     if (num_dtopo == 0) return
 
@@ -71,14 +112,9 @@ subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
                 jdtopo = int(floor((yhidtopo(m)-y)/dydtopo(m))) + 1
                 jdtopo = max(1, min(mydtopo(m)-1, jdtopo))
                 ij = index0_dtopowork + (jdtopo-1)*mxdtopo(m) + idtopo-1
+
                 veta(i,j) = veta(i,j) + dtopowork(ij)
 
-                ! print subsidence at location of interest for debugging:
-                if (.false. .and.(x>0.0).and.(x<0.0006).and.(y>0.0) &
-                     .and. (y<0.0006)) then
-                       write(6,*) '+++ i,j,veta:', i,j,veta(i,j)
-                       !write(6,*) '+++ idtopo,jdtopo,ij: ', idtopo,jdtopo,ij
-                      endif
                 enddo
             enddo
 
