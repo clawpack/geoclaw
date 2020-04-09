@@ -511,7 +511,7 @@ class DTopography(object):
         elif t >= self.times[-1]:
             return self.dZ[-1,:,:]
         else:
-            n = max(numpy.where(numpy.array(self.times)[0] <= t))
+            n = numpy.where(numpy.array(self.times) <= t)[0].max()
             t1 = self.times[n]
             t2 = self.times[n+1]
             dz = (t2-t)/(t2-t1) * self.dZ[n,:,:] + \
