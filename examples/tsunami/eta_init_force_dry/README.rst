@@ -28,9 +28,7 @@ Input data can be created via::
     make input
 
 This executes the Python script `make_input_files.py`, which was created from
-the Jupyter notebook `make_input_files.ipynb`.  A rendered version of the
-notebook is also stored as make_input_files.html, which explains the process
-used to generate the input data.
+the Jupyter notebook `make_input_files.ipynb`.  
 
 The input files should appear in a new subdirectory `input_files`.
 
@@ -43,8 +41,11 @@ using the settings in `setrun.py`.
 
 In addition, the notebook `run_geoclaw.ipynb` can be used to run a sequence of
 experiments and display the results, with some comments on what is
-illustrated in this example.   A rendered version of this notebook is
-available as `run_geoclaw.html`.
+illustrated in this example.
+
+Rendered versions of the Jupyter notebooks for this example can 
+be viewed from the `Clawpack gallery version of this file.
+<http://www.clawpack.org/gallery/_static/geoclaw/examples/tsunami/eta_init_force_dry/README.html>`__
 
 
 Version
