@@ -971,6 +971,13 @@ class Topography(object):
         else:
             Z = self.Z
 
+        # check for NaNs:
+        num_nan = numpy.isnan(Z).sum()
+        if num_nan > 0:
+            print('*** Z contains %i nan values, replacing with %s' \
+                  % (num_nan, no_data_value))
+            Z = numpy.where(numpy.isnan(Z), no_data_value, Z)
+
         # also fill self.z in the same way for unstructured?
         
         if self.unstructured:
@@ -1105,7 +1112,7 @@ class Topography(object):
 
     def plot(self, axes=None, contour_levels=None, contour_kwargs={}, 
              limits=None, cmap=None, add_colorbar=True, 
-             plot_box=False, fig_kwargs={}, data_break=0.):
+             plot_box=False, fig_kwargs={}, data_break=0., cb_kwargs={}):
         r"""Plot the topography.
 
         :Input:
@@ -1128,6 +1135,8 @@ class Topography(object):
            to break between water and land colormaps.
            Defaults to 0., but for some topo files may need to use e.g. 0.01
            Or may want to show plots at different tide stage.
+         - *cb_kwargs* (dict) - keyword arguments to be passed to colorbar
+           e.g. 'shrink', 'extend', 'label'.  Can also set 'title' for cbar
 
         :Output:
          - *axes* (matplotlib.pyplot.axes) - the axes on which plot created.
@@ -1165,7 +1174,7 @@ class Topography(object):
         else:
             topo_extent = limits
 
-        # Create color map - assume shore is at z = 0.0
+        # Create color map - assume shore is at z = data_break
         if cmap is None:
             land_cmap = colormaps.make_colormap({ 0.0:[0.1,0.4,0.0],
                                                  0.25:[0.0,1.0,0.0],
@@ -1193,8 +1202,20 @@ class Topography(object):
             plot = plottools.pcolorcells(self.X, self.Y, self.Z, 
                                          norm=norm, cmap=cmap)
         if add_colorbar:
-            cbar = plt.colorbar(plot, ax=axes)
-            cbar.set_label("Topography (m)")
+            try:
+                # this kwarg can't be passed directly:
+                cb_title = cb_kwargs.pop('title')
+            except:
+                cb_title = None
+            
+            cbar = plt.colorbar(plot, ax=axes, **cb_kwargs)
+
+            if cb_title is not None:
+                cbar.ax.set_title(cb_title)
+
+            if 'label' not in cb_kwargs.keys():
+                cbar.set_label('Topography (m)')
+
         # levels = range(0,int(-numpy.min(Z)),500)
 
         if (contour_levels is not None) and (not self.unstructured):

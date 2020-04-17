@@ -40,7 +40,7 @@ class FGmaxGrid(object):
         self.interp_method = 0    # 0 for pw const, 1 for bilinear
         self.arrival_tol = 1.e-2       # tolerance for flagging arrival
         #self.input_file_name = 'fgmax.txt'  # file for GeoClaw input data
-        self.fgno = 1  # FG number
+        self.fgno = None  # FG number
         self.xy_fname = None   # optional file name for separate list of points
                              # when point_style==0, distinct from header file
         self.write_xy_fname = False # controls whether xy_fname is created
