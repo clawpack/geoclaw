@@ -14,11 +14,19 @@ env['OMP_NUM_THREADS'] = '3'
 
 make_all.make_all(make_clean_first=True, env=env)
 
+run_notebooks = True  # run any *.ipynb files and create html versions?
+
+if run_notebooks:
+    make_all.make_notebook_htmls(env=env)
+
 
 print("\n-----------------------------------------------------------\n")
 
-all_ok = regression_tests.test_subdirs()
-if all_ok:
-    print("===> All tests pass")
-else:
-    print("===> Some test(s) failed")
+if 0:
+    # Not currently working since gallery links changed
+    # Needs more general rethinking
+    all_ok = regression_tests.test_subdirs()
+    if all_ok:
+        print("===> All tests pass")
+    else:
+        print("===> Some test(s) failed")
