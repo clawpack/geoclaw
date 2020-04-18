@@ -12,7 +12,7 @@ from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 
-from clawpack.geoclaw import topotools
+from clawpack.geoclaw import topotools, kmltools
 from six.moves import range
 
 try:
@@ -82,10 +82,10 @@ def setplot(plotdata):
     # Resolution (should be consistent with data)
     # Refinement levels : [2,6]; max level = 3; num_cells = [30,30]
     # rcl : resolution of the coarsest level in this figure
-    rcl = 1    # rcl*figsize = num_cells
+    rcl = 5    # choose so rcl*figsize = integer multiple of num_cells
     plotfigure.kml_figsize = [30.0,30.0]
     plotfigure.kml_dpi = rcl*2*6         # Resolve all three levels
-    plotfigure.kml_tile_images = False    # Tile images for faster loading.  Requires GDAL [False]
+    plotfigure.kml_tile_images = False    # Tile images for faster loading.  Requires GDAL
 
 
     # Water
@@ -97,7 +97,9 @@ def setplot(plotdata):
     plotitem.pcolor_cmax = cmax
 
     def kml_colorbar(filename):
-        geoplot.kml_build_colorbar(filename,cmap,cmin,cmax)
+        kmltools.kml_build_colorbar(filename,cmap=cmap,cmin=cmin,cmax=cmax,
+                                    label='meters', title='surface',
+                                    extend='both')
 
     plotfigure.kml_colorbar = kml_colorbar
 
@@ -105,7 +107,7 @@ def setplot(plotdata):
     # Figure for KML files (zoom)
     #----------------------------------------------------------
     plotfigure = plotdata.new_plotfigure(name='Sea Surface (zoom)',figno=2)
-    plotfigure.show = True
+    #plotfigure.show = False
 
     plotfigure.use_for_kml = True
     plotfigure.kml_use_for_initial_view = False  # Use large plot for view
@@ -128,11 +130,6 @@ def setplot(plotdata):
     plotitem.pcolor_cmap = cmap
     plotitem.pcolor_cmin = cmin
     plotitem.pcolor_cmax = cmax
-
-    def kml_colorbar(filename):
-        geoplot.kml_build_colorbar(filename,cmap,cmin,cmax)
-
-    plotfigure.kml_colorbar = kml_colorbar
 
 
     #-----------------------------------------
