@@ -124,7 +124,7 @@ def qinit(x,y):
     x0 = 0.0
     y0 = 40.0
     d = gcdist(x0,y0,x,y,Rearth)
-    ze = -(d/100e3)**2
+    ze = -0.5e-9 * d**2
     z = where(ze>-100., 20.e0*exp(ze), 0.)
     return z
 

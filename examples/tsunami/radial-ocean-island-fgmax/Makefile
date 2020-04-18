@@ -64,6 +64,7 @@ include $(CLAWMAKE)
 .PHONY: input all fgmax_plots
 
 input:
+	python maketopo.py
 	python make_input_files.py
 
 fgmax_plots:
