@@ -15,8 +15,6 @@ from clawpack.visclaw import gaugetools
 
 from clawpack.visclaw import particle_tools
 from clawpack.visclaw import legend_tools
-from importlib import reload
-reload(particle_tools)
 
 
 #--------------------------
@@ -50,7 +48,7 @@ def setplot(plotdata=None):
     gaugenos_stationary = [k for k in gauge_solutions.keys() \
                 if gauge_solutions[k].gtype=='stationary']
 
-    print('+++ gaugenos_lagrangian: ',gaugenos_lagrangian)
+    #print('+++ gaugenos_lagrangian: ',gaugenos_lagrangian)
     
     def add_particles(current_data):
         t = current_data.t
@@ -84,8 +82,10 @@ def setplot(plotdata=None):
         q = current_data.q
         h = q[0,:,:]
         hs = sqrt(q[1,:,:]**2 + q[2,:,:]**2)
-        s = where(h>1e-3, hs/h, 0.)
-        s = masked_where(h<1e-3, s)
+        where_hpos = (h > 1e-3)
+        s = zeros(h.shape)
+        s[where_hpos] = hs[where_hpos]/h[where_hpos]
+        s = masked_where(h<1e-3, s) # if you want 0's masked out
         #s = s * 1.94384  # convert to knots
         return s
 
