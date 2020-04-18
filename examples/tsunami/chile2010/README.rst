@@ -4,8 +4,18 @@
 Tsunami arising offshore Maule, Chile, Feb. 27, 2010 
 =====================================================
 
-This uses a very simple source model with a single fault plane and constant
-slip, from an early inversion by the USGS.  The input parameters are
+For a version that walks you through various parameter choices, see 
+these notebooks in the `apps repository <http://www.clawpack.org/apps.html>`__
+
+- `$CLAW/apps/notebooks/geoclaw/chile2010a`
+- `$CLAW/apps/notebooks/geoclaw/chile2010b`
+
+Rendered versions of these notebooks can be viewed in 
+`the Clawpack Gallery of Jupyter Notebooks
+<http://www.clawpack.org/gallery/notebooks.html>`__
+
+This example uses a very simple source model with a single fault plane and
+constant slip, from an early inversion by the USGS.  The input parameters are
 specified in `usgs100227.cfg` and converted into the dtopo file
 `usgs100227.txt` by the script `maketopo.py`.  This can be run via::
 
@@ -13,8 +23,8 @@ specified in `usgs100227.cfg` and converted into the dtopo file
 
 which also downloads a topo file for the ocean bathymetry.
 This bathymetry originally came from the NOAA National Geophysical Data
-Center (NGDC)
-using `Design-a-grid <http://www.ngdc.noaa.gov/mgg/gdas/gd_designagrid.html>`_ .
+Center (NGDC), now NCEI (see `Sources of tsunami data
+<http://www.clawpack.org/tsunamidata.html>`__).
 
 A single gauge captures the sea surface elevation at the location of 
 `DART buoy 32412
@@ -54,4 +64,9 @@ files.
 
 See `<http://www.clawpack.org/googleearth_plotting.html>`_ for
 documentation.
+
+Version
+-------
+
+- Updated for v5.7.0 on 18 April 2020
 
