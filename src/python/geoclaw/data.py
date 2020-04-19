@@ -443,7 +443,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("storm_file", None) # File(s) containing data
 
         
-    def write(self,out_file='./surge.data',data_source="setrun.py"):
+    def write(self,out_file='surge.data',data_source="setrun.py"):
         """Write out the data file to the path given"""
 
         # print "Creating data file %s" % out_file
@@ -591,7 +591,7 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
         self.add_attribute('wave_tolerance', [1e-1, 2e-1])
         self.add_attribute('dry_limit', False)
 
-    def write(self, out_file='./multilayer.data', datasource="setrun.py"):
+    def write(self, out_file='multilayer.data', datasource="setrun.py"):
 
         self.open_data_file(out_file, datasource)
 

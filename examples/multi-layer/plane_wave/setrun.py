@@ -38,7 +38,7 @@ class QinitMultilayerData(clawpack.geoclaw.data.QinitData):
         self.add_attribute("angle", 0.0)
         self.add_attribute("sigma", 0.02)
 
-    def write(self, data_source='setrun.py'):
+    def write(self, out_file='qinit.data', data_source='setrun.py'):
 
         # Initial perturbation
         self.open_data_file('qinit.data',data_source)
