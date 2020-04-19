@@ -80,8 +80,8 @@ def setplot(plotdata):
     # Land
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
     plotitem.plot_var = geoplot.land
-    plotitem.pcolor_cmap = colormaps.all_white  # to print better in B&W
-    #plotitem.pcolor_cmap = geoplot.land_colors
+    #plotitem.pcolor_cmap = colormaps.all_white  # to print better in B&W
+    plotitem.pcolor_cmap = geoplot.land_colors
     plotitem.pcolor_cmin = 0.0
     plotitem.pcolor_cmax = 100.0
     plotitem.add_colorbar = False
@@ -133,14 +133,14 @@ def setplot(plotdata):
     plotitem.pcolor_cmax = 1.0
     plotitem.add_colorbar = False
     plotitem.amr_celledges_show = [0]
-    plotitem.patchedges_show = 1
+    plotitem.patchedges_show = 0
 
     # Land
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
     plotitem.show = True
     plotitem.plot_var = geoplot.land
-    plotitem.pcolor_cmap = colormaps.all_white  # to print better in B&W
-    #plotitem.pcolor_cmap = geoplot.land_colors
+    #plotitem.pcolor_cmap = colormaps.all_white  # to print better in B&W
+    plotitem.pcolor_cmap = geoplot.land_colors
     plotitem.pcolor_cmin = 0.0
     plotitem.pcolor_cmax = 100.0
     plotitem.add_colorbar = False
@@ -179,7 +179,7 @@ def setplot(plotdata):
     # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes()
     plotaxes.xlimits = [6000, 14000]
-    plotaxes.ylimits = [-2.0, 3.0]
+    plotaxes.ylimits = [-2.5, 4.0]
     plotaxes.title = 'Surface'
 
     # Plot surface as blue curve:
@@ -262,7 +262,7 @@ def setplot(plotdata):
         try:
             timing_plotdir = plotdata.plotdir + '/timing_figures'
             os.system('mkdir -p %s' % timing_plotdir)
-            units = {'comptime':'seconds', 'simtime':'hours', 'cell':'billions'}
+            units = {'comptime':'seconds', 'simtime':'hours', 'cell':'millions'}
             plot_timing_stats.make_plots(outdir=plotdata.outdir, make_pngs=True,
                                           plotdir=timing_plotdir, units=units)
             os.system('cp %s/timing.* %s' % (plotdata.outdir, timing_plotdir))
