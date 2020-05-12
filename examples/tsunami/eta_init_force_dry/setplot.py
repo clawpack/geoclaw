@@ -16,11 +16,6 @@ from clawpack.geoclaw import topotools
 from six.moves import range
 import os,sys
 
-
-new_code = '../../new_python'
-print('Adding %s to path' % new_code)
-sys.path.insert(0, new_code)
-
 cmax = 0.5
 cmin = -cmax
 
