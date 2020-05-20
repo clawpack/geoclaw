@@ -354,7 +354,10 @@ class Storm(object):
             #             self.time_offset = self.t[i]
 
             # Classification, note that this is not the category of the storm
-            self.classification[i] = data[10]
+            try:
+                self.classification[i] = data[10]
+            except IndexError:
+                self.classification[i] = ''
 
             # Parse eye location - longitude/latitude order
             if data[6][-1] == "N":
@@ -373,7 +376,7 @@ class Storm(object):
                 self.max_wind_speed[i] = -1
             try:
                 self.central_pressure[i] = units.convert(float(data[9]), 'mbar', 'Pa')
-            except ValueError:
+            except (ValueError, IndexError):
                 self.central_pressure[i] = -1
 
             # if this is a shortened line - does not contain max wind radius
