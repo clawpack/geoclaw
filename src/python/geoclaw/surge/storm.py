@@ -1137,8 +1137,29 @@ class Storm(object):
     def plot(self, axes=None, intensity=False, limits=None, track_color='red',
                    category_color=None, categorization="NHC", 
                    plot_package=None):
-        r"""Plot the track and optionally the strength of the storm
+        r"""Plot the track and optionally the intensity of the storm
 
+        Easily plot the track and intensity of a storm using a mapping package.
+
+        :Input:
+         - *axes* (matplotlib.pyplot.axes) Axes to plot into.  Default is *None*
+         - *intensity* (bool) Plot the intensity of storm along the track.  
+           Defaults to *False*.
+         - *limits* (list) Limits of the plot specified.  Defaults to either 
+           using the plotting package's default or the max and min of the 
+           longitude and latitude of the storm track.
+         - *track_color* (str) String or specification of plotting color to use 
+           for the track if *intensity* is not being plotted.
+         - *category_color* (dict) Dictionary containing mapping between 
+           category numerical value and colors.  Defaults to [0, 5] -> ['red', 
+           'yellow', 'orange', 'green', 'blue', 'gray']
+         - *categorization* (str) Type of categorization, defaults to *"NHC"*
+         - *plot_package* (str) Package that will do the plotting.  Available 
+           packages include 'cartopy', 'basemap' and 'basic'.  Checks to see 
+           what packages are available if None is given.
+
+        :Output:
+         - (matplotlib.pyplot.axes) Axes object that was plotted into.
         """
 
         import matplotlib.pyplot as plt
@@ -1165,9 +1186,9 @@ class Storm(object):
             fig = plt.figure()
             axes = fig.add_subplot(1, 1, 1)
 
-        # limits = ((long), (lat))
-        # if limits is None:
-        #     raise NotImplementedError("Need to do this...")
+        # Set limits to the plot
+        if limits is not None:
+            warnings.warn("Limits to the storm track plot are not implemented.")
 
         # Create category dictionary mapping
         if category_color is None:
