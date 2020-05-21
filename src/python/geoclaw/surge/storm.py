@@ -1135,29 +1135,41 @@ class Storm(object):
     # =========================================================================
     # Other Useful Routines
     def plot(self, axes=None, intensity=False, limits=None, track_color='red',
-                   category_colors=None, categorization="NHC"):
+                   category_color=None, categorization="NHC", 
+                   plot_package=None):
         r"""Plot the track and optionally the strength of the storm
 
         """
 
-        # TODO:  Switch to cartopy plotting
         import matplotlib.pyplot as plt
-        try:
-            from mpl_toolkits.basemap import Basemap
-        except ImportError as e:
-            print("Plotting of storms is dependent on the Basemap package.")
-            print("Given that this package has been end-of-lifed this will be")
-            print("replaced by another package in the future.")
-            raise e
 
+        # No package given, check for what is available
+        if plot_package is None:
+            # Check for cartopy
+            try:
+                import cartopy
+                plot_package = "cartopy"
+            except ImportError as e:
+                # Check for basemap
+                try:
+                    from mpl_toolkits.basemap import Basemap
+                    plot_package = "basemap"
+                except ImportError as e:
+                    plot_package = "basic"
+                else:
+                    warnings.warn("The package basemap has been EoF and is" +
+                                  "not available in Python 3.x.")
+
+        # Create axes if not given
         if axes is None:
             fig = plt.figure()
             axes = fig.add_subplot(1, 1, 1)
 
         # limits = ((long), (lat))
-        if limits is None:
-            raise NotImplementedError("Need to do this...")
+        # if limits is None:
+        #     raise NotImplementedError("Need to do this...")
 
+        # Create category dictionary mapping
         if category_color is None:
             category_color = {5: 'red',
                               4: 'yellow',
@@ -1165,21 +1177,45 @@ class Storm(object):
                               2: 'green',
                               1: 'blue',
                               0: 'gray'}
-
-        mapping = Basemap()
-        longitude, latitude = mapping(self.eye_location[:, 0],
-                                      self.eye_location[:, 1])
         category = self.category(categorization=categorization)
-        for i in range(len(longitude)):
-            if intensity:
-                color = category_color[category[i]]
-            else:
-                color = track_color
-            mapping.plot(longitude[i:i + 2], latitude[i:i + 2], color=color)
 
-        mapping.drawcoastlines()
-        mapping.drawcountries()
-        mapping.fillcontinents()
+        # Cartopy plotting
+        if plot_package.lower() is 'cartopy':
+            raise NotImplementedError("Cartopy plotting not yet implemented.")
+
+        # Basemap plotting
+        elif plot_package.lower() is 'basemap':
+            mapping = Basemap()
+            longitude, latitude = mapping(self.eye_location[:, 0],
+                                          self.eye_location[:, 1])
+            for i in range(len(longitude)):
+                if intensity:
+                    color = category_color[category[i]]
+                else:
+                    color = track_color
+                mapping.plot(longitude[i:i + 2], latitude[i:i + 2], color=color)
+
+            mapping.drawcoastlines()
+            mapping.drawcountries()
+            mapping.fillcontinents()
+
+        # Basic plotting :-(
+        else:
+            longitude = self.eye_location[:, 0]
+            latitude = self.eye_location[:, 1]
+            for i in range(len(longitude)):
+                if intensity:
+                    color = category_color[category[i]]
+                else:
+                    color = track_color
+                axes.plot(longitude[i:i + 2], latitude[i:i + 2], color=color)
+
+            axes.set_xlabel("Longitude")
+            axes.set_ylabel("Latitude")
+
+        # TODO: Add colorbar for category color
+        if intensity:
+            pass
 
         return axes
 
