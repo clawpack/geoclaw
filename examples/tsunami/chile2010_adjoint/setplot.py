@@ -132,7 +132,9 @@ def setplot(plotdata=None):
     plotaxes.title = 'Adjoint flag'
 
     def fixup(current_data):
+        from pylab import title
         addgauges(current_data)
+        title('Adjoint flagging indicator')
 
     plotaxes.afteraxes = fixup
 
