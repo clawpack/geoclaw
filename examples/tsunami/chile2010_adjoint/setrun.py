@@ -347,11 +347,48 @@ def setrun(claw_pkg='geoclaw'):
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
 
-    # all 3 levels anywhere, based on flagging:
-    rundata.regiondata.regions.append([1, 3, 0., 1e9, -220,0,-90,90])
+    # Regions can still be specified this way for backward compatibility,
+    # but the new flagregions approach below is preferable so this is 
+    # no longer used here.
+
+    # allow 3 levels anywhere, based on flagging:
+    #rundata.regiondata.regions.append([1, 3, 0., 1e9, -220,0,-90,90])
 
     # earthquake source region - force refinement initially:
-    rundata.regiondata.regions.append([3, 3, 0., 200., -85,-70,-38,-25])
+    #rundata.regiondata.regions.append([3, 3, 0., 200., -85,-70,-38,-25])
+
+    # ---------------
+    # NEW flagregions
+    # ---------------
+
+    flagregions = rundata.flagregiondata.flagregions  # initialized to []
+
+    # now append as many flagregions as desired to this list:
+    from clawpack.amrclaw.data import FlagRegion
+
+    # Allow 3 levels over entire domain:
+    flagregion = FlagRegion(num_dim=2)
+    flagregion.name = 'Region_domain'
+    flagregion.minlevel = 1
+    flagregion.maxlevel = 3
+    flagregion.t1 = 0.
+    flagregion.t2 = 1e9
+    flagregion.spatial_region_type = 1  # Rectangle
+    flagregion.spatial_region = [clawdata.lower[0],clawdata.upper[0],
+                                 clawdata.lower[1],clawdata.upper[1]]
+    flagregions.append(flagregion)
+
+    # Force 2 levels around source region initially:
+    flagregion = FlagRegion(num_dim=2)
+    flagregion.name = 'Region_source'
+    flagregion.minlevel = 2
+    flagregion.maxlevel = 2
+    flagregion.t1 = 0.
+    flagregion.t2 = 200.
+    flagregion.spatial_region_type = 1  # Rectangle
+    flagregion.spatial_region = [-85,-70,-38,-25]
+    flagregions.append(flagregion)
+
 
     # ---------------
     # Gauges:
