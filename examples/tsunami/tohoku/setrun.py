@@ -243,13 +243,12 @@ def setrun(claw_pkg='geoclaw'):
     # Gauges:
     # ---------------
     gauges = rundata.gaugedata.gauges
+
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
     gauges.append([1123, 203.52825, 20.9021333, 7.0*3600., 1.e9]) #Kahului
-    #gauges.append([5680, 203.52333, 20.895, 7.0*3600., 1.e9]) #TG Kahului
+
     # more accurate coordinates from Yong Wei at PMEL:
     gauges.append([5680, 203.530944, 20.895, 7.0*3600., 1.e9]) #TG Kahului
-
-
 
 
     # --------------
@@ -286,7 +285,7 @@ def setrun(claw_pkg='geoclaw'):
     amrdata = rundata.amrdata
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 4   # Set to 6 originally
+    amrdata.amr_levels_max = 5   # Set to 6 originally
 
     # List of refinement ratios at each level (length at least amr_level_max-1)
     # 2 degree, 24', 4', 1', 10", 1/3"
@@ -331,30 +330,35 @@ def setrun(claw_pkg='geoclaw'):
     # ---------------
     regions = rundata.regiondata.regions
 
-    # Region 0 : Global region
-    regions.append([1, 2, 0., 1e9, 0, 360, -90, 90])
+    inf = 1e9
 
-    # Region 1 : (from the dtopo file, below)
+    # Region 0 : Global region.  This assures a maximum refinement in any 
+    # regions not covered by other regions listed below.
+    regions.append([1, 2, 0., inf, 0, 360, -90, 90])
+
+    # Region 1 : (from the dtopo file, below).  
+    # Time interval taken from dtopo file : [0,1]
     regions.append([3, 3, 0, 1, 135., 150., 30., 45.])
 
-    # Region 2 : Large region encompassing lower 3/4 of domain (0,18000)
+    # Region 2 : Large region encompassing lower 3/4 of domain.
+    # Time interval :  (0,18000)
     regions.append([1, 3, 0., 5.*3600., 132., 220., 5., 40.])
 
-    # Region 3 : Region including all Hawaiian Islands (18000,28800)
+    # Region 3 : Region including all Hawaiian Islands.
+    # Time interval  (18000,28800)
     regions.append([1, 3, 5.*3600.,  8.*3600., 180., 220., 5., 40.])
 
-    # Region 4 : Region including Molekai and Maui (23400.0, inf)
-    regions.append([4, 4, 6.5*3600., 1e9, 202.5,204,20.4,21.4])
+    # Region 4 : Region including Molekai and Maui. 
+    # Time interval : (23400.0, inf)
+    regions.append([4, 4, 6.5*3600., inf, 202.5,204,20.4,21.4])
 
-    # Region 5 : Strip including north shore of Maui (25200, inf)
-    regions.append([5, 5, 7.*3600., 1e9, 203.0, 203.7, 20.88333, 21.])
+    # Region 5 : Strip including north shore of Maui.
+    # Time interval :  (25200, inf)
+    regions.append([5, 5, 7.*3600., inf, 203.0, 203.7, 20.88333, 21.])
 
-    # Region 6 :  Includes port at Kailua  (26100.0, inf)
-    #regions.append([6, 6, 7.25*3600., 1e9, 203.516666,203.55,  20.8875, 20.905555])
-    regions.append([6, 6,  7.25*3600., 1e9, 203.52,    203.537, 20.89,   20.905])
-
-    #regions.append([7, 7, 7.25*3600., 1e9, 203.52,203.535,20.892,20.904])
-    #regions.append([6, 6, 7.*3600.,   1e9, 203.25,203.36,20.84,20.90])
+    # Region 6 :  Includes port at Kailua.
+    # Time interval :  (26100.0, inf)
+    regions.append([6, 6,  7.25*3600., inf, 203.52,    203.537, 20.89,   20.905])
 
 
     #  ----- For developers -----
@@ -420,7 +424,9 @@ def setgeo(rundata):
 
     # == setdtopo.data values ==
     # [dtype, minlevel, maxlevel, 'topo']
-    rundata.dtopo_data.dtopofiles = [[1, 3, 3, topodir + 'Fujii.txydz']]
+
+    # Region 1, above handles this region.  
+    rundata.dtopo_data.dtopofiles = [[1, 1, 1, topodir + 'Fujii.txydz']]
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type =  0
