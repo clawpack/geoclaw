@@ -299,7 +299,7 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
         ratio_y = real(refinement_ratio_y,kind=8)  ! needs to be real for "floor" call below
         ratio_x = real(refinement_ratio_x,kind=8)
         ! Loop through patch to be filled, includes multiple coarse cells
-         do j_fine = 1, my_patch
+        do j_fine = 1, my_patch
             j_coarse     = floor((j_fine + jlo - 1) / ratio_y) - jplo + 1
             ycent_coarse = ylow_coarse + (j_coarse-.5d0)*dy_coarse
             ycent_fine   = ylower + (j_fine-1+jlo + .5d0)*dy_fine
@@ -370,8 +370,9 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
 
         ! Momentum Interpolation
         do n = 2, nvar
-          do j_coarse = 2, my_coarse - 1
-            do i_coarse = 2, mx_coarse - 1
+            slope = 0.d0  ! reinitialize for each var
+            do j_coarse = 2, my_coarse - 1
+                do i_coarse = 2, mx_coarse - 1
 
                     ! Determine slopes for interpolation
                     down_slope = (valcrse(ivalc(n,i_coarse,j_coarse)) - valcrse(ivalc(n,i_coarse-1,j_coarse)))
