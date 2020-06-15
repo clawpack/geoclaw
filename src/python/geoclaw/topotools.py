@@ -1747,8 +1747,21 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     else: 
         f = netCDF4.Dataset(path, 'r')
 
-    x = f.variables['lon']
-    y = f.variables['lat']
+    if 'lon' in f.variables:
+        x = f.variables['lon']
+    elif 'x' in f.variables:
+        x = f.variables['x']
+    else:
+        print('*** f.variables = ',f.variables)
+        raise ValueError("*** Unrecognized x, lon in netCDF file")
+
+    if 'lat' in f.variables:
+        y = f.variables['lat']
+    elif 'y' in f.variables:
+        y = f.variables['y']
+    else:
+        print('*** f.variables = ',f.variables)
+        raise ValueError("*** Unrecognized y, lat in netCDF file")
 
     # for selecting subset based on extent, convert to arrays if netCDF4 used:
     #if not return_xarray:
@@ -1764,6 +1777,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         elif 'elevation' in f.variables:
             zvar = 'elevation'
         else:
+            print('*** f.variables = ',f.variables)
             raise ValueError("*** Unrecognized zvar in netCDF file")
 
     if extent == 'all':
