@@ -14,7 +14,7 @@ try:
 except:
     raise Exception("*** Must first set CLAW environment variable")
 
-topodir = '../../../scratch'
+topodir = os.path.join(CLAW, 'geoclaw', 'scratch')
 if not os.path.isdir(topodir):
     raise Exception("*** Missing topo directory: %s" % topodir)
 
@@ -94,7 +94,6 @@ def setrun(claw_pkg='geoclaw'):
 
     # Index of aux array corresponding to capacity function, if there is one:
     clawdata.capa_index = 2
-
 
     # -------------
     # Initial time:

@@ -406,7 +406,7 @@ def setplot(plotdata):
     plotdata.print_format = 'png'            # file format
     plotdata.print_framenos = 'all'         # list of frames to print
     plotdata.print_gaugenos = 'all'          # list of gauges to print
-    plotdata.print_fignos = [4,300,301]           # list of figures to print
+    plotdata.print_fignos = [1,2,3,300,301]           # list of figures to print
     plotdata.html = True                     # create html files of plots?
     plotdata.html_homelink = '../README.html'   # pointer for top of index
     plotdata.latex = False                    # create latex file of plots?
@@ -414,7 +414,7 @@ def setplot(plotdata):
     plotdata.latex_framesperline = 1         # layout of plots
     plotdata.latex_makepdf = False           # also run pdflatex?
 
-    plotdata.kml = True
+    plotdata.kml = False
     #plotfigure.kml_url = 'http://math.boisestate.edu/~calhoun/visclaw/GoogleEarth/tohoku'
 
     return plotdata
