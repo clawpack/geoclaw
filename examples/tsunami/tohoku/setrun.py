@@ -421,7 +421,7 @@ def setgeo(rundata):
     # == settopo.data values ==
     topofiles = rundata.topo_data.topofiles
     topofiles.append([3, 1, 1, 0.0, 1e10, os.path.join(topodir,'etopo1min130E210E0N60N.asc')])
-    topofiles.append([3, 1, 1, 0.0, 1e10, os.path.join(topodir,'hawaii_6s.txt')])
+    # topofiles.append([3, 1, 1, 0.0, 1e10, os.path.join(topodir,'hawaii_6s.txt')])
     topofiles.append([3, 1, 1, 0., 1.e10, os.path.join(topodir,'kahului_1s.txt')])
 
 

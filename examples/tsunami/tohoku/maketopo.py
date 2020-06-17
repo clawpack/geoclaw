@@ -33,10 +33,10 @@ def get_topo(makeplots=False):
     clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
             file_name=topo_fname, verbose=True)
 
-    topo_fname = 'hawaii_6s.txt'
-    url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
-    clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
-            file_name=topo_fname, verbose=True)
+    # topo_fname = 'hawaii_6s.txt'
+    # url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
+    # clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
+    #         file_name=topo_fname, verbose=True)
 
     topo_fname = 'kahului_1s.txt'
     url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
