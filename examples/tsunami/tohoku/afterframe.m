@@ -10,13 +10,11 @@ c1 = -0.1;
 c2 = 0.1;
 caxis([c1,c2]);
 
-% set(gca,'color',[101,67,33]/255)
 set(gca,'zlim',[-10,1])
 
-hold on;
+% Adds gauges (doesn't replace the figure) 
 add_gauges('geoclaw');
 add_regions(t,'geoclaw');
-hold off;
 
 fprintf('%20s %12.4e\n','qmin',qmin);
 fprintf('%20s %12.4e\n','qmax',qmax);
@@ -27,6 +25,7 @@ axis([132 210 9 53])
 daspect([1 1 1]);
 set(gca,'fontsize',16);
 
+% Use these zoom regions to see finer resolution grids. 
 % Zoom Frame = 2
 % axis([134.6060,  164.9044,   28.2413,   45.3327])
 
