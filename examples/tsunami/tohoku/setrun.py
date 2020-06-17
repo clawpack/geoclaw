@@ -9,8 +9,12 @@ that will be read in by the Fortran code.
 import os
 import numpy as np
 
-HOME = os.environ['HOME']
-topodir = './topo/'
+try:
+    CLAW = os.environ['CLAW']
+except:
+    raise Exception("*** Must first set CLAW environment variable")
+
+topodir = '../../../scratch'
 if not os.path.isdir(topodir):
     raise Exception("*** Missing topo directory: %s" % topodir)
 
@@ -417,16 +421,16 @@ def setgeo(rundata):
 
     # == settopo.data values ==
     topofiles = rundata.topo_data.topofiles
-    topofiles.append([3, 1, 1, 0.0, 1e10, topodir+'etopo1min130E210E0N60N.asc'])
-    topofiles.append([3, 1, 1, 0.0, 1e10, topodir+'hawaii_6s.txt'])
-    topofiles.append([3, 1, 1, 0., 1.e10, topodir+'kahului_1s.txt'])
+    topofiles.append([3, 1, 1, 0.0, 1e10, os.path.join(topodir,'etopo1min130E210E0N60N.asc')])
+    topofiles.append([3, 1, 1, 0.0, 1e10, os.path.join(topodir,'hawaii_6s.txt')])
+    topofiles.append([3, 1, 1, 0., 1.e10, os.path.join(topodir,'kahului_1s.txt')])
 
 
     # == setdtopo.data values ==
     # [dtype, minlevel, maxlevel, 'topo']
 
     # Region 1, above handles this region.  
-    rundata.dtopo_data.dtopofiles = [[1, 1, 1, topodir + 'Fujii.txydz']]
+    rundata.dtopo_data.dtopofiles = [[1, 1, 1, os.path.join(topodir,'Fujii.txydz')]]
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type =  0
