@@ -17,11 +17,10 @@ import clawpack.clawutil.data
 try:
     CLAW = os.environ['CLAW']
 except:
-    raise Exception("*** Must first set CLAW enviornment variable")
+    raise Exception("*** Must first set CLAW environment variable")
 
 # Scratch directory for storing topo and dtopo files:
-# scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
-scratch_dir = '../../../scratch/'
+scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
 
 def get_topo(makeplots=False):
     """
