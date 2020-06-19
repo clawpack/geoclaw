@@ -429,7 +429,7 @@ def setgeo(rundata):
     # [dtype, minlevel, maxlevel, 'topo']
 
     # Region 1, above handles this region.  
-    rundata.dtopo_data.dtopofiles = [[1, 1, 1, os.path.join(topodir,'Fujii.txydz')]]
+    rundata.dtopo_data.dtopofiles = [[1, 1, 1, os.path.join(topodir,'fujii.txydz')]]
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type =  0
@@ -454,5 +454,8 @@ def setgeo(rundata):
 if __name__ == '__main__':
     # Set up run-time parameters and write all data files.
     import sys
+    from clawpack.geoclaw import kmltools
     rundata = setrun(*sys.argv[1:])
     rundata.write()
+
+    kmltools.make_input_data_kmls(rundata)
