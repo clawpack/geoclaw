@@ -247,7 +247,8 @@ c
  81          tlevel(i) = tlevel(lbase)
 c
 c          MJB: modified to check level where new grids start, which is lbase+1
-          if (verbosity_regrid.ge.lbase+1) then
+          !if (verbosity_regrid.ge.lbase+1) then
+          if (.false.) then  ! don't need to print these every time
                  do levnew = lbase+1,lfine
                      write(6,1006) intratx(levnew-1),intraty(levnew-1),
      &                             kratio(levnew-1),levnew
