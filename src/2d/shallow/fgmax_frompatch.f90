@@ -142,10 +142,25 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             ! fgmax points are on masked grid giving index of each point,
             ! so we don't need to search through all fg%npts points.
             ! instead just loop over part of masked grid intersecting patch:
+
+            ! June 2020: RJL Fixed index error arising when 
+            !    x1 close to fg%xll (and/or y1 close to fg%yll),
+            !    due to fact that int(A) = sgn(A)*floor(abs(A)) returns 0
+            !    when A is between -1 and +1 regardless of sign
+            !    Hence i2_fg might have been 2 when it should have been 1
             
-            i1_fg = max(int((x1 - fg%xll) / fg%dx + 2), 1)
+            if (x1 <= fg%xll) then
+                i1_fg = 1
+            else
+                i1_fg = max(int((x1 - fg%xll) / fg%dx + 2), 1)
+            endif
             i2_fg = min(int((x2 - fg%xll) / fg%dx + 1), fg%nx)
-            j1_fg = max(int((y1 - fg%yll) / fg%dy + 2), 1)
+
+            if (y1 <= fg%yll) then
+                j1_fg = 1
+            else
+                j1_fg = max(int((y1 - fg%yll) / fg%dy + 2), 1)
+            endif
             j2_fg = min(int((y2 - fg%yll) / fg%dy + 1), fg%ny)
             
             
@@ -155,7 +170,7 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             !write(6,602) fg%xll, fg%xll+(fg%nx-1)*fg%dx, &
             !             fg%yll, fg%yll+(fg%ny-1)*fg%dy
             !write(6,603) i1,i2,j1,j2, i1_fg, i2_fg, j1_fg, j2_fg
- 602        format('+++ xy: ',4f10.3)
+ 602        format('+++ xy: ',4f13.6)
  603        format('+++ ij: ',8i7)
 
  
