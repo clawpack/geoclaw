@@ -143,11 +143,11 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             ! so we don't need to search through all fg%npts points.
             ! instead just loop over part of masked grid intersecting patch:
 
-            ! June 2020: RJL Fixed index error arising when 
-            !    x1 close to fg%xll (and/or y1 close to fg%yll),
+            ! June 2020: RJL Fixed index error arising when x1 close to fg%xll
             !    due to fact that int(A) = sgn(A)*floor(abs(A)) returns 0
-            !    when A is between -1 and +1 regardless of sign
-            !    Hence i2_fg might have been 2 when it should have been 1
+            !    when A is between -1 and +1 regardless of sign.
+            !    Hence i1_fg might have been 2 when it should have been 1.
+            !    And similarly in y direction.
             
             if (x1 <= fg%xll) then
                 i1_fg = 1
