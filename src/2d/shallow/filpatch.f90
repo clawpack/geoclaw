@@ -291,7 +291,7 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
                 up_slope = eta_coarse(i_coarse,j_coarse+1) - eta_coarse(i_coarse,j_coarse)
                 if (up_slope * down_slope > 0.d0) then
                     slope(2,i_coarse,j_coarse) = min(abs(up_slope), abs(down_slope)) &
-                        * sign(1.d0,eta_coarse(i_coarse+1,j_coarse) - eta_coarse(i_coarse-1,j_coarse))
+                        * sign(1.d0,eta_coarse(i_coarse,j_coarse+1) - eta_coarse(i_coarse,j_coarse-1))
                 endif
             enddo
         enddo
