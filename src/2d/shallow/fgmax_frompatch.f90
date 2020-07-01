@@ -20,7 +20,7 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
     type(fgrid), pointer :: fg
     integer :: ifg,k,mv, fg_klist_length, indexk
     real(kind=8) :: h,B,eta
-    real(kind=8) :: x1,x2,y1,y2,x,y,xupper,yupper
+    real(kind=8) :: x1,x2,y1,y2,x,y,xupper,yupper,eps
     integer :: i1,i2,j1,j2
     integer :: clock_start, clock_finish, clock_rate
     integer :: mythread, omp_get_thread_num
@@ -37,6 +37,8 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
         return
         endif 
 
+    eps = min(dx,dy)*0.01d0  ! buffer width to avoid rounding error issues
+    
     !write(61,*) '++++ In frompatch, level,mx,my,xlower,ylower'
     !write(61,*) level,mx,my,xlower,ylower
     
@@ -99,10 +101,10 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
 
         xupper = xlower+mx*dx
         yupper = ylower+my*dy
-        x1 = max(xlower, fg%x1bb) !- dx
-        x2 = min(xupper, fg%x2bb) !+ dx
-        y1 = max(ylower, fg%y1bb) !- dy
-        y2 = min(yupper, fg%y2bb) !+ dy
+        x1 = max(xlower, fg%x1bb) - eps
+        x2 = min(xupper, fg%x2bb) + eps
+        y1 = max(ylower, fg%y1bb) - eps
+        y2 = min(yupper, fg%y2bb) + eps
         if (FG_DEBUG) then
             write(61,*) 'xlower,xupper: ',xlower,xupper
             write(61,*) 'ylower,yupper: ',ylower,yupper
@@ -124,6 +126,8 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
                     
         
         ! No longer create mask, just use i1,i2, j1,j2 directly
+        ! only values(:,i1:i2,j1:j2) on this patch are needed for fgmax
+        ! adding 0.5d0 cellwidth necessary for bilinear interp option
         i1 = max(int((x1 - xlower + 0.5d0*dx) / dx), 0)
         i2 = min(int((x2 - xlower + 0.5d0*dx) / dx) + 1, mx+1)
         j1 = max(int((y1 - ylower + 0.5d0*dy) / dy), 0)
@@ -148,6 +152,10 @@ subroutine fgmax_frompatch(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             !    when A is between -1 and +1 regardless of sign.
             !    Hence i1_fg might have been 2 when it should have been 1.
             !    And similarly in y direction.
+            
+            ! reset eps since now we are computing ranges of indices 
+            ! on the fgmax grid that lie within this patch:
+            eps = min(fg%dx, fg%dy) * 0.01d0
             
             if (x1 <= fg%xll) then
                 i1_fg = 1
