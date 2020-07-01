@@ -93,9 +93,22 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
         k = fg_klist(indexk)
         
         ! compute i,j directly without storing in ik,jk, since now only
-        ! need to be computed once with new loop order    
-        i = int((fg%x(k) - xlower + dx) / dx)
-        j = int((fg%y(k) - ylower + dy) / dy)
+        ! need to be computed once with new loop order  
+        
+        if (fg%interp_method == 0) then
+            ! For piecewise constant interpolation,
+            ! determine cell (i,j) to take value from:
+            i = int((fg%x(k) - xlower + dx) / dx)
+            j = int((fg%y(k) - ylower + dy) / dy)
+        else
+            ! For bilinear interpolation i or j may be 1 less than index
+            ! of cell containing fgmax point, if it is to the left of cell
+            ! center, since we interpolate between cells i and i+1,  j and j+1.
+            ! So round instead of taking floor:
+            i = nint((fg%x(k) - xlower) / dx)
+            j = nint((fg%y(k) - ylower) / dy)
+        endif
+            
         
         if (debug) then
             write(61,62) k,fg%x(k),fg%y(k), i,j
@@ -108,6 +121,13 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             ax = (fg%x(k) - x) / dx    ! fraction of cell offset in x
             y = ylower + (j-0.5d0)*dy  ! grid cell center on patch
             ay = (fg%y(k) - y) / dy    ! fraction of cell offset in y
+            
+            if ((ax < 0.d0) .or. (ay < 0.d0)) then
+                write(6,*) '+++ xlower, dx: ',xlower,dx
+                write(6,*) '+++ fg%x(k),fg%y(k), i,j', fg%x(k),fg%y(k), i,j
+                write(6,*) '+++ ax,ay: ',ax,ay
+                stop
+                endif
             
             ! weights:
             aij = (1.d0 - ax)*(1.d0 - ay)
