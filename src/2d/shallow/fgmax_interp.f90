@@ -122,13 +122,6 @@ subroutine fgmax_interpolate(mx,my,meqn,mbc,maux,q,aux,dx,dy, &
             y = ylower + (j-0.5d0)*dy  ! grid cell center on patch
             ay = (fg%y(k) - y) / dy    ! fraction of cell offset in y
             
-            if ((ax < 0.d0) .or. (ay < 0.d0)) then
-                write(6,*) '+++ xlower, dx: ',xlower,dx
-                write(6,*) '+++ fg%x(k),fg%y(k), i,j', fg%x(k),fg%y(k), i,j
-                write(6,*) '+++ ax,ay: ',ax,ay
-                stop
-                endif
-            
             ! weights:
             aij = (1.d0 - ax)*(1.d0 - ay)
             aipj = ax*(1.d0 - ay)
