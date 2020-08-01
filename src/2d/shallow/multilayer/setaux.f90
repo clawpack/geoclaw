@@ -112,7 +112,7 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
                 xm = xlower + (ilo+ii-1.d0) * dx
                 xp = xlower + (ilo+ii) * dx
                 x = 0.5d0*(xm+xp)
-                aux(1,ii,jj) = test_topo(x, y)
+                aux(1,ii,jj) = test_topo(x)
             end do
         end do
 
