@@ -391,9 +391,11 @@ contains
 
     ! 2. Convert wind speed at 10 m to top of atmospheric boundary layer
     ! ==========================================================================
-    subroutine adjust_max_wind(tv, mws, mod_mws)
+    pure subroutine adjust_max_wind(tv, mws, mod_mws)
 
-        real (kind=8), intent(inout) :: tv(2), mws
+        real (kind=8), intent(inout) :: tv(2)
+        
+        real (kind=8), intent(in) :: mws
 
         real (kind=8), intent(out) :: mod_mws
 
@@ -432,7 +434,7 @@ contains
 
     ! 5. Apply distance ramp to limit scope
     ! ==========================================================================
-    subroutine post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
+    pure subroutine post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
         wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
 
         integer, intent(in) :: maux, mbc, mx, my, i, j
