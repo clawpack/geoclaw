@@ -389,13 +389,16 @@ contains
  
     ! 1. Adjust max wind speed by removing translational speed (bounding at 0).
 
-    ! 2. Convert wind speed at 10 m to top of atmospheric boundary layer
+    ! 2. If specified, convert surface winds to PBL winds
     ! ==========================================================================
-    pure subroutine adjust_max_wind(tv, mws, mod_mws)
+
+    pure subroutine adjust_max_wind(tv, mws, mod_mws, convert_height)
 
         real (kind=8), intent(inout) :: tv(2)
         
         real (kind=8), intent(in) :: mws
+
+        logical, intent(in) :: convert_height
 
         real (kind=8), intent(out) :: mod_mws
 
@@ -412,7 +415,7 @@ contains
         end if
 
         ! Convert wind speed (10 m) to top of atmospheric boundary layer
-        mod_mws = mod_mws / atmos_boundary_layer
+        if (convert_height) mod_mws = mod_mws / atmos_boundary_layer
 
     end subroutine adjust_max_wind
 
@@ -425,8 +428,8 @@ contains
     !    This is tapered to zero as the storm wind tapers to zero toward the eye of the 
     !    storm and at long distances from the storm. Avoid divide-by-0 error
 
-    ! 2. Convert wind velocity from top of atmospheric boundary layer to wind
-    !    velocity at 10 m above the earth's surface.
+    ! 2. If specified, convert wind velocity from top of atmospheric boundary layer to 
+    !    wind velocity at 10 m above the earth's surface.
 
     ! 3. Convert from 1 minute averaged winds to 10 minute averaged winds
 
@@ -435,13 +438,16 @@ contains
     ! 5. Apply distance ramp to limit scope
     ! ==========================================================================
     pure subroutine post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-        wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+        wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+        convert_height)
 
         integer, intent(in) :: maux, mbc, mx, my, i, j
         real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc), wind
 
         real (kind=8), intent(in) :: tv(2), mod_mws, theta, Pa, r, radius
         integer, intent(in) :: wind_index, pressure_index
+
+        logical, intent(in) :: convert_height
 
         real (kind=8) :: trans_speed_x, trans_speed_y, ramp
 
@@ -453,7 +459,9 @@ contains
             trans_speed_y = 0
         end if
 
-        wind = wind * atmos_boundary_layer * sampling_time
+        if (convert_height) wind = wind * atmos_boundary_layer
+
+        wind = wind * sampling_time
 
         ! Velocity components of storm (assumes perfect vortex shape)
         ! including addition of translation speed
@@ -469,8 +477,65 @@ contains
                                 * ramp
 
     end subroutine post_process_wind_estimate
+
+    ! ==========================================================================
+    ! Calculate storm centric polar coordinate location of grid cell center
+    ! ==========================================================================
+    pure subroutine calculate_polar_coordinate(x, y, sloc, r, theta)
+
+    use geoclaw_module, only: deg2rad, coordinate_system
+    use geoclaw_module, only: spherical_distance
+
+    real(kind=8), intent(in) :: x, y, sloc(2)
+    real(kind=8), intent(out) :: r, theta
+
+    if (coordinate_system == 2) then
+        ! lat-long coordinates, uses Haversine formula
+        r = spherical_distance(x, y, sloc(1), sloc(2))
+        theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
+    else
+        ! Strictly cartesian
+        r = sqrt( (x - sloc(1))**2 + (y - sloc(2))**2)
+        theta = atan2(y - sloc(2), x - sloc(1))
+    end if
+
+    end subroutine calculate_polar_coordinate
+
+    ! ==========================================================================
+    ! Calculate central pressure difference
+    ! ==========================================================================
+    pure function get_pressure_diff(Pa, Pc) result(dp)
+        use geoclaw_module, only: rho_air
+
+        real (kind=8), intent(in) :: Pa, Pc
+        real (kind=8) :: dp
+
+        
+        dp = Pa - Pc
+        ! Limit central pressure deficit due to bad ambient pressure,
+        ! really should have better ambient pressure...
+        if (dp < 100.d0) dp = 100.d0
+
+    end function get_pressure_diff
     
-    
+    ! ==========================================================================
+    ! Calculate Holland parameters and limit the result
+    ! ==========================================================================
+    pure function get_holland_b(mod_mws, dp) result(B)
+        use geoclaw_module, only: rho_air
+
+        real (kind=8), intent(in) :: mod_mws, dp
+        real (kind=8) :: B
+
+        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
+        if (B <  1.d0) B = 1.d0
+        if (B > 2.5d0) B = 2.5d0
+
+        if (DEBUG) print "('Holland B = ',d16.8)", B
+        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
+
+    end function get_holland_b
+
     ! ==========================================================================
     !  Use the 1980 Holland model to set the storm fields
     ! ==========================================================================
@@ -478,11 +543,8 @@ contains
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
-        use geoclaw_module, only: coriolis, deg2rad, coordinate_system
-        use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: coriolis
 
         implicit none
 
@@ -504,28 +566,17 @@ contains
         real(kind=8) :: mod_mws, ramp
         integer :: i,j
 
+        ! Holland 1980 requires converting surface to gradient winds
+        logical :: convert_height=.true.
+
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
 
-        ! Other quantities of interest
-        Pa = ambient_pressure
-
-        ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
-
-        ! Calculate central pressure difference
-        dp = Pa - Pc
-        ! Limit central pressure deficit due to bad ambient pressure,
-        ! really should have better ambient pressure...
-        if (dp < 100.d0) dp = 100.d0
-
-        ! Calculate Holland parameters and limit the result
-        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
-        if (B <  1.d0) B = 1.d0
-        if (B > 2.5d0) B = 2.5d0
-
-        if (DEBUG) print "('Holland B = ',d16.8)", B
-        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
+        ! remove translational component
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
+        
+        dp = get_pressure_diff(Pa, Pc)
+        B = get_holland_b(mod_mws, dp)
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -534,17 +585,7 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
-                ! Calculate storm centric polar coordinate location of grid
-                ! cell center
-                if (coordinate_system == 2) then
-                    ! lat-long coordinates, uses Haversine formula
-                    r = spherical_distance(x, y, sloc(1), sloc(2))
-                    theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
-                else
-                    ! Strictly cartesian
-                    r = sqrt( (x - sloc(1))**2 + (y - sloc(2))**2)
-                    theta = atan2(y - sloc(2), x - sloc(1))
-                end if
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
@@ -555,7 +596,8 @@ contains
                         + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                    convert_height)
 
             enddo
         enddo
@@ -570,11 +612,9 @@ contains
                                        pressure_index, storm)
 
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
 
         implicit none
 
@@ -598,23 +638,17 @@ contains
         real(kind=8) :: dg, edg, rg
         integer :: i,j
 
+        ! Holland 2010 does not require converting surface to gradient winds
+        logical :: convert_height=.false.
+        
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
 
-        ! Other quantities of interest
-        Pa = ambient_pressure
-
         ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        ! Calculate central pressure difference
-        dp = Pa - Pc
-        ! Limit central pressure deficit due to bad ambient pressure,
-        ! really should have better ambient pressure...
-        if (dp < 100.d0) dp = 100.d0
-
-        ! Calculate Holland parameters and limit the result
-        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
+        dp = get_pressure_diff(Pa, Pc)
+        B = get_holland_b(mod_mws, dp)
 
         rn = 500000
         dg = (mwr/rn)**B
@@ -630,10 +664,7 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
-                ! Calculate storm centric polar coordinate location of grid
-                ! cell center, uses Haversine formula
-                r = spherical_distance(x, y, sloc(1), sloc(2))
-                theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
@@ -655,7 +686,8 @@ contains
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                    convert_height)
             enddo
         enddo
 
@@ -669,11 +701,9 @@ contains
                               dx, dy, t, aux, wind_index,           &
                               pressure_index, storm)
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
         
         implicit none
 
@@ -710,31 +740,24 @@ contains
         integer :: r_index
         real(kind=8) :: r_factor, t_factor
 
+        ! CLE does not require surface wind to be converted to gradient wind (?)
+        logical :: convert_height=.false.
+
         ! Output the pressure and velocity fields.  
         ! Determines the radial wind ONLY IF called at a new time. 
 
         !First, interpolate all of the relevant tracked storm parameters.
         call get_cle_storm_data(t,storm,sloc,tv,mwr,mws,Pc,radius)
 
-        ! Other quantities of interest 
-        Pa = ambient_pressure 
-
-        ! Additional quantities of interest 
-        i = storm_index(t, storm)
-        f = coriolis(sloc(2))
-        tv = storm%velocity(:, i)
-        Pa = ambient_pressure
-        sloc = storm_location(t, storm)
-        f = coriolis(sloc(2))
-        Pc = storm%central_pressure(i)
-        mws = storm%max_wind_speed(i)
-        mwr = storm%max_wind_radius(i)
-
         ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
+        ! (It appears the azimuthal winds are not used in the algorithm)
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
         
         ! Fill array with CLE model parameters 
         if (last_time /= t) then
+
+            f = coriolis(sloc(2))
+
             ! Determine the wind profile, but only if the profile isn't already
             ! saved. In v_vec and p_vec. 
             last_time = t
@@ -785,13 +808,11 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx ! Degrees longitude 
 
-                ! Calcuate storm centric polar coordinate location of grid
-                ! cell center, uses Haversine formula
-                r = spherical_distance(x, y, sloc(1), sloc(2))
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
                 r_index = floor(r/dr)
                 r_factor = (r - r_index * dr) / dr
-                r_index = r_index + 1 
-                theta = atan2((y - sloc(2)) * DEG2RAD,(x-sloc(1))*DEG2RAD)
+                r_index = r_index + 1
+
                 if (r_index < res) then
                     aux(pressure_index, i, j) = (1 - r_factor) * p_vec(r_index) & 
                                         + r_factor * p_vec(r_index + 1) 
@@ -1125,11 +1146,9 @@ contains
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
 
         implicit none
 
@@ -1150,29 +1169,19 @@ contains
         real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius, trans_mod
         real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
         integer :: i,j
+        
+        ! SLOSH model requires converting surface to gradient winds (for calculating
+        ! Holland B)
+        logical :: convert_height=.true.
 
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
 
-        ! Other quantities of interest
-        Pa = ambient_pressure
-
         ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        ! Calculate central pressure difference
-        dp = Pa - Pc
-        ! Limit central pressure deficit due to bad ambient pressure,
-        ! really should have better ambient pressure...
-        if (dp < 100.d0) dp = 100.d0
-
-        ! Calculate Holland parameters and limit the result
-        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
-        if (B <  1.d0) B = 1.d0
-        if (B > 2.5d0) B = 2.5d0
-
-        if (DEBUG) print "('Holland B = ',d16.8)", B
-        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
+        dp = get_pressure_diff(Pa, Pc)
+        B = get_holland_b(mod_mws, dp)
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -1181,10 +1190,7 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
-                ! Calculate storm centric polar coordinate location of grid
-                ! cell center, uses Haversine formula
-                r = spherical_distance(x, y, sloc(1), sloc(2))
-                theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
@@ -1192,8 +1198,11 @@ contains
                 ! Speed of wind at this point
                 wind = (2.d0 * mws * mwr * r) / (mwr**2.d0 + r**2.d0)
 
+                ! Do not apply gradient-to-surface wind adjustment b/c wind is 
+                ! calculated with observed surface winds (not azimuthal gradient winds)
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                .false.)
 
             enddo
         enddo
@@ -1208,11 +1217,9 @@ contains
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
 
         implicit none
 
@@ -1234,28 +1241,17 @@ contains
         real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
         integer :: i,j
 
+        ! Rankine requires converting surface to gradient winds
+        logical :: convert_height=.true.
+
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
 
-        ! Other quantities of interest
-        Pa = ambient_pressure
-
         ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        ! Calculate central pressure difference
-        dp = Pa - Pc
-        ! Limit central pressure deficit due to bad ambient pressure,
-        ! really should have better ambient pressure...
-        if (dp < 100.d0) dp = 100.d0
-
-        ! Calculate Holland parameters and limit the result
-        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
-        if (B <  1.d0) B = 1.d0
-        if (B > 2.5d0) B = 2.5d0
-
-        if (DEBUG) print "('Holland B = ',d16.8)", B
-        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
+        dp = get_pressure_diff(Pa, Pc)
+        B = get_holland_b(mod_mws, dp)
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -1264,10 +1260,7 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
-                ! Calculate storm centric polar coordinate location of grid
-                ! cell center, uses Haversine formula
-                r = spherical_distance(x, y, sloc(1), sloc(2))
-                theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
@@ -1280,7 +1273,8 @@ contains
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                convert_height)
 
             enddo
         enddo
@@ -1295,11 +1289,9 @@ contains
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
 
         implicit none
 
@@ -1321,28 +1313,17 @@ contains
         real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
         integer :: i,j
 
+        ! Rankine requires converting surface to gradient winds
+        logical :: convert_height=.true.
+
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
 
-        ! Other quantities of interest
-        Pa = ambient_pressure
-
         ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        ! Calculate central pressure difference
-        dp = Pa - Pc
-        ! Limit central pressure deficit due to bad ambient pressure,
-        ! really should have better ambient pressure...
-        if (dp < 100.d0) dp = 100.d0
-
-        ! Calculate Holland parameters and limit the result
-        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
-        if (B <  1.d0) B = 1.d0
-        if (B > 2.5d0) B = 2.5d0
-
-        if (DEBUG) print "('Holland B = ',d16.8)", B
-        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
+        dp = get_pressure_diff(Pa, Pc)
+        B = get_holland_b(mod_mws, dp)
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -1351,10 +1332,7 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
-                ! Calculate storm centric polar coordinate location of grid
-                ! cell center, uses Haversine formula
-                r = spherical_distance(x, y, sloc(1), sloc(2))
-                theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
@@ -1367,7 +1345,8 @@ contains
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                convert_height)
 
             enddo
         enddo
@@ -1382,11 +1361,9 @@ contains
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
 
         implicit none
 
@@ -1408,28 +1385,17 @@ contains
         real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
         integer :: i,j
 
+        ! deMaria requires converting surface to gradient winds (just for Holland B)
+        logical :: convert_height=.true.
+
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
 
-        ! Other quantities of interest
-        Pa = ambient_pressure
-
         ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        ! Calculate central pressure difference
-        dp = Pa - Pc
-        ! Limit central pressure deficit due to bad ambient pressure,
-        ! really should have better ambient pressure...
-        if (dp < 100.d0) dp = 100.d0
-
-        ! Calculate Holland parameters and limit the result
-        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
-        if (B <  1.d0) B = 1.d0
-        if (B > 2.5d0) B = 2.5d0
-
-        if (DEBUG) print "('Holland B = ',d16.8)", B
-        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
+        dp = get_pressure_diff(Pa, Pc)
+        B = get_holland_b(mod_mws, dp)
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -1438,10 +1404,7 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
-                ! Calculate storm centric polar coordinate location of grid
-                ! cell center, uses Haversine formula
-                r = spherical_distance(x, y, sloc(1), sloc(2))
-                theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
@@ -1457,8 +1420,10 @@ contains
                     wind = 1.d0
                 end if
 
+                ! Do not apply gradient-to-surface wind adjustment b/c wind is 
+                ! calculated with observed surface winds (not azimuthal gradient winds)
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, .false.)
 
             enddo
         enddo
@@ -1467,17 +1432,16 @@ contains
 
 
     ! ==========================================================================
-    !  Use the Willoughby model to set the storm fields
+    !  Use the Willoughby 2006 model to set the storm fields
+    !  Original paper https://journals.ametsoc.org/mwr/article/134/4/1102/67551
     ! ==========================================================================
     subroutine set_willoughby_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: g => grav, rho_air, ambient_pressure
+        use geoclaw_module, only: rho_air, ambient_pressure => Pa
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
-
-        use geoclaw_module, only: rad2deg
 
         implicit none
 
@@ -1500,28 +1464,28 @@ contains
         real(kind=8) :: v_inner, v_outer, W 
         integer :: i,j
 
+        ! Willoughby requires converting surface to gradient winds
+        logical :: convert_height=.true.
+
+        ! other Willoughby params
+        real(kind=8) :: n, X1, X2, A, xi, w
+
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
 
-        ! Other quantities of interest
-        Pa = ambient_pressure
-
         ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws)
+        call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        ! Calculate central pressure difference
-        dp = Pa - Pc
-        ! Limit central pressure deficit due to bad ambient pressure,
-        ! really should have better ambient pressure...
-        if (dp < 100.d0) dp = 100.d0
+        dp = get_pressure_diff(Pa, Pc)
+        B = get_holland_b(mod_mws, dp)
 
-        ! Calculate Holland parameters and limit the result
-        B = rho_air * exp(1.d0) * (mod_mws**2) / dp
-        if (B <  1.d0) B = 1.d0
-        if (B > 2.5d0) B = 2.5d0
-
-        if (DEBUG) print "('Holland B = ',d16.8)", B
-        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
+        ! Get willoughby coeffs
+        ! (See Section 4)
+        n = 2.134d0 + 0.0077d0*mod_mws - 0.4522d0*log(mwr) - 0.0038*abs(sloc(2))
+        X1 = (317.1d0 - 2.026d0*mod_mws + 1.915d0*abs(sloc(2))) * 1.d3
+        X2 = 25.d3
+        A = max(0.5913d0 + 0.0029d0*mod_mws - 0.1361*log(mwr) - 0.0042d0*abs(sloc(2)), &
+                0.d0)
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -1530,31 +1494,34 @@ contains
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
-                ! Calculate storm centric polar coordinate location of grid
-                ! cell center, uses Haversine formula
-                r = spherical_distance(x, y, sloc(1), sloc(2))
-                theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
 
                 ! Speed of wind at this point
+                ! (.9 and 1.1 are chosen as R1 and R2 rather than fit)
+                ! Note this may mess up the locatio of Vmax
+                ! see Section 2 of paper
                 if (r < 0.9d0 * mwr) then 
-                    wind = mws * (r / mwr)**0.45d0
-                !else if (r > 0.9d0 * mwr & r < 1.1d0 * mwr) then 
-                else if (r > 0.9d0) then 
-                    wind = 2.d0 
+                    wind = mod_mws * (r / mwr)**n
+                else if (r > 1.1d0 * mwr) then 
+                    wind = mod_mws * ( (1-A) * exp(-(r-mwr)/X1) + A * exp(-(r-mwr)/X2) )
                 else 
-                    wind = 1.d0 
+                    xi = (r - 0.9d0*mwr)/(0.2d0*mwr)
+                    w = 126.d0*xi**5 + 420.d0*xi**6 + 540.d0*xi**7 - 315.d0*xi**8 + &
+                        70.d0*xi**9
+                    wind = mod_mws * (r / mwr)**n * (1-w) + &
+                            mod_mws * &
+                                ( (1-A) * exp(-(r-mwr)/X1) + A * exp(-(r-mwr)/X2) ) * w
                 end if  
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa)
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                    convert_heights)
 
             enddo
         enddo
 
     end subroutine set_willoughby_fields
-
-
 end module model_storm_module
