@@ -438,13 +438,14 @@ contains
     ! 5. Apply distance ramp to limit scope
     ! ==========================================================================
     pure subroutine post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-        wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
-        convert_height)
+        wind_index, pressure_index, r, radius, tv, mod_mws, theta, convert_height)
+
+        use geoclaw_module, only: Pa => ambient_pressure
 
         integer, intent(in) :: maux, mbc, mx, my, i, j
         real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc), wind
 
-        real (kind=8), intent(in) :: tv(2), mod_mws, theta, Pa, r, radius
+        real (kind=8), intent(in) :: tv(2), mod_mws, theta, r, radius
         integer, intent(in) :: wind_index, pressure_index
 
         logical, intent(in) :: convert_height
@@ -504,14 +505,15 @@ contains
     ! ==========================================================================
     ! Calculate central pressure difference
     ! ==========================================================================
-    pure function get_pressure_diff(Pa, Pc) result(dp)
-        use geoclaw_module, only: rho_air
+    pure function get_pressure_diff(Pc) result(dp)
+        use geoclaw_module, only: rho_air, ambient_pressure
 
-        real (kind=8), intent(in) :: Pa, Pc
+        real (kind=8), intent(in) :: Pc
         real (kind=8) :: dp
 
         
-        dp = Pa - Pc
+        dp = ambient_pressure - Pc
+
         ! Limit central pressure deficit due to bad ambient pressure,
         ! really should have better ambient pressure...
         if (dp < 100.d0) dp = 100.d0
@@ -531,9 +533,6 @@ contains
         if (B <  1.d0) B = 1.d0
         if (B > 2.5d0) B = 2.5d0
 
-        if (DEBUG) print "('Holland B = ',d16.8)", B
-        if (DEBUG) print "('Holland A = ',d16.8)", (mwr / 1000.d0)**B
-
     end function get_holland_b
 
     ! ==========================================================================
@@ -543,7 +542,7 @@ contains
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air
         use geoclaw_module, only: coriolis
 
         implicit none
@@ -562,8 +561,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius
-        real(kind=8) :: mod_mws, ramp
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Holland 1980 requires converting surface to gradient winds
@@ -575,7 +573,7 @@ contains
         ! remove translational component
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
         
-        dp = get_pressure_diff(Pa, Pc)
+        dp = get_pressure_diff(Pc)
         B = get_holland_b(mod_mws, dp)
 
         ! Set fields
@@ -596,7 +594,7 @@ contains
                         + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
                     convert_height)
 
             enddo
@@ -612,7 +610,7 @@ contains
                                        pressure_index, storm)
 
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
 
@@ -632,8 +630,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius, trans_mod
-        real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
         real(kind=8) :: rn, vn, xn, xx
         real(kind=8) :: dg, edg, rg
         integer :: i,j
@@ -647,9 +644,12 @@ contains
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        dp = get_pressure_diff(Pa, Pc)
-        B = get_holland_b(mod_mws, dp)
+        dp = get_pressure_diff(Pc)
+        ! Pressure field uses gradient-level Holland B param, so we still need to
+        ! derive B by adjusting surface to gradient level
+        B = get_holland_b(mod_mws / atmos_boundary_layer, dp)
 
+        ! Additional Holland parameters needed
         rn = 500000
         dg = (mwr/rn)**B
         edg = exp(1.d0-dg)
@@ -670,23 +670,16 @@ contains
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
 
                 ! # HOLLAND 2010 WIND SPEED CALCULATION
-                ! Speed of wind at this point
                 if (r <= mwr) then
-                    !xx = 0.5
-                    wind = mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
-                    !wind = sqrt((mwr / r)**B &
-                    !     * exp(1.d0 - (mwr / r)**B) * mws**2.d0 &
-                    !     + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
+                    xx = 0.5
+                    wind = mod_mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
                 else
                     xx = 0.5 + (r - mwr) * (xn - 0.5) / (rn - mwr)
-                    wind = mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
-                    !wind = (((mwr / r)**B &
-                    !     * exp(1.d0 - (mwr / r)**B) * mws**2.d0 &
-                    !     + (r * f)**2.d0 / 4.d0)**xx) - r * f / 2.d0
+                    wind = mod_mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
                     convert_height)
             enddo
         enddo
@@ -701,7 +694,7 @@ contains
                               dx, dy, t, aux, wind_index,           &
                               pressure_index, storm)
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air, Pa => ambient_pressure
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
         
@@ -721,7 +714,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2) 
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius 
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius 
         real(kind=8) :: mod_mws, trans_speed, ramp, trans_mod
         integer :: i,j 
         
@@ -1141,12 +1134,14 @@ contains
    
     ! ==========================================================================
     !  Use the SLOSH model to set the storm fields
+    !  based on info from: https://www.mdpi.com/2073-4433/10/4/193/pdf
+    !  and https://www.hsdl.org/?abstract&did=779560
     ! ==========================================================================
     subroutine set_SLOSH_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
 
@@ -1166,8 +1161,8 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius, trans_mod
-        real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius
+        real(kind=8) :: mod_mws, trans_speed_x, trans_speed_y
         integer :: i,j
         
         ! SLOSH model requires converting surface to gradient winds (for calculating
@@ -1180,8 +1175,11 @@ contains
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        dp = get_pressure_diff(Pa, Pc)
+        dp = get_pressure_diff(Pc)
         B = get_holland_b(mod_mws, dp)
+
+        ! slosh winds use a 10-min wind speed so we apply correction factor upstream
+        mod_mws = mod_mws * sampling_time
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -1196,14 +1194,20 @@ contains
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
 
                 ! Speed of wind at this point
+                ! Note that in reality SLOSH does not directly input mws but instead 
+                ! estimates it from central pressure and mwr using a lookup table and 
+                ! iterative procedure (see p. 14 of Jelesnianski et al. 1992)
+                ! It's assumed to be equal to 10-min winds, so we apply the correction
+                ! upstream 
                 wind = (2.d0 * mws * mwr * r) / (mwr**2.d0 + r**2.d0)
 
-                ! Do not apply gradient-to-surface wind adjustment b/c wind is 
-                ! calculated with observed surface winds (not azimuthal gradient winds)
-                call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
-                .false.)
-
+                !! SLOSH has custom addition of translational velocity
+                ! so we do not use `post_process_wind_estimate` function
+                trans_speed_x = tv(1) * mwr * r / (mwr**2.d0 + r**2.d0)
+                trans_speed_y = tv(2) * mwr * r / (mwr**2.d0 + r**2.d0)
+                
+                aux(wind_index,i,j)   = -wind * sin(theta) + trans_speed_x
+                aux(wind_index+1,i,j) =  wind * cos(theta) + trans_speed_y
             enddo
         enddo
 
@@ -1211,13 +1215,13 @@ contains
 
 
     ! ==========================================================================
-    !  Use the Rankine model to set the storm fields
+    !  Use the Rankine model to set the wind field and H80 for pressure
     ! ==========================================================================
     subroutine set_rankine_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
 
@@ -1237,8 +1241,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius, trans_mod
-        real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Rankine requires converting surface to gradient winds
@@ -1250,7 +1253,7 @@ contains
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        dp = get_pressure_diff(Pa, Pc)
+        dp = get_pressure_diff(Pc)
         B = get_holland_b(mod_mws, dp)
 
         ! Set fields
@@ -1273,7 +1276,7 @@ contains
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
                 convert_height)
 
             enddo
@@ -1283,13 +1286,13 @@ contains
 
 
     ! ==========================================================================
-    !  Use the Modified Rankine model to set the storm fields
+    !  Use the Modified Rankine model to set the wind field and H80 for pressure
     ! ==========================================================================
     subroutine set_modified_rankine_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
 
@@ -1309,12 +1312,14 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius, trans_mod
-        real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Rankine requires converting surface to gradient winds
         logical :: convert_height=.true.
+
+        ! additional decay parameter
+        real(kind=8) :: alpha
 
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
@@ -1322,8 +1327,17 @@ contains
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        dp = get_pressure_diff(Pa, Pc)
+        dp = get_pressure_diff(Pc)
         B = get_holland_b(mod_mws, dp)
+
+        ! set modified rankine decay param (from Mallen, Montgomery and Wang 2005)
+        if ((mws) < 30.d0) then
+            alpha = 0.31d0
+        else if (mws > 50.d0) then
+            alpha = 0.48d0
+        else
+            alpha = 0.35d0
+        end if
 
         ! Set fields
         do j=1-mbc,my+mbc
@@ -1341,11 +1355,11 @@ contains
                 if (r < mwr) then
                     wind = mws * (r / mwr)
                 else
-                    wind = mws * (mwr / r)**0.5d0
+                    wind = mws * (mwr / r)**alpha
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
+                wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
                 convert_height)
 
             enddo
@@ -1355,13 +1369,15 @@ contains
 
 
     ! ==========================================================================
-    !  Use the DeMaria model to set the storm fields
+    !  Use the DeMaria model to set the wind fields, using Holland 1980 for 
+    !  pressures.
+    !  original paper: deMaria 1987, Monthly Weather Review
     ! ==========================================================================
     subroutine set_deMaria_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
 
@@ -1381,8 +1397,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius, trans_mod
-        real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! deMaria requires converting surface to gradient winds (just for Holland B)
@@ -1394,7 +1409,7 @@ contains
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        dp = get_pressure_diff(Pa, Pc)
+        dp = get_pressure_diff(Pc)
         B = get_holland_b(mod_mws, dp)
 
         ! Set fields
@@ -1410,20 +1425,16 @@ contains
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
 
                 ! Speed of wind at this point
+                ! Commented out version has 2 more free parameters that we would need
+                ! to set (chosen to be equal to 1 for the time being)
                 !wind = (r * mws / mwr) &
-                !        * exp((1.d0 - (r / mwr)**B) * (1.d0/B))
-                wind = mws * (r / mwr) &
-                        * exp((1.d0 - (r / mwr)))
-                ! Adjust wind values for account for when the wind is so 
-                ! small by this wind model and we essentially divide by zero. 
-                if (wind <= 1.d0) then 
-                    wind = 1.d0
-                end if
+                !        * exp((1.d0 - (r / mwr)**b) * (1.d0/d))
+                wind = mod_mws * (r / mwr) &
+                        * exp(1.d0 - (r / mwr))
 
-                ! Do not apply gradient-to-surface wind adjustment b/c wind is 
-                ! calculated with observed surface winds (not azimuthal gradient winds)
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, .false.)
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
+                    convert_height)
 
             enddo
         enddo
@@ -1432,14 +1443,14 @@ contains
 
 
     ! ==========================================================================
-    !  Use the Willoughby 2006 model to set the storm fields
+    !  Use the Willoughby 2006 model to set the wind field, using H80 for pressure
     !  Original paper https://journals.ametsoc.org/mwr/article/134/4/1102/67551
     ! ==========================================================================
     subroutine set_willoughby_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
                                        pressure_index, storm)
 
-        use geoclaw_module, only: rho_air, ambient_pressure => Pa
+        use geoclaw_module, only: rho_air
         use geoclaw_module, only: coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
 
@@ -1459,16 +1470,14 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, Pa, dp, wind, tv(2), radius, trans_mod
-        real(kind=8) :: mod_mws, trans_speed, ramp, trans_speed_x, trans_speed_y
-        real(kind=8) :: v_inner, v_outer, W 
+        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Willoughby requires converting surface to gradient winds
         logical :: convert_height=.true.
 
         ! other Willoughby params
-        real(kind=8) :: n, X1, X2, A, xi, w
+        real(kind=8) :: n, X1, X2, A, xi, W
 
         ! Get interpolated storm data
         call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
@@ -1476,7 +1485,7 @@ contains
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
 
-        dp = get_pressure_diff(Pa, Pc)
+        dp = get_pressure_diff(Pc)
         B = get_holland_b(mod_mws, dp)
 
         ! Get willoughby coeffs
@@ -1500,25 +1509,25 @@ contains
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
 
                 ! Speed of wind at this point
-                ! (.9 and 1.1 are chosen as R1 and R2 rather than fit)
-                ! Note this may mess up the locatio of Vmax
-                ! see Section 2 of paper
+                ! (.9 and 1.1 are chosen as R1 and R2 rather than fit )
+                ! Note this may mess up the location of Vmax slightly since it does not
+                ! have to lie at xi=0.5 (see Section 2 of paper)
                 if (r < 0.9d0 * mwr) then 
                     wind = mod_mws * (r / mwr)**n
                 else if (r > 1.1d0 * mwr) then 
                     wind = mod_mws * ( (1-A) * exp(-(r-mwr)/X1) + A * exp(-(r-mwr)/X2) )
                 else 
                     xi = (r - 0.9d0*mwr)/(0.2d0*mwr)
-                    w = 126.d0*xi**5 + 420.d0*xi**6 + 540.d0*xi**7 - 315.d0*xi**8 + &
+                    W = 126.d0*xi**5 + 420.d0*xi**6 + 540.d0*xi**7 - 315.d0*xi**8 + &
                         70.d0*xi**9
-                    wind = mod_mws * (r / mwr)**n * (1-w) + &
+                    wind = mod_mws * (r / mwr)**n * (1-W) + &
                             mod_mws * &
-                                ( (1-A) * exp(-(r-mwr)/X1) + A * exp(-(r-mwr)/X2) ) * w
+                                ( (1-A) * exp(-(r-mwr)/X1) + A * exp(-(r-mwr)/X2) ) * W
                 end if  
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, Pa, &
-                    convert_heights)
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
+                    convert_height)
 
             enddo
         enddo
