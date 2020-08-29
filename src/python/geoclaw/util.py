@@ -271,7 +271,7 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
 
     # fetch water levels and tide predictions
     date_time, water_level = fetch(
-        'water_level', 'Date Time, Water Level, Sigma, O, F, R, L, Quality',
+        'water_level', 'Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality',
         col_idx, col_types)
     date_time2, prediction = fetch('predictions', 'Date Time, Prediction',
                                    col_idx, col_types)
