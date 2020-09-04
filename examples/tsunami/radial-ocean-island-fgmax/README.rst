@@ -20,7 +20,9 @@ To create the input data::
     make input
 
 Running `make input` executes `make_input_files.py`, or you can instead run
-the notebook `make_input_files.ipynb`.
+the notebook `make_input_files.ipynb`,
+from which the `make_input_files.py` script was generated using `nbconvert`.
+
 See sample output in the gallery version linked below.
 
 After running the code, e.g. by::
@@ -32,6 +34,9 @@ you can make the additional fgmax plots via::
     make fgmax_plots
 
 creates the fgmax plots by running `process_fgmax.py`.
+Instead, you can run the notebook `process_fgmax.ipynb`, 
+from which the `process_fgmax.py` script was generated using `nbconvert`.
+
 See sample output in the gallery version linked below.
 
 Finally ::
@@ -54,3 +59,4 @@ Version
 -------
 
 - New in Version 5.7.0.
+- Some Python issues fixed in Version 5.7.1.

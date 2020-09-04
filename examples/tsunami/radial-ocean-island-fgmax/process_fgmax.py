@@ -1,55 +1,39 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # # process_fgmax
 # 
 # Read in fgmax results and produce plots.
 
-# In[1]:
-
-
-#get_ipython().magic('matplotlib inline')
-
-
-# In[2]:
+# In[ ]:
 
 
 from pylab import *
 
 
-# In[3]:
+# In[ ]:
 
 
 import os,sys
 import glob
-from importlib import reload
-from clawpack.geoclaw import topotools, dtopotools
-from clawpack.visclaw import colormaps
 from scipy.interpolate import RegularGridInterpolator
 import matplotlib as mpl
 from matplotlib import colors
 
-#from clawpack.visclaw.plottools import pcolorcells # to appear in 5.7.0
-from matplotlib.pyplot import pcolormesh as pcolorcells # for now
-
-
-# In[4]:
-
-
+from clawpack.geoclaw import topotools, dtopotools
+from clawpack.visclaw import colormaps
+from clawpack.visclaw.plottools import pcolorcells
 from clawpack.geoclaw import fgmax_tools
-#sys.path.insert(0,'../../new_python')
-#sys.path.insert(0,'/Users/rjl/git/clawpack/new_features_for_v5.7.0/new_python')
-#import fgmax_tools
 
 
-# In[5]:
+# In[ ]:
 
 
 save_figs = True
 fgmax_plotdir = '_plots/fgmax_plots'
 
 
-# In[6]:
+# In[ ]:
 
 
 os.system('mkdir -p %s' % fgmax_plotdir)
@@ -63,7 +47,7 @@ def savefigp(fname):
         print('save_figs = False')
 
 
-# In[7]:
+# In[ ]:
 
 
 outdir = '_output'
@@ -84,7 +68,7 @@ else:
     t_hours = nan
 
 
-# In[8]:
+# In[ ]:
 
 
 # Read fgmax data:
@@ -95,7 +79,7 @@ fg.read_fgmax_grids_data(fgno)
 fg.read_output(outdir=outdir)
 
 
-# In[9]:
+# In[ ]:
 
 
 zmin = -60.
@@ -127,14 +111,14 @@ xticks(rotation=20);
 title('GeoClaw B topography on fg1 grid');
 
 
-# In[10]:
+# In[ ]:
 
 
 fg.B0 = fg.B  # no seafloor deformation in this problem
 fg.h_onshore = ma.masked_where(fg.B0 < 0., fg.h)
 
 
-# In[11]:
+# In[ ]:
 
 
 bounds_depth = array([1e-6,0.5,1.0,1.5,2,2.5,3.0])
@@ -164,7 +148,7 @@ title('Maximum Onshore flow depth over %.2f hours\nfgmax grid %s' % (t_hours,fgn
 savefigp('fgmax%s_h_onshore.png' % str(fgno).zfill(4))
 
 
-# In[12]:
+# In[ ]:
 
 
 bounds_speed = np.array([1e-6,0.5,1.0,1.5,2,2.5,3,4.5,6])
@@ -197,7 +181,7 @@ savefigp('fgmax%s_speed.png' % str(fgno).zfill(4))
 
 # Save this so we can plot the topo below...
 
-# In[13]:
+# In[ ]:
 
 
 import copy
@@ -206,7 +190,7 @@ fg1 = copy.copy(fg)
 
 # ## Read fgmax values specified on a Transect
 
-# In[14]:
+# In[ ]:
 
 
 # Read fgmax data:
@@ -218,7 +202,7 @@ xx = fg.X
 yy = fg.Y
 
 
-# In[15]:
+# In[ ]:
 
 
 figure(figsize=(8,8))
@@ -236,7 +220,7 @@ plot(xx,yy,'r')
 title('GeoClaw B topography values on fg1 grid\n with transect from fg2');
 
 
-# In[16]:
+# In[ ]:
 
 
 figure(figsize=(12,4))
@@ -252,7 +236,7 @@ savefigp('fgmax%s_surface.png' % str(fgno).zfill(4));
 
 # ## Read fgmax points as specified on a masked grid
 
-# In[17]:
+# In[ ]:
 
 
 fgno = 3
@@ -262,14 +246,14 @@ fg.read_fgmax_grids_data(fgno)
 fg.read_output(outdir=outdir)
 
 
-# In[18]:
+# In[ ]:
 
 
 fg.B0 = fg.B  # no seafloor deformation in this problem
 fg.h_onshore = ma.masked_where(fg.B0 < 0., fg.h)
 
 
-# In[19]:
+# In[ ]:
 
 
 figure(figsize=(8,8))
@@ -281,10 +265,10 @@ cb.set_ticks(hstack((linspace(zmin,0,5), linspace(0,zmax,5))))
 gca().set_aspect(1./cos(48*pi/180.))
 ticklabel_format(useOffset=False)
 xticks(rotation=20)
-title('GeoClaw B at points selected as fgmax grid\nfgmax grid %s' % fgno)
+title('GeoClaw B at points selected as fgmax grid\nfgmax grid %s' % fgno);
 
 
-# In[20]:
+# In[ ]:
 
 
 figure(figsize=(8,8))
@@ -300,7 +284,7 @@ title('Maximum Onshore flow depth over %.2f hours' % t_hours);
 savefigp('fgmax%s_h_onshore.png' % str(fgno).zfill(4))
 
 
-# In[21]:
+# In[ ]:
 
 
 figure(figsize=(8,8))
@@ -320,7 +304,7 @@ savefigp('fgmax%s_speed.png' % str(fgno).zfill(4))
 # 
 # This isn't generally needed, but if you want to inspect the file that specified fgmax points originally:
 
-# In[22]:
+# In[ ]:
 
 
 fg3input = topotools.Topography(path=fg.xy_fname, topo_type=3)
@@ -337,13 +321,7 @@ xticks(rotation=20);
 
 # ## Read points with `point_style == 0`
 
-# In[23]:
-
-
-reload(fgmax_tools)
-
-
-# In[24]:
+# In[ ]:
 
 
 # Read fgmax data:
@@ -356,7 +334,7 @@ for j in range(fg.npts):
     print('%10.3f %10.3f %10.3f'  % (fg.X[j], fg.Y[j], fg.h[j]))
 
 
-# In[25]:
+# In[ ]:
 
 
 # Read fgmax data:
@@ -367,4 +345,10 @@ fg.read_output(outdir=outdir)
 print('\n      x          y       max speed')
 for j in range(fg.npts):
     print('%10.3f %10.3f %10.3f'  % (fg.X[j], fg.Y[j], fg.s[j]))
+
+
+# In[ ]:
+
+
+
 
