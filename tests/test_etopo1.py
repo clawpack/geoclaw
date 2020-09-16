@@ -20,20 +20,14 @@ def test_etopo1_topo(make_plot=False, save=False):
     
     try:
         import netCDF4
-    except:
+    except ImportError:
         raise nose.SkipTest("netCDF4 not installed, skipping test")
 
     try:
         topo1 = topotools.read_netcdf('etopo1', extent=extent, verbose=True)
-    except:
-        warnings.warn('Could not read etopo1 data, check if thredds server up')
-        raise nose.SkipTest("Reading etopo1 failed, skipping test")
-        
-
-    try:
         topo10 = topotools.read_netcdf('etopo1', extent=extent, 
                                        coarsen=10, verbose=True)
-    except:
+    except (OSError, RuntimeError):
         warnings.warn('Could not read etopo1 data, check if thredds server up')
         raise nose.SkipTest("Reading etopo1 failed, skipping test")
 
@@ -65,14 +59,14 @@ def test_etopo1_xarray():
 
     try:
         import xarray
-    except:
+    except ImportError:
         raise nose.SkipTest("xarray not installed, skipping test")
         
     try:
         topo10,topo10_xarray = topotools.read_netcdf('etopo1', extent=extent, 
                                                      return_xarray=True,
                                                      coarsen=10, verbose=True)
-    except:
+    except (OSError, RuntimeError):
         warnings.warn('Could not read etopo1 data, check if thredds server up')
         raise nose.SkipTest("Reading etopo1 failed, skipping test")
 
