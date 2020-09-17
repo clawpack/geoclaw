@@ -151,7 +151,7 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
           ! so only call intcopy (which copies soln) and not icall.
           if ((xperdom .and. sticksoutxfine)  .or. (yperdom.and.sticksoutyfine)) then
              call preintcopy(val,mitot,mjtot,nvar,ilo-nghost,ihi+nghost,  &
-                       jlo-nghost,jhi+nghost,level,1,1,fliparray)
+                       jlo-nghost,jhi+nghost,level,fliparray)
           else
              call intcopy(val,mitot,mjtot,nvar,ilo-nghost,ihi+nghost,  &
                           jlo-nghost,jhi+nghost,level,1,1)   
