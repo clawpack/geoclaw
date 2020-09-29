@@ -114,7 +114,7 @@ missing_data_warning_str = """*** Cannot yet automatically determine the
 
 # Warning for not having any time points with both a max wind speed and central
 # pressure observation
-missing_necessary_data_warning_str = """No storm points in the input file 
+missing_necessary_data_warning_str = """No storm points in the input file
     had both a max wind speed and a central pressure observation."""
 
 class NoDataError(ValueError):
@@ -157,7 +157,7 @@ class Storm(object):
        simulation time.  This will default to the beginning of the first of the
        year that the first time point is found in.
      - *wind_speeds* (ndarray(:, :)) Wind speeds defined in every record, such
-       as 34kt, 50kt, 64kt, etc and their radii. Default units are meters/second 
+       as 34kt, 50kt, 64kt, etc and their radii. Default units are meters/second
        and meters.
 
     :Initialization:
@@ -303,123 +303,106 @@ class Storm(object):
          - *path* (string) Path to the file to be read.
          - *verbose* (bool) Output more info regarding reading.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            print("read_atcf currently requires pandas to work.")
+            raise e
 
-        # No header, can assume storm data
-        data_block = []
-        with open(path, 'r') as ATCF_file:
-            for line in ATCF_file:
-                line = line.split(",")
-                line = [value.strip() for value in line]
-                data_block.append(line)
-        num_lines = len(data_block)
+        # See here for the ATCF format documentation:
+        #   https://www.nrlmry.navy.mil/atcf_web/docs/database/new/abdeck.txt
+        df = pd.read_csv(path, engine="python", sep=",+", names=[
+                "BASIN", "CY", "YYYYMMDDHH", "TECHNUM", "TECH", "TAU",
+                "LAT", "LON", "VMAX", "MSLP", "TY",
+                "RAD", "WINDCODE", "RAD1", "RAD2", "RAD3", "RAD4",
+                "POUTER", "ROUTER", "RMW", "GUSTS", "EYE", "SUBREGION",
+                "MAXSEAS", "INITIALS", "DIR", "SPEED", "STORMNAME", "DEPTH",
+                "SEAS", "SEASCODE", "SEAS1", "SEAS2", "SEAS3", "SEAS4",
+                "USERDEFINE1", "userdata1",
+                "USERDEFINE2", "userdata2",
+                "USERDEFINE3", "userdata3",
+                "USERDEFINE4", "userdata4",
+                "USERDEFINE5", "userdata5",
+            ],
+            converters={
+                "YYYYMMDDHH": lambda d: datetime.datetime(
+                    int(d[1:5]), int(d[5:7]), int(d[7:9]), int(d[9:11])),
+                "TAU": lambda d: datetime.timedelta(hours=int(d)),
+                "LAT": lambda d: (-.1 if d[-1] == "S" else .1) * int(d.strip("NS ")),
+                "LON": lambda d: (-.1 if d[-1] == "W" else .1) * int(d.strip("WE ")),
+            },
+            dtype={
+                "BASIN": str,
+                "CY": int,
+                "VMAX": float,
+                "MSLP": float,
+                "TY": str,
+                "RAD": float,
+                "RAD1": float,
+                "RAD2": float,
+                "RAD3": float,
+                "RAD4": float,
+                "ROUTER": float,
+                "RMW": float,
+            })
 
-        # Parse data block - convert to correct units
-        # Conversions:
+        # Grab data regarding basin and cyclone number from first row
+        self.basin = ATCF_basins[df["BASIN"][0]]
+        self.ID = df["CY"][0]
+
+        # Take forecast period TAU into consideration
+        df['DATE'] = df["YYYYMMDDHH"] + df["TAU"]
+        df = df[["DATE", "TAU", "TY", "LAT", "LON", "VMAX", "MSLP",
+                 "ROUTER", "RMW", "RAD", "RAD1", "RAD2", "RAD3", "RAD4",]]
+        df = df.sort_values(by=["DATE", "TAU"]).reset_index(drop=True)
+
+
+        # For each DATE, choose best (smallest TAU) available data
+        for c in ["LAT", "LON", "VMAX", "MSLP", "ROUTER", "RMW",
+                  "RAD", "RAD1", "RAD2", "RAD3", "RAD4"]:
+            df[c] = df[c].where(df[c] != 0, numpy.nan)  # value 0 means NaN
+            df[c] = df.groupby("DATE")[c].fillna(method="bfill")
+        df = df.groupby("DATE").first()
+
+        # Wind profile (occasionally missing for older ATCF storms)
+        # Wind speeds and their radii
+        df["RAD_MEAN"] = df[["RAD1", "RAD2", "RAD3", "RAD4"]].mean(axis=1, skipna=True)
+        df = df.drop(["TAU", "RAD1", "RAD2", "RAD3", "RAD4"], axis=1)
+        df = df.dropna(how="any", subset=["LAT", "LON"])
+
+        # Create time
+        self.t = list(df.index.to_pydatetime())
+
+        # Classification, note that this is not the category of the storm
+        self.classification = df["TY"].to_numpy()
+
+        # Eye location - longitude/latitude order
+        self.eye_location = df[["LON", "LAT"]].to_numpy()
+
+        # Convert to correct units:
         #  max_wind_speed - Convert knots to m/s - 0.51444444
         #  max_wind_radius  - convert from nm to m - 1.8520000031807990 * 1000.0
         #  central_pressure - convert from mbar to Pa - 100.0
         #  Radius of last isobar contour - convert from nm to m - 1.852000003180799d0 * 1000.0
-        self.t = []
-        self.classification = numpy.empty(num_lines, dtype=str)
-        self.eye_location = numpy.empty((num_lines, 2))
-        self.max_wind_speed = numpy.empty(num_lines)
-        self.central_pressure = numpy.empty(num_lines)
-        self.max_wind_radius = numpy.empty(num_lines)
-        self.storm_radius = numpy.empty(num_lines)
-        self.wind_speeds = numpy.empty((num_lines, 2))
+        self.max_wind_speed = units.convert(df["VMAX"].to_numpy(), 'knots', 'm/s')
+        self.central_pressure = units.convert(df["MSLP"].to_numpy(), 'mbar', 'Pa')
+        self.max_wind_radius = units.convert(df["RMW"].to_numpy(), 'nmi', 'm')
+        self.storm_radius = units.convert(df["ROUTER"].to_numpy(), 'nmi', 'm')
+        self.wind_speeds = df[["RAD","RAD_MEAN"]].to_numpy()
+        self.wind_speeds[:,0] = units.convert(self.wind_speeds[:,0], 'knots', 'm/s')
+        self.wind_speeds[:,1] = units.convert(self.wind_speeds[:,1], 'nmi', 'm')
 
-        for (i, data) in enumerate(data_block):
-            # End at an empty lines - skips lines at the bottom of a file
-            if len(data) == 0:
-                break
+        # Set NaNs to -1 to mark them as missing
+        for ar in [self.max_wind_speed, self.central_pressure,
+                   self.max_wind_radius, self.storm_radius, self.wind_speeds]:
+            ar[numpy.isnan(ar)] = -1.
 
-            # Grab data regarding basin and cyclone number if we are starting
-            if i == 0:
-                self.basin = ATCF_basins[data[0]]
-                self.ID = int(data[1])
-
-            # Create time
-            self.t.append(datetime.datetime(int(data[2][:4]),
-                                            int(data[2][4:6]),
-                                            int(data[2][6:8]),
-                                            int(data[2][-2:])))
-
-            # # If an event is occuring record it.  If landfall then use as an
-            # # offset.   Note that if there are multiple landfalls the last one
-            # # is used as the offset
-            # if not short_data:
-            #     if len(data[22].strip()) > 0:
-            #         self.event[i] = data[22].strip()
-            #         if self.event[i].upper() == "L":
-            #             self.time_offset = self.t[i]
-
-            # Classification, note that this is not the category of the storm
-            try:
-                self.classification[i] = data[10]
-            except IndexError:
-                self.classification[i] = ''
-
-            # Parse eye location - longitude/latitude order
-            if data[6][-1] == "N":
-                self.eye_location[i, 1] = float(data[6][0:-1]) / 10.0
-            else:
-                self.eye_location[i, 1] = -float(data[6][0:-1]) / 10.0
-            if data[7][-1] == "E":
-                self.eye_location[i, 0] = float(data[7][0:-1]) / 10.0
-            else:
-                self.eye_location[i, 0] = -float(data[7][0:-1]) / 10.0
-
-            # Intensity information (occasionally missing for older ATCF storms)
-            try:
-                self.max_wind_speed[i] = units.convert(float(data[8]), 'knots', 'm/s')
-            except ValueError:
-                self.max_wind_speed[i] = -1
-            try:
-                self.central_pressure[i] = units.convert(float(data[9]), 'mbar', 'Pa')
-            except (ValueError, IndexError):
-                self.central_pressure[i] = -1
-
-            # if this is a shortened line - does not contain max wind radius
-            # and outer storm radius - or if these values are missing, set them
-            # to -1 to mark them as missing
-            try:
-                self.storm_radius[i] = units.convert(float(data[18]), 'nmi', 'm')
-            except (ValueError, IndexError):
-                self.storm_radius[i] = -1
-            try:
-                self.max_wind_radius[i] = units.convert(float(data[19]), 'nmi', 'm')
-            except (ValueError, IndexError):
-                self.max_wind_radius[i] = -1
-		
-	    # Wind profile (occasionally missing for older ATCF storms)
-	    # Wind speeds
-            try:
-                self.wind_speeds[i, 0] = units.convert(float(data[11]), 'knots', 'm/s')
-            except (ValueError, IndexError):
-                self.wind_speeds[i, 0] = -1
-		
-	    # Wind speeds' radii
-            try:
-                average = 0
-                n = 0
-                for j in range(13, 17):
-                    if float(data[j]) != 0:
-                        n = n + 1
-                        average = average + float(data[j])
-                if n != 0:
-                    average = average / float(n)
-                else:
-                    average = 0
-                self.wind_speeds[i, 1] = units.convert(average, 'nmi', 'm')
-            except (ValueError, IndexError):
-                self.wind_speeds[i, 1] = -1
-                
-            if self.max_wind_speed.min() == -1:
-                warnings.warn('Some timesteps have missing max wind speed. These will not be written'
-                              ' out to geoclaw format.')
-            if self.central_pressure.min() == -1:
-                warnings.warn('Some timesteps have missing central pressure. These will not be written'
-                              ' out to geoclaw format.')
+        if self.max_wind_speed.min() == -1:
+            warnings.warn('Some timesteps have missing max wind speed. These will not be written'
+                          ' out to geoclaw format.')
+        if self.central_pressure.min() == -1:
+            warnings.warn('Some timesteps have missing central pressure. These will not be written'
+                          ' out to geoclaw format.')
 
     def read_hurdat(self, path, verbose=False):
         r"""Read in HURDAT formatted storm file
@@ -936,11 +919,11 @@ class Storm(object):
             data.append((self.t[n] - self.time_offset).total_seconds())
             data.append(self.eye_location[n, 0])
             data.append(self.eye_location[n, 1])
-            
+
             if self.max_wind_speed[n] == -1:
                 continue
             data.append(self.max_wind_speed[n])
-            
+
             # Allow custom function to set max wind radius if not
             # available
             if self.max_wind_radius[n] == -1:
@@ -1138,7 +1121,7 @@ class Storm(object):
     # =========================================================================
     # Other Useful Routines
     def plot(self, axes=None, intensity=False, limits=None, track_color='red',
-                   category_color=None, categorization="NHC", 
+                   category_color=None, categorization="NHC",
                    plot_package=None):
         r"""Plot the track and optionally the intensity of the storm
 
@@ -1146,19 +1129,19 @@ class Storm(object):
 
         :Input:
          - *axes* (matplotlib.pyplot.axes) Axes to plot into.  Default is *None*
-         - *intensity* (bool) Plot the intensity of storm along the track.  
+         - *intensity* (bool) Plot the intensity of storm along the track.
            Defaults to *False*.
-         - *limits* (list) Limits of the plot specified.  Defaults to either 
-           using the plotting package's default or the max and min of the 
+         - *limits* (list) Limits of the plot specified.  Defaults to either
+           using the plotting package's default or the max and min of the
            longitude and latitude of the storm track.
-         - *track_color* (str) String or specification of plotting color to use 
+         - *track_color* (str) String or specification of plotting color to use
            for the track if *intensity* is not being plotted.
-         - *category_color* (dict) Dictionary containing mapping between 
-           category numerical value and colors.  Defaults to [0, 5] -> ['red', 
+         - *category_color* (dict) Dictionary containing mapping between
+           category numerical value and colors.  Defaults to [0, 5] -> ['red',
            'yellow', 'orange', 'green', 'blue', 'gray']
          - *categorization* (str) Type of categorization, defaults to *"NHC"*
-         - *plot_package* (str) Package that will do the plotting.  Available 
-           packages include 'cartopy', 'basemap' and 'basic'.  Checks to see 
+         - *plot_package* (str) Package that will do the plotting.  Available
+           packages include 'cartopy', 'basemap' and 'basic'.  Checks to see
            what packages are available if None is given.
 
         :Output:
@@ -1439,10 +1422,10 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
     fill_da = xr.DataArray(getattr(storm_fill,var),
                            coords = {'t': getattr(storm_fill,'t')},
                            dims = ('t',))
-    
+
     # convert -1 to nan
     fill_da = fill_da.where(fill_da>0,numpy.nan)
-    
+
     # if not all missing, try using storm_fill to fill
     if fill_da.notnull().any():
 
@@ -1471,7 +1454,7 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
         targ_interp = targ_da.interp(t=[t], kwargs=interp_kwargs).item()
         if not numpy.isnan(targ_interp):
             return targ_interp
-        
+
     # if nothing worked, return the missing value (-1)
     return -1
 

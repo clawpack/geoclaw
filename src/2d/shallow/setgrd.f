@@ -30,7 +30,6 @@ c
 c
       levnew =  2
       time   = start_time
-      verbosity_regrid = method(4)
 c
  10   if (levnew .gt. mxnest) go to 30
           levold = levnew - 1
@@ -91,9 +90,10 @@ c
           iregridcount(levnew) = iregridcount(levnew) + 1
           if (ngrids .gt. 1) call arrangeGrids(levnew,ngrids)
           if (verbosity_regrid .ge. levnew) then
-             write(*,100) ngrids,ncells,levnew
- 100         format("there are ",i6," grids with ",i10,
-     &               " cells at level ", i3)
+              write(*,100) levnew,start_time,ngrids,ncells
+              write(outunit,100) levnew,start_time,ngrids,ncells
+ 100          format("Gridding level ",i3," at t =",e14.6, ":",i6,
+     &               " grids with ",i11," cells")
           endif 
 c
 c     need to make gridList here before calling again to make finer grids.

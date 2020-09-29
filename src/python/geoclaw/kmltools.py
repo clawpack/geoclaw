@@ -1302,6 +1302,7 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
     
     import matplotlib.pyplot as plt
     import matplotlib as mpl
+    import numpy
 
     fig = plt.figure(figsize=(1.2,3))
     ax1 = fig.add_axes([0.3, 0.075, 0.20, 0.80])
@@ -1315,6 +1316,17 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
                                     norm=norm,
                                     extend=extend,
                                     orientation='vertical')
+
+    # make sure ticks appear at lower and upper limits of scale:
+    cbticks = cb1.get_ticks()
+    cbticks = numpy.hstack([norm.vmin, cbticks, norm.vmax])
+    # remove 2nd and/or next-to-last tick if they are cramped:
+    if cbticks[1]-cbticks[0] < 0.25*(cbticks[2]-cbticks[1]):
+        cbticks = numpy.hstack((cbticks[:1], cbticks[2:]))
+    if cbticks[-1]-cbticks[-2] < 0.25*(cbticks[-2]-cbticks[-3]):
+        cbticks = numpy.hstack((cbticks[:-2], cbticks[-1:]))
+    cb1.set_ticks(cbticks)
+
     if label:
         cb1.set_label(label)
     if title:
