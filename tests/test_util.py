@@ -35,7 +35,7 @@ class TestFetchNoaaTideData:
                                  self.test_retrieve_and_cache.__name__)
 
         water_level_response = \
-            ('Date Time, Water Level, Sigma, O, F, R, L, Quality\n'
+            ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
              '2000-10-30 12:00,1.001,0.001,0,0,0,0,v\n'
              '2000-10-30 12:06,1.002,0.002,0,0,0,0,v\n'
              '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'
@@ -97,7 +97,7 @@ class TestFetchNoaaTideData:
 
         # missing first two entries
         water_level_response = \
-            ('Date Time, Water Level, Sigma, O, F, R, L, Quality\n'
+            ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
              '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'
              '2000-10-30 12:18,1.004,0.004,0,0,0,0,v\n'
              '2000-10-30 12:24,1.005,0.005,0,0,0,0,v\n')
@@ -127,7 +127,7 @@ class TestFetchNoaaTideData:
 
         # missing fist two water level values
         water_level_response = \
-            ('Date Time, Water Level, Sigma, O, F, R, L, Quality\n'
+            ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
              '2000-10-30 12:00,,0.001,0,0,0,0,v\n'
              '2000-10-30 12:06,,0.002,0,0,0,0,v\n'
              '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'

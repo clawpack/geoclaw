@@ -479,9 +479,17 @@ class Topography(object):
         diffy = numpy.diff(y)
         dx = numpy.mean(diffx)
         dy = numpy.mean(diffy)
+        if dy < 0:
+            Y = numpy.flipud(Y)
+            y = numpy.flipud(y)
+            diffy = numpy.diff(y)
+            dy = numpy.mean(diffy)
+            Z = numpy.flipud(Z)
         if diffx.max()-diffx.min() > 1e-3*dx:
+            print('diffx.max()-diffx.min() = ', diffx.max()-diffx.min())
             raise ValueError("x must be equally spaced for structured topo")
         if diffy.max()-diffy.min() > 1e-3*dy:
+            print('diffy.max()-diffy.min() = ', diffy.max()-diffy.min())
             raise ValueError("y must be equally spaced for structured topo")
 
         self.unstructured = False
