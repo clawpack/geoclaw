@@ -1,7 +1,7 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/bowl_slosh/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
 
-Thu, 01 Oct 2020 08:54:31 PDT
+Thu, 01 Oct 2020 08:56:32 PDT
 $CLAW = /Users/rjl/clawpack_src/clawpack_master
 $FC = gfortran
 
@@ -106,5 +106,7 @@ d4e8b16 (HEAD -> rpt2_regression_data, origin/master, origin/HEAD, master) Merge
 
 --- branch and status ---
 ## rpt2_regression_data
- M tests/bowl_slosh/regression_data/claw_git_status.txt
- M tests/bowl_slosh/regression_data/gauge00001.txt
+M  tests/bowl_slosh/regression_data/claw_git_status.txt
+M  tests/bowl_slosh/regression_data/gauge00001.txt
+M  tests/bowl_slosh/regression_data/regression_data_fgmax.txt
+ M tests/dtopo1/regression_data/gauge00001.txt
