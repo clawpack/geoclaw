@@ -27,7 +27,7 @@ real(kind=8) pure function get_max_speed(val,mitot,mjtot,nvar,aux,naux,nghost,hx
                 if (val(1,i,j) > dry_tolerance) then
                     u  = val(2,i,j) / val(1,i,j)
                     v  = val(3,i,j) / val(1,i,j)
-                    sig = sqrt(grav*h)
+                    sig = sqrt(grav*val(1,i,j))
                     sp_over_h = max((abs(u)+sig)/hx,(abs(v)+sig)/hy,sp_over_h)
                 endif
             end do
@@ -38,7 +38,7 @@ real(kind=8) pure function get_max_speed(val,mitot,mjtot,nvar,aux,naux,nghost,hx
                 if (val(1,i,j) > dry_tolerance) then
                     u  = val(2,i,j) / val(1,i,j)
                     v  = val(3,i,j) / val(1,i,j)
-                    sig = sqrt(grav*h)
+                    sig = sqrt(grav*val(1,i,j))
                     sp_over_h = max((abs(u)+sig)/hx,(abs(v)+sig)/hy,sp_over_h)
                 endif
             end do
