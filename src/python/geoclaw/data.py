@@ -170,6 +170,15 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             ntopofiles = len(self.topofiles)
             self.data_write(value=ntopofiles,alt_name='ntopofiles')
             for tfile in self.topofiles:
+
+                if len(tfile) == 6:
+                    print('*** Note topofile specs changed in v5.8.0 -- ' +\
+                          'Flag level info now ignored.')
+                elif len(tfile) == 2:
+                    tfile = [tfile[0]] + [1,1,0,0] + [tfile[1]]
+                else:
+                    raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
+
                 # if path is relative in setrun, assume it's relative to the
                 # same directory that out_file comes from
                 fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
@@ -288,6 +297,15 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         self.data_write(value=mdtopofiles,alt_name='mdtopofiles')
         self.data_write()
         for tfile in self.dtopofiles:
+
+            if len(tfile) == 4:
+                print('*** Note dtopofile specs changed in v5.8.0 -- ' +\
+                      'Flag level info now ignored.')
+            elif len(tfile) == 2:
+                tfile = [tfile[0]] + [1,1] + [tfile[1]]
+            else:
+                raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
+
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
             fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
@@ -376,6 +394,15 @@ class QinitData(clawpack.clawutil.data.ClawData):
         else:
             # Check to see if each qinit file is present and then write the data
             for tfile in self.qinitfiles:
+
+                if len(tfile) == 3:
+                    print('*** Note qinit specs changed in v5.8.0 -- ' +\
+                          'Flag level info now ignored.')
+                elif len(tfile) == 1:
+                    tfile = [1,1] + [tfile[0]]
+                else:
+                    raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
+
                 # if path is relative in setrun, assume it's relative to the
                 # same directory that out_file comes from
                 fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
