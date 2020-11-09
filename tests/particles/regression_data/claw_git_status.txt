@@ -1,7 +1,7 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/multilayer/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/particles/regression_data/claw_git_diffs.txt
 
-Thu, 01 Oct 2020 09:07:12 PDT
+Thu, 01 Oct 2020 12:05:13 PDT
 $CLAW = /Users/rjl/clawpack_src/clawpack_master
 $FC = gfortran
 
@@ -102,14 +102,9 @@ geoclaw
 /Users/rjl/clawpack_src/clawpack_master/geoclaw
 
 --- last commit ---
-407299e (HEAD -> rpt2_regression_data) update regression data for changes in rpt2_geoclaw
+730275d (HEAD -> rpt2_regression_data) update netcdf_topo regression data for changes in rpt2_geoclaw
 
 --- branch and status ---
 ## rpt2_regression_data
-D  tests/multilayer/regression_data/claw_git_diffs.txt
- M tests/multilayer/regression_data/claw_git_status.txt
- M tests/multilayer/regression_data/gauge00000.txt
- M tests/multilayer/regression_data/gauge00001.txt
- M tests/multilayer/regression_data/gauge00002.txt
- M tests/multilayer/regression_data/gauge00003.txt
- M tests/multilayer/regression_data/gauge00004.txt
+ M tests/particles/regression_data/gauge00001.txt
+ M tests/particles/regression_data/gauge00002.txt

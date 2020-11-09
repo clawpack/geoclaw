@@ -1,7 +1,7 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/multilayer/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/chile2010_adjoint/regression_data/claw_git_diffs.txt
 
-Thu, 01 Oct 2020 09:07:12 PDT
+Fri, 23 Oct 2020 16:10:35 PDT
 $CLAW = /Users/rjl/clawpack_src/clawpack_master
 $FC = gfortran
 
@@ -42,7 +42,7 @@ amrclaw
 /Users/rjl/clawpack_src/clawpack_master/amrclaw
 
 --- last commit ---
-fb09a05 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #265 from rjleveque/travis_noPy2
+6da6e17 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #266 from rjleveque/region_tools_ixy
 
 --- branch and status ---
 ## master...origin/master
@@ -66,7 +66,7 @@ pyclaw
 /Users/rjl/clawpack_src/clawpack_master/pyclaw
 
 --- last commit ---
-27f3f4f (HEAD -> master, origin/master, origin/HEAD) Merge pull request #648 from rjleveque/travis_noPy2
+41e15d8 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #650 from kbarnhart/barnhark/fix_vtk_docstring_formatting
 
 --- branch and status ---
 ## master...origin/master
@@ -90,7 +90,7 @@ riemann
 /Users/rjl/clawpack_src/clawpack_master/riemann
 
 --- last commit ---
-cd39c82 (HEAD -> rpt2_geoclaw, rjleveque/rpt2_geoclaw) check for dry states in rpt2_geoclaw
+e326696 (HEAD -> rpt2_geoclaw) refactor rpt2_geoclaw.f, cleaned up and modified behavior
 
 --- branch and status ---
 ## rpt2_geoclaw
@@ -102,14 +102,11 @@ geoclaw
 /Users/rjl/clawpack_src/clawpack_master/geoclaw
 
 --- last commit ---
-407299e (HEAD -> rpt2_regression_data) update regression data for changes in rpt2_geoclaw
+13ff68f (HEAD -> rpt2_regression_data) Merge branch 'master' into rpt2_regression_data
 
 --- branch and status ---
 ## rpt2_regression_data
-D  tests/multilayer/regression_data/claw_git_diffs.txt
- M tests/multilayer/regression_data/claw_git_status.txt
- M tests/multilayer/regression_data/gauge00000.txt
- M tests/multilayer/regression_data/gauge00001.txt
- M tests/multilayer/regression_data/gauge00002.txt
- M tests/multilayer/regression_data/gauge00003.txt
- M tests/multilayer/regression_data/gauge00004.txt
+ M tests/chile2010_adjoint/regression_data/claw_git_status.txt
+ M tests/chile2010_adjoint/regression_data/gauge00001.txt
+ M tests/storm_surge/regression_data/claw_git_status.txt
+ M tests/storm_surge/regression_data/gauge00001.txt
