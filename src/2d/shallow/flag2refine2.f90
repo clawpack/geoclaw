@@ -39,7 +39,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     use storm_module, only: storm_location, wind_forcing, wind_index, wind_refine
 
     use regions_module, only: num_regions, regions
-    use refinement_module
+    use refinement_module, only: wave_tolerance, speed_tolerance
 
     use adjoint_module, only: totnum_adjoints,innerprod_index, &
                               adjoint_flagging,select_snapshots
@@ -139,32 +139,16 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
 
                 if(adjoint_flagging) then
                     if(aux(innerprod_index,i,j) > tolsp) then
-                        ! Check to see if we are near shore
-                        if (q(1,i,j) < deep_depth) then
-                            amrflags(i,j) = DOFLAG
-                            cycle x_loop
-                        ! Check if we are allowed to flag in deep water
-                        ! anyway
-                        else if (level < max_level_deep) then
-                            amrflags(i,j) = DOFLAG
-                            cycle x_loop
-                        endif
+                        amrflags(i,j) = DOFLAG
+                        cycle x_loop
                     endif
                 else
-                    eta = q(1,i,j) + aux(1,i,j)
-
+                
                     ! Check wave criteria
+                    eta = q(1,i,j) + aux(1,i,j)
                     if (abs(eta - sea_level) > wave_tolerance) then
-                        ! Check to see if we are near shore
-                        if (q(1,i,j) < deep_depth) then
-                            amrflags(i,j) = DOFLAG
-                            cycle x_loop
-                        ! Check if we are allowed to flag in deep water
-                        ! anyway
-                        else if (level < max_level_deep) then
-                            amrflags(i,j) = DOFLAG
-                            cycle x_loop
-                        endif
+                        amrflags(i,j) = DOFLAG
+                        cycle x_loop
                     endif
 
                     ! Check speed criteria, note that it might be useful to

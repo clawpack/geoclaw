@@ -27,6 +27,7 @@ from __future__ import print_function
 import os
 import numpy
 import clawpack.clawutil.data
+import warnings
 
 # Radius of earth in meters.  
 # For consistency, should always use this value when needed, e.g.
@@ -113,8 +114,8 @@ class RefinementData(clawpack.clawutil.data.ClawData):
         # Refinement controls
         self.add_attribute('wave_tolerance',1.0e-1)
         self.add_attribute('speed_tolerance',[1.0e12]*6)
-        self.add_attribute('deep_depth',1.0e2)
-        self.add_attribute('max_level_deep',3)
+        self.add_attribute('deep_depth',None)      # deprecated
+        self.add_attribute('max_level_deep',None)  # deprecated
         self.add_attribute('variable_dt_refinement_ratios',False)
 
 
@@ -122,11 +123,18 @@ class RefinementData(clawpack.clawutil.data.ClawData):
         # Refinement controls
         self.open_data_file(out_file, data_source)
         self.data_write('wave_tolerance')
+
+        # check if user set deprecated parameters:
+        if self.deep_depth is not None:
+            w = '\n  *** WARNING: deep_depth parameter ignored as of v5.8.0'
+            warnings.warn(w, UserWarning)
+        if self.max_level_deep is not None:
+            w = '\n  *** WARNING: max_level_deep parameter ignored as of v5.8.0'
+            warnings.warn(w, UserWarning)
+
         if not isinstance(self.speed_tolerance,list):
             self.speed_tolerance = [self.speed_tolerance]
         self.data_write('speed_tolerance')
-        self.data_write('deep_depth')
-        self.data_write('max_level_deep')
         self.data_write()
         self.data_write('variable_dt_refinement_ratios',
                         description="(Set dt refinement ratios automatically)")
@@ -172,8 +180,9 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             for tfile in self.topofiles:
 
                 if len(tfile) == 6:
-                    print('*** Note topofile specs changed in v5.8.0 -- ' +\
-                          'Flag level info now ignored.')
+                    w = '\n  *** WARNING: topofile specs changed in v5.8.0 -- ' + \
+                          'Flag level info now ignored'
+                    warnings.warn(w, UserWarning)
                 elif len(tfile) == 2:
                     tfile = [tfile[0]] + [1,1,0,0] + [tfile[1]]
                 else:
@@ -299,8 +308,9 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         for tfile in self.dtopofiles:
 
             if len(tfile) == 4:
-                print('*** Note dtopofile specs changed in v5.8.0 -- ' +\
-                      'Flag level info now ignored.')
+                w = '\n  *** WARNING: dtopofile specs changed in v5.8.0 -- ' + \
+                      'Flag level info now ignored'
+                warnings.warn(w, UserWarning)
             elif len(tfile) == 2:
                 tfile = [tfile[0]] + [1,1] + [tfile[1]]
             else:
@@ -396,8 +406,9 @@ class QinitData(clawpack.clawutil.data.ClawData):
             for tfile in self.qinitfiles:
 
                 if len(tfile) == 3:
-                    print('*** Note qinit specs changed in v5.8.0 -- ' +\
-                          'Flag level info now ignored.')
+                    w = '\n  *** WARNING: qinit specs changed in v5.8.0 -- ' + \
+                          'Flag level info now ignored'
+                    warnings.warn(w, UserWarning)
                 elif len(tfile) == 1:
                     tfile = [1,1] + [tfile[0]]
                 else:
