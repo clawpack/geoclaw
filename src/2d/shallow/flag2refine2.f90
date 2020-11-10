@@ -26,14 +26,6 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     use geoclaw_module, only:dry_tolerance, sea_level
     use geoclaw_module, only: spherical_distance, coordinate_system
 
-    use topo_module, only: tlowtopo,thitopo,xlowtopo,xhitopo,ylowtopo,yhitopo
-    use topo_module, only: minleveltopo,mtopofiles
-
-    use topo_module, only: tfdtopo,xlowdtopo,xhidtopo,ylowdtopo,yhidtopo
-    use topo_module, only: minleveldtopo,num_dtopo
-
-    use qinit_module, only: x_low_qinit,x_hi_qinit,y_low_qinit,y_hi_qinit
-    use qinit_module, only: min_level_qinit,qinit_type
 
     use storm_module, only: storm_specification_type, wind_refine, R_refine
     use storm_module, only: storm_location, wind_forcing, wind_index, wind_refine
