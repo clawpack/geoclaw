@@ -183,8 +183,9 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     w = '\n  *** WARNING: topofile specs changed in v5.8.0 -- ' + \
                           'Flag level info now ignored'
                     warnings.warn(w, UserWarning)
+                    tfile = [tfile[0], tfile[-1]] # drop minlevel,maxlevel,t1,t2
                 elif len(tfile) == 2:
-                    tfile = [tfile[0]] + [1,1,0,0] + [tfile[1]]
+                    pass  # now expect only topo_type, filename
                 else:
                     raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
 
@@ -192,7 +193,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 # same directory that out_file comes from
                 fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
                 self._out_file.write("\n'%s' \n " % fname)
-                self._out_file.write("%3i %3i %3i %20.10e %20.10e \n" % tuple(tfile[:-1]))
+                self._out_file.write("%3i   # topo_type\n" % tfile[0])
         elif self.test_topography == 1:
             self.data_write(name='topo_location',description='(Bathymetry jump location)')
             self.data_write(name='topo_left',description='(Depth to left of bathy_location)')
@@ -311,8 +312,9 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                 w = '\n  *** WARNING: dtopofile specs changed in v5.8.0 -- ' + \
                       'Flag level info now ignored'
                 warnings.warn(w, UserWarning)
+                tfile = [tfile[0], tfile[-1]]  # drop minlevel,maxlevel
             elif len(tfile) == 2:
-                tfile = [tfile[0]] + [1,1] + [tfile[1]]
+                pass   # now expect only dtopo_type, filename
             else:
                 raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
 
@@ -320,7 +322,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
             # same directory that out_file comes from
             fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
             self._out_file.write("\n'%s' \n" % fname)
-            self._out_file.write("%3i %3i %3i\n" % tuple(tfile[:-1]))
+            self._out_file.write("%3i   # dtopo_type\n" % tfile[0])
         self.data_write()
         self.data_write(value=self.dt_max_dtopo,alt_name='dt_max_dtopo')
         self.close_data_file()
@@ -409,8 +411,9 @@ class QinitData(clawpack.clawutil.data.ClawData):
                     w = '\n  *** WARNING: qinit specs changed in v5.8.0 -- ' + \
                           'Flag level info now ignored'
                     warnings.warn(w, UserWarning)
+                    tfile = [tfile[-1]]  # drop minlevel,maxlevel
                 elif len(tfile) == 1:
-                    tfile = [1,1] + [tfile[0]]
+                    pass  # now expect only filename
                 else:
                     raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
 
@@ -418,7 +421,6 @@ class QinitData(clawpack.clawutil.data.ClawData):
                 # same directory that out_file comes from
                 fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
                 self._out_file.write("\n'%s' \n" % fname)
-                self._out_file.write("%3i %3i \n" % tuple(tfile[:-1]))
         # else:
         #     raise ValueError("Invalid qinit_type parameter %s." % self.qinit_type)
 
