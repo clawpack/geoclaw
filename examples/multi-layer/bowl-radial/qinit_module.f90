@@ -8,8 +8,6 @@ module qinit_module
     ! Type of q initialization
     integer, public :: qinit_type
 
-    integer, public :: min_level_qinit
-    integer, public :: max_level_qinit
 
     ! Geometry
     real(kind=8), public :: x_low_qinit
@@ -70,10 +68,8 @@ contains
                 return
             else if (qinit_type > 0 .and. qinit_type < 5) then
                 read(unit,*) qinit_fname
-                read(unit,"(2i2)") min_level_qinit, max_level_qinit
 
-                write(GEO_PARM_UNIT,*) '   min_level, max_level, qinit_fname:'
-                write(GEO_PARM_UNIT,*)  min_level_qinit, max_level_qinit, qinit_fname
+                write(GEO_PARM_UNIT,*)  qinit_fname
                 
                 call read_qinit(qinit_fname)
             else if (qinit_type >= 5) then
