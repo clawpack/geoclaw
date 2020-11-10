@@ -26,7 +26,7 @@ def days2seconds(days):
     return days * 60.0**2 * 24.0
 
 
-# Scratch directory for storing topo and /topo files:
+# Scratch directory for storing topo and storm files:
 scratch_dir = os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
 
 
