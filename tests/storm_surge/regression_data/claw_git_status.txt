@@ -1,18 +1,36 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/git/clawpack/geoclaw/tests/storm_surge/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/storm_surge/regression_data/claw_git_diffs.txt
 
-Sun, 09 Oct 2016 09:32:11 PDT
-$CLAW = /Users/rjl/git/clawpack
+Fri, 23 Oct 2020 16:06:35 PDT
+$CLAW = /Users/rjl/clawpack_src/clawpack_master
 $FC = gfortran
+
+
+===========
+clawpack
+===========
+/Users/rjl/clawpack_src/clawpack_master/
+
+--- last commit ---
+be2b38d (HEAD -> master, origin/master, origin/HEAD) Merge pull request #189 from clawpack/no_version_repetition
+
+--- branch and status ---
+## master...origin/master
+ M amrclaw
+ M classic
+ M geoclaw
+ M pyclaw
+ M riemann
+ M visclaw
 
 
 ===========
 classic
 ===========
-/Users/rjl/git/clawpack/classic
+/Users/rjl/clawpack_src/clawpack_master/classic
 
 --- last commit ---
-31c9723 Merge pull request #74 from rjleveque/regression_claw_git_status
+13f06a2 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
 
 --- branch and status ---
 ## master...origin/master
@@ -21,10 +39,10 @@ classic
 ===========
 amrclaw
 ===========
-/Users/rjl/git/clawpack/amrclaw
+/Users/rjl/clawpack_src/clawpack_master/amrclaw
 
 --- last commit ---
-6aada0a Merge pull request #175 from rjleveque/regression_data_copy_gauges
+6da6e17 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #266 from rjleveque/region_tools_ixy
 
 --- branch and status ---
 ## master...origin/master
@@ -33,10 +51,10 @@ amrclaw
 ===========
 clawutil
 ===========
-/Users/rjl/git/clawpack/clawutil
+/Users/rjl/clawpack_src/clawpack_master/clawutil
 
 --- last commit ---
-bbc12d6 Merge pull request #105 from mandli/gauge-test-update
+116ffb7 (HEAD -> master, tag: v5.7.1, origin/master, origin/HEAD) Merge pull request #151 from rjleveque/b4run
 
 --- branch and status ---
 ## master...origin/master
@@ -45,10 +63,10 @@ bbc12d6 Merge pull request #105 from mandli/gauge-test-update
 ===========
 pyclaw
 ===========
-/Users/rjl/git/clawpack/pyclaw
+/Users/rjl/clawpack_src/clawpack_master/pyclaw
 
 --- last commit ---
-314fd93 Merge pull request #541 from mandli/add-new-gauges
+41e15d8 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #650 from kbarnhart/barnhark/fix_vtk_docstring_formatting
 
 --- branch and status ---
 ## master...origin/master
@@ -57,10 +75,10 @@ pyclaw
 ===========
 visclaw
 ===========
-/Users/rjl/git/clawpack/visclaw
+/Users/rjl/clawpack_src/clawpack_master/visclaw
 
 --- last commit ---
-72ee0db Merge pull request #187 from rjleveque/remove_ioff
+b03b0d4 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #280 from rjleveque/mapc2p_exists
 
 --- branch and status ---
 ## master...origin/master
@@ -69,22 +87,24 @@ visclaw
 ===========
 riemann
 ===========
-/Users/rjl/git/clawpack/riemann
+/Users/rjl/clawpack_src/clawpack_master/riemann
 
 --- last commit ---
-48a46d3 Merge pull request #113 from rjleveque/shallow_roe_needs_grav
+e326696 (HEAD -> rpt2_geoclaw) refactor rpt2_geoclaw.f, cleaned up and modified behavior
 
 --- branch and status ---
-## master...origin/master
+## rpt2_geoclaw
 
 
 ===========
 geoclaw
 ===========
-/Users/rjl/git/clawpack/geoclaw
+/Users/rjl/clawpack_src/clawpack_master/geoclaw
 
 --- last commit ---
-8d45809 added claw_git status files to a test
+13ff68f (HEAD -> rpt2_regression_data) Merge branch 'master' into rpt2_regression_data
 
 --- branch and status ---
-## master...origin/master [ahead 2]
+## rpt2_regression_data
+ M tests/storm_surge/regression_data/claw_git_status.txt
+ M tests/storm_surge/regression_data/gauge00001.txt
