@@ -34,7 +34,7 @@ def makeqinit():
     xupper = 50.e0
     yupper = 50.e0
     ylower = -50.e0
-    outfile= "hump.xyz"     
+    outfile= "qinit.xyz"     
 
     topography = Topography(topo_func=qinit)
     topography.x = linspace(xlower,xupper,nxpoints)
