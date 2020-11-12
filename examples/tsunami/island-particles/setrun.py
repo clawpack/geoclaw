@@ -376,27 +376,25 @@ def setgeo(rundata):
     # Refinement data
     refinement_data = rundata.refinement_data
     refinement_data.wave_tolerance = 1.e-2
-    refinement_data.deep_depth = 1e2
-    refinement_data.max_level_deep = 3
     refinement_data.variable_dt_refinement_ratios = True
 
     # == settopo.data values ==
     topo_data = rundata.topo_data
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([3, 1, 1, 0., 1.e10, 'island.tt3'])
+    #    [topotype, fname]
+    topo_data.topofiles.append([3, 'island.tt3'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form :   (<= 1 allowed for now!)
-    #   [topotype, minlevel,maxlevel,fname]
+    #   [topotype, fname]
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type = 4
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
-    #   [minlev, maxlev, fname]
-    rundata.qinit_data.qinitfiles.append([1, 2, 'hump.xyz'])
+    #   [fname]
+    rundata.qinit_data.qinitfiles.append(['qinit.xyz'])
 
     # == setfixedgrids.data values ==
     fixedgrids = rundata.fixed_grid_data.fixedgrids

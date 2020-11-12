@@ -14,6 +14,11 @@ To create the topo file before running the code::
 
     make topo
 
+This creates `island.tt3` (with topo_type == 3).  It also creates 
+`qinit.xyz`, containing initial data for a surface perturbation
+corresponding to a "dam break" problem at `x = 10`, leading to flow in the
+positive `x` direction.
+
 
 In this code, :math:`x` and :math:`y` are in meters (coordinate_system=1 
 in `setrun.py`).
