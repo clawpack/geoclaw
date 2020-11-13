@@ -383,8 +383,6 @@ def setrun(claw_pkg='geoclaw'):
     refinement_data = rundata.refinement_data
     refinement_data.variable_dt_refinement_ratios = True
     refinement_data.wave_tolerance = 0.01
-    refinement_data.deep_depth = 100.0
-    refinement_data.max_level_deep = 3
 
     # == settopo.data values ==
     topofiles = rundata.topo_data.topofiles
