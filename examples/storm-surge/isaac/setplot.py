@@ -191,6 +191,7 @@ def setplot(plotdata=None):
     def gauge_afteraxes(cd):
 
         axes = plt.gca()
+        landfall = 0.
         surgeplot.plot_landfall_gauge(cd.gaugesoln, axes, landfall=landfall)
 
         # Fix up plot - in particular fix time labels
