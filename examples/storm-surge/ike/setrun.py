@@ -363,8 +363,9 @@ def setgeo(rundata):
     geo_data.friction_depth = 1e10
 
     # == Algorithm and Initial Conditions ==
-    # Due to seasonal swelling of gulf we set sea level higher
-    geo_data.sea_level = 0.28
+    # Note that in the original paper due to gulf summer swelling this was set
+    # to 0.28
+    geo_data.sea_level = 0.0
     geo_data.dry_tolerance = 1.e-2
 
     # Refinement Criteria
