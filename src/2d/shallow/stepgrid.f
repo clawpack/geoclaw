@@ -111,9 +111,10 @@ c::::::::::::::::::::::::Fixed Grid Output:::::::::::::::::::::::::::::::::
       tcf=tc0+dt !# end of computational step
 
 !$OMP CRITICAL (FixedGrids)
+      write(6,*) '+++ in stepgrid, level,tc0,tcf: ',level,tc0,tcf
 c     # see if any f-grids should be written out
       do ng=1,num_fixed_grids
-        if (tc0 > fgrids(ng)%start_time .and. 
+        if (tc0 > fgrids(ng)%start_time * (1.d0 - 1d-13) .and. 
      &      fgrids(ng)%last_output_index < fgrids(ng)%num_output) then
 c     # fgrid ng may need to be written out
 c     # find the first output number that has not been written out and
@@ -132,12 +133,14 @@ c     # these should be the most accurate values at any given point in the fgrid
 c     # since tc0> output time
            do ioutfg=ioutfgstart,ioutfgend
              toutfg=fgrids(ng)%start_time+(ioutfg-1)*fgrids(ng)%dt
-             if (toutfg < tc0) then
+             if (toutfg < tc0 * (1.d0 - 1d-13)) then
 c               # write out the solution for fixed grid ng
 c               # test if arrival times should be output
                 ioutflag = fgrids(ng)%output_arrival_times*
      &                         (fgrids(ng)%num_output-
      &                          fgrids(ng)%last_output_index)
+                write(6,*) '+++ call fgrid_out, ioutfg,toutfg: ',
+     &                     ioutfg,toutfg
                 call fgrid_out(ng,fgrids(ng),toutfg,ioutfg,ioutflag)
 
                 fgrids(ng)%last_output_time = toutfg
@@ -164,13 +167,17 @@ c     # fill in values at fixed grid points effected at time tc0
      &     (fgrids(ng)%y_low < ylowmbc + my*dy) .and.
      &     (fgrids(ng)%y_hi  > ylowmbc) .and.
      &     (fgrids(ng)%last_output_index < fgrids(ng)%num_output) .and.
-     &     (tcf >= fgrids(ng)%start_time) ) then
+     &     (tcf >= fgrids(ng)%start_time * (1.d0 - 1d-13)) ) then
          
-         if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= tc0 .and.
-     &       fgrids(ng)%last_output_time + fgrids(ng)%dt <= tcf) then
+
+        if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= 
+     &                                    tc0 * (1.d0 - 1d-13) .and.
+     &      fgrids(ng)%last_output_time + fgrids(ng)%dt <=  
+     &                                    tcf * (1.d0 + 1d-13)) then
 
 c        # fixedgrid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
+         write(6,*) '+++ fgrid_interp(1), tc0, level: ',tc0,level
          call fgrid_interp(1,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
      &                     xlowmbc,ylowmbc,maux,aux,0)
      
@@ -286,15 +293,18 @@ c     # fill in values at fixed grid points effected at time tcf
      &    (fgrids(ng)%y_low < ylowmbc + my * dy) .and.
      &    (fgrids(ng)%y_hi  > ylowmbc) .and.
      &    (fgrids(ng)%last_output_index < fgrids(ng)%num_output) .and.
-     &    (tcf >= fgrids(ng)%start_time)) then
+     &    (tcf >= fgrids(ng)%start_time * (1.d0 - 1d-13))) then
       
-        if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= tc0 .and.
-     &      fgrids(ng)%last_output_time + fgrids(ng)%dt <= tcf) then
+        if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= 
+     &                                    tc0 * (1.d0 - 1d-13) .and.
+     &      fgrids(ng)%last_output_time + fgrids(ng)%dt <=  
+     &                                    tcf * (1.d0 + 1d-13)) then
 
 c        # fixedgrid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
 C         i0=i0fg(ng) !# index into the ng grid in the work array
 
+        write(6,*) '+++ fgrid_interp(2), tcf, level: ',tcf,level
         call fgrid_interp(2,fgrids(ng),tcf,q,nvar,mx,my,mbc,dx,dy,
      &                    xlowmbc,ylowmbc,maux,aux,0)
 

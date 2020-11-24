@@ -343,6 +343,9 @@ c            #  check if should adjust finer grid time step to start wtih
              possk(level) = possk(level-1)/ntogo(level)
              go to 60
           endif
+
+          write(6,*) '+++ in tick, done with level',level,
+     &               ' tlevel = ',tlevel
 c
  105      if (level .eq. 1) go to 110
               if (ntogo(level) .gt. 0) then
