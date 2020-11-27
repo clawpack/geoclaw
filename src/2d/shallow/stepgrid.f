@@ -105,53 +105,12 @@ C       mused  = i0next - 1                    !# space already used
 C       mwork1 = mwork - mused              !# remaining space (passed to step2)
 
 c
-
-c::::::::::::::::::::::::Fixed Grid Output:::::::::::::::::::::::::::::::::
       tc0=time !# start of computational step
       tcf=tc0+dt !# end of computational step
-
-!$OMP CRITICAL (FixedGrids)
-      write(6,*) '+++ in stepgrid, level,tc0,tcf: ',level,tc0,tcf
-c     # see if any f-grids should be written out
-      do ng=1,num_fixed_grids
-        if (tc0 > fgrids(ng)%start_time * (1.d0 - 1d-13) .and. 
-     &      fgrids(ng)%last_output_index < fgrids(ng)%num_output) then
-c     # fgrid ng may need to be written out
-c     # find the first output number that has not been written out and
-c     # find the first output number on a fixed grid that is >= tc0
-c     # which will not be written out
-           if (fgrids(ng)%dt > 0.d0) then
-             ioutfgend= 1+max(0,nint((tc0 - fgrids(ng)%start_time)
-     &                                 / fgrids(ng)%dt))
-           else
-             ioutfgend=1
-           endif
-           ioutfgend = min(ioutfgend,fgrids(ng)%num_output)
-           ioutfgstart = fgrids(ng)%last_output_index + 1
-c     # write-out fgrid times that are less than tc0, and have not been written yet
-c     # these should be the most accurate values at any given point in the fgrid
-c     # since tc0> output time
-           do ioutfg=ioutfgstart,ioutfgend
-             toutfg=fgrids(ng)%start_time+(ioutfg-1)*fgrids(ng)%dt
-             if (toutfg < tc0 * (1.d0 - 1d-13)) then
-c               # write out the solution for fixed grid ng
-c               # test if arrival times should be output
-                ioutflag = fgrids(ng)%output_arrival_times*
-     &                         (fgrids(ng)%num_output-
-     &                          fgrids(ng)%last_output_index)
-                write(6,*) '+++ call fgrid_out, ioutfg,toutfg: ',
-     &                     ioutfg,toutfg
-                call fgrid_out(ng,fgrids(ng),toutfg,ioutfg,ioutflag)
-
-                fgrids(ng)%last_output_time = toutfg
-                fgrids(ng)%last_output_index = 
-     &                               fgrids(ng)%last_output_index + 1
-             endif
-           enddo
-
-        endif
-      enddo
-!$OMP END CRITICAL (FixedGrids)
+      
+c::::::::::::::::::::::::Fixed Grid Output:::::::::::::::::::::::::::::::::
+c     This has been moved to tick.f, after advancing all patches on 
+c     finest level.  No need to check on each patch separately.
 c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
        call b4step2(mbc,mx,my,nvar,q,
@@ -169,6 +128,8 @@ c     # fill in values at fixed grid points effected at time tc0
      &     (fgrids(ng)%last_output_index < fgrids(ng)%num_output) .and.
      &     (tcf >= fgrids(ng)%start_time * (1.d0 - 1d-13)) ) then
          
+        !write(6,*) '+++ fgrids(ng)%last_output_time, tc0, tcf: '
+        !write(6,*) '+++ ', fgrids(ng)%last_output_time, tc0, tcf
 
         if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= 
      &                                    tc0 * (1.d0 - 1d-13) .and.
@@ -186,23 +147,7 @@ c         # at tc0 to the fixed grid spatial points,
 c         #saving solution, variables and tc0 at every grid point
          endif
 
-c        # set maxima or minima if this is a new coarse step
-c        if (tc0.ge.tcfmax) then
-
-c        # RJL: rewrote to set min/max every time a grid at level 1
-c        # is about to be taken.  The previous code failed if there was more than one grid
-c        # at level 1.   Note that all grids are up to date at start of step on level 1.
-c        # New feature added at end of this routine to check more frequently if
-c        # levelcheck > 0.
-         if (level .eq. 1) then
-         if (fgrids(ng)%output_surface_max 
-     &       + fgrids(ng)%output_arrival_times > 0) then
-     
-         call fgrid_interp(3,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
-     &                     xlowmbc,ylowmbc,maux,aux,2)
-     
-         endif
-         endif
+c        # Deleted call to update eta max and arrival time: deprecated
 
       endif
       enddo
@@ -313,36 +258,8 @@ c            # at tcf to the fixed grid storage array,
 c            #saving solution and tcf at every grid point
 
         endif
-
-c        # fill in values for eta if they need to be saved for later checking max/mins
-c        # check for arrival times
-        if (fgrids(ng)%output_surface_max 
-     &      + fgrids(ng)%output_arrival_times > 0) then
-
-        call fgrid_interp(3,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy, 
-     &                    xlowmbc,ylowmbc,maux,aux,1)
-     
-        endif
-         
-c        # RJL: Modified 8/20/11 
-c        # If levelcheck > 0 then update max/mins at end of step on this grid.
-c        # Note that if there are finer grids then fgridoften will not have been updated
-c        # properly yet by those grids.  This modification allows checking max/min more
-c        # frequently than the original code (equivalent to levelcheck==0) when you know
-c        # what level is most relevant for this fixed grid.  Note also that if there are no
-c        # grids at levelcheck overlapping a portion of the fixed grid then the max/min values 
-c        # will be updated only at start of next level 1 step.
- 
-        levelcheck = 0 
-        if (level == levelcheck) then
-        if (fgrids(ng)%output_arrival_times 
-     &      + fgrids(ng)%output_surface_max > 0) then
-
-        call fgrid_interp(3,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
-     &    xlowmbc,ylowmbc,maux,aux,2)
-         endif
-         endif
-
+        
+c        # Deleted call to update eta max and arrival time: deprecated
 
       endif
       enddo

@@ -8,7 +8,6 @@ module fixedgrids_module
         ! Grid data
         real(kind=8), pointer :: early(:,:,:)
         real(kind=8), pointer :: late(:,:,:)
-        real(kind=8), pointer :: often(:,:,:)
         
         ! Geometry
         integer :: num_vars(2),mx,my
@@ -16,7 +15,6 @@ module fixedgrids_module
         
         ! Time Tracking and output types
         integer :: num_output,last_output_index
-        integer :: output_arrival_times,output_surface_max
         real(kind=8) :: last_output_time,start_time,end_time,dt
     end type fixedgrid_type    
 
@@ -81,10 +79,9 @@ contains
                              fgrids(i)%y_low, &
                              fgrids(i)%y_hi , &
                              fgrids(i)%mx  , &
-                             fgrids(i)%my  , &
-                             fgrids(i)%output_arrival_times, &
-                             fgrids(i)%output_surface_max
-
+                             fgrids(i)%my
+                             
+                   
                ! Setup data for this grid
                ! Set dtfg (the timestep length between outputs) for each grid
                if (fgrids(i)%end_time <= fgrids(i)%start_time) then
@@ -134,16 +131,15 @@ contains
                 ! set the number of variables stored for each grid
                 ! this should be (the number of variables you want to write out + 1)
                 fgrids(i)%num_vars(1) = 6
-                fgrids(i)%num_vars(2) = 3*fgrids(i)%output_surface_max &
-                                              + fgrids(i)%output_arrival_times
+                fgrids(i)%num_vars(2) = 0 ! deprecated
                 
                 ! Allocate new fixed grid data array
                 allocate(fgrids(i)%early(fgrids(i)%num_vars(1),fgrids(i)%mx,fgrids(i)%my))
                 fgrids(i)%early = nan()
+                
                 allocate(fgrids(i)%late(fgrids(i)%num_vars(1),fgrids(i)%mx,fgrids(i)%my))
                 fgrids(i)%late = nan()
-                allocate(fgrids(i)%often(fgrids(i)%num_vars(2),fgrids(i)%mx,fgrids(i)%my))
-                fgrids(i)%often = nan()
+                
            enddo
            close(unit)
            
@@ -177,8 +173,7 @@ contains
     
         ! Indices
         integer :: ifg,jfg,m,ic1,ic2,jc1,jc2
-        integer :: bathy_index,eta_index,arrival_index
-        integer :: eta_min_index,eta_max_index,eta_now_index
+        integer :: bathy_index,eta_index
 
         ! Tolerances
         real(kind=8), parameter :: arrival_tolerance = 1.d-2
@@ -196,6 +191,11 @@ contains
         integer :: num_vars
         real(kind=8), pointer :: fg_data(:,:,:)
         
+        if (maxcheck > 0) then
+            write(6,*) '*** Unexpected maxcheck = ',maxcheck
+            stop
+        endif
+        
         ! Setup aliases for specific fixed grid
         if (fgrid_type == 1) then
             num_vars = fgrid%num_vars(1)
@@ -204,8 +204,11 @@ contains
             num_vars = fgrid%num_vars(1)
             fg_data => fgrid%late
         else
-            num_vars = fgrid%num_vars(2)
-            fg_data => fgrid%often
+            write(6,*) '*** Unexpected fgrid_type = ', fgrid_type
+            stop
+            ! fgrid_type==3 is deprecated, use fgmax grids instead
+            !num_vars = fgrid%num_vars(2)
+            !fg_data => fgrid%often
         endif
             
         xhic = xlowc + dxc*mxc  
@@ -215,22 +218,6 @@ contains
         bathy_index = meqn + 1
         eta_index = meqn + 2
     
-        if (maxcheck > 0) then 
-            arrival_index = 0
-            eta_now_index = 0
-            eta_min_index = 0
-            eta_max_index = 0
-    
-            if (fgrid%output_arrival_times > 0) then
-                arrival_index = 1
-            endif
-        
-            if (fgrid%output_surface_max > 0) then
-                eta_now_index = arrival_index + 1
-                eta_min_index = arrival_index + 2
-                eta_max_index = arrival_index + 3
-            endif
-        endif
     
         ! Primary interpolation loops 
         do ifg=1,fgrid%mx
@@ -264,24 +251,14 @@ contains
                                 1.d0]
         
                     ! Interpolate for all conserved quantities and bathymetry
-                    if (maxcheck == 0) then 
-                        forall (m=1:meqn)
-                            fg_data(m,ifg,jfg) = interpolate([[q(m,ic1,jc1),q(m,ic1,jc2)], &
-                                                              [q(m,ic2,jc1),q(m,ic2,jc2)]], geometry)
-                        end forall
-                        fg_data(bathy_index,ifg,jfg) = interpolate([[aux(1,ic1,jc1),aux(1,ic1,jc2)], &
-                                                                    [aux(1,ic2,jc1),aux(1,ic2,jc2)]], geometry)
-                    endif
+                    forall (m=1:meqn)
+                        fg_data(m,ifg,jfg) = interpolate([[q(m,ic1,jc1),q(m,ic1,jc2)], &
+                                                          [q(m,ic2,jc1),q(m,ic2,jc2)]], geometry)
+                    end forall
+                    
+                    fg_data(bathy_index,ifg,jfg) = interpolate([[aux(1,ic1,jc1),aux(1,ic1,jc2)], &
+                                                                [aux(1,ic2,jc1),aux(1,ic2,jc2)]], geometry)
 
-                    ! If eta max/min are saved on this grid initialize if necessary
-                    if (fgrid%output_surface_max > 0 .and. maxcheck == 2) then 
-                        if (.not.(fg_data(eta_min_index,ifg,jfg) == fg_data(eta_min_index,ifg,jfg))) then
-                            fg_data(eta_min_index,ifg,jfg) = 0.d0
-                        endif
-                        if (.not.(fg_data(eta_max_index,ifg,jfg) == fg_data(eta_max_index,ifg,jfg))) then
-                            fg_data(eta_max_index,ifg,jfg) = 0.d0
-                        endif
-                    endif
                     
                     ! Interpolate surface eta, only use wet eta points near the shoreline
                     eta(1,:) = [aux(1,ic1,jc1) + q(1,ic1,jc1), aux(1,ic1,jc2) + q(1,ic1,jc2)]
@@ -322,33 +299,10 @@ contains
                         eta(2,2) = nan()
                     endif
     
-                    ! Check which task to perform and evaluate the interpolant
-                    ! or evaluate the eta min and max functions
-                    if (maxcheck == 0) then 
-                        fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry)
-                        fg_data(num_vars,ifg,jfg) = t
-                    else if (maxcheck.eq.1.and.fgrid%output_surface_max.gt.0) then
-                        fg_data(eta_now_index,ifg,jfg) = interpolate(eta,geometry)
-                    else if (maxcheck.eq.2.and.fgrid%output_surface_max.gt.0) then
-                        fg_data(eta_min_index,ifg,jfg) = min(fg_data(eta_min_index,ifg,jfg), &
-                                                             fg_data(eta_now_index,ifg,jfg))
-                        fg_data(eta_max_index,ifg,jfg) = max(fg_data(eta_max_index,ifg,jfg), &
-                                                             fg_data(eta_now_index,ifg,jfg))            
-                    endif
-    
-                    ! If arrival times are saved on this grid
-                    if (maxcheck == 1 .and. fgrid%output_arrival_times > 0) then
-                        ! TODO: It would be nice to replace this with an
-                        ! intrinsic such as ieee_is_nan but this is not widely
-                        ! implemented yet
-                        nan_check = fg_data(arrival_index,ifg,jfg)
-                        ! if nan_check = NaN: Waves haven't arrived previously
-                        if (.not.(nan_check == nan_check)) then
-                            if (abs(fg_data(eta_index,ifg,jfg)) > arrival_tolerance) then
-                                fg_data(arrival_index,ifg,jfg)= t
-                            endif
-                        endif
-                    endif
+                    ! evaluate the interpolant
+                    fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry)
+                    fg_data(num_vars,ifg,jfg) = t
+
                     
                 endif ! Enclosing if statement to see if fixed grid point is
                       ! in this computational grid
@@ -388,18 +342,9 @@ contains
                                                      "e18.8,'    yhi',/,"   // &
                                                         "i5,'  columns',/)"
         character(len=*), parameter :: data_format = "(8e26.16)"
-        character(len=*), parameter :: arrival_header_format = &
-                                                       "(i5,'    mx', /," // &
-                                                        "i5,'    my', /," // &
-                                                     "e18.8,'    xlow',/" // &
-                                                     "e18.8,'    ylow',/" // &
-                                                     "e18.8,'    xhi',/," // &
-                                                     "e18.8,'    yhi',/," // &
-                                                        "i5,'  columns',/)"
         
         ! Other locals
         integer :: i,j,m
-        integer :: eta_min_index,eta_max_index
         real(kind=8) :: t0,tf,tau
     
 
@@ -433,10 +378,7 @@ contains
         ! Write out header
         write(unit,header_format) out_time,fgrid%mx,fgrid%my,fgrid%x_low,fgrid%y_low,fgrid%x_hi,fgrid%y_hi,columns
 
-        ! Surface max/min index
-        eta_min_index = fgrid%output_arrival_times + 2
-        eta_max_index = fgrid%output_arrival_times + 3
-        
+
         ! Interpolate the grid in time, to the output time, using 
         ! the solution in fgrid1 and fgrid2, which represent the 
         ! solution on the fixed grid at the two nearest computational times
@@ -456,28 +398,12 @@ contains
                     fgrid%late(m,i,j) = 0.d0
                 end forall
                 
-                ! Check which output form we are doing
-                if (columns == fgrid%num_vars(1) - 1) then 
-                    ! Output only the conserved quantities
-                    write(unit,data_format) interpolate_time(fgrid%num_vars(1), &
-                                                             fgrid%early(:,i,j), &
-                                                             fgrid%late(:,i,j), &
-                                                             tau)
-                else
-                    ! Output min/max of eta as well as the conserved quantities
-                    if (abs(fgrid%often(eta_min_index,i,j)) < 1d-90) then
-                        fgrid%often(eta_min_index,i,j) = 0.d0
-                    endif
-                    if (abs(fgrid%often(eta_max_index,i,j)) < 1d-90) then
-                        fgrid%often(eta_max_index,i,j) = 0.d0
-                    endif
-                    write(unit,data_format) interpolate_time(fgrid%num_vars(1), &
-                                                             fgrid%early(:,i,j), &
-                                                             fgrid%late(:,i,j), &
-                                                             tau), &
-                                                             fgrid%often(eta_min_index,i,j), &
-                                                             fgrid%often(eta_max_index,i,j)
-                endif
+                ! Output the conserved quantities and topo value
+                write(unit,data_format) interpolate_time(fgrid%num_vars(1), &
+                                                         fgrid%early(:,i,j), &
+                                                         fgrid%late(:,i,j), &
+                                                         tau)
+
             enddo
         enddo
 
@@ -486,26 +412,7 @@ contains
 
         ! ==================== Output for arrival times============
         if (out_flag == 1) then
-            ! Make the file name and open output file for arrival times
-            fg_filename = 'fort.fgnn_arrivaltimes'
-            grid_number= grid_index
-            do pos = 9, 8, -1
-                digit= mod(grid_number,10)
-                fg_filename(pos:pos) = char(ichar('0') + digit)
-                grid_number = grid_number/ 10
-            enddo
-            open(unit,file=fg_filename,status='unknown',form='formatted')
-
-            write(95,arrival_header_format) fgrid%mx,fgrid%my,fgrid%x_low,fgrid%y_low,fgrid%x_hi,fgrid%y_hi
-
-            do j=1,fgrid%my
-                do i=1,fgrid%mx
-                    write(unit,"(1e26.16)") fgrid%often(1,i,j)
-                enddo
-            enddo
-            close(unit)
-
-            print "(a,i2,a)", ' FGRIDOUT: Fixed Grid  ', grid_index, '  arrival times output'
+            write(6,*) '*** Unexpected out_flag == 1'
         endif
       
     end subroutine fgrid_out
