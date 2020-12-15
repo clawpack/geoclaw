@@ -1,33 +1,28 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/git/clawpack/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
 
-Thu, 01 Oct 2020 08:56:32 PDT
-$CLAW = /Users/rjl/clawpack_src/clawpack_master
+Wed, 11 Nov 2020 17:15:02 PST
+$CLAW = /Users/rjl/git/clawpack
 $FC = gfortran
 
 
 ===========
 clawpack
 ===========
-/Users/rjl/clawpack_src/clawpack_master/
+/Users/rjl/git/clawpack/
 
 --- last commit ---
-be2b38d (HEAD -> master, origin/master, origin/HEAD) Merge pull request #189 from clawpack/no_version_repetition
+c8f3e6b (HEAD -> master, origin/master, origin/HEAD) Merge pull request #196 from rjleveque/read_memsize
 
 --- branch and status ---
 ## master...origin/master
- M amrclaw
- M classic
  M geoclaw
- M pyclaw
- M riemann
- M visclaw
 
 
 ===========
 classic
 ===========
-/Users/rjl/clawpack_src/clawpack_master/classic
+/Users/rjl/git/clawpack/classic
 
 --- last commit ---
 13f06a2 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
@@ -39,10 +34,10 @@ classic
 ===========
 amrclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/amrclaw
+/Users/rjl/git/clawpack/amrclaw
 
 --- last commit ---
-fb09a05 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #265 from rjleveque/travis_noPy2
+ee85c1f (HEAD -> master, origin/master, origin/HEAD) Merge pull request #267 from rjleveque/read_memsize
 
 --- branch and status ---
 ## master...origin/master
@@ -51,10 +46,10 @@ fb09a05 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #265 fro
 ===========
 clawutil
 ===========
-/Users/rjl/clawpack_src/clawpack_master/clawutil
+/Users/rjl/git/clawpack/clawutil
 
 --- last commit ---
-116ffb7 (HEAD -> master, tag: v5.7.1, origin/master, origin/HEAD) Merge pull request #151 from rjleveque/b4run
+116ffb7 (HEAD -> master, rjleveque/master, origin/master, origin/HEAD) Merge pull request #151 from rjleveque/b4run
 
 --- branch and status ---
 ## master...origin/master
@@ -63,10 +58,10 @@ clawutil
 ===========
 pyclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/pyclaw
+/Users/rjl/git/clawpack/pyclaw
 
 --- last commit ---
-27f3f4f (HEAD -> master, origin/master, origin/HEAD) Merge pull request #648 from rjleveque/travis_noPy2
+41e15d8 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #650 from kbarnhart/barnhark/fix_vtk_docstring_formatting
 
 --- branch and status ---
 ## master...origin/master
@@ -75,10 +70,10 @@ pyclaw
 ===========
 visclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/visclaw
+/Users/rjl/git/clawpack/visclaw
 
 --- last commit ---
-b03b0d4 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #280 from rjleveque/mapc2p_exists
+b03b0d4 (HEAD -> master, rjleveque/master, origin/master, origin/HEAD) Merge pull request #280 from rjleveque/mapc2p_exists
 
 --- branch and status ---
 ## master...origin/master
@@ -87,26 +82,26 @@ b03b0d4 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #280 fro
 ===========
 riemann
 ===========
-/Users/rjl/clawpack_src/clawpack_master/riemann
+/Users/rjl/git/clawpack/riemann
 
 --- last commit ---
-cd39c82 (HEAD -> rpt2_geoclaw, rjleveque/rpt2_geoclaw) check for dry states in rpt2_geoclaw
+78c2236 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #159 from rjleveque/rpt2_geoclaw
 
 --- branch and status ---
-## rpt2_geoclaw
+## master...origin/master
 
 
 ===========
 geoclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/geoclaw
+/Users/rjl/git/clawpack/geoclaw
 
 --- last commit ---
-d4e8b16 (HEAD -> rpt2_regression_data, origin/master, origin/HEAD, master) Merge pull request #461 from rjleveque/fgmax_ll_indices
+5700120 (HEAD -> remove_allowflag) update tests/bowl_slosh/setrun.py, no change in results
 
 --- branch and status ---
-## rpt2_regression_data
-M  tests/bowl_slosh/regression_data/claw_git_status.txt
-M  tests/bowl_slosh/regression_data/gauge00001.txt
-M  tests/bowl_slosh/regression_data/regression_data_fgmax.txt
+## remove_allowflag
+ M tests/dtopo1/regression_data/claw_git_status.txt
  M tests/dtopo1/regression_data/gauge00001.txt
+ M tests/dtopo1/setplot.py
+ M tests/dtopo1/setrun.py

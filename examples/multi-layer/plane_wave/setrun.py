@@ -433,19 +433,17 @@ def setgeo(rundata):
     refinement_data = rundata.refinement_data
     refinement_data.variable_dt_refinement_ratios = True
     refinement_data.wave_tolerance = 1.e-1
-    refinement_data.deep_depth = 1e2
-    refinement_data.max_level_deep = 3
 
     # == settopo.data values ==
     topo_data = rundata.topo_data
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([2, 1, 5, 0.0, 1e10, 'topo.tt2'])
+    #    [topotype, fname]
+    topo_data.topofiles.append([2, 'topo.tt2'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form : (<= 1 allowed for now!)
-    #   [topotype, minlevel,maxlevel,fname]
+    #   [topotype, fname]
 
     return rundata
     # end of function setgeo

@@ -19,3 +19,9 @@ set of the ``bubble tests``.  The basics of the Riemann solvers involved in
 these examples can be found in [1].
 
 1.	Mandli, K. T. A Numerical Method for the Two Layer Shallow Water Equations with Dry States. Ocean Modelling 72, 80–91 (2013).
+
+
+Version
+-------
+
+- Updated for v5.8.0

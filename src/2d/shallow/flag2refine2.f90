@@ -5,10 +5,6 @@
 ! Specific for GeoClaw for tsunami applications and related problems
 !
 !
-! The logical function allowflag(x,y,t) is called to
-! check whether further refinement at this level is allowed in this cell
-! at this time.
-!
 !    q   = grid values including ghost cells (bndry vals at specified
 !          time have already been set, so can use ghost cell values too)
 !
@@ -18,6 +14,9 @@
 !             DONTFLAG (no refinement needed)  or
 !             DOFLAG   (refinement desired)
 !
+! This routine only checks cells in which amrflags(i,j) = UNSET,
+! If the value is already DONTFLAG or DOFLAG then this we determined by
+! flagregions or other criteria and is not modified by this routine.
 !
 ! ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
@@ -27,20 +26,12 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     use geoclaw_module, only:dry_tolerance, sea_level
     use geoclaw_module, only: spherical_distance, coordinate_system
 
-    use topo_module, only: tlowtopo,thitopo,xlowtopo,xhitopo,ylowtopo,yhitopo
-    use topo_module, only: minleveltopo,mtopofiles
-
-    use topo_module, only: tfdtopo,xlowdtopo,xhidtopo,ylowdtopo,yhidtopo
-    use topo_module, only: minleveldtopo,num_dtopo
-
-    use qinit_module, only: x_low_qinit,x_hi_qinit,y_low_qinit,y_hi_qinit
-    use qinit_module, only: min_level_qinit,qinit_type
 
     use storm_module, only: storm_specification_type, wind_refine, R_refine
     use storm_module, only: storm_location, wind_forcing, wind_index, wind_refine
 
     use regions_module, only: num_regions, regions
-    use refinement_module
+    use refinement_module, only: wave_tolerance, speed_tolerance
 
     use adjoint_module, only: totnum_adjoints,innerprod_index, &
                               adjoint_flagging,select_snapshots
@@ -58,9 +49,6 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     ! Flagging
     real(kind=8), intent(in out) :: amrflags(1-mbuff:mx+mbuff,1-mbuff:my+mbuff)
 
-    logical :: allowflag
-    external allowflag
-
     ! Generic locals
     integer :: i,j,m,r
     real(kind=8) :: x_c,y_c,x_low,y_low,x_hi,y_hi
@@ -72,9 +60,6 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     ! Adjoint method specific variables
     logical mask_selecta(totnum_adjoints)
 
-    ! Don't initialize flags, since they were already
-    ! flagged by flagregions2
-    ! amrflags = DONTFLAG
 
     if(adjoint_flagging) then
         aux(innerprod_index,:,:) = 0.0
@@ -104,9 +89,11 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
             x_low = xlower + (i - 1) * dx
             x_c = xlower + (i - 0.5d0) * dx
             x_hi = xlower + i * dx
-
-            ! The following conditions are only checked in the horizontal and
-            ! override the allowflag routine
+            
+            if (amrflags(i,j) .ne. UNSET) then
+                ! do not consider this cell further
+                cycle x_loop
+            endif
 
             ! ************* Storm Based Refinement ****************
             ! Check to see if we are some specified distance from the eye of
@@ -120,7 +107,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                         ds = sqrt((x_c - R_eye(1))**2 + (y_c - R_eye(2))**2)
                     end if
                     
-                    if ( ds < R_refine(m) .and. level <= m .and. amrflags(i,j) == UNSET) then
+                    if (ds < R_refine(m) .and. level <= m) then
                         amrflags(i,j) = DOFLAG
                         cycle x_loop
                     endif
@@ -130,110 +117,45 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                 if (wind_forcing) then
                     wind_speed = sqrt(aux(wind_index,i,j)**2 + aux(wind_index+1,i,j)**2)
                     do m=1,size(wind_refine,1)
-                        if ((wind_speed > wind_refine(m)) .and. (level <= m) &
-                             .and. amrflags(i,j) == UNSET) then
+                        if ((wind_speed > wind_refine(m)) .and. (level <= m)) then
                             amrflags(i,j) = DOFLAG
                             cycle x_loop
                         endif
                     enddo
                 endif
             endif
-            ! *****************************************************
 
-            ! Check to see if refinement is forced in any topography file region:
-            do m=1,mtopofiles
-                if (level < minleveltopo(m) .and. t >= tlowtopo(m) .and. t <= thitopo(m)) then
-                    if (  x_hi > xlowtopo(m) .and. x_low < xhitopo(m) .and. &
-                          y_hi > ylowtopo(m) .and. y_low < yhitopo(m) &
-                           .and. amrflags(i,j) == UNSET) then
+            ! ********* criteria applied only to wet cells:
 
+            if (q(1,i,j) > dry_tolerance) then
+
+                if(adjoint_flagging) then
+                    if(aux(innerprod_index,i,j) > tolsp) then
                         amrflags(i,j) = DOFLAG
                         cycle x_loop
                     endif
-                endif
-            enddo
-
-            ! Check if we're in the dtopo region and need to refine:
-            ! force refinement to level minleveldtopo
-            do m = 1,num_dtopo
-                if (level < minleveldtopo(m).and. &
-                    t <= tfdtopo(m) .and. & !t.ge.t0dtopo(m).and.
-                    x_hi > xlowdtopo(m) .and. x_low < xhidtopo(m).and. &
-                    y_hi > ylowdtopo(m) .and. y_low < yhidtopo(m) &
-                    .and. amrflags(i,j) == UNSET) then
-
-                    amrflags(i,j) = DOFLAG
-                    cycle x_loop
-                endif
-            enddo
-
-            ! Check if we're in the region where initial perturbation is
-            ! specified and need to force refinement:
-            ! This assumes that t0 = 0.d0, should really be t0 but we do
-            ! not have access to that parameter in this routine
-            if (qinit_type > 0 .and. t == t0 .and. amrflags(i,j) == UNSET) then
-                if (level < min_level_qinit .and. &
-                    x_hi > x_low_qinit .and. x_low < x_hi_qinit .and. &
-                    y_hi > y_low_qinit .and. y_low < y_hi_qinit) then
-
-                    amrflags(i,j) = DOFLAG
-                    cycle x_loop
-                endif
-            endif
-
-            ! -----------------------------------------------------------------
-            ! Refinement not forced, so check if it is allowed 
-            ! and if the flag is still UNSET. If so,
-            ! check if there is a reason to flag this point.
-            ! If flag == DONTFLAG then refinement is forbidden by a region,
-            ! if flag == DOFLAG checking is not needed
-            if (allowflag(x_c,y_c,t,level) .and. amrflags(i,j) == UNSET) then
-
-                if (q(1,i,j) > dry_tolerance) then
-
-                    if(adjoint_flagging) then
-                        if(aux(innerprod_index,i,j) > tolsp) then
-                            ! Check to see if we are near shore
-                            if (q(1,i,j) < deep_depth) then
-                                amrflags(i,j) = DOFLAG
-                                cycle x_loop
-                            ! Check if we are allowed to flag in deep water
-                            ! anyway
-                            else if (level < max_level_deep) then
-                                amrflags(i,j) = DOFLAG
-                                cycle x_loop
-                            endif
-                        endif
-                    else
-                        eta = q(1,i,j) + aux(1,i,j)
-
-                        ! Check wave criteria
-                        if (abs(eta - sea_level) > wave_tolerance) then
-                            ! Check to see if we are near shore
-                            if (q(1,i,j) < deep_depth) then
-                                amrflags(i,j) = DOFLAG
-                                cycle x_loop
-                            ! Check if we are allowed to flag in deep water
-                            ! anyway
-                            else if (level < max_level_deep) then
-                                amrflags(i,j) = DOFLAG
-                                cycle x_loop
-                            endif
-                        endif
-
-                        ! Check speed criteria, note that it might be useful to
-                        ! also have a per layer criteria since this is not
-                        ! gradient based
-                        speed = sqrt(q(2,i,j)**2 + q(3,i,j)**2) / q(1,i,j)
-                        do m=1,min(size(speed_tolerance),mxnest)
-                            if (speed > speed_tolerance(m) .and. level <= m) then
-                                amrflags(i,j) = DOFLAG
-                                cycle x_loop
-                            endif
-                        enddo
+                else
+                
+                    ! Check wave criteria
+                    eta = q(1,i,j) + aux(1,i,j)
+                    if (abs(eta - sea_level) > wave_tolerance) then
+                        amrflags(i,j) = DOFLAG
+                        cycle x_loop
                     endif
+
+                    ! Check speed criteria, note that it might be useful to
+                    ! also have a per layer criteria since this is not
+                    ! gradient based
+                    speed = sqrt(q(2,i,j)**2 + q(3,i,j)**2) / q(1,i,j)
+                    do m=1,min(size(speed_tolerance),mxnest)
+                        if (speed > speed_tolerance(m) .and. level <= m) then
+                            amrflags(i,j) = DOFLAG
+                            cycle x_loop
+                        endif
+                    enddo
                 endif
             endif
+
 
         enddo x_loop
     enddo y_loop
