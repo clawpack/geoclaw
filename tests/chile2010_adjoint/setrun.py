@@ -328,12 +328,12 @@ def setrun(claw_pkg='geoclaw'):
     #  ----- For developers ----- 
     # Toggle debugging print statements:
     amrdata.dprint = False      # print domain flags
-    amrdata.eprint = False      # print err est flags
-    amrdata.edebug = False      # even more err est flags
-    amrdata.gprint = False      # grid bisection/clustering
+    amrdata.eprint = True       # print err est flags
+    amrdata.edebug = True       # even more err est flags
+    amrdata.gprint = True       # grid bisection/clustering
     amrdata.nprint = False      # proper nesting output
     amrdata.pprint = False      # proj. of tagged points
-    amrdata.rprint = False      # print regridding summary
+    amrdata.rprint = True       # print regridding summary
     amrdata.sprint = False      # space/memory output
     amrdata.tprint = True       # time step reporting each level
     amrdata.uprint = False      # update/upbnd reporting
@@ -351,6 +351,9 @@ def setrun(claw_pkg='geoclaw'):
     rundata.regiondata.regions.append([1, 3, 0., 1e9, -220,0,-90,90])
 
     # earthquake source region - force refinement initially:
+    # dtopo region, replacing minlevel in dtopofile specification:
+    rundata.regiondata.regions.append([3, 3, 0., 10., -77,-67,-40,-30])
+    # later times from original test:
     rundata.regiondata.regions.append([3, 3, 0., 200., -85,-70,-38,-25])
 
     # ---------------
@@ -433,16 +436,16 @@ def setgeo(rundata):
     # == settopo.data values ==
     topo_data = rundata.topo_data
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
+    #    [topotype, fname]
     topo_path = os.path.join(scratch_dir, 'etopo10min120W60W60S0S.asc')
-    topo_data.topofiles.append([2, 1, 3, 0., 1.e10, topo_path])
+    topo_data.topofiles.append([2, topo_path])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form :   (<= 1 allowed for now!)
-    #   [topotype, minlevel,maxlevel,fname]
+    #   [topotype, fname]
     dtopo_path = os.path.join(scratch_dir, 'dtopo_usgs100227.tt3')
-    dtopo_data.dtopofiles.append([3,3,3,dtopo_path])
+    dtopo_data.dtopofiles.append([3,dtopo_path])
     dtopo_data.dt_max_dtopo = 0.2
 
 

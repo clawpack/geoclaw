@@ -123,7 +123,7 @@ def setrun(claw_pkg='geoclaw'):
     elif clawdata.output_style == 3:
         # Output every iout timesteps with a total of ntot time steps:
         clawdata.output_step_interval = 1
-        clawdata.total_steps = 3
+        clawdata.total_steps = 1
         clawdata.output_t0 = True
         
 
@@ -293,13 +293,13 @@ def setrun(claw_pkg='geoclaw'):
 
     #  ----- For developers ----- 
     # Toggle debugging print statements:
-    amrdata.dprint = False      # print domain flags
-    amrdata.eprint = False      # print err est flags
-    amrdata.edebug = False      # even more err est flags
-    amrdata.gprint = False      # grid bisection/clustering
-    amrdata.nprint = False      # proper nesting output
-    amrdata.pprint = False      # proj. of tagged points
-    amrdata.rprint = False      # print regridding summary
+    amrdata.dprint = True       # print domain flags
+    amrdata.eprint = True       # print err est flags
+    amrdata.edebug = True       # even more err est flags
+    amrdata.gprint = True       # grid bisection/clustering
+    amrdata.nprint = True       # proper nesting output
+    amrdata.pprint = True       # proj. of tagged points
+    amrdata.rprint = True       # print regridding summary
     amrdata.sprint = False      # space/memory output
     amrdata.tprint = False      # time step reporting each level
     amrdata.uprint = False      # update/upbnd reporting
@@ -313,6 +313,9 @@ def setrun(claw_pkg='geoclaw'):
     regions.append([1, 1, 0., 1.e10, 0. , 80., 0., 50.])
     regions.append([2, 2, 0., 1.e10, 25., 60., 15., 50.])
     regions.append([3, 3, 0., 1.e10, 30., 50., 25., 45.])
+    # should need this after eliminating minlevel,maxlevel from qinit,  
+    # but apparently was not working as expected previously
+    #regions.append([1, 2, 0., 1e-10, -50., 50., -50., 50.])
 
     # == setgauges.data values ==
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
@@ -369,27 +372,25 @@ def setgeo(rundata):
     # Refinement data
     refinement_data = rundata.refinement_data
     refinement_data.wave_tolerance = 1.e-2
-    refinement_data.deep_depth = 1e2
-    refinement_data.max_level_deep = 3
     refinement_data.variable_dt_refinement_ratios = True
 
     # == settopo.data values ==
     topo_data = rundata.topo_data
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([3, 1, 1, 0., 1.e10, 'island.tt3'])
+    #    [topotype, fname]
+    topo_data.topofiles.append([3, 'island.tt3'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form :   (<= 1 allowed for now!)
-    #   [topotype, minlevel,maxlevel,fname]
+    #   [topotype, fname]
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type = 4
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
-    #   [minlev, maxlev, fname]
-    rundata.qinit_data.qinitfiles.append([1, 2, 'hump.xyz'])
+    #   [fname]
+    rundata.qinit_data.qinitfiles.append(['qinit.xyz'])
 
     # == setfixedgrids.data values ==
     fixedgrids = rundata.fixed_grid_data.fixedgrids

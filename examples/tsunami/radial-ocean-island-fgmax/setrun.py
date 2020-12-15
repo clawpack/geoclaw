@@ -330,6 +330,11 @@ def setrun(claw_pkg='geoclaw'):
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
 
+    # default on full domain (no longer implicit in topo file, as of v5.8.0):
+    regions.append([1, 1,    0., 1e9, -20., 20., 20., 60.])
+    # initially around hump (no longer implicit in qinit file, as of v5.8.0):
+    regions.append([1, 2,    0., 1., -20., 20., 20., 60.])
+
     regions.append([1, 3,    0., 5000., -5., 20., 35., 55.])
     regions.append([1, 2, 5000., 6900., -5., 20., 35., 55.])
     regions.append([1, 3, 5000., 6900., 10., 20., 45., 55.])
@@ -378,29 +383,27 @@ def setrun(claw_pkg='geoclaw'):
     refinement_data = rundata.refinement_data
     refinement_data.variable_dt_refinement_ratios = True
     refinement_data.wave_tolerance = 0.01
-    refinement_data.deep_depth = 100.0
-    refinement_data.max_level_deep = 3
 
     # == settopo.data values ==
     topofiles = rundata.topo_data.topofiles
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topofiles.append([3, 1, 1, 0.0, 10000000000.0, 'ocean.tt3'])
-    topofiles.append([3, 1, 1, 0.0, 10000000000.0, 'island.tt3'])
+    #    [topotype, fname]
+    topofiles.append([3, 'ocean.tt3'])
+    topofiles.append([3, 'island.tt3'])
 
     # == setdtopo.data values ==
     rundata.dtopo_data.dtopofiles = []
     dtopofiles = rundata.dtopo_data.dtopofiles
     # for moving topography, append lines of the form :  
-    #   [topotype, minlevel,maxlevel,fname]
+    #   [topotype, fname]
 
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type =  4
     qinitfiles = rundata.qinit_data.qinitfiles 
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
-    #   [minlev, maxlev, fname]
-    rundata.qinit_data.qinitfiles = [[1, 2, 'hump.xyz']]
+    #   [fname]
+    rundata.qinit_data.qinitfiles = [['hump.xyz']]
 
 
     # == fgmax_grids.data values ==

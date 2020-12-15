@@ -51,4 +51,9 @@ be viewed from the `Clawpack gallery version of this file.
 Version
 -------
 
-- New in Version 5.7.0.
+- These capabilities and this example were first introduced in Clawpack v5.7.0
+
+- The results changed slightly in v5.8.0 due to a previous bug being
+  fixed (the `maxlevel` parameter in flagregions specified as ruled
+  rectangles was not properly handled and so the refinement to level
+  2 did not occur as expected along the coast at early times).

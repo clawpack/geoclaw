@@ -175,7 +175,7 @@ def setplot(plotdata=None):
     plotitem.contour_levels = [-2,-1,0,1,2]
     plotitem.amr_contour_colors = ['yellow']  # color on each level
     plotitem.kwargs = {'linestyles':'solid','linewidths':1}
-    plotitem.amr_contour_show = [0,0,1,0]
+    plotitem.amr_contour_show = [0,0,0,1]
     plotitem.celledges_show = 0
     plotitem.patchedges_show = 0
 
