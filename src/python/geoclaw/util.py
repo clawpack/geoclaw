@@ -270,14 +270,29 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
     col_types = 'datetime64[m], float'
 
     # fetch water levels and tide predictions
-    date_time, water_level = fetch(
-        'water_level', 'Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality',
-        col_idx, col_types)
-    date_time2, prediction = fetch('predictions', 'Date Time, Prediction',
-                                   col_idx, col_types)
+    try:
+        date_time, water_level = fetch(
+            'water_level', 'Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality',
+            col_idx, col_types)
+    except:
+        print('*** Fetching water_level failed, returning None')
+        date_time = None
+        water_level = None
+
+    try:
+        date_time2, prediction = fetch('predictions', 'Date Time, Prediction',
+                                       col_idx, col_types)
+        if date_time is None:
+            date_time = date_time2
+
+    except:
+        print('*** Fetching prediction failed, returning None')
+        date_time2 = None
+        prediction = None
 
     # ensure that date/time ranges are the same
-    if not numpy.array_equal(date_time, date_time2):
-        raise ValueError('Received data for different times')
+    if (date_time is not None) and (date_time2 is not None):
+        if not numpy.array_equal(date_time, date_time2):
+            raise ValueError('Received data for different times')
 
     return date_time, water_level, prediction
