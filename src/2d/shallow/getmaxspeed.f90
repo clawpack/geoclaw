@@ -27,12 +27,9 @@ real(kind=8) pure function get_max_speed(val,mitot,mjtot,nvar,aux,naux,nghost,hx
                 if (val(1,i,j) > dry_tolerance) then
                     u  = val(2,i,j) / val(1,i,j)
                     v  = val(3,i,j) / val(1,i,j)
-                else
-                    u = 0.d0
-                    v = 0.d0
+                    sig = sqrt(grav*val(1,i,j))
+                    sp_over_h = max((abs(u)+sig)/hxphys,(abs(v)+sig)/hyphys,sp_over_h)
                 endif
-                sig = sqrt(grav*val(1,i,j))
-                sp_over_h = max((abs(u)+sig)/hxphys,(abs(v)+sig)/hyphys,sp_over_h)
             end do
         end do
     else  ! speeds in cartesian coords, no metrics needed
@@ -41,12 +38,9 @@ real(kind=8) pure function get_max_speed(val,mitot,mjtot,nvar,aux,naux,nghost,hx
                 if (val(1,i,j) > dry_tolerance) then
                     u  = val(2,i,j) / val(1,i,j)
                     v  = val(3,i,j) / val(1,i,j)
-                else
-                    u = 0.d0
-                    v = 0.d0
+                    sig = sqrt(grav*val(1,i,j))
+                    sp_over_h = max((abs(u)+sig)/hx,(abs(v)+sig)/hy,sp_over_h)
                 endif
-                sig = sqrt(grav*val(1,i,j))
-                sp_over_h = max((abs(u)+sig)/hx,(abs(v)+sig)/hy,sp_over_h)
             end do
         end do
     endif
