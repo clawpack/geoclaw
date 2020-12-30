@@ -70,7 +70,7 @@ c
       write(chkunit) (alloc(i),i=1,lendim)
       write(chkunit) hxposs,hyposs,possk,icheck
       write(chkunit) lfree,lenf
-      write(chkunit) rnode,node,lstart,newstl,listsp,tol,
+      write(chkunit) rnode,node,lstart,newstl,listspStart,listsp,tol,
      1          ibuff,mstart,ndfree,ndfree_bnd,lfine,iorder,mxnest,
      2          intratx,intraty,kratio,iregsz,jregsz,
      2          iregst,jregst,iregend,jregend, 
