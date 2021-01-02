@@ -489,7 +489,7 @@ program amr2
         !call set_geo()                    ! sets basic parameters g and coord system
         call set_refinement()             ! sets refinement control parameters
         call read_dtopo_settings()        ! specifies file with dtopo from earthquake
-        call read_topo_settings()         ! specifies topography (bathymetry) files
+        call read_topo_settings(rest)     ! specifies topography (bathymetry) files
         call set_qinit()                  ! specifies file with dh if this used instead
         call set_fixed_grids()            ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
@@ -524,7 +524,7 @@ program amr2
         call set_geo()                    ! sets basic parameters g and coord system
         call set_refinement()             ! sets refinement control parameters
         call read_dtopo_settings()        ! specifies file with dtopo from earthquake
-        call read_topo_settings()         ! specifies topography (bathymetry) files
+        call read_topo_settings(rest)     ! specifies topography (bathymetry) files
         call set_qinit()                  ! specifies file with dh if this used instead
         call set_fixed_grids()            ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter

@@ -7,6 +7,7 @@ c
       use amr_module
       use fgmax_module
       use gauges_module, only: gauges, num_gauges
+      use topo_module, only: aux_finalized
       implicit double precision (a-h,o-z)
       logical   ee
  
@@ -59,7 +60,7 @@ c     # need to allocate for dynamic memory:
      2       intrtx,intrty,intrtt,iregsz,jregsz,
      2       iregst,jregst,iregend,jregend,
      3       numgrids,kcheck1,nsteps,time,
-     3       matlabu
+     3       matlabu,aux_finalized
       read(rstunit) avenumgrids, iregridcount,
      1              evol,rvol,rvoll,lentot,tmass0,cflmax,
      2              tvoll,tvollCPU,timeTick,timeTickCPU,

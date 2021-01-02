@@ -83,7 +83,7 @@ contains
     ! Finest value of topography in a given region will be used for
     ! computation
     ! ========================================================================
-    subroutine read_topo_settings(file_name)
+    subroutine read_topo_settings(restart,file_name)
 
         use geoclaw_module
 
@@ -91,6 +91,7 @@ contains
 
         ! Input arguments
         character(len=*), intent(in), optional :: file_name
+        logical, intent(in) :: restart
 
         ! Locals
         integer, parameter :: iunit = 7
@@ -258,7 +259,10 @@ contains
                 aux_finalized = 2   !# indicates aux arrays properly set with dtopo
                 if (num_dtopo>0) then
                    topo_finalized = .false.
-                   aux_finalized = 0  !# will be incremented each time level 1 goes
+                   if (.not. restart) then ! rest is read in
+                      aux_finalized = 0  !# will be incremented each time level 1 goes
+                   endif
+
                    i0topo0(1) = 1
                    mtopo0size = dot_product(mtopo,topo0save)
                    allocate(topo0work(mtopo0size))
