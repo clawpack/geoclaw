@@ -12,6 +12,7 @@ c     !use gauges_module, only: OUTGAUGEUNIT, num_gauges
       use gauges_module, only: num_gauges, gauges
       use gauges_module, only: print_gauges_and_reset_nextLoc
       use fgmax_module, only: FG_fgrids, FG_num_fgrids, fgrid
+      use topo_module, only:aux_finalized
 
       implicit double precision (a-h,o-z)
       integer tchkunit, ifg, ii
@@ -70,12 +71,12 @@ c
       write(chkunit) (alloc(i),i=1,lendim)
       write(chkunit) hxposs,hyposs,possk,icheck
       write(chkunit) lfree,lenf
-      write(chkunit) rnode,node,lstart,newstl,listsp,tol,
+      write(chkunit) rnode,node,lstart,newstl,listspStart,listsp,tol,
      1          ibuff,mstart,ndfree,ndfree_bnd,lfine,iorder,mxnest,
      2          intratx,intraty,kratio,iregsz,jregsz,
      2          iregst,jregst,iregend,jregend, 
      3          numgrids,kcheck,nsteps,
-     3          time,matlabu
+     3          time,matlabu,aux_finalized
       write(chkunit) avenumgrids, iregridcount,
      1               evol,rvol,rvoll,lentot,tmass0,cflmax,
      2               tvoll,tvollCPU,timeTick,timeTickCPU,

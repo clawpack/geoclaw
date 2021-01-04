@@ -10,8 +10,8 @@ c     1                  maxsp,iused,mptr)
       implicit double precision (a-h,o-z)
 
  
-       dimension val(nvar,mitot,mjtot),listbc(5,maxsp),
-     1           iused(mitot,mjtot)
+       dimension val(nvar,mitot,mjtot),iused(mitot,mjtot)
+       double precision listbc(5,maxsp)
 
 c  OLD INDEXING
 c      iaddaux(i,j) = locaux + i-1 +  mitot*(j-1) 
