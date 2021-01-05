@@ -224,14 +224,13 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
                        val(1,ifine,jfine) = max(0.d0, val(1,ifine,jfine)  &
                                                - aux(1,ifine,jfine))
                                                
-                       x = xleft + (ifine-0.5d0)*dx
-                       y = ybot + (jfine-0.5d0)*dy
+                       x = xleft + (ifine-0.5d0)*dx - nghost*dx
+                       y = ybot + (jfine-0.5d0)*dy - nghost*dy
 
                        ! Check cells newly initialized to wet using force_dry:
                        if (use_force_dry_this_level .and. &
-                               (((coarseval(2) == vetac(i,j)) &
-                               .and. (val(1,ifine,jfine) > 0)) &
-                               .or. (time <= tend_force_dry))) then
+                                (val(1,ifine,jfine) > 0) .and. &
+                                (time <= tend_force_dry)) then
                            ! check if in force_dry region
                            ii = int((x - xlow_fdry + 1d-7) / dx_fdry) + 1
                            jj = int((y - ylow_fdry + 1d-7) / dy_fdry) + 1
