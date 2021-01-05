@@ -19,9 +19,9 @@ def select_by_flooding(Ztopo, mask=None, prev_pts_chosen=None,
     Returns pts_chosen, a 1/0 array of the same shape as Ztopo, indicating
     whether each point is chosen (1) or not (0), based on various criteria.
 
-    If Z1 <= Z2 then points where Ztopo <= Z1 are first selected and 
+    If Z1 <= Z2 then points where Ztopo < Z1 are first selected and 
     then a marching algorithm is used to select neighboring points that 
-    satisfy Ztopo <= Z2. 
+    satisfy Ztopo < Z2. 
 
     Think of chosen points as "wet" and unchosen points as "dry" 
     and new points are flooded if at least one neighbor is "wet" and 
@@ -30,8 +30,8 @@ def select_by_flooding(Ztopo, mask=None, prev_pts_chosen=None,
     protect dry land with lower elevation.
      
     However, this can also be called with Z1 > Z2, in which case points
-    where Ztopo >= Z1 are first selected and then the marching algorithm is 
-    used to select neighboring points that satisfy Ztopo >= Z2.
+    where Ztopo > Z1 are first selected and then the marching algorithm is 
+    used to select neighboring points that satisfy Ztopo > Z2.
     This is useful to select offshore points where the water is shallow,
     (and that are connected to the shore by a path of shallow points) 
     e.g. on the continental shelf. 
@@ -40,7 +40,7 @@ def select_by_flooding(Ztopo, mask=None, prev_pts_chosen=None,
 
     Otherwise, at most max_iters iterations are taken, so setting
     this to a small value only selects points within this many grid
-    points of where Ztopo <= Z1, useful for buffering.
+    points of where Ztopo < Z1, useful for buffering.
 
     If prev_pts_chosen is None we are starting from scratch, otherwise
     we possibly add additional chosen points to an existing array.
@@ -57,11 +57,11 @@ def select_by_flooding(Ztopo, mask=None, prev_pts_chosen=None,
 
     Basic strategy (assuming Z1 <= Z2):
         Outside the masked region, if any, initialize pt_chosen to
-            pt_chosen=1 where Ztopo <= Z1
+            pt_chosen=1 where Ztopo < Z1
             pt_chosen=0 where Ztopo >= Z2
             pt_chosen=-5 for intermediate points to indicate unknown        
         Let water intrude to level Z2
-            (setting pt_chosen=1 where Ztopo <= Z2 and a neighbor is wet)
+            (setting pt_chosen=1 where Ztopo < Z2 and a neighbor is wet)
             This is done by a fast marching iteration in which we keep track 
             of the cells at the front to check next, those for which pt_chosen==1
             and at least one neighbor has pt_chosen=-5 (so sum of neighbors < 0)  
@@ -101,10 +101,10 @@ def select_by_flooding(Ztopo, mask=None, prev_pts_chosen=None,
         # set pt_chosen=1 if Z<Z1 and =0 if Z>Z2, else =-5 (unset)
         if increasing:
             cond1 = logical_and(Ztopo < Z1, logical_not(mask))
-            cond0 = logical_and(Ztopo > Z2, logical_not(mask))
+            cond0 = logical_and(Ztopo >= Z2, logical_not(mask))
         else:
             cond1 = logical_and(Ztopo > Z1, logical_not(mask))
-            cond0 = logical_and(Ztopo < Z2, logical_not(mask))
+            cond0 = logical_and(Ztopo <= Z2, logical_not(mask))
         pt_chosen = where(cond1, 1, -5)  # mark as chosen or unknown
         pt_chosen = where(cond0, 0, pt_chosen) # mark as unchosen
     
