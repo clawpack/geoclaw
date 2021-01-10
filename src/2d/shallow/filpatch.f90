@@ -59,7 +59,6 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
 
     real(kind=8) :: eta1old, eta2old
     real(kind=8) :: veta_init_c
-    real(kind=8) :: x,y
     integer :: ii,jj
 
     ! Scratch arrays for interpolation
@@ -327,20 +326,17 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
                                                              + eta2 * slope(2,i_coarse,j_coarse)
                     h_fine = max(eta_fine - aux(1,i_fine + nrowst - 1, j_fine + ncolst - 1), 0.d0)
 
-                    if (variable_eta_init) &
+                    if (variable_eta_init) then
                         veta_init_c = vetac(ivetac(i_coarse,j_coarse))
                         ! else it has been set to the constant sea_level
+                    endif
 
-                    x = xlow_fine + (i_fine-0.5d0)*dx_fine
-                    y = ylow_fine + (j_fine-0.5d0)*dy_fine
-
-                    if (use_force_dry_this_level .and. &
-                            (((eta_coarse(i_coarse,j_coarse) == veta_init_c) &
-                            .and. (h_fine > 0)) &
-                            .or. (t <= tend_force_dry))) then
+                    if (use_force_dry_this_level &
+                            .and. (h_fine > 0) &
+                            .and. (t <= tend_force_dry)) then
                         ! check if in force_dry region
-                        ii = int((x - xlow_fdry + 1d-7) / dx_fdry) + 1
-                        jj = int((y - ylow_fdry + 1d-7) / dy_fdry) + 1
+                        ii = int((xcent_fine - xlow_fdry + 1d-7) / dx_fdry) + 1
+                        jj = int((ycent_fine - ylow_fdry + 1d-7) / dy_fdry) + 1
                         jj = my_fdry - jj  ! since index 1 corresponds to north edge
                         if ((ii>=1) .and. (ii<=mx_fdry) .and. &
                             (jj>=1) .and. (jj<=my_fdry)) then
