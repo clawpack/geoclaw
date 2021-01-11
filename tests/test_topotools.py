@@ -489,9 +489,8 @@ def integral_topotool(func, mfile, funcflag):
                     z[m][n] = func(x[m], y[n])
             topo1.Z = z
         else:
-            topo1.x = numpy.flip(y)
-            topo1.y = x
-            topo1.Z = func(topo1.Y, topo1.X)
+            topo_x, topo_y = numpy.meshgrid(x, y)
+            topo1.Z = func(topo_x, topo_y)
         topo1.x = x; topo1.y = y
         mtopoorder.append(mfile - 1 - i)
         topo.append(topo1)
