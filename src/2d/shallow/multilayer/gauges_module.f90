@@ -65,8 +65,15 @@ module gauges_module
         ! Last time recorded
         real(kind=8) :: last_time
 
+        ! Last time and final (x,y) written to file 
+        ! (only needed for lagrangian gauges, for checkpointing)
+        ! lagrangian gauges not yet supported in multilayer,
+        ! but these variables still needed for checkpt, restart
+        real(kind=8) :: t_last_written, x_last_written, y_last_written
+
+
         ! Output settings
-        integer :: file_format
+        integer :: file_format, gtype
         real(kind=8) :: min_time_increment
         character(len=10) :: display_format
         logical, allocatable :: q_out_vars(:)
@@ -93,6 +100,7 @@ contains
 
         use utility_module, only: get_value_count
 
+        use amr_module, only: NEEDS_TO_BE_SET
         use multilayer_module, only: num_layers
 
         implicit none
@@ -129,8 +137,16 @@ contains
             do i=1,num_gauges
                 read(UNIT, *) gauges(i)%gauge_num, gauges(i)%x, gauges(i)%y, &
                               gauges(i)%t_start, gauges(i)%t_end
+                ! note that for lagrangian gauges, the x,y values read here 
+                ! might be overwritten if this is a restart
                 gauges(i)%buffer_index = 1
                 gauges(i)%last_time = gauges(i)%t_start
+                ! keep track of last position for lagrangian gauges,
+                ! initialize here in case checkpoint happens before 
+                ! ever writing this gauge:
+                gauges(i)%t_last_written = NEEDS_TO_BE_SET
+                gauges(i)%x_last_written = gauges(i)%x
+                gauges(i)%y_last_written = gauges(i)%y
             enddo
 
             ! Read in output formats
@@ -143,6 +159,17 @@ contains
             read(UNIT, *)
             read(UNIT, *)
             read(UNIT, *) (gauges(i)%min_time_increment, i=1, num_gauges)
+            read(UNIT, *)
+            read(UNIT, *)
+            read(UNIT, *) (gauges(i)%gtype, i=1, num_gauges)
+
+            do i=1,num_gauges
+                if (gauges(i)%gtype == 2) then
+                    write(6,*) "*** ERROR: Lagrangian gauges not supported"
+                    write(6,*) "***        in multilayer code"
+                    stop
+                end if
+            end do
 
             ! Read in q fields
             read(UNIT, *)
@@ -627,6 +654,16 @@ contains
             open(unit=myunit, file=gauges(gauge_num)%file_name, status='old', &
                               position='append', form='formatted')
           
+            !if (gauges(gauge_num)%gtype == 2) then
+                ! keep track of last x,y location written to gauge file
+                ! in case we are at a checkpoint time
+            j = gauges(gauge_num)%buffer_index - 1
+            if (j > 0) then
+                gauges(gauge_num)%t_last_written = gauges(gauge_num)%data(1, j)
+                gauges(gauge_num)%x_last_written = gauges(gauge_num)%data(3, j)
+                gauges(gauge_num)%y_last_written = gauges(gauge_num)%data(4, j)
+            endif
+
             ! Loop through gauge's buffer writing out all available data.  Also
             ! reset buffer_index back to beginning of buffer since we are emptying
             ! the buffer here

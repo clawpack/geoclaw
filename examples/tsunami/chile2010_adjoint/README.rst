@@ -20,7 +20,8 @@ the papers:
 
 - Analysis and Performance Evaluation of Adjoint-Guided Adaptive Mesh
   Refinement for Linear Hyperbolic PDEs Using Clawpack, by
-  B. N. Davis and R. J. LeVeque, 2018.
+  B. N. Davis and R. J. LeVeque, Transactions on Mathematical Software 
+  (TOMS) 46 (2020), pp. 26:1-26:28.
   `<http://faculty.washington.edu/rjl/pubs/adjoint2018>`_
 
 
@@ -95,4 +96,10 @@ time.  Try changing this to see how the AMR adapts to only capture waves
 reaching the gauge over a shorter specified time period, e.g. try `t1 =
 3*3600.` and `t2 = 4.5*3600.` to capture only the leading wave at the gauge.
 
+
+Version
+-------
+
+- New in Version 5.6.0
+- Updated for v5.8.0
 

@@ -25,14 +25,29 @@ module qinit_module
     
     integer, private :: mx_qinit
     integer, private :: my_qinit
-    integer :: min_level_qinit
-    integer :: max_level_qinit
+
+    ! for initializing using force_dry to indicate dry regions below sealevel:
+
+    integer :: mx_fdry, my_fdry
+    real(kind=8) :: xlow_fdry, ylow_fdry, xhi_fdry, yhi_fdry, dx_fdry, dy_fdry
+    integer(kind=1), allocatable :: force_dry(:,:)
+    logical :: use_force_dry
+    real(kind=8) :: tend_force_dry  ! always use mask up to this time
+
+    logical :: variable_eta_init
+
+    ! to initialize using different initial eta values in different regions:
+    integer :: etain_mx, etain_my
+    real(kind=8) :: etain_dx, etain_dy
+    real(kind=8), allocatable :: etain_x(:), etain_y(:), etain_eta(:,:)
+
 
 contains
 
     subroutine set_qinit(fname)
     
         use geoclaw_module, only: GEO_PARM_UNIT
+
     
         implicit none
         
@@ -42,6 +57,9 @@ contains
         ! File handling
         integer, parameter :: unit = 7
         character(len=150) :: qinit_fname
+        character(len=150) :: fname_force_dry
+
+        integer :: num_force_dry
         
         if (.not.module_setup) then
             write(GEO_PARM_UNIT,*) ' '
@@ -61,15 +79,32 @@ contains
                 ! No perturbation specified
                 write(GEO_PARM_UNIT,*)  '  qinit_type = 0, no perturbation'
                 print *,'  qinit_type = 0, no perturbation'
-                return
-            endif
-            read(unit,*) qinit_fname
-            read(unit,"(2i2)") min_level_qinit, max_level_qinit
-
-            write(GEO_PARM_UNIT,*) '   min_level, max_level, qinit_fname:'
-            write(GEO_PARM_UNIT,*)  min_level_qinit, max_level_qinit, qinit_fname
+            else
+                read(unit,*) qinit_fname
+                write(GEO_PARM_UNIT,*)  qinit_fname
             
-            call read_qinit(qinit_fname)
+                call read_qinit(qinit_fname)
+            endif
+
+
+            ! If variable_eta_init then function set_eta_init is called
+            ! to set initial eta when interpolating onto newly refined patches
+            read(unit,*) variable_eta_init
+
+            
+            read(unit,*) num_force_dry
+            use_force_dry = (num_force_dry > 0)
+
+            if (num_force_dry > 1) then
+                write(6,*) '*** num_force_dry > 1 not yet implemented'
+                stop
+                endif
+
+            if (use_force_dry) then
+                read(unit,*) fname_force_dry
+                read(unit,*) tend_force_dry
+                call read_force_dry(trim(fname_force_dry))
+                endif
 
             module_setup = .true.
         end if
@@ -224,5 +259,99 @@ contains
         close(unit)
         
     end subroutine read_qinit
+
+    subroutine read_force_dry(fname)
+
+        use utility_module, only: parse_values
+        character(len=*), intent(in) :: fname
+        integer :: iunit,i,j,n
+        real(kind=8) :: values(10), nodata_value
+        character(len=80) :: str
+
+        iunit = 8
+    
+        open(unit=iunit,file=fname,status='old',form='formatted')
+        !read(iunit,*) tend_force_dry
+        !write(6,*) 'tend_force_dry = ',tend_force_dry
+        read(iunit,*) mx_fdry
+        read(iunit,*) my_fdry
+        read(iunit,*) xlow_fdry
+        read(iunit,*) ylow_fdry
+
+        read(iunit,'(a)') str
+        call parse_values(str, n, values)
+        dx_fdry = values(1)
+        if (n == 2) then
+            dy_fdry = values(2)
+          else
+            dy_fdry = dx_fdry
+          endif
+
+        read(iunit,*) nodata_value
+        allocate(force_dry(mx_fdry,my_fdry))
+
+        xhi_fdry = xlow_fdry + mx_fdry*dx_fdry
+        yhi_fdry = ylow_fdry + my_fdry*dy_fdry
+        write(6,*) '+++ xlow_fdry, xhi_fdry: ',xlow_fdry, xhi_fdry
+        write(6,*) '+++ ylow_fdry, yhi_fdry: ',ylow_fdry, yhi_fdry
+
+        do j=1,my_fdry
+            read(iunit, *) (force_dry(i,j), i=1,mx_fdry)
+            enddo
+    
+        close(iunit)
+        return
+    end subroutine read_force_dry
+
+    
+    subroutine read_eta_init(file_name)
+        ! To read in file specifying different eta value in at different
+        ! locations, then used in qinit function.
+        ! Uses etain module variables.
+        
+        implicit none
+
+        ! Input arguments
+        character(len=*), intent(in), optional :: file_name
+        
+        ! local 
+        integer, parameter :: iunit = 7
+        integer :: i,j
+        real(kind=8) :: nodata_value, xllower, yllower
+
+        if (present(file_name)) then
+            open(unit=iunit, file=file_name, status='unknown',&
+                      form='formatted')
+        else
+            open(unit=iunit, file='eta_init.data', status='unknown',&
+                      form='formatted')
+        endif
+        
+        read(iunit,*) etain_mx
+        !write(6,*) '+++ etain_mx = ',etain_mx
+        read(iunit,*) etain_my
+        !write(6,*) '+++ etain_my = ',etain_my
+        read(iunit,*) xllower
+        read(iunit,*) yllower
+        read(iunit,*) etain_dx
+        etain_dy = etain_dx
+        !read(iunit,*) etain_dy
+        read(iunit,*) nodata_value
+        
+        allocate(etain_x(etain_mx), etain_y(etain_my))
+        allocate(etain_eta(etain_mx, etain_my))
+        
+        do i=1,etain_mx
+            etain_x(i) = xllower + etain_dx*(i-1)
+            enddo
+            
+        do j=1,etain_my
+            etain_y(j) = yllower + etain_dy*(etain_my-j+1)
+            read(iunit,*) (etain_eta(i,j),i=1,etain_mx)
+            enddo
+
+        
+        close(unit=iunit)
+    end subroutine read_eta_init
 
 end module qinit_module

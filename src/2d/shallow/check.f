@@ -9,9 +9,10 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;
 
       use amr_module
 c     !use gauges_module, only: OUTGAUGEUNIT, num_gauges
-      use gauges_module, only: num_gauges
+      use gauges_module, only: num_gauges, gauges
       use gauges_module, only: print_gauges_and_reset_nextLoc
-      use fgmax_module
+      use fgmax_module, only: FG_fgrids, FG_num_fgrids, fgrid
+      use topo_module, only:aux_finalized
 
       implicit double precision (a-h,o-z)
       integer tchkunit, ifg, ii
@@ -70,12 +71,12 @@ c
       write(chkunit) (alloc(i),i=1,lendim)
       write(chkunit) hxposs,hyposs,possk,icheck
       write(chkunit) lfree,lenf
-      write(chkunit) rnode,node,lstart,newstl,listsp,tol,
+      write(chkunit) rnode,node,lstart,newstl,listspStart,listsp,tol,
      1          ibuff,mstart,ndfree,ndfree_bnd,lfine,iorder,mxnest,
      2          intratx,intraty,kratio,iregsz,jregsz,
      2          iregst,jregst,iregend,jregend, 
      3          numgrids,kcheck,nsteps,
-     3          time,matlabu
+     3          time,matlabu,aux_finalized
       write(chkunit) avenumgrids, iregridcount,
      1               evol,rvol,rvoll,lentot,tmass0,cflmax,
      2               tvoll,tvollCPU,timeTick,timeTickCPU,
@@ -96,7 +97,6 @@ c     ### they contain allocatable arrays
      &          fg%arrival_time,fg%aux,fg%t_last_updated
       end do
 c
-      close(chkunit)
 
 c     # flush open running output files fort.amr, fort.gauge, fort.debug
 c     # so if code dies it will at least have output up to this checkpoint time
@@ -106,9 +106,19 @@ c     # so if code dies it will at least have output up to this checkpoint time
 
 c     now that gauge data is batched, need to write the last batch to file
 c    ! flush(OUTGAUGEUNIT)   ! defined in gauges_module.f90 
+
+
+      write(chkunit) num_gauges
+      ! write out last recorded x,y position,
+      ! needed on restart only for lagrangian gauges, but write them all
       do ii = 1, num_gauges
-         call print_gauges_and_reset_nextLoc(ii)
+         write(chkunit) gauges(ii)%gauge_num,
+     &                      gauges(ii)%t_last_written,
+     &                      gauges(ii)%x_last_written,
+     &                      gauges(ii)%y_last_written
       end do
+
+      close(chkunit)
 
 c     # write the time stamp file last so it's not updated until data is
 c     # all dumped, in case of crash mid-dump.

@@ -1,0 +1,107 @@
+Clawpack Git Status 
+Diffs can be found in /Users/rjl/git/clawpack/geoclaw/tests/chile2010_adjoint/regression_data/claw_git_diffs.txt
+
+Wed, 11 Nov 2020 16:03:01 PST
+$CLAW = /Users/rjl/git/clawpack
+$FC = gfortran
+
+
+===========
+clawpack
+===========
+/Users/rjl/git/clawpack/
+
+--- last commit ---
+c8f3e6b (HEAD -> master, origin/master, origin/HEAD) Merge pull request #196 from rjleveque/read_memsize
+
+--- branch and status ---
+## master...origin/master
+ M geoclaw
+
+
+===========
+classic
+===========
+/Users/rjl/git/clawpack/classic
+
+--- last commit ---
+13f06a2 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
+
+--- branch and status ---
+## master...origin/master
+
+
+===========
+amrclaw
+===========
+/Users/rjl/git/clawpack/amrclaw
+
+--- last commit ---
+ee85c1f (HEAD -> master, origin/master, origin/HEAD) Merge pull request #267 from rjleveque/read_memsize
+
+--- branch and status ---
+## master...origin/master
+
+
+===========
+clawutil
+===========
+/Users/rjl/git/clawpack/clawutil
+
+--- last commit ---
+116ffb7 (HEAD -> master, rjleveque/master, origin/master, origin/HEAD) Merge pull request #151 from rjleveque/b4run
+
+--- branch and status ---
+## master...origin/master
+
+
+===========
+pyclaw
+===========
+/Users/rjl/git/clawpack/pyclaw
+
+--- last commit ---
+41e15d8 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #650 from kbarnhart/barnhark/fix_vtk_docstring_formatting
+
+--- branch and status ---
+## master...origin/master
+
+
+===========
+visclaw
+===========
+/Users/rjl/git/clawpack/visclaw
+
+--- last commit ---
+b03b0d4 (HEAD -> master, rjleveque/master, origin/master, origin/HEAD) Merge pull request #280 from rjleveque/mapc2p_exists
+
+--- branch and status ---
+## master...origin/master
+
+
+===========
+riemann
+===========
+/Users/rjl/git/clawpack/riemann
+
+--- last commit ---
+78c2236 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #159 from rjleveque/rpt2_geoclaw
+
+--- branch and status ---
+## master...origin/master
+
+
+===========
+geoclaw
+===========
+/Users/rjl/git/clawpack/geoclaw
+
+--- last commit ---
+d2212bc (HEAD -> remove_allowflag) change region in chile2010/setrun.py to better match previous results with implicit topofile region
+
+--- branch and status ---
+## remove_allowflag
+ M tests/chile2010_adjoint/adjoint/setrun.py
+ M tests/chile2010_adjoint/regression_data/claw_git_status.txt
+ M tests/chile2010_adjoint/regression_data/gauge00001.txt
+ M tests/chile2010_adjoint/setrun.py

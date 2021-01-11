@@ -232,11 +232,11 @@ contains
         mult_depth_l = product(h_l)
         mult_depth_r = product(h_r)
                           
-        s(1) = - sqrt(grav*total_depth_l) + 0.5d0 * mult_depth_l/ total_depth_l**(3/2) * one_minus_r
+        s(1) = - sqrt(grav*total_depth_l) + 0.5d0 * mult_depth_l/ total_depth_l**(3.0/2) * one_minus_r
         s(2) = - sqrt(grav * mult_depth_l / total_depth_l * one_minus_r)
         s(3:4) = 0.5d0 * (u_l + u_r)
         s(5) = sqrt(grav * mult_depth_r / total_depth_r * one_minus_r)
-        s(6) = sqrt(grav*total_depth_r) - 0.5d0 * mult_depth_r / total_depth_r**(3/2) * one_minus_r
+        s(6) = sqrt(grav*total_depth_r) - 0.5d0 * mult_depth_r / total_depth_r**(3.0/2) * one_minus_r
 
         eig_vec(1,:) = [1.d0,1.d0,0.d0,0.d0,1.d0,1.d0]
         eig_vec(n_index,:) = [s(1),s(2),0.d0,0.d0,s(5),s(6)]

@@ -505,13 +505,13 @@ class DTopography(object):
         """
         Interpolate dZ to specified time t and return deformation.
         """
-        from matplotlib.mlab import find
+        from numpy import where
         if t <= self.times[0]:
             return self.dZ[0,:,:]
         elif t >= self.times[-1]:
             return self.dZ[-1,:,:]
         else:
-            n = max(find(numpy.array(self.times) <= t))
+            n = numpy.where(numpy.array(self.times) <= t)[0].max()
             t1 = self.times[n]
             t2 = self.times[n+1]
             dz = (t2-t)/(t2-t1) * self.dZ[n,:,:] + \

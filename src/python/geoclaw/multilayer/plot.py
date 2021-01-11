@@ -541,12 +541,12 @@ def add_cross_section(plotaxes, surface):
 
     def xsec(current_data):
         # Return x value and surface eta at this point, along y=0
-        from pylab import find,ravel
+        from pylab import where,ravel
         x = current_data.x
-        y = current_data.y
+        y = ravel(current_data.y)
         dy = current_data.dy
 
-        ij = find((y <= dy/2.) & (y > -dy/2.))
+        ij = where((y <= dy/2.) & (y > -dy/2.))
         x_slice = ravel(x)[ij]
         eta_slice = ravel(plot_eta(current_data))[ij]
         return x_slice, eta_slice
@@ -562,12 +562,12 @@ def add_land_cross_section(plotaxes):
     r""" Add cross section view of topo"""
 
     def plot_topo_xsec(current_data):
-        from pylab import find,ravel
+        from pylab import where,ravel
         x = current_data.x
-        y = current_data.y
+        y = ravel(current_data.y)
         dy = current_data.dy
 
-        ij = find((y <= dy/2.) & (y > -dy/2.))
+        ij = where((y <= dy/2.) & (y > -dy/2.))
         x_slice = ravel(x)[ij]
         b_slice = ravel(b(current_data))[ij]
         return x_slice, b_slice

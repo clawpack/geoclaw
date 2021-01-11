@@ -453,6 +453,59 @@ class Topography(object):
         #    self.read(path=path, topo_type=topo_type, unstructured=unstructured,
         #     mask=mask, filter_region=filter_region)
 
+    def set_xyZ(self, X, Y, Z):
+        r"""
+        Set _x, _y, and _Z attributes and then generate X,Y,Z.
+
+        If X,Y are 1d arrays, then shape of Z should be (len(Y), len(X)).
+
+        Allow X,Y to be 2d arrays of shape Z.shape, in which case
+        first extract x,y
+        """
+
+        if X.ndim == 1:
+            x = X
+        else:
+            x = X[0,:]
+
+        if Y.ndim == 1:
+            y = Y
+        else:
+            y = Y[:,0]
+
+        if Z.shape != (len(y),len(x)):
+            raise ValueError("shape of Z should be (len(y), len(x))")
+
+        diffx = numpy.diff(x)
+        diffy = numpy.diff(y)
+        dx = numpy.mean(diffx)
+        dy = numpy.mean(diffy)
+        if dy < 0:
+            Y = numpy.flipud(Y)
+            y = numpy.flipud(y)
+            diffy = numpy.diff(y)
+            dy = numpy.mean(diffy)
+            Z = numpy.flipud(Z)
+        if diffx.max()-diffx.min() > 1e-3*dx:
+            print('diffx.max()-diffx.min() = ', diffx.max()-diffx.min())
+            raise ValueError("x must be equally spaced for structured topo")
+        if diffy.max()-diffy.min() > 1e-3*dy:
+            print('diffy.max()-diffy.min() = ', diffy.max()-diffy.min())
+            raise ValueError("y must be equally spaced for structured topo")
+
+        self.unstructured = False
+        self._x = x
+        self._y = y
+        self._Z = Z
+        self._X = None
+        self._Y = None
+        self.generate_2d_coordinates()
+
+        if X.ndim == 2:
+            assert numpy.allclose(self.X, X), '*** X set incorrectly?'
+        if Y.ndim == 2:
+            assert numpy.allclose(self.Y, Y), '*** Y set incorrectly?'
+
 
     def generate_2d_topo(self, mask=False):
         r"""Generate a 2d array of the topo."""
@@ -841,12 +894,24 @@ class Topography(object):
                 # set extent based on data locations (not lower corner for 'llcorner')
                 self._extent = [self._x[0],self._x[-1],self._y[0],self._y[-1]]
 
+        elif abs(self.topo_type) == 4:
+            # netCDF
+            import netCDF4
+            f = netCDF4.Dataset(self.path, 'r')
+            self._x = f.variables['lon']
+            self._y = f.variables['lat']
+            self._extent = [self._x[0],self._x[-1],self._y[0],self._y[-1]]
+            dx = self._x[1] - self._x[0]
+            dy = self._y[1] - self._y[0]
+            self._delta = (dx, dy)
+            num_cells = (len(self._x), len(self._y))
+
         else:
             raise IOError("Cannot read header for topo_type %s" % self.topo_type)
             
         return num_cells
 
-    def write(self, path, topo_type=None, no_data_value=None, masked=True, 
+    def write(self, path, topo_type=None, no_data_value=None, fill_value=None, 
                 header_style='geoclaw', Z_format="%15.7e", grid_registration=None):
         r"""Write out a topography file to path of type *topo_type*.
 
@@ -862,7 +927,7 @@ class Topography(object):
            the read function in this class.  It was the third argument in
            GeoClaw version 5.3.1 and earlier.  
          - *no_data_value* - values used to indicate missing data
-         - *masked* (bool) - unused??
+         - *fill_value* (float) - value to use if filling a masked array
          - *header_style* (str) - indicates format of header lines
              'geoclaw' or 'default'  ==> write value then label 
                                      with grid_registration == 'lower' as default
@@ -905,13 +970,25 @@ class Topography(object):
         if no_data_value is None:
             no_data_value = self.no_data_value
 
-        # Check to see if masks have been applied to topography, if so use them
-        # if masked is True
-        if isinstance(self.Z, numpy.ma.MaskedArray) and masked:
-            pass
+        # Check to see if masks have been applied to topography, if so 
+        # replace with fill_value (or  numpy.ma default value e.g. 1e+20)
+        if isinstance(self.Z, numpy.ma.MaskedArray):
+            if fill_value is not None:
+                Z = self.Z.filled(fill_value)
+            else:
+                Z = self.Z.filled()
         else:
-            pass
+            Z = self.Z
 
+        # check for NaNs:
+        num_nan = numpy.isnan(Z).sum()
+        if num_nan > 0:
+            print('*** Z contains %i nan values, replacing with %s' \
+                  % (num_nan, no_data_value))
+            Z = numpy.where(numpy.isnan(Z), no_data_value, Z)
+
+        # also fill self.z in the same way for unstructured?
+        
         if self.unstructured:
             with open(path, 'w') as outfile:
                 for (i, topo) in enumerate(self.z):
@@ -952,8 +1029,8 @@ class Topography(object):
             with open(path, 'w') as outfile:
                 # Write out header
                 if header_style in ['geoclaw','default']:
-                    outfile.write('%6i                              ncols\n' % self.Z.shape[1])
-                    outfile.write('%6i                              nrows\n' % self.Z.shape[0])
+                    outfile.write('%6i                              ncols\n' % Z.shape[1])
+                    outfile.write('%6i                              nrows\n' % Z.shape[0])
                     outfile.write('%22.15e              %s\n' % (xlower,xlabel))
                     outfile.write('%22.15e              %s\n' % (ylower,ylabel))
                     if abs(self.delta[0] - self.delta[1])/self.delta[0] < 1e-8:
@@ -966,8 +1043,8 @@ class Topography(object):
                                 % (self.delta[0], self.delta[1]))
                     outfile.write('%10i                          nodata_value\n' % no_data_value)
                 elif header_style in ['arcgis','asc']:
-                    outfile.write('ncols  %6i\n' % self.Z.shape[1])
-                    outfile.write('nrows  %6i\n' % self.Z.shape[0]) 
+                    outfile.write('ncols  %6i\n' % Z.shape[1])
+                    outfile.write('nrows  %6i\n' % Z.shape[0]) 
                     outfile.write('%s  %22.15e\n' % (xlabel,xlower))
                     outfile.write('%s  %22.15e\n' % (ylabel,ylower))
                     outfile.write('cellsize %22.15e\n'  % self.delta[0])
@@ -975,32 +1052,21 @@ class Topography(object):
                 else:
                     raise ValueError("*** Unrecognized header_style")
 
-                masked_Z = isinstance(self.Z, numpy.ma.MaskedArray)
-
                 # Write out topography data
+                Z_flipped = numpy.flipud(Z) 
                 if topo_type == 2:
                     Z_format = Z_format + "\n"
-                    if masked_Z:
-                        Z_filled = numpy.flipud(self.Z.filled())
-                    else:
-                        Z_filled = numpy.flipud(self.Z)
-                    for i in range(self.Z.shape[0]):
-                        for j in range(self.Z.shape[1]):
-                            outfile.write(Z_format % Z_filled[i,j])
-                    if masked_Z:
-                        del Z_filled
+                    for i in range(Z.shape[0]):
+                        for j in range(Z.shape[1]):
+                            outfile.write(Z_format % Z_flipped[i,j])
                 elif topo_type == 3:
                     Z_format = Z_format + " "
-                    if masked_Z:
-                        Z_flipped = numpy.flipud(self.Z.filled())
-                    else:
-                        Z_flipped = numpy.flipud(self.Z)
-                    for i in range(self.Z.shape[0]):
-                        for j in range(self.Z.shape[1]):
-                            outfile.write(Z_format % (Z_flipped[i,j]))
+                    for i in range(Z.shape[0]):
+                        for j in range(Z.shape[1]):
+                            outfile.write(Z_format % Z_flipped[i,j])
                         outfile.write("\n")
-                    if masked_Z:
-                        del Z_flipped
+                del Z_flipped
+
         elif topo_type == 4:
             # Write out netCDF4 topography
             import netCDF4
@@ -1044,7 +1110,7 @@ class Topography(object):
                 elevation.sdn_uom_urn  = "SDN:P06:ULAA"
                 elevation.sdn_uom_name  = "Metres"
                 elevation.positive = "up"
-                elevation[:, :] = self.Z
+                elevation[:, :] = Z  # note this has masked values replaced by fill_value
 
                 elevation.no_data_value = self.no_data_value
 
@@ -1055,7 +1121,7 @@ class Topography(object):
 
     def plot(self, axes=None, contour_levels=None, contour_kwargs={}, 
              limits=None, cmap=None, add_colorbar=True, 
-             plot_box=False, fig_kwargs={}, data_break=0.):
+             plot_box=False, fig_kwargs={}, data_break=0., cb_kwargs={}):
         r"""Plot the topography.
 
         :Input:
@@ -1078,6 +1144,8 @@ class Topography(object):
            to break between water and land colormaps.
            Defaults to 0., but for some topo files may need to use e.g. 0.01
            Or may want to show plots at different tide stage.
+         - *cb_kwargs* (dict) - keyword arguments to be passed to colorbar
+           e.g. 'shrink', 'extend', 'label'.  Can also set 'title' for cbar
 
         :Output:
          - *axes* (matplotlib.pyplot.axes) - the axes on which plot created.
@@ -1092,6 +1160,7 @@ class Topography(object):
         import matplotlib.colors as colors
 
         import clawpack.visclaw.colormaps as colormaps
+        from clawpack.visclaw import plottools
 
         # Create axes if needed
         if axes is None:
@@ -1114,7 +1183,7 @@ class Topography(object):
         else:
             topo_extent = limits
 
-        # Create color map - assume shore is at z = 0.0
+        # Create color map - assume shore is at z = data_break
         if cmap is None:
             land_cmap = colormaps.make_colormap({ 0.0:[0.1,0.4,0.0],
                                                  0.25:[0.0,1.0,0.0],
@@ -1134,34 +1203,44 @@ class Topography(object):
         else:
             norm = colors.Normalize(vmin=topo_extent[0], vmax=topo_extent[1])
 
-        # Plot data
+
         if self.unstructured:
             plot = axes.scatter(self.x, self.y, c=self.z, cmap=cmap, norm=norm,
                                                 marker=',', linewidths=(0.0,))
-        elif isinstance(self.Z, numpy.ma.MaskedArray):
-            # Adjust coordinates so color pixels centered at X,Y locations
-            plot = axes.pcolor(self.X - self.delta[0] / 2.0, 
-                               self.Y - self.delta[1] / 2.0, 
-                               self.Z,
-                               norm=norm,
-                               cmap=cmap)
         else:
-            plot = axes.imshow(self.Z, norm=norm, extent=region_extent, 
-                                       cmap=cmap, origin='lower',
-                                       interpolation='nearest')
+            plot = plottools.pcolorcells(self.X, self.Y, self.Z, 
+                                         norm=norm, cmap=cmap)
         if add_colorbar:
-            cbar = plt.colorbar(plot, ax=axes)
-            cbar.set_label("Topography (m)")
+            try:
+                # this kwarg can't be passed directly:
+                cb_title = cb_kwargs.pop('title')
+            except:
+                cb_title = None
+            
+            cbar = plt.colorbar(plot, ax=axes, **cb_kwargs)
+
+            if cb_title is not None:
+                cbar.ax.set_title(cb_title)
+
+            if 'label' not in cb_kwargs.keys():
+                cbar.set_label('Topography (m)')
+
         # levels = range(0,int(-numpy.min(Z)),500)
 
         if (contour_levels is not None) and (not self.unstructured):
             axes.contour(self.X, self.Y, self.Z, levels=contour_levels,
                  **contour_kwargs)
 
-        axes.set_xlim(region_extent[0:2])
-        axes.set_ylim(region_extent[2:])
-
-        x1,x2,y1,y2 = self.extent
+        
+        # expand extent to include full cells, which are centered at X,Y:
+        x1 = self.x.min() - self.delta[0]/2.
+        x2 = self.x.max() + self.delta[0]/2.
+        y1 = self.y.min() - self.delta[1]/2.
+        y2 = self.y.max() + self.delta[1]/2.
+        
+        axes.set_xlim(x1,x2)
+        axes.set_ylim(y1,y2)
+        
         if plot_box:
             # plot a box around this topography region
             if type(plot_box) is bool:
@@ -1261,8 +1340,8 @@ class Topography(object):
         if not numpy.all(N[:] < numpy.ones((2)) * resolution_limit):
             ValueError("Calculated resolution too high, N=%s!" % str(N))
         self._X, self._Y = numpy.meshgrid( 
-                                     numpy.linspace(extent[0], extent[1], N[0]),
-                                     numpy.linspace(extent[2], extent[3], N[1]))
+                                     numpy.linspace(extent[0], extent[1], int(N[0])),
+                                     numpy.linspace(extent[2], extent[3], int(N[1])))
 
         # Add the unstructured points to the data
         points = numpy.array([self.x, self.y]).transpose()
@@ -2033,7 +2112,6 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     and using `Z_format='%.0f'` will save as integers to minimize file size.
     """
     
-    from clawpack.geoclaw import topotools
     from numpy import array
     import netCDF4
     if return_xarray:
@@ -2054,13 +2132,27 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     else: 
         f = netCDF4.Dataset(path, 'r')
 
-    x = f.variables['lon']
-    y = f.variables['lat']
+    if 'lon' in f.variables:
+        x = f.variables['lon']
+    elif 'x' in f.variables:
+        x = f.variables['x']
+    else:
+        print('*** f.variables = ',f.variables)
+        raise ValueError("*** Unrecognized x, lon in netCDF file")
+
+    if 'lat' in f.variables:
+        y = f.variables['lat']
+    elif 'y' in f.variables:
+        y = f.variables['y']
+    else:
+        print('*** f.variables = ',f.variables)
+        raise ValueError("*** Unrecognized y, lat in netCDF file")
 
     # for selecting subset based on extent, convert to arrays if netCDF4 used:
-    if not return_xarray:
-        x = array(x)
-        y = array(y)
+    #if not return_xarray:
+    
+    x = array(x)
+    y = array(y)
     
     if zvar is None:
         if 'Band1' in f.variables:
@@ -2070,6 +2162,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         elif 'elevation' in f.variables:
             zvar = 'elevation'
         else:
+            print('*** f.variables = ',f.variables)
             raise ValueError("*** Unrecognized zvar in netCDF file")
 
     if extent == 'all':
@@ -2084,8 +2177,8 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     else:
         x1,x2,y1,y2 = extent
         # find indices of x,y arrays for points lying within extent:
-        iindex = [i for i,xi in enumerate(x) if (x1 <= xi <= x2)]
-        jindex = [j for j,yj in enumerate(y) if (y1 <= yj <= y2)]
+        iindex = numpy.where(numpy.logical_and(x >= x1, x <= x2))[0]
+        jindex = numpy.where(numpy.logical_and(y >= y1, y <= y2))[0]
         i1 = iindex[0]
         i2 = iindex[-1] + 1
         j1 = jindex[0]
@@ -2102,6 +2195,8 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
             ys = y[j1:j2:coarsen]
             Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
 
+    Zs = array(Zs)
+    
     if verbose:
         print('Returning a DEM with shape = %s' \
                 % str(Zs.shape))
@@ -2112,12 +2207,8 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     output = None
 
     if return_topo:
-        topo = topotools.Topography()
-        topo._x = xs
-        topo._y = ys
-        topo._Z = Zs
-        topo.generate_2d_coordinates()
-
+        topo = Topography()
+        topo.set_xyZ(xs,ys,Zs)
         output = topo
             
     if return_xarray:

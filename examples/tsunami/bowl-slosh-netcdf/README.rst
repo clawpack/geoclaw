@@ -25,3 +25,8 @@ order to read in the `bowl.nc` file.  The `Makefile` refers to an
 environment variable `NETCDF4_DIR` that must be set appropriately.
 See `<https://www.unidata.ucar.edu/software/netcdf/docs-fortran/>`_.
 
+
+Version
+-------
+
+- Updated for v5.8.0

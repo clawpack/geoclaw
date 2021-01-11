@@ -319,6 +319,16 @@ def setrun(claw_pkg='geoclaw'):
     regions.append([1,3,0,0.5,-0.2,-0.1,-0.05,0.05])
     regions.append([1,3,0.7,1.5,-1,-0.4,-0.05,0.05])
 
+    if 0:
+        # to replace implicit regions previously defined by topo,dtopo files:
+        # but using these gives different refinement, so old version wasn't
+        # behaving as expected.   
+        regions.append([1,1,0,1e10,-10,10,-10,10])   # topo1
+        regions.append([2,2,0,100,-0.5,-0.3,-0.1,0.4])   # topo2
+        regions.append([2,2,0,1.0,-0.4,0.6,-0.4,0.4])   # dtopo1
+        regions.append([2,2,0.5,1.2,-0.9,0.1,-0.4,0.4])   # dtopo2
+        regions.append([2,2,0,0.5,-0.5,0.0,-0.3,0.3])   # dtopo3
+
     # == setgauges.data values ==
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
     rundata.gaugedata.gauges.append([1,-0.45,0.05,0,1e10])
@@ -368,24 +378,24 @@ def setgeo(rundata):
     # == settopo.data values ==
     topofiles = rundata.topo_data.topofiles
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topofiles.append([2, 1, 1, 0., 1.e10, 'topo1.topotype2'])
-    topofiles.append([2, 2, 2, 0., 100, 'topo2.topotype2'])
+    #    [topotype, fname]
+    topofiles.append([2, 'topo1.topotype2'])
+    topofiles.append([2, 'topo2.topotype2'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form :   (<= 1 allowed for now!)
-    #   [topotype, minlevel,maxlevel,fname]
-    dtopo_data.dtopofiles.append([3,2,2,'dtopo1.tt3'])
-    dtopo_data.dtopofiles.append([3,2,2,'dtopo2.tt3'])
-    dtopo_data.dtopofiles.append([1,2,2,'dtopo3.tt1'])
+    #   [topotype, fname]
+    dtopo_data.dtopofiles.append([3,'dtopo1.tt3'])
+    dtopo_data.dtopofiles.append([3,'dtopo2.tt3'])
+    dtopo_data.dtopofiles.append([1,'dtopo3.tt1'])
     dtopo_data.dt_max_dtopo = 0.02
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type = 0
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
-    #   [minlev, maxlev, fname]
+    #   [fname]
 
     # == setfixedgrids.data values ==
     fixedgrids = rundata.fixed_grid_data

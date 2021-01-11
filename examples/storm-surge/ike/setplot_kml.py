@@ -26,7 +26,7 @@ import clawpack.amrclaw.data as amrclaw
 import clawpack.geoclaw.data as geodata
 
 import clawpack.geoclaw.surge.plot as surgeplot
-import clawpack.geoclaw.surge.data as surgedata
+import clawpack.geoclaw.data as surgedata
 
 try:
     from setplotfg import setplotfg
@@ -56,9 +56,7 @@ def setplot(plotdata):
 
 
     plotdata.clearfigures()  # clear any old figures,axes,items data
-    plotdata.format = 'binary'
-
-    fig_num_counter = surgeplot.figure_counter()
+    plotdata.format = 'ascii'
 
     # Load data from output
     clawdata = clawutil.ClawInputData(2)
