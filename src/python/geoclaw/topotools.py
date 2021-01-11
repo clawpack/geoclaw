@@ -1600,11 +1600,9 @@ def intersection(rect1, rect2):
     r"""
     Whether two domains, rect1 and rect2 intersect. If they intersect,
     find the intersection's boundary and area.
-
     :Input:
      - *rect1* (ndarray(:))
      - *rect2* (ndarray(:))
-
     :Output:
      - *mark* (bool) If rect1 and rect2 intersect, mark = True. Otherwise,
        mark = False.
@@ -1657,7 +1655,6 @@ def bilinearintegral(domain, topodomain, corners):
      - *domain* (ndarray(:))
      - *topodomain* (ndarray(:))
      - *corners* (ndarray(:, :)) Four corner points of the topodomain.
-
     :Output:
      - *bilinearintegral* (float) The integral of the function, f(xi, eta), on
        the intersection of domain and topodomain.
@@ -1665,20 +1662,20 @@ def bilinearintegral(domain, topodomain, corners):
 
     # Set boundary for integral
     bound = intersection(domain, topodomain)[2]
-    
+
     # Find terms for the integration
     deltax = topodomain[1] - topodomain[0]
     deltay = topodomain[3] - topodomain[2]
     area = (bound[3] - bound[2]) * (bound[1] - bound[0])
     sumxi = (bound[1] + bound[0] - 2.0 * topodomain[0]) / deltax
     sumeta = (bound[3] + bound[2] - 2.0 * topodomain[2]) / deltay
-    
+
     # Find coefficients of the function, f(xi, eta)
     a = corners[1][0] - corners[0][0]
     b = corners[0][1] - corners[0][0]
     c = corners[1][1] - corners[1][0] - corners[0][1] + corners[0][0]
     d = corners[0][0]
-    
+
     bilinearintegral = (0.5 * (a * sumxi + b * sumeta) +
                         0.25 * c * sumxi * sumeta + d) * area
 
@@ -1704,7 +1701,6 @@ def bilinearintegral_s(domain, topodomain, corners):
      - *domain* (ndarray(:))
      - *topodomain* (ndarray(:))
      - *corners* (ndarray(:, :)) Four corner points of the topodomain.
-
     :Output:
      - *bilinearintegral* (float) The integral of the function, f(xi, eta), on
        the intersection of domain and topodomain.
@@ -1740,7 +1736,7 @@ def bilinearintegral_s(domain, topodomain, corners):
                           r2d * (c * xdiff2 + b * intdx) * cbsinint) * (Rearth * d2r)**2
 
     return bilinearintegral_s
-        
+
 
 def topointegral(domain, topoparam, z, intmethod, coordinate_system):
     r"""
@@ -1756,78 +1752,77 @@ def topointegral(domain, topoparam, z, intmethod, coordinate_system):
      - *z* (ndarray(:, :)) Topo data of domain represented by topoparam.
      - *intmethod* (int) The method of integral.
      - *coordinate_system* (int) The type of coordinate system.
-
     :Output:
      - *theintegral* (float) The integral of a surface over a rectangular
        region which is the intersection of the domain and "topoparam".
     """
-    
+
     theintegral = 0.0
-    
+
     # Set topo's parameter
     x1 = topoparam[0]; x2 = topoparam[1]
     y1 = topoparam[2]; y2 = topoparam[3]
     topodx = topoparam[4]; topody = topoparam[5]
-    topomx = numpy.array(z).shape[0]
-    topomy = numpy.array(z).shape[1]
-    
+    topomx = numpy.array(z).shape[1]
+    topomy = numpy.array(z).shape[0]
+
     # Find the intersection of the domain and topo
     bound = intersection(domain, topoparam)[2]
     xlow = bound[0]; xhi = bound[1]
     ylow = bound[2]; yhi = bound[3]
-    
+
     if intmethod == 1:
-        
+
         # Find topo's start and end points for integral
         # The x coodinate of the topo's start point
         istart = -1
         for i in range(topomx):
             if (x1 + i * topodx) > xlow:
-                istart = i
+                istart = max(i-1, 0)
                 break
-        
+
         # The y coodinate of the topo's start point
         jstart = -1
         for j in range(topomy):
             if (y1 + j * topody)  > ylow:
-                jstart = j
+                jstart = max(j-1, 0)
                 break
-        
+ 
         # The x coodinate of the topo's end point
         iend = topomx
         for m in range(topomx):
             if (x1 + m * topodx) >= xhi:
                 iend = m
                 break
-        
+   
         # The y coodinate of the topo's end point
         jend = topomy
         for n in range(topomy):
             if (y1 + n * topody) >= yhi:
                 jend = n
                 break
-                        
+
         # Prevent overflow
-        jstart = max(jstart, 1)
-        istart = max(istart, 1)
+        jstart = max(jstart, 0)
+        istart = max(istart, 0)
         jend = min(jend, topomy - 1)
         iend = min(iend, topomx - 1)
-        
-        # Topo integral
-        for jj in range(jstart, jend + 1):
-            yint1 = y1 + (jj - 1.0) * topody
-            yint2 = y1 + jj * topody
 
-            for ii in range(istart, iend + 1):
-                xint1 = x1 + (ii - 1.0) * topodx
-                xint2 = x1 + ii * topodx
+        # Topo integral
+        for jj in range(jstart, jend):
+            yint1 = y1 + jj * topody
+            yint2 = y1 + (jj + 1) * topody
+
+            for ii in range(istart, iend):
+                xint1 = x1 + ii * topodx
+                xint2 = x1 + (ii + 1) * topodx
 
                 # Four corners of topo's grid
                 corners = numpy.empty((2, 2))
-                corners[0][0] = z[ii-1][topomy - jj]
-                corners[0][1] = z[ii-1][topomy - 1 - jj]
-                corners[1][0] = z[ii][topomy - jj]
-                corners[1][1] = z[ii][topomy - 1 - jj]
+                corners[0][0] = z[jj][ii]
+                corners[0][1] = z[jj+1][ii]
+                corners[1][0] = z[jj][ii+1]
+                corners[1][1] = z[jj+1][ii+1]
 
                 # Parameters of topo's grid integral
                 topointparam = [xint1, xint2, yint1, yint2]
@@ -1837,7 +1832,7 @@ def topointegral(domain, topoparam, z, intmethod, coordinate_system):
                 elif coordinate_system == 2:
                     theintegral += bilinearintegral_s(domain, topointparam, corners)
                 else:
-                     print("TOPOINTEGRAL: coordinate_system error")
+                    print("TOPOINTEGRAL: coordinate_system error")
 
     else:
         print("TOPOINTEGRAL: only intmethod = 1,2 is supported")
@@ -1850,11 +1845,9 @@ def recurintegral(domain, mtopoorder, mtopofiles, m, topo):
     Compute the integral of topo over the rectangle domain defined by "domain".
     Find the index of the topo whose resolution is m by "mtopoorder". Use this
     index to find corresponding topo object in the list "topo".
-
     The main call to this recursive function has corners of a grid cell for the
     rectangle and m = 1 in order to compute the integral over the cell using all
     topo objects.
-
     The recursive strategy is to first compute the integral using only the topo
     object of m+1 resolution. Then apply corrections due to adding m resolution
     topo object.
@@ -1871,7 +1864,6 @@ def recurintegral(domain, mtopoorder, mtopofiles, m, topo):
      - *mtopofiles* (int) The number of the topo objects.
      - *m* (int) Resolution of the topo objects.
      - *topo* (list) The list of topo objects.
-
     :Output:
      - *integral* (float) Integral.
     """
@@ -1918,7 +1910,6 @@ def cellintegral(cell, mtopoorder, mtopofiles, topo):
     - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
     - *mtopofiles* (int) The number of the topo objects.
     - *topo* (list) The list of topo objects.
-
     :Output:
     - *topoint* (float) The integral on the cell, "cell".
     """
@@ -1956,13 +1947,11 @@ def cellintegral(cell, mtopoorder, mtopofiles, topo):
 def cell_average_patch(patch, mtopoorder, mtopofiles, topo):
     r"""
     Compute every cell's average of the specific patch given by "patch".
-
     :Input:
     - *patch* (Dictionary) Patch.
     - *mtopoorder* (ndarray(:)) The order of the topo objects' resolutions.
     - *mtopofiles* (int) The number of the topo objects.
     - *topo* (list) The list of topo objects.
-
     :Output:
     - *cell_average* (ndarray(:, :)) Patch's every cell average.
     """
