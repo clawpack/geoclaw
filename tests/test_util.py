@@ -79,16 +79,16 @@ class TestFetchNoaaTideData:
         self._fetch_and_assert(date_time_expected, water_level_expected,
                                prediction_expected, cache_dir)
 
-    @raises(ValueError)
     def test_api_error(self):
         cache_dir = os.path.join(self.temp_dir, self.test_api_error.__name__)
 
         # configure endpoint to return an error
         self._monkey_patch_urlopen(lambda url: 'Something went wrong')
 
-        # should raise ValueError
-        fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
+        # should return None
+        d,w,p = fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
                              cache_dir=cache_dir)
+        assert d == None, '*** expected d == None'
 
     @raises(ValueError)
     def test_date_time_range_mismatch(self):

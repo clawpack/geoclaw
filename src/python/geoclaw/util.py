@@ -152,6 +152,51 @@ def inv_haversine(d,x1,y1,y2,Rsphere=Rearth,units='degrees'):
     return dx
 
 
+def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
+
+    """
+    Compute the bearing from (x0,y0) to (x1,y1), i.e., the angle clockwise from
+    due North of the great circle path from point 0 to 1.  
+
+    The value returned is thus between 0 and 360 if bearing_units='degrees',
+    or between 0 and 2*pi if bearing_units='radians'.
+
+    Note: If using this to initialize a radially-symmetric 2d velocity on the
+    sphere based on a radial velocity U(r), symmetric about (x0, y0), set:
+        # lat-long assumed to be in degrees, r in meters
+        r = haversine(x0,y0,x,y)
+        beta = bearing(x0,y0,x,y,bearing_units='radians')
+        u = U(r) * sin(beta)  # beta measured from North!
+        v = U(r) * cos(beta)
+    """
+    from math import atan2, degrees
+
+    if units == 'degrees':
+        # convert to radians:
+        x0 = x0*DEG2RAD
+        y0 = y0*DEG2RAD
+        x1 = x1*DEG2RAD
+        y1 = y1*DEG2RAD
+    elif units != 'radians':
+        raise Exception("unrecognized units")
+
+    dx = x1 - x0
+    dy = y1 - y0
+    xx = numpy.cos(y0)*numpy.sin(y1) - numpy.sin(y0)*numpy.cos(y1)*numpy.cos(dx)
+    yy = numpy.sin(dx) * numpy.cos(y1)
+    b = atan2(yy, xx)   # in radians from North (between -pi and pi)
+
+    beta = (degrees(b) + 360) % 360  # convert to degrees clockwise from North
+
+    if bearing_units == 'radians':
+        beta = radians(beta)  # convert to radians clockwise (0 to 2*pi)
+
+    elif bearing_units != 'degrees':
+        raise Exception("unrecognized bearing_units")
+
+    return b
+    
+
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
                          datum='STND', units='metric', cache_dir=None,
                          verbose=True):
@@ -270,14 +315,29 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
     col_types = 'datetime64[m], float'
 
     # fetch water levels and tide predictions
-    date_time, water_level = fetch(
-        'water_level', 'Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality',
-        col_idx, col_types)
-    date_time2, prediction = fetch('predictions', 'Date Time, Prediction',
-                                   col_idx, col_types)
+    try:
+        date_time, water_level = fetch(
+            'water_level', 'Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality',
+            col_idx, col_types)
+    except:
+        print('*** Fetching water_level failed, returning None')
+        date_time = None
+        water_level = None
+
+    try:
+        date_time2, prediction = fetch('predictions', 'Date Time, Prediction',
+                                       col_idx, col_types)
+        if date_time is None:
+            date_time = date_time2
+
+    except:
+        print('*** Fetching prediction failed, returning None')
+        date_time2 = None
+        prediction = None
 
     # ensure that date/time ranges are the same
-    if not numpy.array_equal(date_time, date_time2):
-        raise ValueError('Received data for different times')
+    if (date_time is not None) and (date_time2 is not None):
+        if not numpy.array_equal(date_time, date_time2):
+            raise ValueError('Received data for different times')
 
     return date_time, water_level, prediction

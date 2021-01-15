@@ -333,7 +333,7 @@ def setrun(claw_pkg='geoclaw'):
     #rundata.regiondata.regions = []
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
-
+    # NO OLD STYLE REGIONS USED HERE
 
 
     # ---------------
@@ -362,6 +362,18 @@ def setrun(claw_pkg='geoclaw'):
                                  clawdata.upper[1] + 0.1]
     flagregions.append(flagregion)
 
+    # force 2 levels around dtopo source region for short time:
+    flagregion = FlagRegion(num_dim=2)
+    flagregion.name = 'Region_level2_dtopo'
+    flagregion.minlevel = 2
+    flagregion.maxlevel = 2
+    flagregion.t1 = 0.
+    flagregion.t2 = 2.
+    flagregion.spatial_region_type = 1  # Rectangle
+    flagregion.spatial_region = [-2,1,-1,1]
+    flagregions.append(flagregion)
+
+    # allow 3 levels around coastal region for all times:
     flagregion = FlagRegion(num_dim=2)
     flagregion.name = 'Region_level3'
     flagregion.minlevel = 1
@@ -369,11 +381,10 @@ def setrun(claw_pkg='geoclaw'):
     flagregion.t1 = 0.
     flagregion.t2 = 1e9
     flagregion.spatial_region_type = 1  # Rectangle
-    # domain plus a bit so kml files look nicer:
-    flagregion.spatial_region = [-0.1,0.1,-0.1,0.1]
+    flagregion.spatial_region = [-0.01,0.01,-0.01,0.01]
     flagregions.append(flagregion)
 
-
+    # force 4 levels around coastal region starting at 5 minutes:
     flagregion = FlagRegion(num_dim=2)
     flagregion.name = 'Region_level4'
     flagregion.minlevel = 4
@@ -381,7 +392,6 @@ def setrun(claw_pkg='geoclaw'):
     flagregion.t1 = 5*60.
     flagregion.t2 = 1e9
     flagregion.spatial_region_type = 1  # Rectangle
-    # domain plus a bit so kml files look nicer:
     flagregion.spatial_region = [-0.005, 0.01, -0.011, 0.011]
     flagregions.append(flagregion)
 
@@ -419,26 +429,23 @@ def setrun(claw_pkg='geoclaw'):
     refinement_data = rundata.refinement_data
     refinement_data.variable_dt_refinement_ratios = True
     refinement_data.wave_tolerance = 0.2
-    refinement_data.deep_depth = 1e2
-    refinement_data.max_level_deep = 30
 
     # == settopo.data values ==
     topofiles = rundata.topo_data.topofiles
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
+    #    [topotype, fname]
     topodir = 'input_files'
 
-    topofiles.append([3, 1, 1, 0., 1e10, topodir + '/topo_ocean.tt3'])
-    topofiles.append([3, 1, 1, 0., 1e10, topodir + '/topo_shore.tt3'])
+    topofiles.append([3, topodir + '/topo_ocean.tt3'])
+    topofiles.append([3, topodir + '/topo_shore.tt3'])
 
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form :   (<= 1 allowed for now!)
-    #   [topotype, minlevel,maxlevel,fname]
+    #   [topotype, fname]
     dtopodir = 'input_files'
-    dtopo_data.dtopofiles.append([3, 2, 2, \
-            dtopodir + '/dtopo_test.tt3'])
+    dtopo_data.dtopofiles.append([3, dtopodir + '/dtopo_test.tt3'])
 
     dtopo_data.dt_max_dtopo = 1.0
 
@@ -448,7 +455,7 @@ def setrun(claw_pkg='geoclaw'):
     rundata.qinit_data.qinit_type = 0
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
-    #   [minlev, maxlev, fname]
+    #   [fname]
     
     # NEW feature to adjust sea level by dtopo:
     rundata.qinit_data.variable_eta_init = True

@@ -25,8 +25,6 @@ module qinit_module
     
     integer, private :: mx_qinit
     integer, private :: my_qinit
-    integer :: min_level_qinit
-    integer :: max_level_qinit
 
     ! for initializing using force_dry to indicate dry regions below sealevel:
 
@@ -83,11 +81,7 @@ contains
                 print *,'  qinit_type = 0, no perturbation'
             else
                 read(unit,*) qinit_fname
-                read(unit,"(2i2)") min_level_qinit, max_level_qinit
-
-                write(GEO_PARM_UNIT,*) '   min_level, max_level, qinit_fname:'
-                write(GEO_PARM_UNIT,*)  min_level_qinit, max_level_qinit, &
-                                        qinit_fname
+                write(GEO_PARM_UNIT,*)  qinit_fname
             
                 call read_qinit(qinit_fname)
             endif

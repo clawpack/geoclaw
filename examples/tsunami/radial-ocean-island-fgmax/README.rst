@@ -60,3 +60,5 @@ Version
 
 - New in Version 5.7.0.
 - Some Python issues fixed in Version 5.7.1.
+- The results changed very slightly in v5.8.0 due to changes in the 
+  transverse Riemann solver.

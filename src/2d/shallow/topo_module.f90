@@ -22,7 +22,7 @@ module topo_module
     integer, allocatable ::  mxtopo(:), mytopo(:)
 
     integer, allocatable :: i0topo(:), mtopo(:), mtopoorder(:)
-    integer, allocatable :: minleveltopo(:), maxleveltopo(:), itopotype(:)
+    integer, allocatable :: itopotype(:)
     integer, allocatable :: topoID(:),topo0save(:)
     logical :: topo_finalized
 
@@ -50,7 +50,7 @@ module topo_module
     real(kind=8), allocatable :: tdtopo1(:),tdtopo2(:),taudtopo(:)
 
     integer, allocatable :: mxdtopo(:),mydtopo(:),mtdtopo(:),mdtopo(:)
-    integer, allocatable :: minleveldtopo(:),maxleveldtopo(:),dtopotype(:)
+    integer, allocatable :: dtopotype(:)
     integer, allocatable :: i0dtopo(:),mdtopoorder(:),kdtopo1(:),kdtopo2(:)
     integer, allocatable :: index0_dtopowork1(:),index0_dtopowork2(:)
 
@@ -137,22 +137,17 @@ contains
                 allocate(tlowtopo(mtopofiles),xhitopo(mtopofiles),yhitopo(mtopofiles))
                 allocate(thitopo(mtopofiles),dxtopo(mtopofiles),dytopo(mtopofiles))
                 allocate(topofname(mtopofiles),itopotype(mtopofiles))
-                allocate(minleveltopo(mtopofiles),maxleveltopo(mtopofiles))
                 allocate(i0topo(mtopofiles),mtopo(mtopofiles),mtopoorder(mtopofiles))
                 allocate(topoID(mtopofiles),topotime(mtopofiles),topo0save(mtopofiles))
                 allocate(i0topo0(mtopofiles),topo0ID(mtopofiles))
 
                 do i=1,mtopofiles - num_dtopo
                     read(iunit,*) topofname(i)
-                    read(iunit,*) itopotype(i),minleveltopo(i), maxleveltopo(i), &
-                        tlowtopo(i),thitopo(i)
+                    read(iunit,*) itopotype(i)
 
                     write(GEO_PARM_UNIT,*) '   '
                     write(GEO_PARM_UNIT,*) '   ',topofname(i)
                     write(GEO_PARM_UNIT,*) '  itopotype = ', itopotype(i)
-                    write(GEO_PARM_UNIT,*) '  minlevel, maxlevel = ', &
-                        minleveltopo(i), maxleveltopo(i)
-                    write(GEO_PARM_UNIT,*) '  tlow, thi = ', tlowtopo(i),thitopo(i)
                     if (abs(itopotype(i)) == 1) then
                         print *, 'WARNING: topotype 1 has been deprecated'
                         print *, 'converting to topotype > 1 is encouraged'
@@ -180,10 +175,6 @@ contains
                    yhitopo(i) = yhidtopo(j)
                    dxtopo(i) = dxdtopo(j)
                    dytopo(i) = dydtopo(j)
-                   minleveltopo(i) = minleveldtopo(j)
-                   maxleveltopo(i) = maxleveldtopo(j)
-                   tlowtopo(i) = t0dtopo(j)
-                   thitopo(i) = tfdtopo(j)
                    mtopo(i) = mxtopo(i)*mytopo(i)
                    topoID(i) = i
                    topotime(i) = -huge(1.0)
@@ -1066,8 +1057,8 @@ contains
         endif
 
         ! Allocate and read in dtopo info
-        allocate(dtopofname(num_dtopo),minleveldtopo(num_dtopo))
-        allocate(maxleveldtopo(num_dtopo),mxdtopo(num_dtopo))
+        allocate(dtopofname(num_dtopo))
+        allocate(mxdtopo(num_dtopo))
         allocate(mydtopo(num_dtopo),mtdtopo(num_dtopo),mdtopo(num_dtopo))
         allocate(xlowdtopo(num_dtopo),ylowdtopo(num_dtopo),t0dtopo(num_dtopo))
         allocate(xhidtopo(num_dtopo),yhidtopo(num_dtopo),tfdtopo(num_dtopo))
@@ -1080,11 +1071,9 @@ contains
 
         do i=1,num_dtopo
             read(iunit,*) dtopofname(i)
-            read(iunit,*) dtopotype(i),minleveldtopo(i), maxleveldtopo(i)
+            read(iunit,*) dtopotype(i)
             write(GEO_PARM_UNIT,*) '   fname:',dtopofname(i)
             write(GEO_PARM_UNIT,*) '   topo type:',dtopotype(i)
-            write(GEO_PARM_UNIT,*) '   minlevel, maxlevel:'
-            write(GEO_PARM_UNIT,*)  minleveldtopo(i),maxleveldtopo(i)
 
             ! Read in header data
             call read_dtopo_header(dtopofname(i),dtopotype(i),mxdtopo(i), &
