@@ -384,9 +384,7 @@ def setgeo(rundata):
     clawutil.data.get_remote_file(
            "http://www.columbia.edu/~ktm2132/bathy/gulf_caribbean.tt3.tar.bz2")
     topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
-    topo_data.topofiles.append([3, rundata.clawdata.t0,
-                                rundata.clawdata.tfinal,
-                                topo_path])
+    topo_data.topofiles.append([3, topo_path])
 
     # == setfixedgrids.data values ==
     rundata.fixed_grid_data.fixedgrids = []
