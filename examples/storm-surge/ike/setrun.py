@@ -180,7 +180,7 @@ def setrun(claw_pkg='geoclaw'):
     # ------------------
 
     # Order of accuracy:  1 => Godunov,  2 => Lax-Wendroff plus limiters
-    clawdata.order = 1
+    clawdata.order = 2
 
     # Use dimensional splitting? (not yet available for AMR)
     clawdata.dimensional_split = 'unsplit'
@@ -189,7 +189,7 @@ def setrun(claw_pkg='geoclaw'):
     #  0 or 'none'      ==> donor cell (only normal solver used)
     #  1 or 'increment' ==> corner transport of waves
     #  2 or 'all'       ==> corner transport of 2nd order corrections too
-    clawdata.transverse_waves = 1
+    clawdata.transverse_waves = 2
 
     # Number of waves in the Riemann solution:
     clawdata.num_waves = 3
@@ -363,8 +363,9 @@ def setgeo(rundata):
     geo_data.friction_depth = 1e10
 
     # == Algorithm and Initial Conditions ==
-    # Due to seasonal swelling of gulf we set sea level higher
-    geo_data.sea_level = 0.28
+    # Note that in the original paper due to gulf summer swelling this was set
+    # to 0.28
+    geo_data.sea_level = 0.0
     geo_data.dry_tolerance = 1.e-2
 
     # Refinement Criteria
@@ -383,9 +384,7 @@ def setgeo(rundata):
     clawutil.data.get_remote_file(
            "http://www.columbia.edu/~ktm2132/bathy/gulf_caribbean.tt3.tar.bz2")
     topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
-    topo_data.topofiles.append([3, rundata.clawdata.t0,
-                                rundata.clawdata.tfinal,
-                                topo_path])
+    topo_data.topofiles.append([3, topo_path])
 
     # == setfixedgrids.data values ==
     rundata.fixed_grid_data.fixedgrids = []
