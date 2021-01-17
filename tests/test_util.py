@@ -35,7 +35,7 @@ class TestFetchNoaaTideData:
                                  self.test_retrieve_and_cache.__name__)
 
         water_level_response = \
-            ('Date Time, Water Level, Sigma, O, F, R, L, Quality\n'
+            ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
              '2000-10-30 12:00,1.001,0.001,0,0,0,0,v\n'
              '2000-10-30 12:06,1.002,0.002,0,0,0,0,v\n'
              '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'
@@ -79,16 +79,16 @@ class TestFetchNoaaTideData:
         self._fetch_and_assert(date_time_expected, water_level_expected,
                                prediction_expected, cache_dir)
 
-    @raises(ValueError)
     def test_api_error(self):
         cache_dir = os.path.join(self.temp_dir, self.test_api_error.__name__)
 
         # configure endpoint to return an error
         self._monkey_patch_urlopen(lambda url: 'Something went wrong')
 
-        # should raise ValueError
-        fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
+        # should return None
+        d,w,p = fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
                              cache_dir=cache_dir)
+        assert d == None, '*** expected d == None'
 
     @raises(ValueError)
     def test_date_time_range_mismatch(self):
@@ -97,7 +97,7 @@ class TestFetchNoaaTideData:
 
         # missing first two entries
         water_level_response = \
-            ('Date Time, Water Level, Sigma, O, F, R, L, Quality\n'
+            ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
              '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'
              '2000-10-30 12:18,1.004,0.004,0,0,0,0,v\n'
              '2000-10-30 12:24,1.005,0.005,0,0,0,0,v\n')
@@ -127,7 +127,7 @@ class TestFetchNoaaTideData:
 
         # missing fist two water level values
         water_level_response = \
-            ('Date Time, Water Level, Sigma, O, F, R, L, Quality\n'
+            ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
              '2000-10-30 12:00,,0.001,0,0,0,0,v\n'
              '2000-10-30 12:06,,0.002,0,0,0,0,v\n'
              '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'

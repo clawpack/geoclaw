@@ -1,29 +1,21 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # # Make input files for geoclaw_fgmax_test
 # 
 # Create synthetic topo files and fgmax input file fgmax_pts_island.data specified as a topo_type==3 file.
 
-# In[1]:
-
-
-#get_ipython().magic('matplotlib inline')
-
-
-# In[2]:
+# In[ ]:
 
 
 from pylab import *
 import os,sys
 from clawpack.visclaw import colormaps, plottools
 from clawpack.geoclaw import fgmax_tools, topotools
-
-#from clawpack.visclaw.plottools import pcolorcells # to appear in 5.7.0
-from matplotlib.pyplot import pcolormesh as pcolorcells # for now
+from clawpack.visclaw.plottools import pcolorcells
 
 
-# In[3]:
+# In[ ]:
 
 
 zmin = -60.
@@ -48,7 +40,7 @@ cmap_dry, norm_dry = colormaps.add_colormaps((land_cmap, sea_cmap_dry),
 
 # ## Run script to generate topo files
 
-# In[4]:
+# In[ ]:
 
 
 import maketopo
@@ -56,7 +48,7 @@ maketopo.maketopo()
 maketopo.makeqinit()
 
 
-# In[6]:
+# In[ ]:
 
 
 ocean_topo = topotools.Topography(path='ocean.tt3', topo_type=3)
@@ -66,14 +58,14 @@ plottools.plotbox(island_topo.extent, kwargs={'color':'r'})
 title('Ocean topo\nRed box is location of island');
 
 
-# In[7]:
+# In[ ]:
 
 
 island_topo.plot()
 title('Island topo')
 
 
-# In[8]:
+# In[ ]:
 
 
 extent = [14.25, 14.65, 50.1, 50.35]
@@ -89,19 +81,19 @@ gca().set_aspect(1./cos(50.2*pi/180.))
 # 
 # Select the points where `Z > -15`m or `Z < 15`m elevation.
 
-# In[9]:
+# In[ ]:
 
 
 pts_chosen = where(logical_and(topo.Z>-15, topo.Z<15), 1, 0)
 
 
-# In[10]:
+# In[ ]:
 
 
 Zchosen = ma.masked_array(topo.Z, logical_not(pts_chosen))
 
 
-# In[11]:
+# In[ ]:
 
 
 figure(figsize=(12,6))
@@ -116,7 +108,7 @@ gca().set_aspect(1./cos(48*pi/180.))
 # 
 # This file can be used together with setting `point_style==4` in `setrun.py`.
 
-# In[12]:
+# In[ ]:
 
 
 fname_fgmax_mask = 'fgmax_pts_island.data'
@@ -130,4 +122,10 @@ topo_fgmax_mask.generate_2d_coordinates()
 
 topo_fgmax_mask.write(fname_fgmax_mask, topo_type=3, Z_format='%1i')
 print('Created %s' % fname_fgmax_mask)
+
+
+# In[ ]:
+
+
+
 

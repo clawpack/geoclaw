@@ -104,7 +104,7 @@ def setplot(plotdata=None):
         plotaxes.afteraxes = surge_afteraxes
 
         surgeplot.add_surface_elevation(plotaxes, bounds=surface_limits)
-        surgeplot.add_land(plotaxes)
+        surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
         plotaxes.plotitem_dict['surface'].amr_patchedges_show = [0] * 10
         plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
         add_custom_colorbar_ticks_to_axes(plotaxes, 'surface', surface_ticks,
@@ -120,7 +120,7 @@ def setplot(plotdata=None):
         plotaxes.afteraxes = surge_afteraxes
 
         surgeplot.add_speed(plotaxes, bounds=speed_limits)
-        surgeplot.add_land(plotaxes)
+        surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
         plotaxes.plotitem_dict['speed'].amr_patchedges_show = [0] * 10
         plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
         add_custom_colorbar_ticks_to_axes(plotaxes, 'speed', speed_ticks,
@@ -157,7 +157,7 @@ def setplot(plotdata=None):
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
     surgeplot.add_pressure(plotaxes, bounds=pressure_limits)
-    surgeplot.add_land(plotaxes)
+    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
 
     # Wind field
     plotfigure = plotdata.new_plotfigure(name='Wind Speed')
@@ -170,7 +170,7 @@ def setplot(plotdata=None):
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
     surgeplot.add_wind(plotaxes, bounds=wind_limits)
-    surgeplot.add_land(plotaxes)
+    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
 
     # ========================================================================
     #  Figures for gauges
@@ -191,6 +191,7 @@ def setplot(plotdata=None):
     def gauge_afteraxes(cd):
 
         axes = plt.gca()
+        landfall = 0.
         surgeplot.plot_landfall_gauge(cd.gaugesoln, axes, landfall=landfall)
 
         # Fix up plot - in particular fix time labels

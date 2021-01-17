@@ -86,7 +86,7 @@ def setplot(plotdata=None):
         plotaxes.afteraxes = surge_afteraxes
 
         surgeplot.add_surface_elevation(plotaxes, bounds=surface_limits)
-        surgeplot.add_land(plotaxes)
+        surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
         plotaxes.plotitem_dict['surface'].amr_patchedges_show = [0] * 10
         plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
 
@@ -100,7 +100,7 @@ def setplot(plotdata=None):
         plotaxes.afteraxes = surge_afteraxes
 
         surgeplot.add_speed(plotaxes, bounds=speed_limits)
-        surgeplot.add_land(plotaxes)
+        surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
         plotaxes.plotitem_dict['speed'].amr_patchedges_show = [0] * 10
         plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
 
@@ -135,7 +135,7 @@ def setplot(plotdata=None):
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
     surgeplot.add_pressure(plotaxes, bounds=pressure_limits)
-    surgeplot.add_land(plotaxes)
+    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
 
     # Wind field
     plotfigure = plotdata.new_plotfigure(name='Wind Speed')
@@ -148,7 +148,7 @@ def setplot(plotdata=None):
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
     surgeplot.add_wind(plotaxes, bounds=wind_limits)
-    surgeplot.add_land(plotaxes)
+    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
 
     # ========================================================================
     #  Figures for gauges
@@ -207,7 +207,7 @@ def setplot(plotdata=None):
     plotaxes.ylimits = [29.0, 30.0]
     plotaxes.afteraxes = gauge_location_afteraxes
     surgeplot.add_surface_elevation(plotaxes, bounds=surface_limits)
-    surgeplot.add_land(plotaxes)
+    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
     plotaxes.plotitem_dict['surface'].amr_patchedges_show = [0] * 10
     plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
 
@@ -218,7 +218,7 @@ def setplot(plotdata=None):
     plotdata.printfigs = True                # print figures
     plotdata.print_format = 'png'            # file format
     plotdata.print_framenos = 'all'          # list of frames to print
-    plotdata.print_gaugenos = [1, 2, 3, 4]   # list of gauges to print
+    plotdata.print_gaugenos = 'all'          # list of gauges to print
     plotdata.print_fignos = 'all'            # list of figures to print
     plotdata.html = True                     # create html files of plots?
     plotdata.latex = True                    # create latex file of plots?

@@ -7,6 +7,7 @@ c
       use amr_module
       use fgmax_module
       use gauges_module, only: gauges, num_gauges
+      use topo_module, only: aux_finalized
       implicit double precision (a-h,o-z)
       logical   ee
  
@@ -54,12 +55,12 @@ c     # need to allocate for dynamic memory:
       read(rstunit) (alloc(i),i=1,lendim)
       read(rstunit) hxposs,hyposs,possk,icheck
       read(rstunit) lfree,lenf
-      read(rstunit) rnode,node,lstart,newstl,listsp,tl,
+      read(rstunit) rnode,node,lstart,newstl,listspStart,listsp,tl,
      1       ibuf,mstart,ndfree,ndfree_bnd,lfine,iorder,mxnold,
      2       intrtx,intrty,intrtt,iregsz,jregsz,
      2       iregst,jregst,iregend,jregend,
      3       numgrids,kcheck1,nsteps,time,
-     3       matlabu
+     3       matlabu,aux_finalized
       read(rstunit) avenumgrids, iregridcount,
      1              evol,rvol,rvoll,lentot,tmass0,cflmax,
      2              tvoll,tvollCPU,timeTick,timeTickCPU,
@@ -73,9 +74,10 @@ c     # need to allocate for dynamic memory:
         do ifg = 1, FG_num_fgrids
           fg => FG_fgrids(ifg)
           read(rstunit) fg%levelmax
-          read(rstunit) fg%auxdone(1:mxnest) 
+          read(rstunit) fg%auxdone(1:mxnold) 
           read(rstunit) fg%x,fg%y,fg%valuemax,fg%tmax,
-     &       fg%arrival_time,fg%aux(1:mxnold,:,:),fg%t_last_updated
+     &       fg%arrival_time,fg%aux(1:mxnold,:,:),
+     &       fg%t_last_updated(1:mxnold)
         end do
       else
         do ifg = 1, FG_num_fgrids

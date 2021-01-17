@@ -1,13 +1,14 @@
 
 subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     
+    use geoclaw_module, only: sea_level
+    use amr_module, only: t0
     use qinit_module, only: qinit_type,add_perturbation
+    use qinit_module, only: variable_eta_init
     use qinit_module, only: force_dry,use_force_dry,mx_fdry, my_fdry
     use qinit_module, only: xlow_fdry, ylow_fdry, xhi_fdry, yhi_fdry
     use qinit_module, only: dx_fdry, dy_fdry
-    use geoclaw_module, only: sea_level
-    use amr_module, only: t0
-    use qinit_module, only: variable_eta_init
+    use qinit_module, only: tend_force_dry
     
     implicit none
     
@@ -37,7 +38,7 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
         q(1,i,j) = max(0.d0, veta(i,j) - aux(1,i,j))
     end forall
 
-    if (use_force_dry) then
+    if (use_force_dry .and. (t0 <= tend_force_dry)) then
      ! only use the force_dry if it specified on a grid that matches the 
      ! resolution of this patch, since we only check the cell center:
      ddxy = max(abs(dx-dx_fdry), abs(dy-dy_fdry))

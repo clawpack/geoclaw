@@ -172,7 +172,7 @@ def setrun(claw_pkg='geoclaw'):
     # ------------------
 
     # Order of accuracy:  1 => Godunov,  2 => Lax-Wendroff plus limiters
-    clawdata.order = 1
+    clawdata.order = 2
 
     # Use dimensional splitting? (not yet available for AMR)
     clawdata.dimensional_split = 'unsplit'
@@ -181,7 +181,7 @@ def setrun(claw_pkg='geoclaw'):
     #  0 or 'none'      ==> donor cell (only normal solver used)
     #  1 or 'increment' ==> corner transport of waves
     #  2 or 'all'       ==> corner transport of 2nd order corrections too
-    clawdata.transverse_waves = 1
+    clawdata.transverse_waves = 2
 
     # Number of waves in the Riemann solution:
     clawdata.num_waves = 3
@@ -350,16 +350,14 @@ def setgeo(rundata):
     refine_data = rundata.refinement_data
     refine_data.wave_tolerance = 1.0
     refine_data.speed_tolerance = [1.0, 2.0, 3.0, 4.0]
-    refine_data.deep_depth = 300.0
-    refine_data.max_level_deep = 4
     refine_data.variable_dt_refinement_ratios = True
 
     # == settopo.data values ==
     topo_data = rundata.topo_data
     topo_data.topofiles = []
     # for topography, append lines of the form
-    #   [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([2, 1, 5, -RAMP_UP_TIME, 1e10, 'topo.tt2'])
+    #   [topotype, fname]
+    topo_data.topofiles.append([2, 'topo.tt2'])
 
     # == setfixedgrids.data values ==
     rundata.fixed_grid_data.fixedgrids = []

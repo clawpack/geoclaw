@@ -367,19 +367,19 @@ def setgeo(rundata):
     # == settopo.data values ==
     topo_data = rundata.topo_data
     # for topography, append lines of the form
-    #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([2, 1, 10, 0., 1.e10, 'bowl.topotype2'])
+    #    [topotype, fname]
+    topo_data.topofiles.append([2, 'bowl.topotype2'])
 
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     # for moving topography, append lines of the form :   (<= 1 allowed for now!)
-    #   [topotype, minlevel,maxlevel,fname]
+    #   [topotype, fname]
 
     # == setqinit.data values ==
     rundata.qinit_data.qinit_type = 0
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
-    #   [minlev, maxlev, fname]
+    #   [fname]
 
     # == setfixedgrids.data values ==
     fixedgrids = rundata.fixed_grid_data

@@ -158,7 +158,6 @@ COMMON_SOURCES += \
   $(GEOLIB)/flux2fw.f \
   $(GEOLIB)/qad.f \
   $(GEOLIB)/bc2amr.f \
-  $(GEOLIB)/allowflag.f90  \
   $(GEOLIB)/tick.f \
   $(GEOLIB)/setgrd.f \
   $(GEOLIB)/gfixup.f \

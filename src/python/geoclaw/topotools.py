@@ -479,9 +479,17 @@ class Topography(object):
         diffy = numpy.diff(y)
         dx = numpy.mean(diffx)
         dy = numpy.mean(diffy)
+        if dy < 0:
+            Y = numpy.flipud(Y)
+            y = numpy.flipud(y)
+            diffy = numpy.diff(y)
+            dy = numpy.mean(diffy)
+            Z = numpy.flipud(Z)
         if diffx.max()-diffx.min() > 1e-3*dx:
+            print('diffx.max()-diffx.min() = ', diffx.max()-diffx.min())
             raise ValueError("x must be equally spaced for structured topo")
         if diffy.max()-diffy.min() > 1e-3*dy:
+            print('diffy.max()-diffy.min() = ', diffy.max()-diffy.min())
             raise ValueError("y must be equally spaced for structured topo")
 
         self.unstructured = False
@@ -1747,8 +1755,21 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     else: 
         f = netCDF4.Dataset(path, 'r')
 
-    x = f.variables['lon']
-    y = f.variables['lat']
+    if 'lon' in f.variables:
+        x = f.variables['lon']
+    elif 'x' in f.variables:
+        x = f.variables['x']
+    else:
+        print('*** f.variables = ',f.variables)
+        raise ValueError("*** Unrecognized x, lon in netCDF file")
+
+    if 'lat' in f.variables:
+        y = f.variables['lat']
+    elif 'y' in f.variables:
+        y = f.variables['y']
+    else:
+        print('*** f.variables = ',f.variables)
+        raise ValueError("*** Unrecognized y, lat in netCDF file")
 
     # for selecting subset based on extent, convert to arrays if netCDF4 used:
     #if not return_xarray:
@@ -1764,6 +1785,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         elif 'elevation' in f.variables:
             zvar = 'elevation'
         else:
+            print('*** f.variables = ',f.variables)
             raise ValueError("*** Unrecognized zvar in netCDF file")
 
     if extent == 'all':
