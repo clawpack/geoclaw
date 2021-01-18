@@ -15,10 +15,6 @@ import matplotlib.pyplot as plt
 from clawpack.geoclaw import topotools
 from six.moves import range
 
-try:
-    TG32412 = np.loadtxt('32412_notide.txt')
-except:
-    print("*** Could not load DART data file")
 
 #--------------------------
 def setplot(plotdata=None):
@@ -90,7 +86,7 @@ def setplot(plotdata=None):
     plotitem.pcolor_cmax = 0.0005
     plotitem.add_colorbar = True
     plotitem.amr_celledges_show = [0,0,0]
-    plotitem.patchedges_show = 0
+    plotitem.amr_patchedges_show = [0,1,0]
 
     # Land
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')

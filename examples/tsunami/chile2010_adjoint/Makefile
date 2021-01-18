@@ -18,10 +18,6 @@ OUTDIR = _output               # Directory for output
 SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
-OVERWRITE ?= True                   # False ==> make a copy of OUTDIR first
-RESTART ?= False                    # Should = clawdata.restart in setrun
-GIT_STATUS = True
-
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 
 # Compiler flags can be specified here or set as an environment variable
@@ -31,7 +27,7 @@ FFLAGS ?=
 # package sources for this program:
 # ---------------------------------
 
-GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
+GEOLIB = $(CLAW)/geoclaw/src/2d/shallow
 include $(GEOLIB)/Makefile.geoclaw
 
 # ---------------------------------------
