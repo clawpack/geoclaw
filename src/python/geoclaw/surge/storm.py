@@ -1481,6 +1481,39 @@ def available_models():
     return output
 
 
+def make_multi_structure(path):
+    r"""Create a dictionary of Storm objects for ATCF files with multiple storm tracks in them
+    """
+    with open(path, 'r') as f:
+        lines = f.readlines()
+        curTime = "test"
+        curTrack = "test"
+        os.mkdir("Clipped_ATCFs")
+        stormDict = {}
+        for line in lines:
+            lineArr = line.split(", ")
+            if curTime in lineArr[2]:
+                if curTrack in lineArr[4]:
+                    fileWrite.writelines(line)
+                else:
+                    fileWrite.close()
+                    stormDict[curTime].update({curTrack: Storm(path=os.path.join(os.path.expandvars(os.getcwd()), "Clipped_ATCFs", curTime, curTrack), file_format="ATCF")})
+                    curTrack = lineArr[4]
+                    fileWrite = open("Clipped_ATCFs/" + curTime + "/" + curTrack, 'w')
+                    fileWrite.writelines(line)
+            else:
+                if curTime != "test":
+                    fileWrite.close()
+                    stormDict[curTime].update({curTrack: Storm(path=os.path.join(os.path.expandvars(os.getcwd()), "Clipped_ATCFs", curTime, curTrack), file_format="ATCF")})
+                curTime = lineArr[2]
+                curTrack = lineArr[4]
+                stormDict[curTime] = {}
+                os.mkdir("Clipped_ATCFs/" + curTime)
+                fileWrite = open("Clipped_ATCFs/" + curTime + "/" + curTrack, 'w')
+                fileWrite.writelines(line)
+    return stormDict
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
