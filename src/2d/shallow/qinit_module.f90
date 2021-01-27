@@ -128,6 +128,7 @@ contains
         ! Local
         integer :: i,j
         real(kind=8) :: ximc,xim,x,xip,xipc,yjmc,yjm,y,yjp,yjpc,dq
+        real(kind=8) :: eta
         
         ! Topography integral function
         real(kind=8) :: topointegral
@@ -161,13 +162,15 @@ contains
                             dq = dq / ((xipc-ximc)*(yjpc-yjmc))
                         endif 
 
-                        if (qinit_type < 4) then 
-                            if (aux(1,i,j) <= sea_level) then
+                        if (q(1,i,j) > 0.d0) then 
+                            if (qinit_type < 4) then 
                                 q(qinit_type,i,j) = q(qinit_type,i,j) + dq
+                            else if (qinit_type == 4) then
+                                eta = aux(1,i,j) + q(1,i,j) + dq
+                                q(1,i,j) = max(eta - aux(1,i,j), 0.d0)
                             endif
-                        else if (qinit_type == 4) then
-                            q(1,i,j) = max(dq-aux(1,i,j),0.d0)
                         endif
+
                     endif
                 enddo
             enddo
@@ -180,8 +183,9 @@ contains
     ! x,y,z values, one per line in standard order from NW corner to SE
     ! z is perturbation from standard depth h,hu,hv set in qinit_geo,
     ! if iqinit = 1,2, or 3 respectively.
-    ! if iqinit = 4, the z column corresponds to the definition of the 
+    ! if iqinit = 4, the z column corresponds to the perturbation of the 
     ! surface elevation eta. The depth is then set as q(i,j,1)=max(eta-b,0)
+
     subroutine read_qinit(fname)
     
         use geoclaw_module, only: GEO_PARM_UNIT
