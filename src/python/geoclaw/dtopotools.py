@@ -1543,7 +1543,9 @@ class SubFault(object):
                 dip_deg = 90.   # vertical fault
             else:
                 dip_deg = rad2deg(numpy.arcsin(m.dot(n)/(norm(m)*norm(n))))
-            
+                # use "right hand rule" convention for dip direction
+                dip_deg = -dip_deg
+                
             # dip should be between 0 and 90. If negative, reverse strike:
             if dip_deg < 0:
                 strike_deg = strike_deg - 180.
