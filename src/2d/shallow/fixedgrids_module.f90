@@ -372,8 +372,8 @@ contains
            columns = columns + 2
         endif
         
-c       write(6,*) '+++ fixedgrid out_time = ',out_time
-c       write(6,*) '+++ fgrid%num_vars: ',fgrid%num_vars(1),fgrid%num_vars(2)
+        !write(6,*) '+++ fixedgrid out_time = ',out_time
+        !write(6,*) '+++ fgrid%num_vars: ',fgrid%num_vars(1),fgrid%num_vars(2)
         
         ! Write out header
         write(unit,header_format) out_time,fgrid%mx,fgrid%my,fgrid%x_low,fgrid%y_low,fgrid%x_hi,fgrid%y_hi,columns
