@@ -138,7 +138,7 @@ c     # fill in values at fixed grid points effected at time tc0
 
 c        # fixedgrid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
-         write(6,*) '+++ fgrid_interp(1), tc0, level: ',tc0,level
+c        write(6,*) '+++ fgrid_interp(1), tc0, level: ',tc0,level
          call fgrid_interp(1,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
      &                     xlowmbc,ylowmbc,maux,aux,0)
      
@@ -249,7 +249,7 @@ c        # fixedgrid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
 C         i0=i0fg(ng) !# index into the ng grid in the work array
 
-        write(6,*) '+++ fgrid_interp(2), tcf, level: ',tcf,level
+c       write(6,*) '+++ fgrid_interp(2), tcf, level: ',tcf,level
         call fgrid_interp(2,fgrids(ng),tcf,q,nvar,mx,my,mbc,dx,dy,
      &                    xlowmbc,ylowmbc,maux,aux,0)
 

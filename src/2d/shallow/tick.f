@@ -343,8 +343,8 @@ c            #  check if should adjust finer grid time step to start wtih
              go to 60
           endif
 
-          write(6,*) '+++ in tick, done with level',level,
-     &               ' tlevel = ',tlevel(1:level)
+c         write(6,*) '+++ in tick, done with level',level,
+c    &               ' tlevel = ',tlevel(1:level)
       
 c         When we reach here, we are done with grid patches at 
 c         the finest level with grids present at this time
@@ -369,16 +369,16 @@ c     after all patches at finest level have been advanced.
            ioutfgstart = fgrids(ng)%last_output_index + 1
 c     # write-out fgrid times that are less than tlevel, 
 c     # and have not been written yet
-           write(6,*) '+++ in tick, ioutfgstart,ioutfgend: ',
-     &                ioutfgstart,ioutfgend
+c          write(6,*) '+++ in tick, ioutfgstart,ioutfgend: ',
+c    &                ioutfgstart,ioutfgend
            do ioutfg=ioutfgstart,ioutfgend
              toutfg=fgrids(ng)%start_time+(ioutfg-1)*fgrids(ng)%dt
              if (toutfg < tc0 * (1.d0 - 1d-13)) then
 c               # write out the solution for fixed grid ng
 c               # test if arrival times should be output
                 ioutflag = 0  ! deprecated
-                write(6,*) '+++ tick call fgrid_out, ioutfg,toutfg: ',
-     &                     ioutfg,toutfg
+c               write(6,*) '+++ tick call fgrid_out, ioutfg,toutfg: ',
+c    &                     ioutfg,toutfg
                 call fgrid_out(ng,fgrids(ng),toutfg,ioutfg,ioutflag)
 
                 fgrids(ng)%last_output_time = toutfg
