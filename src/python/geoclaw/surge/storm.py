@@ -905,9 +905,9 @@ class Storm(object):
         num_casts = 0
         data_string = [""]
         if self.time_offset is None:
-            # Use the first time in sequence if not provided
-            self.time_offset = self.t[0]
-        data_string.append("%s\n\n" % self.time_offset.isoformat())
+	    data_string.append("None\n")
+	else:
+            data_string.append("%s\n\n" % self.time_offset.isoformat())
         for n in range(len(self.t)):
             # Remove duplicate times
             if n > 0:
