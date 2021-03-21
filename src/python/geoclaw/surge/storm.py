@@ -905,9 +905,11 @@ class Storm(object):
         num_casts = 0
         data_string = [""]
         if self.time_offset is None:
-            # Use the first time in sequence if not provided
+            data_string.append("None")
+            print(self.t)
             self.time_offset = self.t[0]
-        data_string.append("%s\n\n" % self.time_offset.isoformat())
+        else:
+            data_string.append("%s\n\n" % self.time_offset.isoformat())
         for n in range(len(self.t)):
             # Remove duplicate times
             if n > 0:
@@ -916,7 +918,10 @@ class Storm(object):
 
             format_string = ("{:19,.8e} " * 7)[:-1] + "\n"
             data = []
-            data.append((self.t[n] - self.time_offset).total_seconds())
+            if not isinstance(self.time_offset, float):
+                data.append((self.t[n] - self.time_offset).total_seconds())
+            else:
+                data.append(self.t[n] - self.time_offset)
             data.append(self.eye_location[n, 0])
             data.append(self.eye_location[n, 1])
 
@@ -1187,11 +1192,11 @@ class Storm(object):
         category = self.category(categorization=categorization)
 
         # Cartopy plotting
-        if plot_package.lower() is 'cartopy':
+        if plot_package.lower() == 'cartopy':
             raise NotImplementedError("Cartopy plotting not yet implemented.")
 
         # Basemap plotting
-        elif plot_package.lower() is 'basemap':
+        elif plot_package.lower() == 'basemap':
             mapping = Basemap()
             longitude, latitude = mapping(self.eye_location[:, 0],
                                           self.eye_location[:, 1])
