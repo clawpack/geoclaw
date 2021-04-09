@@ -342,7 +342,7 @@ class Storm(object):
             self.t.append(datetime.datetime(int(data[2][:4]),
                                             int(data[2][4:6]),
                                             int(data[2][6:8]),
-                                            int(data[2][-2:])))
+                                            int(data[2][-2:]))+datetime.timedelta(hours=int(data[5])))
 
             # # If an event is occuring record it.  If landfall then use as an
             # # offset.   Note that if there are multiple landfalls the last one
