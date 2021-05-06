@@ -761,6 +761,29 @@ class Topography(object):
                 if mask:
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
                     
+            elif abs(self.topo_type) == 5:
+                # GeoTIFF
+                try:
+                    import gdal
+                except ImportError as e:
+                    print("Reading GeoTIFF files requires GDAL.")
+                    raise e
+
+                data = gdal.Open(self.path)
+                z = data.GetRasterBand(1).ReadAsArray()
+                transform = data.GetGeoTransform()
+                x_origin = transform[0]
+                y_origin = transform[3]
+                dx = transform[1]
+                dy = -transform[5]
+
+                self._Z = numpy.flipud(z)
+                self._x = numpy.linspace(x_origin, 
+                                   x_origin + (z.shape[0] - 1) * dx, z.shape[0])
+                self._y = numpy.linspace(y_origin - (z.shape[0] - 1) * dy, 
+                                   y_origin, z.shape[1])
+
+
             else:
                 raise IOError("Unrecognized topo_type: %s" % self.topo_type)
                 
@@ -904,6 +927,28 @@ class Topography(object):
             dy = self._y[1] - self._y[0]
             self._delta = (dx, dy)
             num_cells = (len(self._x), len(self._y))
+
+        elif abs(self.topo_type) == 5:
+            # GeoTIFF
+            try:
+                import gdal
+            except ImportError as e:
+                print("Reading GeoTIFF files requires GDAL.")
+                raise e
+
+            data = gdal.Open(self.path)
+            # z = data.GetRasterBand(1).ReadAsArray()
+            transform = data.GetGeoTransform()
+            x_origin = transform[0]
+            y_origin = transform[3]
+            dx = transform[1]
+            dy = -transform[5]
+
+            # self._Z = numpy.flipud(z)
+            self._x = numpy.linspace(x_origin, 
+                               x_origin + (z.shape[0] - 1) * dx, z.shape[0])
+            self._y = numpy.linspace(y_origin - (z.shape[0] - 1) * dy, 
+                               y_origin, z.shape[1])
 
         else:
             raise IOError("Cannot read header for topo_type %s" % self.topo_type)
