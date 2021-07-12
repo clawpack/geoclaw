@@ -438,7 +438,8 @@ contains
     ! 5. Apply distance ramp to limit scope
     ! ==========================================================================
     pure subroutine post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
-        wind_index, pressure_index, r, radius, tv, mod_mws, theta, convert_height)
+        wind_index, pressure_index, r, radius, tv, mod_mws, theta, convert_height, &
+        n_hemisphere)
 
         use geoclaw_module, only: Pa => ambient_pressure
 
@@ -448,7 +449,7 @@ contains
         real (kind=8), intent(in) :: tv(2), mod_mws, theta, r, radius
         integer, intent(in) :: wind_index, pressure_index
 
-        logical, intent(in) :: convert_height
+        logical, intent(in) :: convert_height, n_hemisphere
 
         real (kind=8) :: trans_speed_x, trans_speed_y, ramp
 
@@ -465,9 +466,10 @@ contains
         wind = wind * sampling_time
 
         ! Velocity components of storm (assumes perfect vortex shape)
-        ! including addition of translation speed
-        aux(wind_index,i,j)   = -wind * sin(theta) + trans_speed_x
-        aux(wind_index+1,i,j) =  wind * cos(theta) + trans_speed_y
+        ! including addition of translation speed, and adjustment of orientation
+        ! according to hemisphere (counter-clockwise on northern hemisphere).
+        aux(wind_index,i,j)   = wind * merge(-1, 1, n_hemisphere) * sin(theta) + trans_speed_x
+        aux(wind_index+1,i,j) = wind * merge(1, -1, n_hemisphere) * cos(theta) + trans_speed_y
 
         ! Apply distance ramp down(up) to fields to limit scope
         ramp = 0.5d0 * (1.d0 - tanh((r - radius) / RAMP_WIDTH))
@@ -595,7 +597,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height)
+                    convert_height, y >= 0)
 
             enddo
         enddo
@@ -680,7 +682,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height)
+                    convert_height, y >= 0)
             enddo
         enddo
 
@@ -1206,8 +1208,8 @@ contains
                 trans_speed_x = tv(1) * mwr * r / (mwr**2.d0 + r**2.d0)
                 trans_speed_y = tv(2) * mwr * r / (mwr**2.d0 + r**2.d0)
                 
-                aux(wind_index,i,j)   = -wind * sin(theta) + trans_speed_x
-                aux(wind_index+1,i,j) =  wind * cos(theta) + trans_speed_y
+                aux(wind_index,i,j)   = wind * merge(-1, 1, y >= 0) * sin(theta) + trans_speed_x
+                aux(wind_index+1,i,j) = wind * merge(1, -1, y >= 0) * cos(theta) + trans_speed_y
             enddo
         enddo
 
@@ -1277,7 +1279,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                 wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                convert_height)
+                convert_height, y >= 0)
 
             enddo
         enddo
@@ -1360,7 +1362,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                 wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                convert_height)
+                convert_height, y >= 0)
 
             enddo
         enddo
@@ -1434,7 +1436,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height)
+                    convert_height, y >= 0)
 
             enddo
         enddo
@@ -1527,7 +1529,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height)
+                    convert_height, y >= 0)
 
             enddo
         enddo
