@@ -106,6 +106,7 @@ contains
 
         use model_storm_module, only: set_model_storm => set_storm
         use model_storm_module, only: set_holland_1980_fields
+        use model_storm_module, only: set_holland_2008_fields
         use model_storm_module, only: set_holland_2010_fields
         use model_storm_module, only: set_CLE_fields
         use model_storm_module, only: set_SLOSH_fields
@@ -197,10 +198,13 @@ contains
 
             ! Use parameterized storm model
             if (0 < storm_specification_type .and.              &
-                    storm_specification_type <=3) then
+                    storm_specification_type <= 3               &
+                .or. storm_specification_type == 8) then
                 select case(storm_specification_type)
                     case(1) ! Holland 1980 model
                         set_model_fields => set_holland_1980_fields
+                    case(8) ! Holland 2008 model
+                        set_model_fields => set_holland_2008_fields
                     case(2) ! Holland 2010 model
                         set_model_fields => set_holland_2010_fields
                     case(3) ! Chavas, Lin, Emanuel model
