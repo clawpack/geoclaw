@@ -46,6 +46,9 @@ module model_storm_module
         ! using a first order difference on the sphere
         real(kind=8), allocatable :: velocity(:, :)
 
+        ! Approximate pressure change of storm, approximated using first order differences
+        real(kind=8), allocatable :: central_pressure_change(:)
+
     end type model_storm_type
 
     ! Interal tracking variables for storm
@@ -159,6 +162,16 @@ contains
             storm%velocity(:, storm%num_casts) = storm%velocity(:,  &
                                                             storm%num_casts - 1)
 
+            ! Calculate central pressure change
+            allocate(storm%central_pressure_change(storm%num_casts))
+            do i=1,storm%num_casts - 1
+                ds = storm%central_pressure(i + 1) - storm%central_pressure(i)
+                dt = storm%track(1,i + 1) - storm%track(1,i)
+                storm%central_pressure_change(i) = ds / dt
+            end do
+            storm%central_pressure_change(storm%num_casts) = &
+                storm%central_pressure_change(storm%num_casts - 1)
+
             if (t0 <= storm%track(1, 1) - TRACKING_TOLERANCE) then
                 print *, "Start time", t0, " is outside of the tracking"
                 print *, "tolerance range with the track start"
@@ -207,10 +220,10 @@ contains
         real(kind=8) :: location(2)
 
         ! Junk storage
-        real(kind=8) :: junk(6)
+        real(kind=8) :: junk(7)
 
         call get_storm_data(t, storm, location,                 &
-                                  junk(1:2), junk(3), junk(4), junk(5), junk(6))
+                            junk(1:2), junk(3), junk(4), junk(5), junk(6), junk(7))
 
     end function storm_location
 
@@ -227,11 +240,11 @@ contains
         type(model_storm_type), intent(in) :: storm
 
         ! Locals
-        real(kind=8) :: junk(6), velocity(2)
+        real(kind=8) :: junk(7), velocity(2)
 
         ! Fetch velocity of storm which has direction encoded in it
         call get_storm_data(t, storm, junk(1:2), velocity, junk(3), junk(4),   &
-                                                      junk(5), junk(6))
+                            junk(5), junk(6), junk(7))
 
         ! Unit directional vector
         theta = atan2(velocity(2),velocity(1))
@@ -304,7 +317,7 @@ contains
     ! ==========================================================================
     subroutine get_storm_data(t, storm, location, velocity, max_wind_radius,  &
                               max_wind_speed, central_pressure,               &
-                              radius)
+                              radius, central_pressure_change)
 
         use geoclaw_module, only: deg2rad, latlon2xy, xy2latlon
 
@@ -317,10 +330,10 @@ contains
         ! Output
         real(kind=8), intent(out) :: location(2), velocity(2)
         real(kind=8), intent(out) :: max_wind_radius, max_wind_speed
-        real(kind=8), intent(out) :: central_pressure, radius
+        real(kind=8), intent(out) :: central_pressure, radius, central_pressure_change
 
         ! Local
-        real(kind=8) :: fn(8), fnm(8), weight, tn, tnm, x(2)
+        real(kind=8) :: fn(9), fnm(9), weight, tn, tnm, x(2)
         integer :: i
 
         ! Increment storm data index if needed and not at end of forecast
@@ -356,7 +369,7 @@ contains
             fn = [xy2latlon(x,storm%track(2:3,i)), &
                   storm%velocity(:,i), storm%max_wind_radius(i), &
                   storm%max_wind_speed(i), storm%central_pressure(i), &
-                  storm%radius(i)]
+                  storm%radius(i), storm%central_pressure_change(i)]
         else
             ! Inbetween two forecast time points (the function storm_index
             ! ensures that we are not before the first data point, i.e. i > 1)
@@ -365,10 +378,12 @@ contains
             weight = (t - tnm) / (tn - tnm)
             fn = [storm%track(2:3,i),storm%velocity(:,i), &
                   storm%max_wind_radius(i),storm%max_wind_speed(i), &
-                  storm%central_pressure(i), storm%radius(i)]
+                  storm%central_pressure(i), storm%radius(i), &
+                  storm%central_pressure_change(i)]
             fnm = [storm%track(2:3,i - 1),storm%velocity(:,i - 1), &
                    storm%max_wind_radius(i - 1),storm%max_wind_speed(i - 1), &
-                   storm%central_pressure(i - 1), storm%radius(i - 1)]
+                   storm%central_pressure(i - 1), storm%radius(i - 1), &
+                   storm%central_pressure_change(i - 1)]
             fn = weight * (fn - fnm) + fnm
         endif
 
@@ -379,6 +394,7 @@ contains
         max_wind_speed = fn(6)
         central_pressure = fn(7)
         radius = fn(8)
+        central_pressure_change = fn(9)
 
     end subroutine get_storm_data
 
@@ -538,6 +554,22 @@ contains
     end function get_holland_b
 
     ! ==========================================================================
+    ! Calculate B parameter according to Holland 2008 and limit the result
+    ! ==========================================================================
+    pure function get_holland_b_2008(dp, dpdt, slat, tv) result(B)
+        real (kind=8), intent(in) :: dp, dpdt, slat, tv(2)
+        real (kind=8) :: B, x, trans_speed
+
+        trans_speed = sqrt(tv(1)**2 + tv(2)**2)
+        x = 0.6d0 * (1.d0 - dp / 215.d0)
+        B = -4.4d-5 * dp**2 + 0.01d0 * dp + 0.03d0 * dpdt &
+            - 0.014d0 * abs(slat) + 0.15d0 * trans_speed**x + 1.d0
+        if (B <  1.d0) B = 1.d0
+        if (B > 2.5d0) B = 2.5d0
+
+    end function get_holland_b_2008
+
+    ! ==========================================================================
     !  Use the 1980 Holland model to set the storm fields
     ! ==========================================================================
     subroutine set_holland_1980_fields(maux, mbc, mx, my, xlower, ylower,    &
@@ -563,14 +595,14 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Holland 1980 requires converting surface to gradient winds
         logical :: convert_height=.true.
 
         ! Get interpolated storm data
-        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         ! remove translational component
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
@@ -605,6 +637,73 @@ contains
     end subroutine set_holland_1980_fields
 
     ! ==========================================================================
+    !  Use the 2008 Holland model to set the storm fields
+    ! ==========================================================================
+    subroutine set_holland_2008_fields(maux, mbc, mx, my, xlower, ylower,    &
+                                       dx, dy, t, aux, wind_index,           &
+                                       pressure_index, storm)
+
+        use geoclaw_module, only: rho_air
+        use geoclaw_module, only: coriolis
+
+        implicit none
+
+        ! Time of the wind field requested
+        integer, intent(in) :: maux,mbc,mx,my
+        real(kind=8), intent(in) :: xlower,ylower,dx,dy,t
+
+        ! Storm description, need in out here since we may update the storm
+        ! if at next time point
+        type(model_storm_type), intent(inout) :: storm
+
+        ! Array storing wind and presure field
+        integer, intent(in) :: wind_index, pressure_index
+        real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
+
+        ! Local storage
+        real(kind=8) :: x, y, r, theta, sloc(2), B
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
+        integer :: i,j
+
+        ! Holland 2008 uses surface winds exclusively
+        logical :: convert_height=.false.
+
+        ! Get interpolated storm data
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
+
+        dp = get_pressure_diff(Pc)
+        B = get_holland_b_2008(dp, dPc_dt, sloc(2), tv)
+
+        ! Use estimated mws instead of recorded mws
+        mod_mws = sqrt(B / (rho_air * exp(1.d0)) * dp)
+
+        ! Set fields
+        do j=1-mbc,my+mbc
+            y = ylower + (j-0.5d0) * dy     ! Degrees latitude
+            f = coriolis(y)
+            do i=1-mbc,mx+mbc
+                x = xlower + (i-0.5d0) * dx   ! Degrees longitude
+
+                call calculate_polar_coordinate(x, y, sloc, r, theta)
+
+                ! Set pressure field
+                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+
+                ! Speed of wind at this point
+                wind = sqrt((mwr / r)**B &
+                        * exp(1.d0 - (mwr / r)**B) * mod_mws**2.d0 &
+                        + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
+
+                call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
+                    wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
+                    convert_height, y >= 0)
+
+            enddo
+        enddo
+
+    end subroutine set_holland_2008_fields
+
+    ! ==========================================================================
     !  Use the 2010 Holland model to set the storm fields
     !
     !  As in the original publication, this implementation computes
@@ -635,7 +734,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         real(kind=8) :: rn, vn, xn, xx
         real(kind=8) :: dg, rg
         integer :: i,j
@@ -644,15 +743,13 @@ contains
         logical :: convert_height=.false.
 
         ! Get interpolated storm data
-        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
-
-        ! pre-process max wind speed and translational velocity
-        call adjust_max_wind(tv, mws, mod_mws, convert_height)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         dp = get_pressure_diff(Pc)
-        ! Pressure field uses gradient-level Holland B param, so we still need to
-        ! derive B by adjusting surface to gradient level
-        B = get_holland_b(mod_mws / atmos_boundary_layer, dp)
+        B = get_holland_b_2008(dp, dPc_dt, sloc(2), tv)
+
+        ! Use estimated mws instead of recorded mws
+        mod_mws = sqrt(B / (rho_air * exp(1.d0)) * dp)
 
         ! Additional Holland parameters needed
         ! Since we don't have a second wind speed measurement, we assume that the
@@ -719,7 +816,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2)
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius
         real(kind=8) :: mod_mws, trans_speed, ramp, trans_mod
         integer :: i,j
 
@@ -745,7 +842,7 @@ contains
         ! Determines the radial wind ONLY IF called at a new time.
 
         !First, interpolate all of the relevant tracked storm parameters.
-        call get_cle_storm_data(t,storm,sloc,tv,mwr,mws,Pc,radius)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         ! pre-process max wind speed and translational velocity
         ! (It appears the azimuthal winds are not used in the algorithm)
@@ -827,92 +924,6 @@ contains
         end do
 
     end subroutine set_CLE_fields
-
-    ! ==========================================================================
-    !  get_cle_storm_data()
-    !    Interpolates in time and returns storm data.
-    ! ==========================================================================
-    subroutine get_cle_storm_data(t, storm, location, velocity,   &
-                                                max_wind_radius,  &
-                                                max_wind_speed,   &
-                                                central_pressure, &
-                                                radius)
-
-        use geoclaw_module, only: deg2rad, latlon2xy, xy2latlon
-
-        implicit none
-
-        ! Input
-        real(kind=8), intent(in) :: t                       ! Current time
-        type(model_storm_type), intent(in) :: storm   ! Storm
-
-        ! Output
-        real(kind=8), intent(out) :: location(2), velocity(2)
-        real(kind=8), intent(out) :: max_wind_radius, max_wind_speed
-        real(kind=8), intent(out) :: central_pressure, radius
-
-        ! Local
-        real(kind=8) :: fn(8), fnm(8), weight, tn, tnm, x(2)
-        integer :: i
-
-        ! Increment storm data index if needed and not at end of forecast
-        i = storm_index(t,storm)
-        last_storm_index = i
-
-        ! List of possible error conditions
-        if (i <= 1) then
-            if (i == 0) then
-                print *,"Invalid storm forecast requested for t = ",t
-                print *,"Time requested is before any forecast data."
-                print *,"    first time = ",storm%track(1,1)
-                print *,"   ERROR = ",i
-                stop
-            else if (i > storm%num_casts + 2) then
-                print *,"Invalid storm indexing, i > num_casts + 2..."
-                print *,"This really should not happen, what have you done?"
-                stop
-            endif
-        endif
-
-        ! Interpolate in time for all parameters
-        if (i == storm%num_casts + 1) then
-            i = i - 1
-            ! At last forecast, use last data for storm strength parameters and
-            ! velocity, location uses last velocity and constant motion forward
-
-            ! Convert coordinates temporarily to meters so that we can use
-            ! the pre-calculated m/s velocities from before
-            x = latlon2xy(storm%track(2:3,i),storm%track(2:3,i))
-            x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
-
-            fn = [xy2latlon(x,storm%track(2:3,i)), &
-                  storm%velocity(:,i), storm%max_wind_radius(i), &
-                  storm%max_wind_speed(i), storm%central_pressure(i), &
-                  storm%radius(i)]
-        else
-            ! Inbetween two forecast time points (the function storm_index
-            ! ensures that we are not before the first data point, i.e. i > 1)
-            tn = storm%track(1,i)
-            tnm = storm%track(1,i-1)
-            weight = (t - tnm) / (tn - tnm)
-            fn = [storm%track(2:3,i),storm%velocity(:,i), &
-                  storm%max_wind_radius(i),storm%max_wind_speed(i), &
-                  storm%central_pressure(i), storm%radius(i)]
-            fnm = [storm%track(2:3,i - 1),storm%velocity(:,i - 1), &
-                   storm%max_wind_radius(i - 1),storm%max_wind_speed(i - 1), &
-                  storm%central_pressure(i - 1), storm%radius(i - 1)]
-            fn = weight * (fn - fnm) + fnm
-        endif
-
-        ! Set output variables
-        location = fn(1:2)
-        velocity = fn(3:4)
-        max_wind_radius = fn(5)
-        max_wind_speed = fn(6)
-        central_pressure = fn(7)
-        radius = fn(8)
-
-    end subroutine get_cle_storm_data
 
     ! ==========================================================================
     !  inner_derivative(f,r_m,v_m,r_a)
@@ -1166,7 +1177,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius
         real(kind=8) :: mod_mws, trans_speed_x, trans_speed_y
         integer :: i,j
 
@@ -1175,7 +1186,7 @@ contains
         logical :: convert_height=.true.
 
         ! Get interpolated storm data
-        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
@@ -1246,14 +1257,14 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Rankine requires converting surface to gradient winds
         logical :: convert_height=.true.
 
         ! Get interpolated storm data
-        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
@@ -1317,7 +1328,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Rankine requires converting surface to gradient winds
@@ -1327,7 +1338,7 @@ contains
         real(kind=8) :: alpha
 
         ! Get interpolated storm data
-        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
@@ -1402,14 +1413,14 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! deMaria requires converting surface to gradient winds (just for Holland B)
         logical :: convert_height=.true.
 
         ! Get interpolated storm data
-        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
@@ -1475,7 +1486,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Willoughby requires converting surface to gradient winds
@@ -1485,7 +1496,7 @@ contains
         real(kind=8) :: n, X1, X2, A, xi, W
 
         ! Get interpolated storm data
-        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius)
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
 
         ! pre-process max wind speed and translational velocity
         call adjust_max_wind(tv, mws, mod_mws, convert_height)
