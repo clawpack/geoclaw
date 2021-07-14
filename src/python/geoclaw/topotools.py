@@ -580,6 +580,9 @@ class Topography(object):
                         self.read(mask=mask)
                     # Generate arrays
                     self._X, self._Y = numpy.meshgrid(self._x, self._y)
+                elif abs(self.topo_type) in [4, 5]:
+                    # Generate arrays
+                    self._X, self._Y = numpy.meshgrid(self._x, self._y)
                 else:
                     raise ValueError("Unrecognized topo_type: %s" % self.topo_type)
 
@@ -760,6 +763,23 @@ class Topography(object):
 
                 if mask:
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
+
+            elif abs(self.topo_type) == 5:
+                # GeoTIFF format
+                from osgeo import gdal
+
+                topo_file = gdal.Open(self.path, gdal.GA_ReadOnly)
+                self._Z = numpy.flipud(topo_file.GetRasterBand(1).ReadAsArray())
+                lower = [0, 0]
+                upper = [0, 0]
+                delta = [0, 0]
+                lower[0], delta[0], dxdy, lower[1], dydx, delta[1] = topo_file.GetGeoTransform()
+                upper[0] = lower[0] + delta[0] * self._Z.shape[1]
+                upper[1] = lower[1] + delta[1] * self._Z.shape[0]
+                self._x = numpy.linspace(lower[0], upper[0], 
+                                      int((upper[0] - lower[0]) / delta[0]))
+                self._y = numpy.linspace(lower[1], upper[1], 
+                                      int((upper[1] - lower[1]) / delta[1]))
                     
             else:
                 raise IOError("Unrecognized topo_type: %s" % self.topo_type)
@@ -806,7 +826,7 @@ class Topography(object):
 
         """
 
-        if abs(self.topo_type) in [2,3]:
+        if abs(self.topo_type) in [2, 3]:
 
             # Default values to track errors
             num_cells = [numpy.nan,numpy.nan]
@@ -1113,6 +1133,12 @@ class Topography(object):
 
                 elevation.no_data_value = self.no_data_value
 
+        elif topo_type == 5:
+            # Write out GeoTIFF
+            from osgeo import gdal
+
+            driver = gdal.GetDriverByName("GTiff")
+            raise NotImplementedError("Writing out GeoTIFF topography is not yet supported.")
 
         else:
             raise NotImplemented("Output type %s not implemented." % topo_type)
