@@ -780,7 +780,7 @@ class Topography(object):
                 self._Z = numpy.flipud(z)
                 self._x = numpy.linspace(x_origin, 
                                    x_origin + (z.shape[0] - 1) * dx, z.shape[0])
-                self._y = numpy.linspace(y_origin - (z.shape[0] - 1) * dy, 
+                self._y = numpy.linspace(y_origin - (z.shape[1] - 1) * dy, 
                                    y_origin, z.shape[1])
 
 
