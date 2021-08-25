@@ -190,6 +190,21 @@ contains
             coriolis = 0.d0
         endif
     end function coriolis
+    
+    ! ==========================================================================
+    !  Calculate the absolute value of the coriolis constant f
+    !   Calling `unsigned_coriolis(y)` is the same as `abs(coriolis(y))`.
+    !   See the `coriolis` function for details.
+    ! ==========================================================================
+    real(kind=8) pure function unsigned_coriolis(y)
+
+        implicit none
+        
+        ! Input
+        real(kind=8), intent(in) :: y
+        
+        unsigned_coriolis = abs(coriolis(y))
+    end function unsigned_coriolis
 
     ! ==========================================================================
     !  Calculate the distance along a sphere
