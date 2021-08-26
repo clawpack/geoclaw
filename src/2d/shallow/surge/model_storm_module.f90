@@ -606,6 +606,9 @@ contains
 
     ! ==========================================================================
     !  Use the 2010 Holland model to set the storm fields
+    !  
+    !  As in the original publication, this implementation computes
+    !  cyclostrophic winds, i.e., it does not include the Coriolis force.
     ! ==========================================================================
     subroutine set_holland_2010_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
@@ -634,7 +637,7 @@ contains
         real(kind=8) :: x, y, r, theta, sloc(2), B
         real(kind=8) :: f, mwr, mws, Pc, dp, wind, tv(2), radius, mod_mws
         real(kind=8) :: rn, vn, xn, xx
-        real(kind=8) :: dg, edg, rg
+        real(kind=8) :: dg, rg
         integer :: i,j
 
         ! Holland 2010 does not require converting surface to gradient winds
@@ -652,17 +655,18 @@ contains
         B = get_holland_b(mod_mws / atmos_boundary_layer, dp)
 
         ! Additional Holland parameters needed
+        ! Since we don't have a second wind speed measurement, we assume that the
+        ! wind speed is 10 m/s at a radius of 500 km. For comparison: The original
+        ! publication assumed 17 m/s at a radius of 300 km.
+        vn = 10
         rn = 500000
         dg = (mwr/rn)**B
-        edg = exp(1.d0-dg)
-        rg = dg * edg/rho_air
-        vn = 10
+        rg = dg * exp(1.d0-dg)
         xn = log(vn/mws)/log(rg)
 
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
-            f = coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
@@ -674,11 +678,10 @@ contains
                 ! # HOLLAND 2010 WIND SPEED CALCULATION
                 if (r <= mwr) then
                     xx = 0.5
-                    wind = mod_mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
                 else
                     xx = 0.5 + (r - mwr) * (xn - 0.5) / (rn - mwr)
-                    wind = mod_mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
                 endif
+                wind = mod_mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
