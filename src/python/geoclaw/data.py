@@ -29,7 +29,7 @@ import numpy
 import clawpack.clawutil.data
 import warnings
 
-# Radius of earth in meters.  
+# Radius of earth in meters.
 # For consistency, should always use this value when needed, e.g.
 # in setrun.py or topotools:
 Rearth = 6367.5e3  # average of polar and equatorial radii
@@ -70,7 +70,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
 
         self.open_data_file(out_file, data_source)
 
-        self.data_write('gravity', 
+        self.data_write('gravity',
                                description="(gravitational acceleration m/s^2)")
         self.data_write('rho', description="(Density of water kg/m^3)")
         self.data_write('rho_air',description="(Density of air kg/m^3)")
@@ -100,7 +100,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write()
 
         self.data_write('dry_tolerance')
- 
+
         self.close_data_file()
 
 
@@ -152,13 +152,13 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         self.add_attribute('topo_missing',99999.)
         self.add_attribute('test_topography',0)
         self.add_attribute('topofiles',[])
-        
+
         # Jump discontinuity
         self.add_attribute('topo_location',-50e3)
         self.add_attribute('topo_left',-4000.0)
         self.add_attribute('topo_right',-200.0)
         self.add_attribute('topo_angle',0.0)
-        
+
         # Simple oceanic shelf
         self.add_attribute('x0',350e3)
         self.add_attribute('x1',450e3)
@@ -168,7 +168,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         self.add_attribute('beach_slope',0.008)
 
 
-    def write(self,data_source='setrun.py', out_file='topo.data'): 
+    def write(self,data_source='setrun.py', out_file='topo.data'):
 
         self.open_data_file(out_file, data_source)
         self.data_write(name='topo_missing',
@@ -198,7 +198,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             self.data_write(name='topo_location',description='(Bathymetry jump location)')
             self.data_write(name='topo_left',description='(Depth to left of bathy_location)')
             self.data_write(name='topo_right',description='(Depth to right of bathy_location)')
-        elif self.test_topography == 2 or self.test_topography == 3: 
+        elif self.test_topography == 2 or self.test_topography == 3:
             self.data_write(name='x0',description='(Location of basin end)')
             self.data_write(name='x1',description='(Location of shelf slope end)')
             self.data_write(name='x2',description='(Location of beach slope)')
@@ -218,7 +218,7 @@ class FixedGridData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(FixedGridData,self).__init__()
-        
+
         # Fixed Grids
         self.add_attribute('fixedgrids',[])
 
@@ -238,7 +238,7 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(FGmaxData,self).__init__()
-        
+
         # File name for fgmax points and parameters:
         self.add_attribute('fgmax_files',[])
         self.add_attribute('num_fgmax_val',1)
@@ -280,7 +280,7 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
             if fg.fgno in fgno_list:
                 msg = 'Trying to set fgmax grid number to fgno = %i' % fg.fgno \
                       + '\n             but this fgno was already used' \
-                      + '\n             Set unique fgno for each fgmax grid' 
+                      + '\n             Set unique fgno for each fgmax grid'
                 raise ValueError(msg)
 
             fgno_list.append(fg.fgno)
@@ -294,7 +294,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(DTopoData,self).__init__()
-        
+
         # Moving topograhpy
         self.add_attribute('dtopofiles',[])
         self.add_attribute('dt_max_dtopo', 1.e99)
@@ -336,7 +336,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         with open(os.path.abspath(path), 'r') as data_file:
 
             file_name = None
-            
+
             # Forward to first parameter
             for line in data_file:
 
@@ -370,12 +370,12 @@ class DTopoData(clawpack.clawutil.data.ClawData):
 
 
 class ForceDry(clawpack.clawutil.data.ClawData):
-    
+
     def __init__(self):
         r"""
         A single force_dry array and associated data
         """
-        
+
         super(ForceDry,self).__init__()
         self.add_attribute('tend',None)
         self.add_attribute('fname','')
@@ -386,12 +386,12 @@ class QinitData(clawpack.clawutil.data.ClawData):
     def __init__(self):
 
         super(QinitData,self).__init__()
-        
+
         # Qinit data
         self.add_attribute('qinit_type',0)
-        self.add_attribute('qinitfiles',[])   
-        self.add_attribute('variable_eta_init',False)   
-        self.add_attribute('force_dry_list',[])   
+        self.add_attribute('qinitfiles',[])
+        self.add_attribute('variable_eta_init',False)
+        self.add_attribute('force_dry_list',[])
         self.add_attribute('num_force_dry',0)
 
     def write(self,data_source='setrun.py', out_file='qinit.data'):
@@ -431,7 +431,7 @@ class QinitData(clawpack.clawutil.data.ClawData):
         self.data_write('num_force_dry')
 
         for force_dry in self.force_dry_list:
-            
+
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
             fname = os.path.abspath(os.path.join(os.path.dirname(out_file),\
@@ -439,7 +439,7 @@ class QinitData(clawpack.clawutil.data.ClawData):
             self._out_file.write("\n'%s' \n" % fname)
             self._out_file.write("%.3f \n" % force_dry.tend)
 
-    
+
         self.close_data_file()
 
 
@@ -451,14 +451,15 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     storm_spec_dict_mapping = {"HWRF":-1,
                                None: 0,
                                'holland80': 1,
+                               'holland08': 8,
                                'holland10': 2,
-                               'CLE': 3,  
-                               'SLOSH': 4,                     
-                               'rankine': 5,           
-                               'modified-rankine': 6, 
-                               'DeMaria': 7     
+                               'CLE': 3,
+                               'SLOSH': 4,
+                               'rankine': 5,
+                               'modified-rankine': 6,
+                               'DeMaria': 7
                               }
-    storm_spec_not_implemented = ['CLE'] 
+    storm_spec_not_implemented = ['CLE']
 
     def __init__(self):
         super(SurgeData,self).__init__()
@@ -476,13 +477,13 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         # AMR parameters
         self.add_attribute('wind_refine',[20.0,40.0,60.0])
         self.add_attribute('R_refine',[60.0e3,40e3,20e3])
-        
+
         # Storm parameters
         self.add_attribute('storm_type', None)  # Backwards compatibility
         self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
         self.add_attribute("storm_file", None) # File(s) containing data
 
-        
+
     def write(self,out_file='surge.data',data_source="setrun.py"):
         """Write out the data file to the path given"""
 
@@ -499,7 +500,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                         description="(Index into aux array - fortran indexing)")
         self.data_write("pressure_index", value=self.pressure_index +  1,
                         description="(Index into aux array - fortran indexing)")
-        self.data_write("display_landfall_time", 
+        self.data_write("display_landfall_time",
                         description='(Display time relative to landfall)')
         self.data_write()
 
@@ -530,11 +531,11 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             if self.storm_specification_type in         \
                     self.storm_spec_dict_mapping.keys():
                 if self.storm_specification_type in     \
-                    self.storm_spec_not_implemented: 
-                    raise NotImplementedError("%s has not been implemented." 
-                                %self.storm_specification_type) 
-                
-                else: 
+                    self.storm_spec_not_implemented:
+                    raise NotImplementedError("%s has not been implemented."
+                                %self.storm_specification_type)
+
+                else:
                     self.data_write("storm_specification_type",
                                 self.storm_spec_dict_mapping[
                                         self.storm_specification_type],
