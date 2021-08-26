@@ -1221,7 +1221,7 @@ contains
                 ! so we do not use `post_process_wind_estimate` function
                 trans_speed_x = tv(1) * mwr * r / (mwr**2.d0 + r**2.d0)
                 trans_speed_y = tv(2) * mwr * r / (mwr**2.d0 + r**2.d0)
-
+                
                 aux(wind_index,i,j)   = wind * merge(-1, 1, y >= 0) * sin(theta) + trans_speed_x
                 aux(wind_index+1,i,j) = wind * merge(1, -1, y >= 0) * cos(theta) + trans_speed_y
             enddo

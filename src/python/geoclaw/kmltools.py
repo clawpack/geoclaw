@@ -25,6 +25,7 @@ the full 8 digits if you want it transparent).
  - pcolorcells_for_kml - version of pcolormesh with appropriate dpi and size
  - png2kml - create kml file wrapping a png figure to be viewed on GE
  - kml_build_colorbar - create a colorbar to display on GE
+ - topo2kmz - create kmz file showing onshore and offshore topography
  - kml_header - used internally
  - kml_footer - used internally
  - kml_region - used internally
@@ -1293,7 +1294,8 @@ def png2kml(extent, png_files, png_names=None, name='png_files', fname=None,
 
 
 def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None, 
-                       norm=None, label=None, title=None, extend='neither'):
+                       norm=None, label=None, title=None, extend='neither',
+                       close_figs=True):
 
     """
     Make a png file with a colorbar corresponding to cmap, norm.
@@ -1335,4 +1337,119 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
         
     # This is called from plotpages, in <plotdir>.
     plt.savefig(cb_filename,Transparent=True)
+    
+    if close_figs:
+        plt.close(fig)
 
+
+def topo2kmz(topo, zlim=(-20,20), mask_outside_zlim=True, sea_level=0., 
+             name='topo', force_dry=None, close_figs=True):
+
+    """
+    Create kmz file showing onshore and offshore topography as separate layers.
+    Currently not very flexible but is useful in quickly creating kmz files
+    to open on Google Earth showing the onshore topography and offshore
+    bathymetry as two separate layers.  Constant colors on rectangular grid
+    cells should be properly rendered to ease exploration of DEMs.
+    A colorbar png file is also created and included in the kmz file. 
+
+    :Input:
+     - *topo* should be a topotools.Topography object,
+     - *zlim* is the elevation z limits for choosing the color map
+     - *mask_outside_zlim* if True, suppress plotting outsize `zlim`
+     - *sea_level* is the break between water and land colors
+     - *name* is used in the kml menu and file name
+     - *force_dry* is currently not used 
+     - *close_figs* to close the pyplot figures after making png files
+
+    :Future:
+    If `force_dry` is an array of the same shape as `topo.Z` then another png
+    and kml file are created for land that is below `sea_level` but where
+    `force_dry = True`.
+
+    """
+    
+    import os, glob
+    import numpy
+    from numpy import ma
+    from clawpack.visclaw import colormaps
+    import zipfile
+    import matplotlib.pyplot as plt
+    
+    assert force_dry is None, 'force_dry not yet implemented'
+    
+    cmap_land = colormaps.make_colormap({ 0.0:[0.1,0.4,0.0],
+                                         0.25:[0.0,1.0,0.0],
+                                          0.5:[0.8,1.0,0.5],
+                                          1.0:[0.8,0.5,0.2]})
+
+    cmap_water = colormaps.make_colormap({ 0.0:[0,0,1], 1.:[.8,.8,1]})
+
+    cmap_topo, norm_topo = colormaps.add_colormaps((cmap_land, cmap_water),
+                                         data_limits=(zlim[0],zlim[1]),
+                                         data_break=sea_level)
+
+    cmap_force_dry = colormaps.make_colormap({ 0.0:[1.0,0.7,0.7], 1.:[1.0,0.7,0.7]})
+    cmap_dry, norm_dry = colormaps.add_colormaps((cmap_land, cmap_force_dry),
+                                         data_limits=(zlim[0],zlim[1]),
+                                         data_break=sea_level)
+    
+    if mask_outside_zlim:
+        Z = ma.masked_where(numpy.logical_or(topo.Z<zlim[0], topo.Z>zlim[1]), topo.Z)
+        cbar_extend = 'neither'
+    else:
+        Z = topo.Z
+        cbar_extend = 'both'
+    
+    kml_dir = 'kmlfiles_%s' % name
+    os.system('mkdir -p %s' % kml_dir)
+    print('Will put png and kml files in %s' % kml_dir)
+    
+    Z_land = ma.masked_where(Z<sea_level, Z)
+    png_filename = '%s/%s_land.png' % (kml_dir, name)
+    fig,ax,png_extent,kml_dpi = pcolorcells_for_kml(topo.X, topo.Y, 
+                                         Z_land, png_filename=png_filename,
+                                         dpc=2, cmap=cmap_topo, norm=norm_topo)
+    if close_figs:
+        plt.close(fig)
+
+    Z_water = ma.masked_where(Z>=sea_level, Z)
+    png_filename = '%s/%s_water.png' % (kml_dir, name)
+    fig,ax,png_extent,kml_dpi = pcolorcells_for_kml(topo.X, topo.Y, 
+                                         Z_water, png_filename=png_filename,
+                                         dpc=2, cmap=cmap_topo, norm=norm_topo)
+
+    if close_figs:
+        plt.close(fig)
+
+    kml_build_colorbar('%s/colorbar.png' % kml_dir, cmap_topo, 
+                                cmin=zlim[0], cmax=zlim[1], label='meters', 
+                                title='topo', extend=cbar_extend,
+                                close_figs=close_figs)
+
+        
+    png_files=['%s_water.png' % name, '%s_land.png' % name]
+    png_names=['%s_water' % name,'%s_land' % name]
+    cb_files = ['colorbar.png']
+    cb_names = ['colorbar_topo']
+
+    name = '%s_topo' % name
+    fname = os.path.join(kml_dir, name+'.kml')
+    png2kml(png_extent, png_files=png_files, png_names=png_names, 
+                     name=name, fname=fname,
+                     radio_style=False,
+                     cb_files=cb_files, cb_names=cb_names)
+
+    savedir = os.getcwd()
+    os.chdir(kml_dir)
+    files = glob.glob('*.kml') + glob.glob('*.png')
+    print('kmz file will include:')
+    for file in files:
+        print('    %s' % os.path.split(file)[-1])
+
+    fname_kmz = 'topo_%s.kmz' % name
+    with zipfile.ZipFile(fname_kmz, 'w') as zip:
+        for file in files:
+            zip.write(file) 
+        print('Created %s' % os.path.abspath(fname_kmz))
+    os.chdir(savedir)
