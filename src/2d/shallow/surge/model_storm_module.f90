@@ -577,7 +577,7 @@ contains
                                        pressure_index, storm)
 
         use geoclaw_module, only: rho_air
-        use geoclaw_module, only: coriolis
+        use geoclaw_module, only: unsigned_coriolis
 
         implicit none
 
@@ -613,7 +613,7 @@ contains
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
-            f = coriolis(y)
+            f = unsigned_coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
@@ -715,7 +715,7 @@ contains
 
 
         use geoclaw_module, only: rho_air
-        use geoclaw_module, only: coriolis, deg2rad
+        use geoclaw_module, only: deg2rad
         use geoclaw_module, only: spherical_distance
 
         implicit none
@@ -734,7 +734,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         real(kind=8) :: rn, vn, xn, xx
         real(kind=8) :: dg, rg
         integer :: i,j
@@ -797,7 +797,7 @@ contains
                               pressure_index, storm)
 
         use geoclaw_module, only: rho_air, Pa => ambient_pressure
-        use geoclaw_module, only: coriolis, deg2rad
+        use geoclaw_module, only: unsigned_coriolis, deg2rad
         use geoclaw_module, only: spherical_distance
 
         implicit none
@@ -851,7 +851,7 @@ contains
         ! Fill array with CLE model parameters
         if (last_time /= t) then
 
-            f = coriolis(sloc(2))
+            f = unsigned_coriolis(sloc(2))
 
             ! Determine the wind profile, but only if the profile isn't already
             ! saved. In v_vec and p_vec.
@@ -899,7 +899,6 @@ contains
            ! Assign a clockwise, radially symmetric wind field by piece-wise linear
            ! interpolation of v_vec.  Likewise with p_vec.
             y = ylower + (j-0.5d0) * dy ! Degrees latitude
-            f = coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx ! Degrees longitude
 
@@ -1158,7 +1157,7 @@ contains
                                        pressure_index, storm)
 
         use geoclaw_module, only: rho_air
-        use geoclaw_module, only: coriolis, deg2rad
+        use geoclaw_module, only: deg2rad
         use geoclaw_module, only: spherical_distance
 
         implicit none
@@ -1177,7 +1176,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius
+        real(kind=8) :: mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius
         real(kind=8) :: mod_mws, trans_speed_x, trans_speed_y
         integer :: i,j
 
@@ -1200,7 +1199,6 @@ contains
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
-            f = coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
@@ -1238,7 +1236,7 @@ contains
                                        pressure_index, storm)
 
         use geoclaw_module, only: rho_air
-        use geoclaw_module, only: coriolis, deg2rad
+        use geoclaw_module, only: deg2rad
         use geoclaw_module, only: spherical_distance
 
         implicit none
@@ -1257,7 +1255,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Rankine requires converting surface to gradient winds
@@ -1275,7 +1273,6 @@ contains
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
-            f = coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
@@ -1309,7 +1306,7 @@ contains
                                        pressure_index, storm)
 
         use geoclaw_module, only: rho_air
-        use geoclaw_module, only: coriolis, deg2rad
+        use geoclaw_module, only: deg2rad
         use geoclaw_module, only: spherical_distance
 
         implicit none
@@ -1328,7 +1325,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Rankine requires converting surface to gradient winds
@@ -1358,7 +1355,6 @@ contains
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
-            f = coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
@@ -1394,7 +1390,7 @@ contains
                                        pressure_index, storm)
 
         use geoclaw_module, only: rho_air
-        use geoclaw_module, only: coriolis, deg2rad
+        use geoclaw_module, only: deg2rad
         use geoclaw_module, only: spherical_distance
 
         implicit none
@@ -1413,7 +1409,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! deMaria requires converting surface to gradient winds (just for Holland B)
@@ -1431,7 +1427,6 @@ contains
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
-            f = coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
@@ -1467,7 +1462,7 @@ contains
                                        pressure_index, storm)
 
         use geoclaw_module, only: rho_air
-        use geoclaw_module, only: coriolis, deg2rad
+        use geoclaw_module, only: deg2rad
         use geoclaw_module, only: spherical_distance
 
         implicit none
@@ -1486,7 +1481,7 @@ contains
 
         ! Local storage
         real(kind=8) :: x, y, r, theta, sloc(2), B
-        real(kind=8) :: f, mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
+        real(kind=8) :: mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
         integer :: i,j
 
         ! Willoughby requires converting surface to gradient winds
@@ -1515,7 +1510,6 @@ contains
         ! Set fields
         do j=1-mbc,my+mbc
             y = ylower + (j-0.5d0) * dy     ! Degrees latitude
-            f = coriolis(y)
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx   ! Degrees longitude
 
