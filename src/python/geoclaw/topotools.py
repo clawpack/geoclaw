@@ -1165,7 +1165,8 @@ class Topography(object):
 
     def plot(self, axes=None, contour_levels=None, contour_kwargs={}, 
              limits=None, cmap=None, add_colorbar=True, 
-             plot_box=False, fig_kwargs={}, data_break=0., cb_kwargs={}):
+             plot_box=False, long_lat=True, fig_kwargs={}, data_break=0., 
+             cb_kwargs={}):
         r"""Plot the topography.
 
         :Input:
@@ -1184,6 +1185,9 @@ class Topography(object):
          - *fig_kwargs* (dict) - keyword arguments to be passed to figure.
          - *plot_box* (bool or color specifier) - If evaluates to True, plot
            a box around limits of this topo. 
+         - *long_lat* (bool) - If this is a longitude-latitude plot then set the
+           aspect of the plot to compensate for stretching.  If not then the 
+           aspect is set to "equal".
          - *data_break* (float) - when default cmap is used, the value to use
            to break between water and land colormaps.
            Defaults to 0., but for some topo files may need to use e.g. 0.01
@@ -1253,7 +1257,7 @@ class Topography(object):
                                                 marker=',', linewidths=(0.0,))
         else:
             plot = plottools.pcolorcells(self.X, self.Y, self.Z, 
-                                         norm=norm, cmap=cmap)
+                                         axes=axes, norm=norm, cmap=cmap)
         if add_colorbar:
             try:
                 # this kwarg can't be passed directly:
@@ -1294,8 +1298,12 @@ class Topography(object):
                 color = plot_box
             plt.plot([x1,x2,x2,x1,x1], [y1,y1,y2,y2,y1], color=color)
 
-        mean_lat = 0.5 * (region_extent[3] + region_extent[2])
-        axes.set_aspect(1.0 / numpy.cos(numpy.pi / 180.0 * mean_lat))
+        
+        if long_lat:
+            mean_lat = 0.5 * (region_extent[3] + region_extent[2])
+            axes.set_aspect(1.0 / numpy.cos(numpy.pi / 180.0 * mean_lat))
+        else:
+            axes.set_aspect('equal')
 
         return axes
 
