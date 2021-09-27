@@ -308,7 +308,6 @@ class Storm(object):
         except ImportError as e:
             print("read_atcf currently requires pandas to work.")
             raise e
-
         # See here for the ATCF format documentation:
         #   https://www.nrlmry.navy.mil/atcf_web/docs/database/new/abdeck.txt
         df = pd.read_csv(path, engine="python", sep=",+", names=[
@@ -330,21 +329,32 @@ class Storm(object):
                 "TAU": lambda d: datetime.timedelta(hours=int(d)),
                 "LAT": lambda d: (-.1 if d[-1] == "S" else .1) * int(d.strip("NS ")),
                 "LON": lambda d: (-.1 if d[-1] == "W" else .1) * int(d.strip("WE ")),
+                #"BASIN":lambda d: (d.replace)  
+                "CY": lambda d: (d if isinstance(d, int) else 0),
+                "VMAX": lambda d: (d if isinstance(d, float) else 0),
+                "MSLP": lambda d: (d if isinstance(d, float) else 0),
+                "RAD": lambda d: (d if isinstance(d, float) else 0),
+                "RAD1": lambda d: (d if isinstance(d, float) else 0),
+                "RAD2": lambda d: (d if isinstance(d, float) else 0),
+                "RAD3": lambda d: (d if isinstance(d, float) else 0),
+                "RAD4": lambda d: (d if isinstance(d, float) else 0),
+                "ROUTER": lambda d: (d if isinstance(d, float) else 0),
+                "RMW": lambda d: (d if isinstance(d, float) else 0),
             },
-            dtype={
-                "BASIN": str,
-                "CY": int,
-                "VMAX": float,
-                "MSLP": float,
-                "TY": str,
-                "RAD": float,
-                "RAD1": float,
-                "RAD2": float,
-                "RAD3": float,
-                "RAD4": float,
-                "ROUTER": float,
-                "RMW": float,
-            })
+            ).fillna(value = {
+                "BASIN": '',
+                "CY": 0,
+                "VMAX": 0,
+                "MSLP": 0,
+                "TY": '',
+                "RAD": 0,
+                "RAD1": 0,
+                "RAD2": 0,
+                "RAD3": 0,
+                "RAD4": 0,
+                "ROUTER": 0,
+                "RMW": 0
+                })
 
         # Grab data regarding basin and cyclone number from first row
         self.basin = ATCF_basins[df["BASIN"][0]]
