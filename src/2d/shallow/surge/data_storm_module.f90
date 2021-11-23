@@ -21,8 +21,19 @@ module data_storm_module
     ! Model storm type definition
     type data_storm_type
 
-        ! Dummy variable
-        integer :: mine
+        ! Total number of wind/pressure fields
+        integer :: num_casts
+
+        ! Storm data, wind velocity in x and y, pressure and wind speed
+        real(kind=8), allocatable :: pressure(:,:,:)
+        real(kind=8), allocatable :: wind_speed(:,:,:)
+
+        ! Wind field latitude/longitude arrays
+        real(kind=8), allocatable :: latitude(:)
+        real(kind=8), allocatable :: longitude(:)
+
+        ! Time steps from wind/pressure files in seconds
+        integer, allocatable :: time(:)
 
     end type data_storm_type
 
