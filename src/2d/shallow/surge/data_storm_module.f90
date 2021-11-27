@@ -39,15 +39,68 @@ module data_storm_module
 
 contains
 
-    ! Setup routine for model storms
+    ! Setup routine for data type storms
     subroutine set_storm(storm_data_path, storm, model_type, log_unit)
-
+        use netcdf
         implicit none
 
         ! Subroutine I/O
         character(len=*), optional :: storm_data_path
-        type(data_storm_type), intent(in out) :: storm
+        type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: model_type, log_unit
+
+        ! Set up for dimension info, dims are lat/lon/time
+        integer :: num_dims, x_dim_id, y_dim_id, t_dim_id, dim_ids(3)
+        character (len=10) :: x_dim_name, y_dim_name, t_dim_name
+        ! Length of dims, mx, my, mt
+        integer :: mx, my, mt
+
+        ! Set up for variable info, variables are speed, pressure, lat, lon, time
+        integer :: nvars, var_type, var_id
+        character (len=10) :: var_name
+
+        ! Local storage
+        integer :: nc_fid, n
+
+        if (.not. module_setup) then
+            ! Open file and get file ID
+            call check_netcdf_error(nf90_open(storm_data_path, nf90_nowrite, nc_fid))
+            call check_netcdf_error(nf90_inquire(nc_fid, num_dims, nvars))
+
+            ! Get the dimension names, sizes from the file
+            call get_dim_info(nc_fid, num_dims, x_dim_id, x_dim_name, mx, &
+            y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
+
+            ! allocate arrays in storm object
+            allocate(storm%wind_speed(mx, my, mt))
+            allocate(storm%pressure(mx, my, mt))
+            allocate(storm%longitude(mx))
+            allocate(storm%latitude(my))
+            allocate(storm%time(mt))
+
+            ! Fill out variable data/info
+            do n = 1, nvars
+                call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
+                if (ANY((/'SPEED     ', 'WIND SPEED'/) == Upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_speed))
+                elseif ('PRESSURE' == Upper(var_name)) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
+                elseif(ANY((/'LON      ','LONGITUDE'/) == Upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%longitude))
+                elseif(ANY((/'LAT     ', 'LATITUDE'/) == Upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%latitude))
+                elseif(ANY((/'TIME', 'T   '/) == Upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%time))
+                end if
+            end do
+
+
+        end if
 
         stop "Data-derived storm are not yet implemented!"
 
@@ -121,10 +174,73 @@ contains
 
     end subroutine set_HWRF_fields
 
+    subroutine check_netcdf_error(ios)
+
+        use netcdf
+
+        implicit none
+
+        integer, intent(in) :: ios
+
+        if (ios /= NF90_NOERR) then
+            print *, "NetCDF IO error: ", ios
+            print *, trim(nf90_strerror(ios))
+            stop
+        end if
+
+    end subroutine check_netcdf_error
+
+    subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &
+        y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
+        use netcdf
+        implicit none
+        integer, intent(in) :: nc_file, ndims
+        integer, intent(out) :: x_dim_id, y_dim_id, mx, my, t_dim_id, mt
+        character (len = *), intent(out) :: x_dim_name, y_dim_name, t_dim_name
+        integer :: m_tmp, n
+        character(20) :: dim_name_tmp
+
+        ! get indices to start at for reading netcdf within domain
+        do n=1, ndims
+            call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                n, dim_name_tmp, m_tmp))
+            if (ANY((/ 'LON      ','LONGITUDE','X        ' /) == Upper(dim_name_tmp))) then
+                x_dim_name = dim_name_tmp
+                mx = m_tmp
+                x_dim_id = n
+            else if (ANY((/ 'LAT     ','LATITUDE','Y       ' /) == Upper(dim_name_tmp))) then
+                y_dim_name = dim_name_tmp
+                my = m_tmp
+                y_dim_id = n
+            else if (ANY((/'TIME', 'T   '/) == Upper(dim_name_tmp))) then
+                t_dim_name = dim_name_tmp
+                mt = m_tmp
+                t_dim_id = n
+            end if
+        end do
+    end subroutine get_dim_info
+
+
+    function Upper(s1)  RESULT (s2)
+    CHARACTER(*)       :: s1
+    CHARACTER(LEN(s1)) :: s2
+    CHARACTER          :: ch
+    INTEGER,PARAMETER  :: DUC = ICHAR('A') - ICHAR('a')
+    INTEGER            :: i
+
+        DO i = 1,LEN(s1)
+           ch = s1(i:i)
+           IF (ch >= 'a'.AND.ch <= 'z') ch = CHAR(ICHAR(ch)+DUC)
+           s2(i:i) = ch
+        END DO
+    END function Upper
 end module data_storm_module
 
 
-
+   ! ==========================================================================
+    !
+    !
+    ! ==========================================================================
 
 
 
