@@ -37,6 +37,8 @@ module data_storm_module
 
     end type data_storm_type
 
+    integer, private :: last_storm_index
+
 contains
 
     ! Setup routine for data type storms
@@ -101,8 +103,6 @@ contains
 
 
         end if
-
-        stop "Data-derived storm are not yet implemented!"
 
         if (.not. module_setup) then
 
@@ -190,6 +190,12 @@ contains
 
     end subroutine check_netcdf_error
 
+
+    ! ==========================================================================
+    ! get_dim_info() pulls dim names and lengths from the nc file
+    !
+    ! ==========================================================================
+
     subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &
         y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
         use netcdf
@@ -220,6 +226,138 @@ contains
         end do
     end subroutine get_dim_info
 
+    ! ==========================================================================
+    !  storm_index(t,storm)
+    !    Finds the index of the next storm data point
+    ! ==========================================================================
+    integer pure function storm_index(t, storm) result(index)
+
+        implicit none
+
+        ! Input
+        real(kind=8), intent(in) :: t
+        type(model_storm_type), intent(in) :: storm
+
+        ! Locals
+        real(kind=8) :: t0,t1
+        logical :: found
+
+        ! Figure out where we are relative to the last time we checked for the
+        ! index (stored in last_storm_index)
+
+        ! Check if we are already beyond the end of the last forecast time
+        if (last_storm_index == storm%num_casts + 1) then
+            index = storm%num_casts + 1
+        else
+            t0 = storm%time(last_storm_index - 1)
+            t1 = storm%time(last_storm_index)
+
+            ! Check to see if we are close enough to the current index to just
+            ! use that, tolerance is based on TRACKING_TOLERANCE
+            if ((abs(t0 - t) < TRACKING_TOLERANCE) .or.   &
+                (abs(t1 - t) < TRACKING_TOLERANCE) .or.   &
+                (t0 < t .and. t < t1)) then
+
+                index = last_storm_index
+            else if ( t1 < t ) then
+                found = .false.
+                do index=last_storm_index+1,storm%num_casts
+                    if (t < storm%time(index)) then
+                        found = .true.
+                        exit
+                    endif
+                enddo
+                ! Assume we have gone past last forecast time
+                if (.not. found) then
+                    index = storm%num_casts + 1
+                endif
+            else
+                ! Fail gracefully
+                if (last_storm_index == 2) then
+                    index = -1
+                else
+                    do index=last_storm_index-1,2,-1
+                        if (storm%time(index-1) < t) exit
+                    enddo
+                endif
+            endif
+        endif
+
+    end function storm_index
+
+    ! ==========================================================================
+    ! get_storm_time()
+    ! Calculates the wind and pressure fields for the current time step
+    ! ==========================================================================
+    subroutine get_storm_time(storm, t, wind_t, pressure_t, mx, my)
+    ! Interpolate in time
+        ! Subroutine IO
+        type(data_storm_type), intent(in) :: storm
+        integer, intent(in) :: mx, my
+        real(kind=8), intent(in) :: t
+        real(kind=8), intent(inout) :: wind_t(mx,my), pressure_t(mx,my)
+
+        ! Local storage
+        integer :: i, j, k
+
+        i = storm_index(t, storm)
+        last_storm_index = i
+
+        ! List of possible error conditions
+        if (i <= 1) then
+            if (i == 0) then
+                print *,"Invalid storm forecast requested for t = ",t
+                print *,"Time requested is before any forecast data."
+                print *,"    first time = ",storm%track(1,1)
+                print *,"   ERROR = ",i
+                stop
+            else if (i > storm%num_casts + 2) then
+                print *,"Invalid storm indexing, i > num_casts + 2..."
+                print *,"This really should not happen, what have you done?"
+                stop
+            endif
+        endif
+
+        if (i == storm%num_casts + 1) then
+            i = i -1
+            wind_t = storm%wind_speed(:,:,i)
+            pressure_t = storm%pressure(:,:,i)
+        else
+            tn = storm%time(i)
+            tnm = storm%time(i - 1)
+            wind_t = (storm%wind_speed(:,:,i) - storm%wind_speed(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
+                      storm%wind_speed(:,:, i-1))
+            pressure_t = (storm%wind_pressure(:,:,i) - storm%pressure(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
+                          storm%pressure(:,:, i-1))
+        end if
+
+    end subroutine get_storm_time
+
+    ! ==========================================================================
+    ! set_owi_fields()
+    ! Uses bilinear interpolation to fill in patch data from original wind/pressure fields
+    ! ==========================================================================
+    subroutine set_owi_fields(storm, location, corners, maux, mbc, mx, my, xlower, &
+                                  ylower, dx, dy, t, aux, wind_index, pressure_index)
+        implicit none
+        ! subroutine i/o
+        type(data_storm_type), intent(inout) :: storm
+        integer, intent(in) :: maux, mbc, mx, my
+        real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
+
+        ! Array storing wind and pressure field
+        integer, intent(in) :: wind_index, pressure_index
+        real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+
+        ! Local storage
+        real(kind=8) :: location(2), corners
+        ! wind and pressure arrays for current time step
+        real(kind=8) :: wind_t, pressure_t
+
+        call get_storm_time(storm, t, wind_t, pressure_t, mx, my)
+
+
+    end subroutine set_owi_fields
 
     function Upper(s1)  RESULT (s2)
     CHARACTER(*)       :: s1
