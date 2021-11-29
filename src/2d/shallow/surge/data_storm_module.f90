@@ -303,6 +303,7 @@ contains
     ! Calculates the wind and pressure fields for the current time step
     ! ==========================================================================
     subroutine get_storm_time(storm, t, wind_t, pressure_t, mx, my)
+        implicit none
     ! Interpolate in time
         ! Subroutine IO
         type(data_storm_type), intent(in) :: storm
@@ -351,13 +352,15 @@ contains
     ! set_owi_fields()
     ! Uses bilinear interpolation to fill in patch data from original wind/pressure fields
     ! ==========================================================================
-    subroutine set_owi_fields(storm, maux, mbc, mx, my, xlower, ylower, dx, dy, &
-                              t, aux, wind_index, pressure_index)
+    subroutine set_owi_fields(maux, mbc, mx, my, xlower, ylower,    &
+                              dx, dy, t, aux, wind_index,           &
+                              pressure_index, storm)
         implicit none
         ! subroutine i/o
-        type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: maux, mbc, mx, my
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
+
+        type(data_storm_type), intent(inout) :: storm
 
         ! Array storing wind and pressure field
         integer, intent(in) :: wind_index, pressure_index
@@ -392,6 +395,7 @@ contains
     end subroutine set_owi_fields
 
     subroutine interp_wind_velocity(storm, x, y, interp_array, value)
+        implicit none
         ! Subroutine I/O
         type(data_storm_type), intent(inout) :: storm
         real(kind=8), intent(inout) :: x, y
@@ -428,6 +432,7 @@ contains
     !
     ! ==========================================================================
     subroutine find_nearest(x, y, lon, lat, storm, xidx, yidx)
+        implicit none
         ! Subroutine I/O
         type(data_storm_type), intent(in) :: storm
         real(kind=8), intent(in) :: x, y

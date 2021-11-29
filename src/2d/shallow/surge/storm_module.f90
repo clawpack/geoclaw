@@ -80,7 +80,7 @@ module storm_module
             implicit none
             integer, intent(in) :: maux, mbc, mx, my
             real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-            type(data_storm_type), intent(in out) :: storm
+            type(data_storm_type), intent(inout) :: storm
             integer, intent(in) :: wind_index, pressure_index
             real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
         end subroutine set_data_fields_def
@@ -116,6 +116,7 @@ contains
 
         ! use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
+        use data_storm_module, only: set_owi_fields
 
         use utility_module, only: get_value_count
 
@@ -232,6 +233,8 @@ contains
                 select case(storm_specification_type)
                     case(1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
+                    case(2) ! owi data
+                        set_data_fields => set_owi_fields
                 end select
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
@@ -449,7 +452,7 @@ contains
         ! Input arguments
         integer, intent(in) :: maux, mbc, mx, my
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-        real(kind=8), intent(in out) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
+        real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
 
         if (storm_specification_type > 0) then
             call set_model_fields(maux,mbc,mx,my, &
