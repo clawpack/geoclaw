@@ -236,7 +236,7 @@ contains
                         set_data_fields => set_HWRF_fields
                     case(2) ! owi data
                         set_data_fields => set_owi_fields
-                end selectSt
+                end select
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
                             storm_specification_type, "not available."
