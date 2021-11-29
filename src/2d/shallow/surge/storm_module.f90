@@ -182,7 +182,8 @@ contains
             read(unit,*)
 
             ! Storm Setup
-            read(unit, "(i1)") storm_specification_type
+            read(unit, "(i2)") storm_specification_type
+            print *, storm_specification_type, 'storm spec type'
             read(unit, *) storm_file_path
 
             close(unit)
