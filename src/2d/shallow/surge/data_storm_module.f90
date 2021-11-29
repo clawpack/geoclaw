@@ -1,5 +1,5 @@
 ! ==============================================================================
-! model_storm_module 
+! data_storm_module
 !
 ! Module contains routines for constructing a wind and pressure field based on a
 ! provided set of data files.
@@ -27,6 +27,8 @@ module data_storm_module
         ! Storm data, wind velocity in x and y, pressure and wind speed
         real(kind=8), allocatable :: pressure(:,:,:)
         real(kind=8), allocatable :: wind_speed(:,:,:)
+        real(kind=8), allocatable :: wind_u(:,:,:)
+        real(kind=8), allocatable :: wind_v(:,:,:)
 
         ! Wind field latitude/longitude arrays
         real(kind=8), allocatable :: latitude(:)
@@ -76,6 +78,8 @@ contains
             ! allocate arrays in storm object
             allocate(storm%wind_speed(mx, my, mt))
             allocate(storm%pressure(mx, my, mt))
+            allocate(storm%wind_u(mx, my, mt))
+            allocate(storm%wind_v(mx, my, mt))
             allocate(storm%longitude(mx))
             allocate(storm%latitude(my))
             allocate(storm%time(mt))
@@ -98,6 +102,12 @@ contains
                 elseif(ANY((/'TIME', 'T   '/) == Upper(var_name))) then
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%time))
+                elseif(ANY((/'U     ', 'WIND_U', 'UU    '/) == Upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_u))
+                elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == Upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
                 end if
             end do
 
@@ -350,15 +360,80 @@ contains
         real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
 
         ! Local storage
-        real(kind=8) :: location(2), corners
-        ! wind and pressure arrays for current time step
-        real(kind=8) :: wind_t, pressure_t
+        real(kind=8) :: u_value, v_value, p_value
 
+        ! wind and pressure arrays for current time step
+        real(kind=8) :: wind_t(mx,my), pressure_t(mx,my)
+
+        !!! fix the time interpolation to include u and v values
         call get_storm_time(storm, t, wind_t, pressure_t, mx, my)
+
+        do j=1-mbc, my+mbc
+            y = ylower + (j-0.5d0) * dy
+            do i=1-mbc, mx+mbc
+                x = xlower + (i-0.5d0) * dx
+
+                call interp_wind_velocity(storm, x, y, storm%u, u_value)
+                aux(wind_index, i, j) = u_value
+                call interp_wind_velocity(storm, x, y, storm%v, v_value)
+                aux(wind_index + 1, i, j) = v_value
+                call interp_wind_velocity(storm, x, y, storm%pressure, p_value)
+                aux(pressure_index, i, j) = p_value
+            end do
+        end do
 
 
     end subroutine set_owi_fields
 
+    subroutine interp_wind_velocity(storm, x, y, interp_array, value)
+        ! Subroutine I/O
+        type(data_storm_type), intent(inout) :: storm
+        real(kind=8), intent(inout) :: x, y
+        real(kind=8), intent(in) :: interp_array(size(storm%lon), size(storm%lat))
+        real(kind=8), intent(out) :: value
+
+        ! Local storage
+        real(kind=8) :: q11, q12, q21, q22
+        real(kind=8) :: llon, llat, ulon, ulat
+        real(kind=8) :: storm_dx, storm_dy ! initial wind field dx and dy
+        integer :: xidx_low, xidx_high, yidx_low, yidx_high
+
+        storm_dx = storm%longitude(2) - storm%longitude(1)
+        storm_dy = storm%latitude(2) - storm%latitude(1)
+
+        ! Get the nearest lat/lon values to use for interpolation box
+        call find_nearest(x - storm_dx, y - storm_dy, llon, llat, storm, xidx_low, yidx_low)
+        call find_nearest(x + storm_dx, y + storm_dy, ulon, ulat, storm, xidx_high, yidx_high)
+
+        q11 = interp_array(xidx_low, yidx_low)
+        q12 = interp_array(xidx_low, yidx_high)
+        q21 = interp_array(xidx_high, yidx_low)
+        q22 = interp_array(xidx_high, yidx_high)
+
+        value = (q11 * (ulon - x) * (ulat -y) + &
+                 q21 * (x - llon) * (ulat - y) + &
+                 q12 * (ulon - x) * (y - llat) + &
+                 q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
+
+    end subroutine interp_wind_velocity
+
+    ! ==========================================================================
+    ! find_nearest() finds nearest value to x and y for interpolation points
+    !
+    ! ==========================================================================
+    subroutine find_nearest(x, y, lon, lat, storm, xidx, yidx)
+        ! Subroutine I/O
+        type(data_storm_type), intent(in) :: storm
+        real(kind=8), intent(in) :: x, y
+        real(kind=8), intent(out) :: lon, lat
+        integer, intent(out) :: xidx, yidx
+
+        xidx = minloc(abs(storm%longitude - x))
+        yidx = minloc(abs(storm%latitude - y))
+        lon = storm%longitude(xidx)
+        lat = storm%latitude(yidx)
+
+    end subroutine find_nearest
     function Upper(s1)  RESULT (s2)
     CHARACTER(*)       :: s1
     CHARACTER(LEN(s1)) :: s2
