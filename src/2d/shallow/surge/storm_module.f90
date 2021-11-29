@@ -229,18 +229,19 @@ contains
             end if
 
             ! Storm will be set based on a gridded set of data
-            if (-1 <= storm_specification_type .and.                    &
+            if (-2 <= storm_specification_type .and.                    &
                       storm_specification_type < 0) then
                 select case(storm_specification_type)
                     case(1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
                     case(2) ! owi data
                         set_data_fields => set_owi_fields
-                end select
+                end selectSt
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
                             storm_specification_type, "not available."
                 stop
+
             end if
 
             close(log_unit)
@@ -415,7 +416,7 @@ contains
             location = [rinfinity,rinfinity]
         else if (storm_specification_type > 0) then
             location = model_location(t, model_storm)
-        else if (storm_specification_type < 0) then
+        else if (storm_specification_type == -1) then
             location = data_location(t, data_storm)
         else
             stop "Something may be wrong."
