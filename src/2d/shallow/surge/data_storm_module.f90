@@ -40,6 +40,9 @@ module data_storm_module
     end type data_storm_type
 
     integer, private :: last_storm_index
+    ! Time tracking tolerance allowance - allows for the beginning of the storm
+    ! track to be close to but not equal the start time of the simulation
+    real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
 
 contains
 
@@ -246,7 +249,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(model_storm_type), intent(in) :: storm
+        type(data_storm_type), intent(in) :: storm
 
         ! Locals
         real(kind=8) :: t0,t1
@@ -309,6 +312,7 @@ contains
 
         ! Local storage
         integer :: i, j, k
+        real(kind=8) :: tn, tnm
 
         i = storm_index(t, storm)
         last_storm_index = i
@@ -318,7 +322,7 @@ contains
             if (i == 0) then
                 print *,"Invalid storm forecast requested for t = ",t
                 print *,"Time requested is before any forecast data."
-                print *,"    first time = ",storm%track(1,1)
+                print *,"    first time = ",storm%time(1)
                 print *,"   ERROR = ",i
                 stop
             else if (i > storm%num_casts + 2) then
@@ -337,7 +341,7 @@ contains
             tnm = storm%time(i - 1)
             wind_t = (storm%wind_speed(:,:,i) - storm%wind_speed(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
                       storm%wind_speed(:,:, i-1))
-            pressure_t = (storm%wind_pressure(:,:,i) - storm%pressure(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
+            pressure_t = (storm%pressure(:,:,i) - storm%pressure(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
                           storm%pressure(:,:, i-1))
         end if
 
@@ -347,8 +351,8 @@ contains
     ! set_owi_fields()
     ! Uses bilinear interpolation to fill in patch data from original wind/pressure fields
     ! ==========================================================================
-    subroutine set_owi_fields(storm, location, corners, maux, mbc, mx, my, xlower, &
-                                  ylower, dx, dy, t, aux, wind_index, pressure_index)
+    subroutine set_owi_fields(storm, maux, mbc, mx, my, xlower, ylower, dx, dy, &
+                              t, aux, wind_index, pressure_index)
         implicit none
         ! subroutine i/o
         type(data_storm_type), intent(inout) :: storm
@@ -361,6 +365,8 @@ contains
 
         ! Local storage
         real(kind=8) :: u_value, v_value, p_value
+        integer :: i, j
+        real(kind=8) :: x, y
 
         ! wind and pressure arrays for current time step
         real(kind=8) :: wind_t(mx,my), pressure_t(mx,my)
@@ -373,9 +379,9 @@ contains
             do i=1-mbc, mx+mbc
                 x = xlower + (i-0.5d0) * dx
 
-                call interp_wind_velocity(storm, x, y, storm%u, u_value)
+                call interp_wind_velocity(storm, x, y, storm%wind_u, u_value)
                 aux(wind_index, i, j) = u_value
-                call interp_wind_velocity(storm, x, y, storm%v, v_value)
+                call interp_wind_velocity(storm, x, y, storm%wind_v, v_value)
                 aux(wind_index + 1, i, j) = v_value
                 call interp_wind_velocity(storm, x, y, storm%pressure, p_value)
                 aux(pressure_index, i, j) = p_value
@@ -389,7 +395,7 @@ contains
         ! Subroutine I/O
         type(data_storm_type), intent(inout) :: storm
         real(kind=8), intent(inout) :: x, y
-        real(kind=8), intent(in) :: interp_array(size(storm%lon), size(storm%lat))
+        real(kind=8), intent(in) :: interp_array(size(storm%longitude), size(storm%latitude))
         real(kind=8), intent(out) :: value
 
         ! Local storage
@@ -428,8 +434,8 @@ contains
         real(kind=8), intent(out) :: lon, lat
         integer, intent(out) :: xidx, yidx
 
-        xidx = minloc(abs(storm%longitude - x))
-        yidx = minloc(abs(storm%latitude - y))
+        xidx = minloc(abs(storm%longitude - x), dim=1)
+        yidx = minloc(abs(storm%latitude - y), dim=1)
         lon = storm%longitude(xidx)
         lat = storm%latitude(yidx)
 
