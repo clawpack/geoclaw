@@ -47,18 +47,21 @@ module data_storm_module
 contains
 
     ! Setup routine for data type storms
-    subroutine set_storm(storm_data_path, storm, model_type, log_unit)
+    subroutine set_storm(storm_data_path, storm, storm_spec_type, log_unit)
         use netcdf
+        use amr_module, only: t0, rinfinity
         implicit none
 
         ! Subroutine I/O
         character(len=*), optional :: storm_data_path
         type(data_storm_type), intent(inout) :: storm
-        integer, intent(in) :: model_type, log_unit
+        integer, intent(in) :: storm_spec_type, log_unit
 
+        ! Local Storage
         ! Set up for dimension info, dims are lat/lon/time
         integer :: num_dims, x_dim_id, y_dim_id, t_dim_id, dim_ids(3)
         character (len=10) :: x_dim_name, y_dim_name, t_dim_name
+
         ! Length of dims, mx, my, mt
         integer :: mx, my, mt
 
@@ -66,10 +69,11 @@ contains
         integer :: nvars, var_type, var_id
         character (len=10) :: var_name
 
-        ! Local storage
         integer :: nc_fid, n
-
         if (.not. module_setup) then
+
+            ! Open data file
+            print *, 'Reading storm data file ', storm_data_path
             ! Open file and get file ID
             call check_netcdf_error(nf90_open(storm_data_path, nf90_nowrite, nc_fid))
             call check_netcdf_error(nf90_inquire(nc_fid, num_dims, nvars))
@@ -114,9 +118,23 @@ contains
                 end if
             end do
 
-
+        call check_netcdf_error(nf90_close(nc_fid))
         end if
 
+        if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
+            print *, 'Start time', t0, " is outside of the tracking"
+            print *, 'tolerance range with the track start'
+            print *, storm%time(1), '.'
+            stop
+        end if
+        last_storm_index = 2
+        last_storm_index = storm_index(t0, storm)
+        if (last_storm_index == -1) then
+            print *, 'Forecast not found for time ', t0, '.'
+            stop
+        end if
+
+        ! Write out a surge file after discussing the data with kyle
         if (.not. module_setup) then
 
             module_setup = .true.
@@ -257,7 +275,6 @@ contains
 
         ! Figure out where we are relative to the last time we checked for the
         ! index (stored in last_storm_index)
-
         ! Check if we are already beyond the end of the last forecast time
         if (last_storm_index == storm%num_casts + 1) then
             index = storm%num_casts + 1
@@ -314,10 +331,9 @@ contains
         ! Local storage
         integer :: i, j, k
         real(kind=8) :: tn, tnm
-
+        last_storm_index = 2
         i = storm_index(t, storm)
         last_storm_index = i
-
         ! List of possible error conditions
         if (i <= 1) then
             if (i == 0) then
@@ -360,6 +376,7 @@ contains
         integer, intent(in) :: maux, mbc, mx, my
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
 
+        ! Storm descrption
         type(data_storm_type), intent(inout) :: storm
 
         ! Array storing wind and pressure field
@@ -371,10 +388,13 @@ contains
         integer :: i, j
         real(kind=8) :: x, y
 
+        ! Get the data loaded into the storm object
+!        call get_storm_data(t, storm, )
         ! wind and pressure arrays for current time step
         real(kind=8) :: wind_t(mx,my), pressure_t(mx,my)
-
+        print *, 'Setting OWI fields'
         !!! fix the time interpolation to include u and v values
+!        call set_storm(storm_data_path, storm, storm_spec_type, log_unit)
         call get_storm_time(storm, t, wind_t, pressure_t, mx, my)
 
         do j=1-mbc, my+mbc

@@ -114,7 +114,7 @@ contains
         use model_storm_module, only: set_modified_rankine_fields
         use model_storm_module, only: set_deMaria_fields
 
-        ! use data_storm_module, only: set_data_storm => set_storm
+        use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
         use data_storm_module, only: set_owi_fields
 
@@ -183,7 +183,6 @@ contains
 
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
-            print *, storm_specification_type, 'storm spec type'
             read(unit, *) storm_file_path
 
             close(unit)
@@ -232,11 +231,13 @@ contains
             if (-2 <= storm_specification_type .and.                    &
                       storm_specification_type < 0) then
                 select case(storm_specification_type)
-                    case(1) ! HWRF Data
+                    case(-1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
-                    case(2) ! owi data
+                    case(-2) ! owi data
                         set_data_fields => set_owi_fields
                 end select
+                call set_data_storm(storm_file_path, data_storm, &
+                                    storm_specification_type, log_unit)
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
                             storm_specification_type, "not available."
@@ -418,6 +419,7 @@ contains
             location = model_location(t, model_storm)
         else if (storm_specification_type == -1) then
             location = data_location(t, data_storm)
+        else if (storm_specification_type == -2) then
         else
             stop "Something may be wrong."
         end if
@@ -437,8 +439,9 @@ contains
 
         if (storm_specification_type > 0) then
             theta = model_direction(t, model_storm)
-        else if (storm_specification_type < 0) then
+        else if (storm_specification_type == -1) then
             theta = data_direction(t, data_storm)
+        else if (storm_specification_type == -2) then
         else
             theta = rinfinity
         end if
