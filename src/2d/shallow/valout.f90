@@ -223,7 +223,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                 ! HDF5 output
                 case(4)
 #ifdef HDF5
-                ! Create data space - handles dimensions of the corresponding 
+                ! Create data space - handles dimensions of the corresponding
                 ! data set - annoyingling need to stick grid size into other
                 ! data type
                 dims = (/ num_eqn, num_cells(1) + 2 * num_ghost,               &
@@ -244,7 +244,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
 #endif
                 case default
                     print *, "Unsupported output format", output_format,"."
-                    stop 
+                    stop
 
             end select
             grid_ptr = node(levelptr, grid_ptr)
@@ -273,7 +273,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
         else if (output_format == 4) then
             ! Create group for aux
             call h5gcreate_f(hdf_file, "/aux", aux_group, hdf_error)
-#endif            
+#endif
         end if
 
         do level = level_begin, level_end
@@ -294,7 +294,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                     ! ASCII output
                     case(1)
 
-                        ! We only output header info for aux data if writing 
+                        ! We only output header info for aux data if writing
                         ! ASCII data
                         write(out_unit, header_format) grid_ptr, level, &
                                                        num_cells(1),    &
@@ -334,7 +334,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                     ! HDF5 output
                     case(4)
 #ifdef HDF5
-                ! Create data space - handles dimensions of the corresponding 
+                ! Create data space - handles dimensions of the corresponding
                 ! data set - annoyingling need to stick grid size into other
                 ! data type
                 dims = (/ num_aux, num_cells(1) + 2 * num_ghost,               &
@@ -358,7 +358,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
 #endif
                     case default
                         print *, "Unsupported output format", output_format,"."
-                        stop 
+                        stop
 
                 end select
                 grid_ptr = node(levelptr, grid_ptr)
@@ -389,7 +389,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     open(unit=out_unit, file=timing_file_name, form='formatted',         &
              status='unknown', action='write', position='append')
              !status='old', action='write', position='append')
-    
+
     timing_line = "(e16.6, ', ', e16.6, ', ', e16.6,"
     do level=1, mxnest
         timing_substr = "', ', e16.6, ', ', e16.6, ', ', e16.6"
@@ -413,7 +413,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     write(out_unit, timing_line) time, timeTick_overall, t_CPU_overall, &
         (real(tvoll(i), kind=8) / real(clock_rate, kind=8), &
          tvollCPU(i), rvoll(i), i=1,mxnest)
-    
+
     close(out_unit)
 
     ! ==========================================================================
@@ -437,7 +437,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     call cpu_time(cpu_finish)
     timeValout = timeValout + clock_finish - clock_start
     timeValoutCPU = timeValoutCPU + cpu_finish - cpu_start
-    
+
 
 contains
 

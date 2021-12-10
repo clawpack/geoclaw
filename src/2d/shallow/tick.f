@@ -130,7 +130,7 @@ c        write(*,*)" old possk is ", possk(1)
          diffdt = oldposs - possk(1)  ! if positive new step is smaller
 
 
-         if (.false.) then  
+         if (.false.) then
             write(*,122) diffdt,outtime  ! notify of change
  122        format(" Adjusting timestep by ",e10.3,
      .             " to hit output time of ",e13.6)
@@ -182,12 +182,12 @@ c     if this is true by checking if aux_finalized == 2 elsewhere in code.
       if (aux_finalized .eq. 1 .and. num_dtopo > 0) then
 c         # this is only true once, and only if there was moving topo
           deallocate(topo0work)
-          endif 
+          endif
       if (topo_finalized .and. (aux_finalized .lt. 2)) then
           aux_finalized = aux_finalized + 1
           endif
 
-    
+
 c
 c     ------------- regridding  time?  ---------
 c
@@ -252,7 +252,7 @@ c          MJB: modified to check level where new grids start, which is lbase+1
                  do levnew = lbase+1,lfine
                      write(6,1006) intratx(levnew-1),intraty(levnew-1),
      &                             kratio(levnew-1),levnew
- 1006                format('   Refinement ratios...  in x:', i3, 
+ 1006                format('   Refinement ratios...  in x:', i3,
      &                 '  in y:',i3,'  in t:',i3,' for level ',i4)
                  end do
 
@@ -274,7 +274,7 @@ c
                   fg%min_levelmax_checked = minval(fg%levelmax)
                 endif
                 enddo
-c 
+c
 c         ! time after step:
           timenew = tlevel(level)+possk(level)
 
@@ -282,12 +282,12 @@ c         ! time after step:
           ! if so, set fg%update_now(level) to .true.
           do ifg=1,FG_num_fgrids
               fg => FG_fgrids(ifg)
-              if ((timenew >= fg%tstart_max) .and. 
+              if ((timenew >= fg%tstart_max) .and.
      &            (timenew <= fg%tend_max) .and.
-     &            (timenew >= fg%t_last_updated(level)  
+     &            (timenew >= fg%t_last_updated(level)
      &                         + fg%dt_check) .and.
      &            (level >= fg%min_level_check) .and.
-     &            (level >= fg%min_levelmax_checked)) then 
+     &            (level >= fg%min_levelmax_checked)) then
 
                       fg%update_now(level) = .true.
                       fg%t_last_updated(level) = timenew
@@ -307,13 +307,13 @@ c Output time info
           time_format = "(' AMRCLAW: level ',i2,'  CFL = ',e8.3," //
      &                  "'  dt = ',e10.4,  '  final t = ',e12.6)"
           if (display_landfall_time) then
-c           Convert time to days            
+c           Convert time to days
             timenew = timenew / (3.6d3 * 24d0)
             time_format = "(' AMRCLAW: level ',i2,'  CFL = ',e8.3," //
      &                  "'  dt = ',e10.4,  '  final t = ', f5.2)"
           end if
           if (tprint) then
-              write(outunit, time_format) level, cfl_level, 
+              write(outunit, time_format) level, cfl_level,
      &                                    possk(level), timenew
           endif
           if (method(4).ge.level) then
@@ -437,7 +437,7 @@ c             ! use same alg. as when setting refinement when first make new fin
 
       endif
 
- 201  if ((abs(checkpt_style).eq.3 .and. 
+ 201  if ((abs(checkpt_style).eq.3 .and.
      &      mod(ncycle,checkpt_interval).eq.0) .or. dumpchk) then
                if (num_gauges .gt. 0) then
                   do ii = 1, num_gauges
@@ -481,7 +481,7 @@ c
               dump_final = (tout(nout).eq.tfinal)
               endif
           endif
-      
+
       if (dump_final) then
            call valout(1,lfine,time,nvar,naux)
            if (printout) call outtre(mstart,.true.,nvar,naux)
@@ -498,14 +498,14 @@ c  # (unless we just did it based on dumpchk)
 c
       call system_clock(tick_clock_finish,tick_clock_rate)
       call cpu_time(tick_cpu_finish)
-      timeTick = timeTick + tick_clock_finish - tick_clock_start 
-      timeTickCPU = timeTickCPU + tick_cpu_finish - tick_cpu_start 
+      timeTick = timeTick + tick_clock_finish - tick_clock_start
+      timeTickCPU = timeTickCPU + tick_cpu_finish - tick_cpu_start
 
 
 c  # checkpoint everything for possible future restart
 c  # (unless we just did it based on dumpchk)
 c
-      ! write gauges first in case lagrangian gauge x,y needed by check         
+      ! write gauges first in case lagrangian gauge x,y needed by check
       if (num_gauges .gt. 0) then
          if (.not. dumpout) then
              ! normally this was done already, unless nout = 0
@@ -514,7 +514,7 @@ c
              end do
          endif
       endif
-      
+
       if (checkpt_style .ne. 0) then  ! want a chckpt
          ! check if just did it so dont do it twice
          if (.not. dumpchk) call check(ncycle,time,nvar,naux)

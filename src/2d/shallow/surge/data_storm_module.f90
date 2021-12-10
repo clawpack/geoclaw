@@ -24,6 +24,9 @@ module data_storm_module
         ! Total number of wind/pressure fields
         integer :: num_casts
 
+        ! size of latitude and longitude arrays
+        integer :: mx, my
+
         ! Storm data, wind velocity in x and y, pressure and wind speed
         real(kind=8), allocatable :: pressure(:,:,:)
         real(kind=8), allocatable :: wind_speed(:,:,:)
@@ -91,6 +94,9 @@ contains
             allocate(storm%latitude(my))
             allocate(storm%time(mt))
 
+            storm%mx = mx
+            storm%my = my
+            storm%num_casts = mt
             ! Fill out variable data/info
             do n = 1, nvars
                 call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
@@ -195,7 +201,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(data_storm_type), intent(in out) :: storm
+        type(data_storm_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -319,17 +325,17 @@ contains
     ! get_storm_time()
     ! Calculates the wind and pressure fields for the current time step
     ! ==========================================================================
-    subroutine get_storm_time(storm, t, wind_t, pressure_t, mx, my)
+    subroutine get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
         implicit none
     ! Interpolate in time
         ! Subroutine IO
         type(data_storm_type), intent(in) :: storm
         integer, intent(in) :: mx, my
         real(kind=8), intent(in) :: t
-        real(kind=8), intent(inout) :: wind_t(mx,my), pressure_t(mx,my)
+        real(kind=8), intent(inout) :: wind_tu(storm%mx,storm%my), wind_tv(storm%mx, storm%my),pressure_t(storm%mx,storm%my)
 
         ! Local storage
-        integer :: i, j, k
+        integer :: i, j, k, mx_orig, my_orig
         real(kind=8) :: tn, tnm
         last_storm_index = 2
         i = storm_index(t, storm)
@@ -348,16 +354,18 @@ contains
                 stop
             endif
         endif
-
         if (i == storm%num_casts + 1) then
             i = i -1
-            wind_t = storm%wind_speed(:,:,i)
+            wind_tu = storm%wind_u(:,:,i)
+            wind_tv = storm%wind_v(:,:,i)
             pressure_t = storm%pressure(:,:,i)
         else
             tn = storm%time(i)
             tnm = storm%time(i - 1)
-            wind_t = (storm%wind_speed(:,:,i) - storm%wind_speed(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
-                      storm%wind_speed(:,:, i-1))
+            wind_tu = (storm%wind_u(:,:,i) - storm%wind_u(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
+                      storm%wind_u(:,:, i-1))
+            wind_tv = (storm%wind_v(:,:,i) - storm%wind_v(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
+                      storm%wind_v(:,:, i-1))
             pressure_t = (storm%pressure(:,:,i) - storm%pressure(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
                           storm%pressure(:,:, i-1))
         end if
@@ -391,27 +399,26 @@ contains
         ! Get the data loaded into the storm object
 !        call get_storm_data(t, storm, )
         ! wind and pressure arrays for current time step
-        real(kind=8) :: wind_t(mx,my), pressure_t(mx,my)
-        print *, 'Setting OWI fields'
+        real(kind=8) :: wind_tu(storm%mx,storm%my), wind_tv(storm%mx, storm%my), pressure_t(storm%mx,storm%my)
+
         !!! fix the time interpolation to include u and v values
 !        call set_storm(storm_data_path, storm, storm_spec_type, log_unit)
-        call get_storm_time(storm, t, wind_t, pressure_t, mx, my)
-
+        call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
         do j=1-mbc, my+mbc
             y = ylower + (j-0.5d0) * dy
             do i=1-mbc, mx+mbc
                 x = xlower + (i-0.5d0) * dx
-
-                call interp_wind_velocity(storm, x, y, storm%wind_u, u_value)
+!                printt *, x,xΩ y, u_value
+                call interp_wind_velocity(storm, x, y, wind_tu, u_value)
                 aux(wind_index, i, j) = u_value
-                call interp_wind_velocity(storm, x, y, storm%wind_v, v_value)
+                call interp_wind_velocity(storm, x, y, wind_tv, v_value)
                 aux(wind_index + 1, i, j) = v_value
-                call interp_wind_velocity(storm, x, y, storm%pressure, p_value)
+                call interp_wind_velocity(storm, x, y, pressure_t, p_value)
                 aux(pressure_index, i, j) = p_value
             end do
         end do
 
-
+!    doprint *, aux(wind_index + 1, :, :)
     end subroutine set_owi_fields
 
     subroutine interp_wind_velocity(storm, x, y, interp_array, value)
@@ -434,17 +441,22 @@ contains
         ! Get the nearest lat/lon values to use for interpolation box
         call find_nearest(x - storm_dx, y - storm_dy, llon, llat, storm, xidx_low, yidx_low)
         call find_nearest(x + storm_dx, y + storm_dy, ulon, ulat, storm, xidx_high, yidx_high)
-
+        if (xidx_low == xidx_high) then
+            xidx_high = xidx_low + 1
+            ulon = storm%longitude(xidx_high)
+        elseif (yidx_low == yidx_high) then
+            yidx_high = yidx_low + 1
+            ulat = storm%latitude(yidx_high)
+        end if
         q11 = interp_array(xidx_low, yidx_low)
         q12 = interp_array(xidx_low, yidx_high)
         q21 = interp_array(xidx_high, yidx_low)
         q22 = interp_array(xidx_high, yidx_high)
-
+!        print *, 'ulon and andulat', ulon, llon
         value = (q11 * (ulon - x) * (ulat -y) + &
                  q21 * (x - llon) * (ulat - y) + &
                  q12 * (ulon - x) * (y - llat) + &
                  q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
-
     end subroutine interp_wind_velocity
 
     ! ==========================================================================
@@ -458,12 +470,10 @@ contains
         real(kind=8), intent(in) :: x, y
         real(kind=8), intent(out) :: lon, lat
         integer, intent(out) :: xidx, yidx
-
         xidx = minloc(abs(storm%longitude - x), dim=1)
         yidx = minloc(abs(storm%latitude - y), dim=1)
         lon = storm%longitude(xidx)
         lat = storm%latitude(yidx)
-
     end subroutine find_nearest
     function Upper(s1)  RESULT (s2)
     CHARACTER(*)       :: s1

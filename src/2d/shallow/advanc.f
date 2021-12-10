@@ -88,23 +88,23 @@ c save coarse level values if there is a finer level for wave fixup
 c
       time = rnode(timemult,lstart(level))
 c      call fgrid_advance(time,delt)
-      
+
       dtlevnew = rinfinity
       cfl_level = 0.d0    !# to keep track of max cfl seen on each level
 
       if (.not. topo_finalized) then
          call topo_update(time)
          endif
-c 
+c
       call system_clock(clock_startStepgrid,clock_rate)
       call cpu_time(cpu_startStepgrid)
-        
+
 c  set number of thrad to use. later will base on number of grids
 c     nt = 4
 c   ! $OMP PARALLEL DO num_threads(nt)
 
-!$OMP PARALLEL DO 
-!$OMP&            PRIVATE(j,mptr,nx,ny,mitot,mjtot)  
+!$OMP PARALLEL DO
+!$OMP&            PRIVATE(j,mptr,nx,ny,mitot,mjtot)
 !$OMP&            PRIVATE(mythread,dtnew,levSt)
 !$OMP&            SHARED(rvol,rvoll,level,nvar,mxnest,alloc,intrat)
 !$OMP&            SHARED(nghost,intratx,intraty,hx,hy,naux,listsp)
@@ -123,7 +123,7 @@ c
           call par_advanc(mptr,mitot,mjtot,nvar,naux,dtnew)
 !$OMP CRITICAL (newdt)
           dtlevnew = dmin1(dtlevnew,dtnew)
-!$OMP END CRITICAL (newdt)    
+!$OMP END CRITICAL (newdt)
 
       end do
 !$OMP END PARALLEL DO
