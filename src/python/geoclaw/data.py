@@ -213,23 +213,23 @@ class TopographyData(clawpack.clawutil.data.ClawData):
 
 
 
-class FixedGridData(clawpack.clawutil.data.ClawData):
+class FGoutData(clawpack.clawutil.data.ClawData):
 
     def __init__(self):
 
-        super(FixedGridData,self).__init__()
+        super(FGoutData,self).__init__()
 
-        # Fixed Grids
-        self.add_attribute('fixedgrids',[])
+        # fgout Grids
+        self.add_attribute('fgout_grids',[])
 
 
-    def write(self,data_source='setrun.py', out_file='fixed_grids.data'):
+    def write(self,data_source='setrun.py', out_file='fgout_grids.data'):
         # Fixed grid settings
         self.open_data_file(out_file, data_source)
-        nfixedgrids = len(self.fixedgrids)
-        self.data_write(value=nfixedgrids,alt_name='nfixedgrids')
+        num_fgout_grids = len(self.fgout_grids)
+        self.data_write(value=num_fgout_grids,alt_name='num_fgout_grids')
         self.data_write()
-        for fixedgrid in self.fixedgrids:
+        for fixedgrid in self.fgout_grids:
             self._out_file.write(11*"%g  " % tuple(fixedgrid) +"\n")
         self.close_data_file()
 

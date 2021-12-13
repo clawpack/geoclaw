@@ -14,7 +14,7 @@ c
 
       use storm_module, only: landfall, display_landfall_time
       use fgmax_module, only: FG_num_fgrids, FG_fgrids, fgrid
-      use fixedgrids_module, only: fgrids, num_fixed_grids, fgrid_out
+      use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids, fgout_write
 
       implicit double precision (a-h,o-z)
 
@@ -355,35 +355,39 @@ c     after all patches at finest level have been advanced.
 
       tc0 = tlevel(level)  ! current time on finest level present
       
-      do ng=1,num_fixed_grids
-        if (tc0 > fgrids(ng)%start_time * (1.d0 - 1d-13)  .and. 
-     &     fgrids(ng)%last_output_index < fgrids(ng)%num_output) then
+      do ng=1,FGOUT_num_grids
+        if (tc0 > FGOUT_fgrids(ng)%start_time * (1.d0 - 1d-13)  .and. 
+     &     FGOUT_fgrids(ng)%last_output_index 
+     &     < FGOUT_fgrids(ng)%num_output) then
 
-           if (fgrids(ng)%dt > 0.d0) then
+           if (FGOUT_fgrids(ng)%dt > 0.d0) then
              ioutfgend= 1+max(0,nint((tc0 
-     &                    - fgrids(ng)%start_time) / fgrids(ng)%dt))
+     &                    - FGOUT_fgrids(ng)%start_time) 
+     &                  / FGOUT_fgrids(ng)%dt))
            else
              ioutfgend=1
            endif
-           ioutfgend = min(ioutfgend,fgrids(ng)%num_output)
-           ioutfgstart = fgrids(ng)%last_output_index + 1
+           ioutfgend = min(ioutfgend,FGOUT_fgrids(ng)%num_output)
+           ioutfgstart = FGOUT_fgrids(ng)%last_output_index + 1
 c     # write-out fgrid times that are less than tlevel, 
 c     # and have not been written yet
 c          write(6,*) '+++ in tick, ioutfgstart,ioutfgend: ',
 c    &                ioutfgstart,ioutfgend
            do ioutfg=ioutfgstart,ioutfgend
-             toutfg=fgrids(ng)%start_time+(ioutfg-1)*fgrids(ng)%dt
+             toutfg=FGOUT_fgrids(ng)%start_time+(ioutfg-1)
+     &                *FGOUT_fgrids(ng)%dt
              if (toutfg < tc0 * (1.d0 - 1d-13)) then
 c               # write out the solution for fixed grid ng
 c               # test if arrival times should be output
                 ioutflag = 0  ! deprecated
 c               write(6,*) '+++ tick call fgrid_out, ioutfg,toutfg: ',
 c    &                     ioutfg,toutfg
-                call fgrid_out(ng,fgrids(ng),toutfg,ioutfg,ioutflag)
+                call fgout_write(ng,FGOUT_fgrids(ng),
+     &                           toutfg,ioutfg,ioutflag)
 
-                fgrids(ng)%last_output_time = toutfg
-                fgrids(ng)%last_output_index = 
-     &                               fgrids(ng)%last_output_index + 1
+                FGOUT_fgrids(ng)%last_output_time = toutfg
+                FGOUT_fgrids(ng)%last_output_index = 
+     &                      FGOUT_fgrids(ng)%last_output_index + 1
              endif
            enddo
 

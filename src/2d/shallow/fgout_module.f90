@@ -1,10 +1,10 @@
-module fixedgrids_module
+module fgout_module
 
     implicit none
     save
 
     ! Container for fixed grid data, geometry and output settings
-    type fixedgrid_type
+    type fgout_grid
         ! Grid data
         real(kind=8), pointer :: early(:,:,:)
         real(kind=8), pointer :: late(:,:,:)
@@ -16,21 +16,21 @@ module fixedgrids_module
         ! Time Tracking and output types
         integer :: num_output,last_output_index
         real(kind=8) :: last_output_time,start_time,end_time,dt
-    end type fixedgrid_type    
+    end type fgout_grid    
 
 
     logical, private :: module_setup = .false.
 
     ! Fixed grid arrays and sizes
-    integer :: num_fixed_grids
-    type(fixedgrid_type), allocatable :: fgrids(:)
-    real(kind=8) :: tcfmax
+    integer :: FGOUT_num_grids
+    type(fgout_grid), allocatable :: FGOUT_fgrids(:)
+    real(kind=8) :: FGOUT_tcfmax
 
 contains
     
     ! Setup routine that reads in the fixed grids data file and sets up the
     ! appropriate data structures
-    subroutine set_fixed_grids(fname)
+    subroutine set_fgout(fname)
 
         use amr_module, only: parmunit
 
@@ -47,82 +47,86 @@ contains
 
             write(parmunit,*) ' '
             write(parmunit,*) '--------------------------------------------'
-            write(parmunit,*) 'SETFIXEDGRIDS:'
+            write(parmunit,*) 'SETFGOUT:'
             write(parmunit,*) '-----------'
 
             ! Open data file
             if (present(fname)) then
                 call opendatafile(unit,fname)
             else
-                call opendatafile(unit,'fixed_grids.data')
+                call opendatafile(unit,'fgout_grids.data')
             endif
 
             ! Read in data
-            read(unit,'(i2)') num_fixed_grids
-            write(parmunit,*) '  mfgrids = ',num_fixed_grids
-            if (num_fixed_grids == 0) then
+            read(unit,'(i2)') FGOUT_num_grids
+            write(parmunit,*) '  mfgrids = ',FGOUT_num_grids
+            if (FGOUT_num_grids == 0) then
                 write(parmunit,*) '  No fixed grids specified for output'
                 return
             endif
             
             ! Allocate fixed grids (not the data yet though)
-            allocate(fgrids(num_fixed_grids))
+            allocate(FGOUT_fgrids(FGOUT_num_grids))
 
             ! Read in data for each fixed grid
-            do i=1,num_fixed_grids
+            do i=1,FGOUT_num_grids
                 ! Read in this grid's data
-                read(unit,*) fgrids(i)%start_time, &
-                             fgrids(i)%end_time, &
-                             fgrids(i)%num_output, &
-                             fgrids(i)%x_low, &
-                             fgrids(i)%x_hi , &
-                             fgrids(i)%y_low, &
-                             fgrids(i)%y_hi , &
-                             fgrids(i)%mx  , &
-                             fgrids(i)%my
+                read(unit,*) FGOUT_fgrids(i)%start_time, &
+                             FGOUT_fgrids(i)%end_time, &
+                             FGOUT_fgrids(i)%num_output, &
+                             FGOUT_fgrids(i)%x_low, &
+                             FGOUT_fgrids(i)%x_hi , &
+                             FGOUT_fgrids(i)%y_low, &
+                             FGOUT_fgrids(i)%y_hi , &
+                             FGOUT_fgrids(i)%mx  , &
+                             FGOUT_fgrids(i)%my
                              
                    
                ! Setup data for this grid
                ! Set dtfg (the timestep length between outputs) for each grid
-               if (fgrids(i)%end_time <= fgrids(i)%start_time) then
-                   if (fgrids(i)%num_output > 1) then 
+               if (FGOUT_fgrids(i)%end_time <= FGOUT_fgrids(i)%start_time) then
+                   if (FGOUT_fgrids(i)%num_output > 1) then 
                       print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
                       print *,'start_time <= end_time yet num_output > 1'
                       print *,'set end_time > start_time or set num_output = 1'
                       stop
                    else
-                       fgrids(i)%dt = 0.d0
+                       FGOUT_fgrids(i)%dt = 0.d0
                    endif
                else
-                   if (fgrids(i)%num_output < 2) then
+                   if (FGOUT_fgrids(i)%num_output < 2) then
                        print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
                        print *,'end_time > start_time, yet num_output = 1'
                        print *,'set num_output > 2'
                        stop
                    else
-                       fgrids(i)%dt = (fgrids(i)%end_time - fgrids(i)%start_time) &
-                                           / (fgrids(i)%num_output - 1)
+                       FGOUT_fgrids(i)%dt = (FGOUT_fgrids(i)%end_time &
+                                          - FGOUT_fgrids(i)%start_time) &
+                                           / (FGOUT_fgrids(i)%num_output - 1)
                    endif
                 endif
 
                 ! Initialize last_output_time and index
-                fgrids(i)%last_output_time = fgrids(i)%start_time - fgrids(i)%dt
-                fgrids(i)%last_output_index = 0
+                FGOUT_fgrids(i)%last_output_time = FGOUT_fgrids(i)%start_time &
+                     - FGOUT_fgrids(i)%dt
+                FGOUT_fgrids(i)%last_output_index = 0
 
                 ! Set spatial intervals dx and dy on each grid
-                if (fgrids(i)%mx > 1) then
-                   fgrids(i)%dx = (fgrids(i)%x_hi - fgrids(i)%x_low) / (fgrids(i)%mx - 1)
-                else if (fgrids(i)%mx == 1) then
-                   fgrids(i)%dx = 0.d0
+                if (FGOUT_fgrids(i)%mx > 1) then
+                   FGOUT_fgrids(i)%dx = (FGOUT_fgrids(i)%x_hi &
+                        - FGOUT_fgrids(i)%x_low) / (FGOUT_fgrids(i)%mx - 1)
+                else if (FGOUT_fgrids(i)%mx == 1) then
+                   FGOUT_fgrids(i)%dx = 0.d0
                 else
                      print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
                      print *,'x grid points mx <= 0, set mx >= 1'
                 endif
 
-                if (fgrids(i)%my > 1) then
-                    fgrids(i)%dy = (fgrids(i)%y_hi - fgrids(i)%y_low) / (fgrids(i)%my - 1)
-                else if (fgrids(i)%my == 1) then
-                    fgrids(i)%dy = 0.d0
+                if (FGOUT_fgrids(i)%my > 1) then
+                    FGOUT_fgrids(i)%dy = (FGOUT_fgrids(i)%y_hi &
+                         - FGOUT_fgrids(i)%y_low) / (FGOUT_fgrids(i)%my - 1)
+                else if (FGOUT_fgrids(i)%my == 1) then
+                    FGOUT_fgrids(i)%dy = 0.d0
                 else
                     print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
                     print *,'y grid points my <= 0, set my >= 1'
@@ -130,33 +134,35 @@ contains
            
                 ! set the number of variables stored for each grid
                 ! this should be (the number of variables you want to write out + 1)
-                fgrids(i)%num_vars(1) = 6
-                fgrids(i)%num_vars(2) = 0 ! deprecated
+                FGOUT_fgrids(i)%num_vars(1) = 6
+                FGOUT_fgrids(i)%num_vars(2) = 0 ! deprecated
                 
                 ! Allocate new fixed grid data array
-                allocate(fgrids(i)%early(fgrids(i)%num_vars(1),fgrids(i)%mx,fgrids(i)%my))
-                fgrids(i)%early = nan()
+                allocate(FGOUT_fgrids(i)%early(FGOUT_fgrids(i)%num_vars(1), &
+                         FGOUT_fgrids(i)%mx,FGOUT_fgrids(i)%my))
+                FGOUT_fgrids(i)%early = nan()
                 
-                allocate(fgrids(i)%late(fgrids(i)%num_vars(1),fgrids(i)%mx,fgrids(i)%my))
-                fgrids(i)%late = nan()
+                allocate(FGOUT_fgrids(i)%late(FGOUT_fgrids(i)%num_vars(1), &
+                         FGOUT_fgrids(i)%mx,FGOUT_fgrids(i)%my))
+                FGOUT_fgrids(i)%late = nan()
                 
            enddo
            close(unit)
            
-           tcfmax=-1.d16
+           FGOUT_tcfmax=-1.d16
 
            module_setup = .true.
         end if
 
-    end subroutine set_fixed_grids
+    end subroutine set_fgout
     
     
-    !=====================FGRIDINTERP=======================================
+    !=====================FGOUT_INTERP=======================================
     ! This routine interpolates q and aux on a computational grid
-    ! to a fgrid not necessarily aligned with the computational grid
-    ! using bilinear interpolation defined on computation grid
+    ! to an fgout grid not necessarily aligned with the computational grid
+    ! using bilinear interpolation defined on computational grid
     !=======================================================================
-    subroutine fgrid_interp(fgrid_type,fgrid, &
+    subroutine fgout_interp(fgrid_type,fgrid, &
                             t,q,meqn,mxc,myc,mbc,dxc,dyc,xlowc,ylowc, &
                             maux,aux,maxcheck)
     
@@ -165,7 +171,7 @@ contains
     
         ! Subroutine arguments
         integer, intent(in) :: fgrid_type
-        type(fixedgrid_type), intent(inout) :: fgrid
+        type(fgout_grid), intent(inout) :: fgrid
         integer, intent(in) :: meqn,mxc,myc,mbc,maux,maxcheck
         real(kind=8), intent(in) :: t,dxc,dyc,xlowc,ylowc
         real(kind=8), intent(in) :: q(meqn,1-mbc:mxc+mbc,1-mbc:myc+mbc)
@@ -176,7 +182,6 @@ contains
         integer :: bathy_index,eta_index
 
         ! Tolerances
-        real(kind=8), parameter :: arrival_tolerance = 1.d-2
         real(kind=8) :: total_depth,depth_indicator,nan_check
 
         ! Geometry
@@ -304,12 +309,11 @@ contains
                     fg_data(num_vars,ifg,jfg) = t
 
                     
-                endif ! Enclosing if statement to see if fixed grid point is
-                      ! in this computational grid
-            enddo ! Fixed grid y-coordinate loop
-        enddo ! Fixed grid x-coordinte loop
+                endif ! if fgout point is on this grid
+            enddo ! fgout y-coordinate loop
+        enddo ! fgout x-coordinte loop
     
-    end subroutine fgrid_interp
+    end subroutine fgout_interp
     
 
     !=====================FGRIDOUT==========================================
@@ -318,19 +322,21 @@ contains
     !
     ! files have a header, followed by columns of data
     !=======================================================================
-    subroutine fgrid_out(grid_index,fgrid,out_time,out_index,out_flag)
+    subroutine fgout_write(grid_index,fgrid,out_time,out_index,out_flag)
 
         implicit none
         
         ! Subroutine arguments
-        type(fixedgrid_type), intent(inout) :: fgrid
+        type(fgout_grid), intent(inout) :: fgrid
         real(kind=8), intent(in) :: out_time
         integer, intent(in) :: grid_index,out_index, out_flag
               
         ! I/O
         integer, parameter :: unit = 95
-        character(len=30) :: fg_filename
-        integer :: grid_number,pos,digit,out_number,columns
+        character(len=22) :: fg_filename
+        character(len=4) :: cfgno, cframeno
+        integer :: grid_number,ipos,idigit,out_number,columns
+        integer :: ifg,ifg1, iframe,iframe1
         
         ! Out format strings
         character(len=*), parameter :: header_format = "(e18.8,'    time', /," // &
@@ -349,20 +355,28 @@ contains
     
 
         ! Make the file names and open output files
-        fg_filename = 'fort.fgnn_xxxx'
-        grid_number= grid_index
-        do pos = 9, 8, -1
-            digit = mod(grid_number,10)
-            fg_filename(pos:pos) = char(ichar('0') + digit)
-            grid_number = grid_number/ 10
-        enddo
+        cfgno = '0000'
+        ifg = grid_index
+        ifg1 = ifg
+        do ipos=4,1,-1
+            idigit = mod(ifg1,10)
+            cfgno(ipos:ipos) = char(ichar('0') + idigit)
+            ifg1 = ifg1/10
+            enddo
 
-        out_number = out_index
-        do pos = 14, 11, -1
-            digit = mod(out_number,10)
-            fg_filename(pos:pos) = char(ichar('0') + digit)
-            out_number = out_number / 10
-        enddo
+        cframeno = '0000'
+        iframe = out_index
+        iframe1 = iframe
+        do ipos=4,1,-1
+            idigit = mod(iframe1,10)
+            cframeno(ipos:ipos) = char(ichar('0') + idigit)
+            iframe1 = iframe1/10
+            enddo
+            
+        !write(6,*) '+++ grid_index, out_index: ',grid_index, out_index
+        !write(6,*) '+++ cfgno, cframeno: ',cfgno, cframeno
+        fg_filename = 'fgout' // cfgno // 'frame' // cframeno // '.txt'
+        print *, 'Writing to file ', fg_filename
 
         open(unit,file=fg_filename,status='unknown',form='formatted')
 
@@ -372,11 +386,12 @@ contains
            columns = columns + 2
         endif
         
-        !write(6,*) '+++ fixedgrid out_time = ',out_time
+        !write(6,*) '+++ fgout out_time = ',out_time
         !write(6,*) '+++ fgrid%num_vars: ',fgrid%num_vars(1),fgrid%num_vars(2)
         
         ! Write out header
-        write(unit,header_format) out_time,fgrid%mx,fgrid%my,fgrid%x_low,fgrid%y_low,fgrid%x_hi,fgrid%y_hi,columns
+        write(unit,header_format) out_time,fgrid%mx,fgrid%my, &
+             fgrid%x_low,fgrid%y_low, fgrid%x_hi,fgrid%y_hi, columns
 
 
         ! Interpolate the grid in time, to the output time, using 
@@ -408,14 +423,16 @@ contains
         enddo
 
         close(unit)
-        print "(a,i2,a,i2,a,e18.8)",' FGRIDOUT: Fixed Grid  ',grid_index, '  frame ',out_index,' at time =',out_time
+        print "(a,i2,a,i2,a,e18.8)",' FGOUT: Fixed Grid  ',grid_index, &
+              '  frame ',out_index,' at time =',out_time
 
         ! ==================== Output for arrival times============
+        ! Deprecated
         if (out_flag == 1) then
             write(6,*) '*** Unexpected out_flag == 1'
         endif
       
-    end subroutine fgrid_out
+    end subroutine fgout_write
     
     ! =========================================================================
     ! Utility functions for this module
@@ -467,4 +484,4 @@ contains
     end function interpolate_time
     
 
-end module fixedgrids_module
+end module fgout_module

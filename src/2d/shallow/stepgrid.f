@@ -23,12 +23,13 @@ c
 c
 c
 c      This version of stepgrid, stepgrid_geo.f allows output on
-c      fixed grids specified in setfixedgrids.data
+c      fgout grids specified in fgout_grids.data
 c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
       use geoclaw_module
       use amr_module
-      use fixedgrids_module
+      use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids, 
+     &                        FGOUT_tcfmax, fgout_interp
       implicit double precision (a-h,o-z)
 
       external rpn2,rpt2
@@ -45,7 +46,7 @@ c      dimension work(mwork)
       logical :: dump = .false.
       logical, intent (in) :: actualstep
 c
-      tcfmax = -rinfinity
+      FGOUT_tcfmax = -rinfinity
       level = node(nestlevel,mptr)
 
       if (dump) then
@@ -108,7 +109,7 @@ c
       tc0=time !# start of computational step
       tcf=tc0+dt !# end of computational step
       
-c::::::::::::::::::::::::Fixed Grid Output:::::::::::::::::::::::::::::::::
+c::::::::::::::::::::::::fgout Output:::::::::::::::::::::::::::::::::
 c     This has been moved to tick.f, after advancing all patches on 
 c     finest level.  No need to check on each patch separately.
 c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -116,31 +117,32 @@ c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
        call b4step2(mbc,mx,my,nvar,q,
      &             xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux,actualstep)
       
-c::::::::::::::::::::::::FIXED GRID DATA before step:::::::::::::::::::::::
+c::::::::::::::::::::::::FGOUT DATA before step:::::::::::::::::::::::
 c     # fill in values at fixed grid points effected at time tc0
 !$OMP CRITICAL (FixedGrids)
-      do ng=1,num_fixed_grids
+      do ng=1,FGOUT_num_grids
 
-      if ( (fgrids(ng)%x_low < xlowmbc + mx*dx) .and.
-     &     (fgrids(ng)%x_hi  > xlowmbc) .and.
-     &     (fgrids(ng)%y_low < ylowmbc + my*dy) .and.
-     &     (fgrids(ng)%y_hi  > ylowmbc) .and.
-     &     (fgrids(ng)%last_output_index < fgrids(ng)%num_output) .and.
-     &     (tcf >= fgrids(ng)%start_time * (1.d0 - 1d-13)) ) then
+      if ( (FGOUT_fgrids(ng)%x_low < xlowmbc + mx*dx) .and.
+     &     (FGOUT_fgrids(ng)%x_hi  > xlowmbc) .and.
+     &     (FGOUT_fgrids(ng)%y_low < ylowmbc + my*dy) .and.
+     &     (FGOUT_fgrids(ng)%y_hi  > ylowmbc) .and.
+     &     (FGOUT_fgrids(ng)%last_output_index
+     &      < FGOUT_fgrids(ng)%num_output) .and.
+     &     (tcf >= FGOUT_fgrids(ng)%start_time * (1.d0 - 1d-13))) then
          
-        !write(6,*) '+++ fgrids(ng)%last_output_time, tc0, tcf: '
-        !write(6,*) '+++ ', fgrids(ng)%last_output_time, tc0, tcf
+        !write(6,*) '+++ FGOUT_fgrids(ng)%last_output_time, tc0, tcf: '
+        !write(6,*) '+++ ', FGOUT_fgrids(ng)%last_output_time, tc0, tcf
 
-        if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= 
+        if (FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt >= 
      &                                    tc0 * (1.d0 - 1d-13) .and.
-     &      fgrids(ng)%last_output_time + fgrids(ng)%dt <=  
+     &      FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt <=  
      &                                    tcf * (1.d0 + 1d-13)) then
 
-c        # fixedgrid ng has an output time within [tc0,tcf] interval
+c        # fgout grid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
-c        write(6,*) '+++ fgrid_interp(1), tc0, level: ',tc0,level
-         call fgrid_interp(1,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
-     &                     xlowmbc,ylowmbc,maux,aux,0)
+         !write(6,*) '+++ fout_interp(1), tc0, level: ',tc0,level
+         call fgout_interp(1,FGOUT_fgrids(ng),tc0,q,nvar,mx,my,mbc,
+     &                     dx,dy,xlowmbc,ylowmbc,maux,aux,0)
      
 c         # routine to spatially interpolate computational solution
 c         # at tc0 to the fixed grid spatial points,
@@ -151,7 +153,7 @@ c        # Deleted call to update eta max and arrival time: deprecated
 
       endif
       enddo
-      tcfmax=max(tcfmax,tcf)
+      FGOUT_tcfmax=max(FGOUT_tcfmax,tcf)
 
 !$OMP END CRITICAL (FixedGrids)
 
@@ -230,27 +232,29 @@ c        # with source term:   use Godunov splitting
          endif
 
 !$OMP CRITICAL (FixedGrids)
-c     ::::::::::::::::::::::::Fixed Grid data afterstep:::::::::::::::::::::::
+c     ::::::::::::::::::::::::fgout data afterstep:::::::::::::::::::::::
 c     # fill in values at fixed grid points effected at time tcf
-      do ng=1,num_fixed_grids
-      if ((fgrids(ng)%x_low < xlowmbc + mx * dx) .and.
-     &    (fgrids(ng)%x_hi  > xlowmbc) .and.
-     &    (fgrids(ng)%y_low < ylowmbc + my * dy) .and.
-     &    (fgrids(ng)%y_hi  > ylowmbc) .and.
-     &    (fgrids(ng)%last_output_index < fgrids(ng)%num_output) .and.
-     &    (tcf >= fgrids(ng)%start_time * (1.d0 - 1d-13))) then
+      do ng=1,FGOUT_num_grids
+     
+       if ((FGOUT_fgrids(ng)%x_low < xlowmbc + mx * dx) .and.
+     &    (FGOUT_fgrids(ng)%x_hi  > xlowmbc) .and.
+     &    (FGOUT_fgrids(ng)%y_low < ylowmbc + my * dy) .and.
+     &    (FGOUT_fgrids(ng)%y_hi  > ylowmbc) .and.
+     &    (FGOUT_fgrids(ng)%last_output_index 
+     &      < FGOUT_fgrids(ng)%num_output) .and.
+     &    (tcf >= FGOUT_fgrids(ng)%start_time * (1.d0 - 1d-13))) then
       
-        if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= 
+        if (FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt >= 
      &                                    tc0 * (1.d0 - 1d-13) .and.
-     &      fgrids(ng)%last_output_time + fgrids(ng)%dt <=  
+     &      FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt <=  
      &                                    tcf * (1.d0 + 1d-13)) then
 
-c        # fixedgrid ng has an output time within [tc0,tcf] interval
+c        # fgout grid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
 C         i0=i0fg(ng) !# index into the ng grid in the work array
 
-c       write(6,*) '+++ fgrid_interp(2), tcf, level: ',tcf,level
-        call fgrid_interp(2,fgrids(ng),tcf,q,nvar,mx,my,mbc,dx,dy,
+        !write(6,*) '+++ fgout_interp(2), tcf, level: ',tcf,level
+        call fgout_interp(2,FGOUT_fgrids(ng),tcf,q,nvar,mx,my,mbc,dx,dy,
      &                    xlowmbc,ylowmbc,maux,aux,0)
 
 c            # routine to interpolate solution
