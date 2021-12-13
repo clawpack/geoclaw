@@ -336,7 +336,7 @@ contains
 
         ! Local storage
         integer :: i, j, k, mx_orig, my_orig
-        real(kind=8) :: tn, tnm
+        real(kind=8) :: tn, tnm, weight
         last_storm_index = 2
         i = storm_index(t, storm)
         last_storm_index = i
@@ -362,12 +362,13 @@ contains
         else
             tn = storm%time(i)
             tnm = storm%time(i - 1)
-            wind_tu = (storm%wind_u(:,:,i) - storm%wind_u(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
-                      storm%wind_u(:,:, i-1))
-            wind_tv = (storm%wind_v(:,:,i) - storm%wind_v(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
-                      storm%wind_v(:,:, i-1))
-            pressure_t = (storm%pressure(:,:,i) - storm%pressure(:,:,i - 1) * ((t - tnm)/(tn - tnm)) + &
-                          storm%pressure(:,:, i-1))
+            weight = (t - tnm) / (tn - tnm)
+            wind_tu = (storm%wind_u(:,:,i) - storm%wind_u(:,:,i - 1)) * weight + &
+                      storm%wind_u(:,:, i-1)
+            wind_tv = (storm%wind_v(:,:,i) - storm%wind_v(:,:,i - 1)) * weight + &
+                      storm%wind_v(:,:, i-1)
+            pressure_t = (storm%pressure(:,:,i) - storm%pressure(:,:,i - 1)) * weight + &
+                          storm%pressure(:,:,i - 1)
         end if
 
     end subroutine get_storm_time
