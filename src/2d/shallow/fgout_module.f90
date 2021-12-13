@@ -10,7 +10,7 @@ module fgout_module
         real(kind=8), pointer :: late(:,:,:)
         
         ! Geometry
-        integer :: num_vars(2),mx,my
+        integer :: num_vars(2),mx,my,point_style,fgno
         real(kind=8) :: dx,dy,x_low,x_hi,y_low,y_hi
         
         ! Time Tracking and output types
@@ -27,6 +27,7 @@ module fgout_module
     real(kind=8) :: FGOUT_tcfmax
 
 contains
+                        
     
     ! Setup routine that reads in the fixed grids data file and sets up the
     ! appropriate data structures
@@ -71,17 +72,21 @@ contains
             ! Read in data for each fixed grid
             do i=1,FGOUT_num_grids
                 ! Read in this grid's data
-                read(unit,*) FGOUT_fgrids(i)%start_time, &
-                             FGOUT_fgrids(i)%end_time, &
-                             FGOUT_fgrids(i)%num_output, &
-                             FGOUT_fgrids(i)%x_low, &
-                             FGOUT_fgrids(i)%x_hi , &
-                             FGOUT_fgrids(i)%y_low, &
-                             FGOUT_fgrids(i)%y_hi , &
-                             FGOUT_fgrids(i)%mx  , &
-                             FGOUT_fgrids(i)%my
-                             
+                read(unit,*) FGOUT_fgrids(i)%fgno
+                read(unit,*) FGOUT_fgrids(i)%start_time
+                read(unit,*) FGOUT_fgrids(i)%end_time
+                read(unit,*) FGOUT_fgrids(i)%num_output
+                read(unit,*) FGOUT_fgrids(i)%point_style
+                read(unit,*) FGOUT_fgrids(i)%mx, FGOUT_fgrids(i)%my
+                read(unit,*) FGOUT_fgrids(i)%x_low, FGOUT_fgrids(i)%y_low
+                read(unit,*) FGOUT_fgrids(i)%x_hi, FGOUT_fgrids(i)%y_hi
+             
                    
+                if (FGOUT_fgrids(i)%point_style .ne. 2) then
+                    print *, 'set_fgout: ERROR, unrecognized point_style = ',\
+                          FGOUT_fgrids(i)%point_style
+                endif
+                    
                ! Setup data for this grid
                ! Set dtfg (the timestep length between outputs) for each grid
                if (FGOUT_fgrids(i)%end_time <= FGOUT_fgrids(i)%start_time) then
@@ -118,7 +123,7 @@ contains
                 else if (FGOUT_fgrids(i)%mx == 1) then
                    FGOUT_fgrids(i)%dx = 0.d0
                 else
-                     print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
+                     print *,'set_fgout: ERROR for fixed grid', i
                      print *,'x grid points mx <= 0, set mx >= 1'
                 endif
 
@@ -128,7 +133,7 @@ contains
                 else if (FGOUT_fgrids(i)%my == 1) then
                     FGOUT_fgrids(i)%dy = 0.d0
                 else
-                    print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
+                    print *,'set_fgout: ERROR for fixed grid', i
                     print *,'y grid points my <= 0, set my >= 1'
                 endif 
            
