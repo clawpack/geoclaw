@@ -29,7 +29,6 @@ module data_storm_module
 
         ! Storm data, wind velocity in x and y, pressure and wind speed
         real(kind=8), allocatable :: pressure(:,:,:)
-        real(kind=8), allocatable :: wind_speed(:,:,:)
         real(kind=8), allocatable :: wind_u(:,:,:)
         real(kind=8), allocatable :: wind_v(:,:,:)
 
@@ -43,6 +42,7 @@ module data_storm_module
     end type data_storm_type
 
     integer, private :: last_storm_index
+
     ! Time tracking tolerance allowance - allows for the beginning of the storm
     ! track to be close to but not equal the start time of the simulation
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
@@ -68,20 +68,24 @@ contains
         ! Length of dims, mx, my, mt
         integer :: mx, my, mt
 
-        ! Set up for variable info, variables are speed, pressure, lat, lon, time
+        ! Set up for variable info, variables are pressure, lat, lon, time
         integer :: nvars, var_type, var_id
         character (len=10) :: var_name
 
+        ! Netcdf file id and counter for looping
         integer :: nc_fid, n
+
         if (.not. module_setup) then
 
             ! Open data file
             print *, 'Reading storm data file ', storm_data_path
+
             ! Open file and get file ID
             call check_netcdf_error(nf90_open(storm_data_path, nf90_nowrite, nc_fid))
+            ! Read number of dimensions and variables in nc file
             call check_netcdf_error(nf90_inquire(nc_fid, num_dims, nvars))
 
-            ! Get the dimension names, sizes from the file
+            ! Get the dimension names and sizes from the file
             call get_dim_info(nc_fid, num_dims, x_dim_id, x_dim_name, mx, &
             y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
 
@@ -94,16 +98,18 @@ contains
             allocate(storm%latitude(my))
             allocate(storm%time(mt))
 
+            ! Set up lat/lon lengths in storm object for use in linear interpolation of time
             storm%mx = mx
             storm%my = my
+
+            ! Number of time steps in data
             storm%num_casts = mt
+
             ! Fill out variable data/info
             do n = 1, nvars
+                ! read file for one variable and parse the data in storm object
                 call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
-                if (ANY((/'SPEED     ', 'WIND SPEED'/) == Upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_speed))
-                elseif ('PRESSURE' == Upper(var_name)) then
+                if ('PRESSURE' == Upper(var_name)) then
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
                 elseif(ANY((/'LON      ','LONGITUDE'/) == Upper(var_name))) then
@@ -123,16 +129,19 @@ contains
                     call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
                 end if
             end do
-
+        ! Close file to stop corrupting the netcdf files
         call check_netcdf_error(nf90_close(nc_fid))
+        ! end if setup
         end if
 
+        ! Make sure first time step in setrun is inside the times in the data
         if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
             print *, 'Start time', t0, " is outside of the tracking"
             print *, 'tolerance range with the track start'
             print *, storm%time(1), '.'
             stop
         end if
+
         last_storm_index = 2
         last_storm_index = storm_index(t0, storm)
         if (last_storm_index == -1) then
@@ -154,7 +163,7 @@ contains
     !    Interpolate location of hurricane in the current time interval
     ! ==========================================================================
     function storm_location(t,storm) result(location)
-
+        ! used in other potential data storm types, requires eye location
         implicit none
 
         ! Input
@@ -173,7 +182,7 @@ contains
     !   Angle off of due north that the storm is traveling
     ! ==========================================================================
     real(kind=8) function storm_direction(t, storm) result(theta)
-
+        ! Used for other types of data storm types, requires eye location
         implicit none
 
         ! Input
@@ -210,23 +219,6 @@ contains
         stop "HWRF data input is not yet implemented!"
 
     end subroutine set_HWRF_fields
-
-    subroutine check_netcdf_error(ios)
-
-        use netcdf
-
-        implicit none
-
-        integer, intent(in) :: ios
-
-        if (ios /= NF90_NOERR) then
-            print *, "NetCDF IO error: ", ios
-            print *, trim(nf90_strerror(ios))
-            stop
-        end if
-
-    end subroutine check_netcdf_error
-
 
     ! ==========================================================================
     ! get_dim_info() pulls dim names and lengths from the nc file
@@ -321,13 +313,62 @@ contains
 
     end function storm_index
 
+
+
+    ! ==========================================================================
+    ! set_owi_fields()
+    ! Fills out data for current time step and current patch
+    ! ==========================================================================
+    subroutine set_owi_fields(maux, mbc, mx, my, xlower, ylower,    &
+                              dx, dy, t, aux, wind_index,           &
+                              pressure_index, storm)
+        implicit none
+        ! subroutine i/o
+        integer, intent(in) :: maux, mbc, mx, my
+        real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
+
+        ! Storm descrption
+        type(data_storm_type), intent(inout) :: storm
+
+        ! Array storing wind and pressure field
+        integer, intent(in) :: wind_index, pressure_index
+        real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+
+        ! Local storage
+        real(kind=8) :: u_value, v_value, p_value
+        integer :: i, j
+        real(kind=8) :: x, y
+
+        ! wind and pressure arrays for current time step
+        real(kind=8) :: wind_tu(storm%mx,storm%my), wind_tv(storm%mx, storm%my), pressure_t(storm%mx,storm%my)
+
+        ! get the wind and pressure arrays for the current timestep
+        call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
+
+        ! Loop over every point in the patch and fill in the data
+        do j=1-mbc, my+mbc
+            y = ylower + (j-0.5d0) * dy
+            do i=1-mbc, mx+mbc
+                x = xlower + (i-0.5d0) * dx
+!                printt *, x,xΩ y, u_value
+                call interp_array_data(storm, x, y, wind_tu, u_value)
+                aux(wind_index, i, j) = u_value
+                call interp_array_data(storm, x, y, wind_tv, v_value)
+                aux(wind_index + 1, i, j) = v_value
+                call interp_array_data(storm, x, y, pressure_t, p_value)
+                aux(pressure_index, i, j) = p_value
+            end do
+        end do
+
+    end subroutine set_owi_fields
+
+
     ! ==========================================================================
     ! get_storm_time()
     ! Calculates the wind and pressure fields for the current time step
     ! ==========================================================================
     subroutine get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
         implicit none
-    ! Interpolate in time
         ! Subroutine IO
         type(data_storm_type), intent(in) :: storm
         integer, intent(in) :: mx, my
@@ -340,6 +381,7 @@ contains
         last_storm_index = 2
         i = storm_index(t, storm)
         last_storm_index = i
+
         ! List of possible error conditions
         if (i <= 1) then
             if (i == 0) then
@@ -372,57 +414,11 @@ contains
         end if
 
     end subroutine get_storm_time
-
     ! ==========================================================================
-    ! set_owi_fields()
-    ! Uses bilinear interpolation to fill in patch data from original wind/pressure fields
+    ! interp_array_data() Obtains wind and pressure data for each patch
+    ! Uses bilinear interpolation to get the data
     ! ==========================================================================
-    subroutine set_owi_fields(maux, mbc, mx, my, xlower, ylower,    &
-                              dx, dy, t, aux, wind_index,           &
-                              pressure_index, storm)
-        implicit none
-        ! subroutine i/o
-        integer, intent(in) :: maux, mbc, mx, my
-        real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-
-        ! Storm descrption
-        type(data_storm_type), intent(inout) :: storm
-
-        ! Array storing wind and pressure field
-        integer, intent(in) :: wind_index, pressure_index
-        real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
-
-        ! Local storage
-        real(kind=8) :: u_value, v_value, p_value
-        integer :: i, j
-        real(kind=8) :: x, y
-
-        ! Get the data loaded into the storm object
-!        call get_storm_data(t, storm, )
-        ! wind and pressure arrays for current time step
-        real(kind=8) :: wind_tu(storm%mx,storm%my), wind_tv(storm%mx, storm%my), pressure_t(storm%mx,storm%my)
-
-        !!! fix the time interpolation to include u and v values
-!        call set_storm(storm_data_path, storm, storm_spec_type, log_unit)
-        call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
-        do j=1-mbc, my+mbc
-            y = ylower + (j-0.5d0) * dy
-            do i=1-mbc, mx+mbc
-                x = xlower + (i-0.5d0) * dx
-!                printt *, x,xΩ y, u_value
-                call interp_wind_velocity(storm, x, y, wind_tu, u_value)
-                aux(wind_index, i, j) = u_value
-                call interp_wind_velocity(storm, x, y, wind_tv, v_value)
-                aux(wind_index + 1, i, j) = v_value
-                call interp_wind_velocity(storm, x, y, pressure_t, p_value)
-                aux(pressure_index, i, j) = p_value
-            end do
-        end do
-
-!    doprint *, aux(wind_index + 1, :, :)
-    end subroutine set_owi_fields
-
-    subroutine interp_wind_velocity(storm, x, y, interp_array, value)
+    subroutine interp_array_data(storm, x, y, interp_array, value)
         implicit none
         ! Subroutine I/O
         type(data_storm_type), intent(inout) :: storm
@@ -436,12 +432,15 @@ contains
         real(kind=8) :: storm_dx, storm_dy ! initial wind field dx and dy
         integer :: xidx_low, xidx_high, yidx_low, yidx_high
 
+        ! Get the data resolution
         storm_dx = storm%longitude(2) - storm%longitude(1)
         storm_dy = storm%latitude(2) - storm%latitude(1)
 
         ! Get the nearest lat/lon values to use for interpolation box
         call find_nearest(x - storm_dx, y - storm_dy, llon, llat, storm, xidx_low, yidx_low)
         call find_nearest(x + storm_dx, y + storm_dy, ulon, ulat, storm, xidx_high, yidx_high)
+
+        ! Test to make sure upper and lower corners aren't the same
         if (xidx_low == xidx_high) then
             xidx_high = xidx_low + 1
             ulon = storm%longitude(xidx_high)
@@ -449,20 +448,23 @@ contains
             yidx_high = yidx_low + 1
             ulat = storm%latitude(yidx_high)
         end if
+
+        ! Find the values at the corners
         q11 = interp_array(xidx_low, yidx_low)
         q12 = interp_array(xidx_low, yidx_high)
         q21 = interp_array(xidx_high, yidx_low)
         q22 = interp_array(xidx_high, yidx_high)
-!        print *, 'ulon and andulat', ulon, llon
+
+        ! Calculate the value at the center of the box using bilinear interpolation
         value = (q11 * (ulon - x) * (ulat -y) + &
                  q21 * (x - llon) * (ulat - y) + &
                  q12 * (ulon - x) * (y - llat) + &
                  q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
-    end subroutine interp_wind_velocity
+    end subroutine interp_array_data
 
     ! ==========================================================================
     ! find_nearest() finds nearest value to x and y for interpolation points
-    !
+    ! Finds the nearest actual point to the patch values using minimum distance
     ! ==========================================================================
     subroutine find_nearest(x, y, lon, lat, storm, xidx, yidx)
         implicit none
@@ -471,11 +473,29 @@ contains
         real(kind=8), intent(in) :: x, y
         real(kind=8), intent(out) :: lon, lat
         integer, intent(out) :: xidx, yidx
+
         xidx = minloc(abs(storm%longitude - x), dim=1)
         yidx = minloc(abs(storm%latitude - y), dim=1)
         lon = storm%longitude(xidx)
         lat = storm%latitude(yidx)
     end subroutine find_nearest
+
+     subroutine check_netcdf_error(ios)
+
+        use netcdf
+
+        implicit none
+
+        integer, intent(in) :: ios
+
+        if (ios /= NF90_NOERR) then
+            print *, "NetCDF IO error: ", ios
+            print *, trim(nf90_strerror(ios))
+            stop
+        end if
+
+    end subroutine check_netcdf_error
+
     function Upper(s1)  RESULT (s2)
     CHARACTER(*)       :: s1
     CHARACTER(LEN(s1)) :: s2
