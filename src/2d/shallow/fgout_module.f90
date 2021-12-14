@@ -380,10 +380,9 @@ contains
         ! Other locals
         integer :: i,j,m
         real(kind=8) :: t0,tf,tau, qaug(6)
-        real(kind=8), allocatable :: qeta(:)
+        real(kind=8), allocatable :: qeta(:,:,:)
     
-        !allocate(qeta(4, fgrid%mx, fgrid%my))  ! to store h,hu,hv,eta
-        allocate(qeta(4*fgrid%mx*fgrid%my))
+        allocate(qeta(4, fgrid%mx, fgrid%my))  ! to store h,hu,hv,eta
         
         
         ! Interpolate the grid in time, to the output time, using 
@@ -410,14 +409,10 @@ contains
                 !write(6,*) '+++ tau, early, late: ',tau,fgrid%early(:,i,j),fgrid%late(:,i,j)
                 
                 ! Output the conserved quantities and topo value
-                !qeta(1,i,j) = qaug(1)  ! h
-                !qeta(2,i,j) = qaug(2)  ! hu
-                !qeta(3,i,j) = qaug(3)  ! hv
-                !qeta(4,i,j) = qaug(5)  ! eta
-                qeta(iaddqeta(1,i,j,fgrid%mx)) = qaug(1)
-                qeta(iaddqeta(2,i,j,fgrid%mx)) = qaug(2)
-                qeta(iaddqeta(3,i,j,fgrid%mx)) = qaug(3)
-                qeta(iaddqeta(4,i,j,fgrid%mx)) = qaug(5)
+                qeta(1,i,j) = qaug(1)  ! h
+                qeta(2,i,j) = qaug(2)  ! hu
+                qeta(3,i,j) = qaug(3)  ! hv
+                qeta(4,i,j) = qaug(5)  ! eta
 
             enddo
         enddo
@@ -470,10 +465,8 @@ contains
             ! ascii output added to .q file:
             do j=1,fgrid%my
                 do i=1,fgrid%mx
-                    write(unit, "(50e26.16)") &
-                         (qeta(iaddqeta(m,i,j,fgrid%mx)), m=1,4)
-                    !qeta(1,i,j),qeta(2,i,j), &
-                    !            qeta(3,i,j),qeta(4,i,j)
+                    write(unit, "(50e26.16)") qeta(1,i,j),qeta(2,i,j), &
+                                qeta(3,i,j),qeta(4,i,j)
                 enddo
                 write(unit,*) ' '  ! blank line required between rows
             enddo
@@ -509,12 +502,6 @@ contains
         ! and will not output more (change num_eqn parameter above)
         
     end subroutine fgout_write
-
-    pure integer function iaddqeta(m, i, j, mx)
-        implicit none
-        integer, intent(in) :: m, i, j, mx
-        iaddqeta = 1 + m - 1 + 4 * ((j - 1) * mx + i - 1)
-    end function iaddqeta
               
     
     ! =========================================================================
