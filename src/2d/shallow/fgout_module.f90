@@ -10,7 +10,7 @@ module fgout_module
         real(kind=8), pointer :: late(:,:,:)
         
         ! Geometry
-        integer :: num_vars(2),mx,my,point_style,fgno
+        integer :: num_vars(2),mx,my,point_style,fgno,output_format
         real(kind=8) :: dx,dy,x_low,x_hi,y_low,y_hi
         
         ! Time Tracking and output types
@@ -77,10 +77,11 @@ contains
                 read(unit,*) FGOUT_fgrids(i)%end_time
                 read(unit,*) FGOUT_fgrids(i)%num_output
                 read(unit,*) FGOUT_fgrids(i)%point_style
+                read(unit,*) FGOUT_fgrids(i)%output_format
                 read(unit,*) FGOUT_fgrids(i)%mx, FGOUT_fgrids(i)%my
                 read(unit,*) FGOUT_fgrids(i)%x_low, FGOUT_fgrids(i)%y_low
                 read(unit,*) FGOUT_fgrids(i)%x_hi, FGOUT_fgrids(i)%y_hi
-             
+                
                    
                 if (FGOUT_fgrids(i)%point_style .ne. 2) then
                     print *, 'set_fgout: ERROR, unrecognized point_style = ',\
@@ -91,7 +92,7 @@ contains
                ! Set dtfg (the timestep length between outputs) for each grid
                if (FGOUT_fgrids(i)%end_time <= FGOUT_fgrids(i)%start_time) then
                    if (FGOUT_fgrids(i)%num_output > 1) then 
-                      print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
+                      print *,'set_fgout: ERROR for fixed grid', i
                       print *,'start_time <= end_time yet num_output > 1'
                       print *,'set end_time > start_time or set num_output = 1'
                       stop
@@ -100,7 +101,7 @@ contains
                    endif
                else
                    if (FGOUT_fgrids(i)%num_output < 2) then
-                       print *,'SETFIXEDGRIDS: ERROR for fixed grid', i
+                       print *,'set_fgout: ERROR for fixed grid', i
                        print *,'end_time > start_time, yet num_output = 1'
                        print *,'set num_output > 2'
                        stop
@@ -114,7 +115,7 @@ contains
                 ! Initialize last_output_time and index
                 FGOUT_fgrids(i)%last_output_time = FGOUT_fgrids(i)%start_time &
                      - FGOUT_fgrids(i)%dt
-                FGOUT_fgrids(i)%last_output_index = 0
+                FGOUT_fgrids(i)%last_output_index = -1  ! so first output is 0
 
                 ! Set spatial intervals dx and dy on each grid
                 if (FGOUT_fgrids(i)%mx > 1) then
@@ -140,7 +141,6 @@ contains
                 ! set the number of variables stored for each grid
                 ! this should be (the number of variables you want to write out + 1)
                 FGOUT_fgrids(i)%num_vars(1) = 6
-                FGOUT_fgrids(i)%num_vars(2) = 0 ! deprecated
                 
                 ! Allocate new fixed grid data array
                 allocate(FGOUT_fgrids(i)%early(FGOUT_fgrids(i)%num_vars(1), &
@@ -228,6 +228,7 @@ contains
         bathy_index = meqn + 1
         eta_index = meqn + 2
     
+        !write(59,*) '+++ ifg,jfg,eta,geometry at t = ',t
     
         ! Primary interpolation loops 
         do ifg=1,fgrid%mx
@@ -305,13 +306,24 @@ contains
                                       + h(1,1)*eta(1,1)) / total_depth
                         endif            
                     endif
-                    if (total_depth <= 4.d0*dry_tolerance) then
-                        eta(2,2) = nan()
-                    endif
+                    
+                    !if (total_depth <= 4.d0*dry_tolerance) then
+                    !    eta(2,2) = nan()
+                    !endif
     
                     ! evaluate the interpolant
                     fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry)
+                    
+                    if (total_depth <= 4.d0*dry_tolerance) then
+                        ! surface eta = B topography
+                        eta(2,2) = fg_data(bathy_index,ifg,jfg)
+                    endif
+                    
                     fg_data(num_vars,ifg,jfg) = t
+                    
+                    !write(59,*) '+++',ifg,jfg
+                    !write(59,*) eta
+                    !write(59,*) geometry
 
                     
                 endif ! if fgout point is on this grid
@@ -321,43 +333,95 @@ contains
     end subroutine fgout_interp
     
 
-    !=====================FGRIDOUT==========================================
+    !================ fgout_write ==========================================
     ! This routine interpolates in time and then outputs a grid at
-    ! time=toutfg
+    ! time=out_time
     !
-    ! files have a header, followed by columns of data
+    ! files now have the same format as frames produced by outval
     !=======================================================================
-    subroutine fgout_write(grid_index,fgrid,out_time,out_index,out_flag)
+    subroutine fgout_write(grid_index,fgrid,out_time,out_index)
 
         implicit none
         
         ! Subroutine arguments
         type(fgout_grid), intent(inout) :: fgrid
         real(kind=8), intent(in) :: out_time
-        integer, intent(in) :: grid_index,out_index, out_flag
+        integer, intent(in) :: grid_index,out_index
               
         ! I/O
         integer, parameter :: unit = 95
-        character(len=22) :: fg_filename
+        character(len=15) :: fg_filename
         character(len=4) :: cfgno, cframeno
         integer :: grid_number,ipos,idigit,out_number,columns
         integer :: ifg,ifg1, iframe,iframe1
         
-        ! Out format strings
-        character(len=*), parameter :: header_format = "(e18.8,'    time', /," // &
-                                                        "i5,'    mx', /,"   // &
-                                                        "i5,'    my', /,"   // &
-                                                     "e18.8,'    xlow',/"   // &
-                                                     "e18.8,'    ylow',/"   // &
-                                                     "e18.8,'    xhi',/,"   // &
-                                                     "e18.8,'    yhi',/,"   // &
-                                                        "i5,'  columns',/)"
-        character(len=*), parameter :: data_format = "(8e26.16)"
+        ! Output format strings 
+        ! These are now the same as in outval for frame data, for compatibility
+        ! For fgout grids there is only a single grid (ngrids=1)
+        ! and we set AMR_level=0, naux=0, nghost=0 (so no extra cells in binary)
+        
+        character(len=*), parameter :: header_format =                         &
+                                    "(i6,'                 grid_number',/," // &
+                                     "i6,'                 AMR_level',/,"   // &
+                                     "i6,'                 mx',/,"          // &
+                                     "i6,'                 my',/"           // &
+                                     "e26.16,'    xlow', /, "               // &
+                                     "e26.16,'    ylow', /,"                // &
+                                     "e26.16,'    dx', /,"                  // &
+                                     "e26.16,'    dy',/)"
+                                     
+        character(len=*), parameter :: t_file_format = "(e18.8,'    time', /," // &
+                                           "i6,'                 meqn'/,"   // &
+                                           "i6,'                 ngrids'/," // &
+                                           "i6,'                 naux'/,"   // &
+                                           "i6,'                 ndim'/,"   // &
+                                           "i6,'                 nghost'/,/)"
         
         ! Other locals
         integer :: i,j,m
-        real(kind=8) :: t0,tf,tau
+        real(kind=8) :: t0,tf,tau, qaug(6)
+        real(kind=8), allocatable :: qeta(:)
     
+        !allocate(qeta(4, fgrid%mx, fgrid%my))  ! to store h,hu,hv,eta
+        allocate(qeta(4*fgrid%mx*fgrid%my))
+        
+        
+        ! Interpolate the grid in time, to the output time, using 
+        ! the solution in fgrid1 and fgrid2, which represent the 
+        ! solution on the fixed grid at the two nearest computational times
+        do j=1,fgrid%my
+            do i=1,fgrid%mx
+                ! Fetch times for interpolation, this is done per grid point 
+                ! since each grid point may come from a different source
+                t0 = fgrid%early(fgrid%num_vars(1),i,j)
+                tf = fgrid%late(fgrid%num_vars(1),i,j)
+                tau = (out_time - t0) / (tf - t0)
+                
+                ! Check for small numbers
+                forall(m=1:fgrid%num_vars(1)-1,abs(fgrid%early(m,i,j)) < 1d-90)
+                    fgrid%early(m,i,j) = 0.d0
+                end forall
+                forall(m=1:fgrid%num_vars(1)-1,abs(fgrid%late(m,i,j)) < 1d-90)
+                    fgrid%late(m,i,j) = 0.d0
+                end forall
+                
+                ! interpolate in time:
+                qaug = (1.d0-tau)*fgrid%early(:,i,j) + tau*fgrid%late(:,i,j)
+                !write(6,*) '+++ tau, early, late: ',tau,fgrid%early(:,i,j),fgrid%late(:,i,j)
+                
+                ! Output the conserved quantities and topo value
+                !qeta(1,i,j) = qaug(1)  ! h
+                !qeta(2,i,j) = qaug(2)  ! hu
+                !qeta(3,i,j) = qaug(3)  ! hv
+                !qeta(4,i,j) = qaug(5)  ! eta
+                qeta(iaddqeta(1,i,j,fgrid%mx)) = qaug(1)
+                qeta(iaddqeta(2,i,j,fgrid%mx)) = qaug(2)
+                qeta(iaddqeta(3,i,j,fgrid%mx)) = qaug(3)
+                qeta(iaddqeta(4,i,j,fgrid%mx)) = qaug(5)
+
+            enddo
+        enddo
+
 
         ! Make the file names and open output files
         cfgno = '0000'
@@ -378,9 +442,10 @@ contains
             iframe1 = iframe1/10
             enddo
             
-        !write(6,*) '+++ grid_index, out_index: ',grid_index, out_index
-        !write(6,*) '+++ cfgno, cframeno: ',cfgno, cframeno
-        fg_filename = 'fgout' // cfgno // 'frame' // cframeno // '.txt'
+        write(6,*) '+++ grid_index, out_index: ',grid_index, out_index
+        write(6,*) '+++ cfgno, cframeno: ',cfgno, '    ', cframeno
+        !fg_filename = 'fgout' // cfgno // 'frame' // cframeno // '.txt'
+        fg_filename = 'fgout' // cfgno // '.q' // cframeno 
         print *, 'Writing to file ', fg_filename
 
         open(unit,file=fg_filename,status='unknown',form='formatted')
@@ -394,50 +459,63 @@ contains
         !write(6,*) '+++ fgout out_time = ',out_time
         !write(6,*) '+++ fgrid%num_vars: ',fgrid%num_vars(1),fgrid%num_vars(2)
         
-        ! Write out header
-        write(unit,header_format) out_time,fgrid%mx,fgrid%my, &
-             fgrid%x_low,fgrid%y_low, fgrid%x_hi,fgrid%y_hi, columns
+        ! Write out header in .q file:
+        !write(unit,header_format) out_time,fgrid%mx,fgrid%my, &
+        !     fgrid%x_low,fgrid%y_low, fgrid%x_hi,fgrid%y_hi, columns
 
-
-        ! Interpolate the grid in time, to the output time, using 
-        ! the solution in fgrid1 and fgrid2, which represent the 
-        ! solution on the fixed grid at the two nearest computational times
-        do j=1,fgrid%my
-            do i=1,fgrid%mx
-                ! Fetch times for interpolation, this is done per grid point 
-                ! since each grid point may come from a different source
-                t0 = fgrid%early(fgrid%num_vars(1),i,j)
-                tf = fgrid%late(fgrid%num_vars(1),i,j)
-                tau = (out_time - t0) / (tf - t0)
-                
-                ! Check for small numbers
-                forall(m=1:fgrid%num_vars(1)-1,abs(fgrid%early(m,i,j)) < 1d-90)
-                    fgrid%early(m,i,j) = 0.d0
-                end forall
-                forall(m=1:fgrid%num_vars(1)-1,abs(fgrid%late(m,i,j)) < 1d-90)
-                    fgrid%late(m,i,j) = 0.d0
-                end forall
-                
-                ! Output the conserved quantities and topo value
-                write(unit,data_format) interpolate_time(fgrid%num_vars(1), &
-                                                         fgrid%early(:,i,j), &
-                                                         fgrid%late(:,i,j), &
-                                                         tau)
-
+        write(unit,header_format) fgrid%fgno, 0, fgrid%mx,fgrid%my, &
+            fgrid%x_low,fgrid%y_low, fgrid%dx, fgrid%dy
+            
+        if (fgrid%output_format == 1) then
+            ! ascii output added to .q file:
+            do j=1,fgrid%my
+                do i=1,fgrid%mx
+                    write(unit, "(50e26.16)") &
+                         (qeta(iaddqeta(m,i,j,fgrid%mx)), m=1,4)
+                    !qeta(1,i,j),qeta(2,i,j), &
+                    !            qeta(3,i,j),qeta(4,i,j)
+                enddo
+                write(unit,*) ' '  ! blank line required between rows
             enddo
-        enddo
-
+        endif  
+        
         close(unit)
-        print "(a,i2,a,i2,a,e18.8)",' FGOUT: Fixed Grid  ',grid_index, &
-              '  frame ',out_index,' at time =',out_time
-
-        ! ==================== Output for arrival times============
-        ! Deprecated
-        if (out_flag == 1) then
-            write(6,*) '*** Unexpected out_flag == 1'
+        
+        if (fgrid%output_format == 3) then
+            ! binary output goes in .b file:
+            fg_filename = 'fgout' // cfgno // '.b' // cframeno 
+            write(6,*) '+++ fgout filename: ',fg_filename
+            open(unit=unit, file=fg_filename, status="unknown",    &
+                 access='stream')
+            write(unit) qeta
+            close(unit)
         endif
+        
+        deallocate(qeta)
+
+        ! time info .t file:
+        fg_filename = 'fgout' // cfgno // '.t' // cframeno 
+        write(6,*) '+++ fgout filename: ',fg_filename
+        open(unit=unit, file=fg_filename, status='unknown', form='formatted')
+        ! time, num_eqn+1, num_grids, num_aux, num_dim, num_ghost:
+        write(unit, t_file_format) out_time, 4, 1, 0, 2, 0
+        close(unit)
+        
+        print "(a,i2,a,i2,a,e18.8)",'fgout for grid #',grid_index, &
+              '  frame ',out_index,' at time =',out_time
       
+        ! Index into qeta for binary output
+        ! Note that this implicitly assumes that we are outputting only h, hu, hv
+        ! and will not output more (change num_eqn parameter above)
+        
     end subroutine fgout_write
+
+    pure integer function iaddqeta(m, i, j, mx)
+        implicit none
+        integer, intent(in) :: m, i, j, mx
+        iaddqeta = 1 + m - 1 + 4 * ((j - 1) * mx + i - 1)
+    end function iaddqeta
+              
     
     ! =========================================================================
     ! Utility functions for this module

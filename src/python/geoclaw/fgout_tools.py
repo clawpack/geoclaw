@@ -34,6 +34,7 @@ class FGoutGrid(object):
         self.tend_out = None
         self.nout = None
         self.fgno = None  # grid number
+        self.output_format = 'binary'  # 'ascii' or 'binary'
 
         # Other possible GeoClaw inputs:
         self.x = None
@@ -69,16 +70,21 @@ class FGoutGrid(object):
         self.tstart_out = float(fgout_input[0].split()[0])
         self.tend_out = float(fgout_input[1].split()[0])
         self.nout = int(fgout_input[2].split()[0])
-        self.point_style = point_style = int(fgout_input[6].split()[0])
+        self.point_style = point_style = int(fgout_input[3].split()[0])
+        output_format = int(fgout_input[4].split()[0])
+        if output_format == 1:
+            self.output_format = 'ascii'
+        elif output_format == 3:
+            self.output_format = 'binary'
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 2:
-            self.nx = nx = int(fgmax_input[7].split()[0])
-            self.ny = ny = int(fgmax_input[7].split()[1])
-            self.x1 = float(fgmax_input[8].split()[0])
-            self.y1 = float(fgmax_input[8].split()[1])
-            self.x2 = float(fgmax_input[9].split()[0])
-            self.y2 = float(fgmax_input[9].split()[1])
+            self.nx = nx = int(fgmax_input[5].split()[0])
+            self.ny = ny = int(fgmax_input[5].split()[1])
+            self.x1 = float(fgmax_input[6].split()[0])
+            self.y1 = float(fgmax_input[6].split()[1])
+            self.x2 = float(fgmax_input[7].split()[0])
+            self.y2 = float(fgmax_input[7].split()[1])
         else:
             raise NotImplementedError("fgout not implemented for point_style %i" \
                 % point_style)
@@ -89,8 +95,15 @@ class FGoutGrid(object):
         print("\n---------------------------------------------- ")
         point_style = self.point_style
         if point_style not in [2]:
-            raise NotImplementedError("make_fgout not implemented for point_style %i" \
+            raise NotImplementedError("fgout not implemented for point_style %i" \
                 % point_style)
+                
+        if self.output_format == 'ascii':
+            output_format = 1
+        elif self.output_format == 'binary':
+            output_format = 3
+        else:
+            raise NotImplementedError("fgout output_format must be ascii or binary")
 
         # write header, independent of point_style:
         #fid = open(self.input_file_name,'w')
@@ -101,6 +114,8 @@ class FGoutGrid(object):
         fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
         fid.write("%i %s              # point_style\n" \
                             % (self.point_style,12*" "))
+        fid.write("%i %s              # output_format\n" \
+                            % (output_format,12*" "))
 
         print('fgout grid %i has point_style = %i' % (self.fgno, point_style))
 

@@ -374,16 +374,13 @@ c     # and have not been written yet
 c          write(6,*) '+++ in tick, ioutfgstart,ioutfgend: ',
 c    &                ioutfgstart,ioutfgend
            do ioutfg=ioutfgstart,ioutfgend
-             toutfg=FGOUT_fgrids(ng)%start_time+(ioutfg-1)
+             toutfg=FGOUT_fgrids(ng)%start_time+ioutfg !(ioutfg-1)
      &                *FGOUT_fgrids(ng)%dt
              if (toutfg < tc0 * (1.d0 - 1d-13)) then
 c               # write out the solution for fixed grid ng
-c               # test if arrival times should be output
-                ioutflag = 0  ! deprecated
 c               write(6,*) '+++ tick call fgrid_out, ioutfg,toutfg: ',
 c    &                     ioutfg,toutfg
-                call fgout_write(ng,FGOUT_fgrids(ng),
-     &                           toutfg,ioutfg,ioutflag)
+                call fgout_write(ng,FGOUT_fgrids(ng),toutfg,ioutfg)
 
                 FGOUT_fgrids(ng)%last_output_time = toutfg
                 FGOUT_fgrids(ng)%last_output_index = 
