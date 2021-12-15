@@ -14,7 +14,8 @@ c
 
       use storm_module, only: landfall, display_landfall_time
       use fgmax_module, only: FG_num_fgrids, FG_fgrids, fgrid
-      use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids, fgout_write
+      use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids,
+     &                         fgout_write,fgout_grid
 
       implicit double precision (a-h,o-z)
 
@@ -26,6 +27,7 @@ c
       character(len=128) :: time_format
       real(kind=8) cpu_start,cpu_finish
       type(fgrid), pointer :: fg
+      type(fgout_grid), pointer :: fgout
 
 c
 c :::::::::::::::::::::::::::: TICK :::::::::::::::::::::::::::::
@@ -356,35 +358,34 @@ c     after all patches at finest level have been advanced.
       tc0 = tlevel(level)  ! current time on finest level present
       
       do ng=1,FGOUT_num_grids
-        if (tc0 > FGOUT_fgrids(ng)%start_time * (1.d0 - 1d-13)  .and. 
-     &     FGOUT_fgrids(ng)%last_output_index 
-     &     < FGOUT_fgrids(ng)%num_output) then
+        fgout => FGOUT_fgrids(ng)
+        if (tc0 > fgout%start_time * (1.d0 - 1d-13)  .and. 
+     &     fgout%last_output_index 
+     &     < fgout%num_output) then
 
-           if (FGOUT_fgrids(ng)%dt > 0.d0) then
-             ioutfgend= 1+max(0,nint((tc0 
-     &                    - FGOUT_fgrids(ng)%start_time) 
-     &                  / FGOUT_fgrids(ng)%dt))
+           if (fgout%dt > 0.d0) then
+             ioutfgend= 1+max(0,nint((tc0 - fgout%start_time) 
+     &                  / fgout%dt))
            else
              ioutfgend=1
            endif
-           ioutfgend = min(ioutfgend,FGOUT_fgrids(ng)%num_output)
-           ioutfgstart = FGOUT_fgrids(ng)%last_output_index + 1
+           ioutfgend = min(ioutfgend,fgout%num_output)
+           ioutfgstart = fgout%last_output_index + 1
 c     # write-out fgrid times that are less than tlevel, 
 c     # and have not been written yet
 c          write(6,*) '+++ in tick, ioutfgstart,ioutfgend: ',
 c    &                ioutfgstart,ioutfgend
            do ioutfg=ioutfgstart,ioutfgend
-             toutfg=FGOUT_fgrids(ng)%start_time+ioutfg !(ioutfg-1)
-     &                *FGOUT_fgrids(ng)%dt
+             toutfg=fgout%start_time+ioutfg !(ioutfg-1)
+     &                *fgout%dt
              if (toutfg < tc0 * (1.d0 - 1d-13)) then
 c               # write out the solution for fixed grid ng
 c               write(6,*) '+++ tick call fgrid_out, ioutfg,toutfg: ',
 c    &                     ioutfg,toutfg
-                call fgout_write(ng,FGOUT_fgrids(ng),toutfg,ioutfg)
+                call fgout_write(ng,fgout,toutfg,ioutfg)
 
-                FGOUT_fgrids(ng)%last_output_time = toutfg
-                FGOUT_fgrids(ng)%last_output_index = 
-     &                      FGOUT_fgrids(ng)%last_output_index + 1
+                fgout%last_output_time = toutfg
+                fgout%last_output_index = fgout%last_output_index + 1
              endif
            enddo
 
