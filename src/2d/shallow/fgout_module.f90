@@ -23,7 +23,7 @@ module fgout_module
 
     ! Fixed grid arrays and sizes
     integer :: FGOUT_num_grids
-    type(fgout_grid), allocatable :: FGOUT_fgrids(:)
+    type(fgout_grid), target, allocatable :: FGOUT_fgrids(:)
     real(kind=8) :: FGOUT_tcfmax
 
 contains
@@ -43,6 +43,7 @@ contains
         ! Local storage
         integer, parameter :: unit = 7
         integer :: i
+        type(fgout_grid), pointer :: fg
 
         if (.not.module_setup) then
 
@@ -71,68 +72,66 @@ contains
 
             ! Read in data for each fixed grid
             do i=1,FGOUT_num_grids
+                fg => FGOUT_fgrids(i)
                 ! Read in this grid's data
-                read(unit,*) FGOUT_fgrids(i)%fgno
-                read(unit,*) FGOUT_fgrids(i)%start_time
-                read(unit,*) FGOUT_fgrids(i)%end_time
-                read(unit,*) FGOUT_fgrids(i)%num_output
-                read(unit,*) FGOUT_fgrids(i)%point_style
-                read(unit,*) FGOUT_fgrids(i)%output_format
-                read(unit,*) FGOUT_fgrids(i)%mx, FGOUT_fgrids(i)%my
-                read(unit,*) FGOUT_fgrids(i)%x_low, FGOUT_fgrids(i)%y_low
-                read(unit,*) FGOUT_fgrids(i)%x_hi, FGOUT_fgrids(i)%y_hi
+                read(unit,*) fg%fgno
+                read(unit,*) fg%start_time
+                read(unit,*) fg%end_time
+                read(unit,*) fg%num_output
+                read(unit,*) fg%point_style
+                read(unit,*) fg%output_format
+                read(unit,*) fg%mx, fg%my
+                read(unit,*) fg%x_low, fg%y_low
+                read(unit,*) fg%x_hi, fg%y_hi
                 
                    
-                if (FGOUT_fgrids(i)%point_style .ne. 2) then
+                if (fg%point_style .ne. 2) then
                     print *, 'set_fgout: ERROR, unrecognized point_style = ',\
-                          FGOUT_fgrids(i)%point_style
+                          fg%point_style
                 endif
                     
                ! Setup data for this grid
                ! Set dtfg (the timestep length between outputs) for each grid
-               if (FGOUT_fgrids(i)%end_time <= FGOUT_fgrids(i)%start_time) then
-                   if (FGOUT_fgrids(i)%num_output > 1) then 
+               if (fg%end_time <= fg%start_time) then
+                   if (fg%num_output > 1) then 
                       print *,'set_fgout: ERROR for fixed grid', i
                       print *,'start_time <= end_time yet num_output > 1'
                       print *,'set end_time > start_time or set num_output = 1'
                       stop
                    else
-                       FGOUT_fgrids(i)%dt = 0.d0
+                       fg%dt = 0.d0
                    endif
                else
-                   if (FGOUT_fgrids(i)%num_output < 2) then
+                   if (fg%num_output < 2) then
                        print *,'set_fgout: ERROR for fixed grid', i
                        print *,'end_time > start_time, yet num_output = 1'
                        print *,'set num_output > 2'
                        stop
                    else
-                       FGOUT_fgrids(i)%dt = (FGOUT_fgrids(i)%end_time &
-                                          - FGOUT_fgrids(i)%start_time) &
-                                           / (FGOUT_fgrids(i)%num_output - 1)
+                       fg%dt = (fg%end_time  - fg%start_time) &
+                                           / (fg%num_output - 1)
                    endif
                 endif
 
                 ! Initialize last_output_time and index
-                FGOUT_fgrids(i)%last_output_time = FGOUT_fgrids(i)%start_time &
-                     - FGOUT_fgrids(i)%dt
-                FGOUT_fgrids(i)%last_output_index = -1  ! so first output is 0
+                fg%last_output_time = fg%start_time &
+                     - fg%dt
+                fg%last_output_index = -1  ! so first output is 0
 
                 ! Set spatial intervals dx and dy on each grid
-                if (FGOUT_fgrids(i)%mx > 1) then
-                   FGOUT_fgrids(i)%dx = (FGOUT_fgrids(i)%x_hi &
-                        - FGOUT_fgrids(i)%x_low) / (FGOUT_fgrids(i)%mx - 1)
-                else if (FGOUT_fgrids(i)%mx == 1) then
-                   FGOUT_fgrids(i)%dx = 0.d0
+                if (fg%mx > 1) then
+                   fg%dx = (fg%x_hi - fg%x_low) / (fg%mx - 1)
+                else if (fg%mx == 1) then
+                   fg%dx = 0.d0
                 else
                      print *,'set_fgout: ERROR for fixed grid', i
                      print *,'x grid points mx <= 0, set mx >= 1'
                 endif
 
-                if (FGOUT_fgrids(i)%my > 1) then
-                    FGOUT_fgrids(i)%dy = (FGOUT_fgrids(i)%y_hi &
-                         - FGOUT_fgrids(i)%y_low) / (FGOUT_fgrids(i)%my - 1)
-                else if (FGOUT_fgrids(i)%my == 1) then
-                    FGOUT_fgrids(i)%dy = 0.d0
+                if (fg%my > 1) then
+                    fg%dy = (fg%y_hi - fg%y_low) / (fg%my - 1)
+                else if (fg%my == 1) then
+                    fg%dy = 0.d0
                 else
                     print *,'set_fgout: ERROR for fixed grid', i
                     print *,'y grid points my <= 0, set my >= 1'
@@ -140,16 +139,14 @@ contains
            
                 ! set the number of variables stored for each grid
                 ! this should be (the number of variables you want to write out + 1)
-                FGOUT_fgrids(i)%num_vars(1) = 6
+                fg%num_vars(1) = 6
                 
                 ! Allocate new fixed grid data array
-                allocate(FGOUT_fgrids(i)%early(FGOUT_fgrids(i)%num_vars(1), &
-                         FGOUT_fgrids(i)%mx,FGOUT_fgrids(i)%my))
-                FGOUT_fgrids(i)%early = nan()
+                allocate(fg%early(fg%num_vars(1), fg%mx,fg%my))
+                fg%early = nan()
                 
-                allocate(FGOUT_fgrids(i)%late(FGOUT_fgrids(i)%num_vars(1), &
-                         FGOUT_fgrids(i)%mx,FGOUT_fgrids(i)%my))
-                FGOUT_fgrids(i)%late = nan()
+                allocate(fg%late(fg%num_vars(1), fg%mx,fg%my))
+                fg%late = nan()
                 
            enddo
            close(unit)
@@ -264,11 +261,11 @@ contains
                     ! Interpolate for all conserved quantities and bathymetry
                     forall (m=1:meqn)
                         fg_data(m,ifg,jfg) = interpolate([[q(m,ic1,jc1),q(m,ic1,jc2)], &
-                                                          [q(m,ic2,jc1),q(m,ic2,jc2)]], geometry)
+                                    [q(m,ic2,jc1),q(m,ic2,jc2)]], geometry)
                     end forall
                     
                     fg_data(bathy_index,ifg,jfg) = interpolate([[aux(1,ic1,jc1),aux(1,ic1,jc2)], &
-                                                                [aux(1,ic2,jc1),aux(1,ic2,jc2)]], geometry)
+                                [aux(1,ic2,jc1),aux(1,ic2,jc2)]], geometry)
 
                     
                     ! Interpolate surface eta, only use wet eta points near the shoreline
