@@ -29,7 +29,7 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
       use geoclaw_module
       use amr_module
       use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids, 
-     &                        FGOUT_tcfmax, fgout_interp
+     &                        FGOUT_tcfmax, fgout_interp, fgout_grid
       implicit double precision (a-h,o-z)
 
       external rpn2,rpt2
@@ -45,6 +45,7 @@ c      dimension work(mwork)
       logical :: debug = .false.
       logical :: dump = .false.
       logical, intent (in) :: actualstep
+      type(fgout_grid), pointer :: fgout
 c
       FGOUT_tcfmax = -rinfinity
       level = node(nestlevel,mptr)
@@ -121,27 +122,27 @@ c::::::::::::::::::::::::FGOUT DATA before step:::::::::::::::::::::::
 c     # fill in values at fixed grid points effected at time tc0
 !$OMP CRITICAL (FixedGrids)
       do ng=1,FGOUT_num_grids
-
-      if ( (FGOUT_fgrids(ng)%x_low < xlowmbc + mx*dx) .and.
-     &     (FGOUT_fgrids(ng)%x_hi  > xlowmbc) .and.
-     &     (FGOUT_fgrids(ng)%y_low < ylowmbc + my*dy) .and.
-     &     (FGOUT_fgrids(ng)%y_hi  > ylowmbc) .and.
-     &     (FGOUT_fgrids(ng)%last_output_index
-     &      < FGOUT_fgrids(ng)%num_output) .and.
-     &     (tcf >= FGOUT_fgrids(ng)%start_time * (1.d0 - 1d-13))) then
+      fgout => FGOUT_fgrids(ng)
+      if ( (fgout%x_low < xlowmbc + mx*dx) .and.
+     &     (fgout%x_hi  > xlowmbc) .and.
+     &     (fgout%y_low < ylowmbc + my*dy) .and.
+     &     (fgout%y_hi  > ylowmbc) .and.
+     &     (fgout%last_output_index
+     &      < fgout%num_output) .and.
+     &     (tcf >= fgout%start_time * (1.d0 - 1d-13))) then
          
-        !write(6,*) '+++ FGOUT_fgrids(ng)%last_output_time, tc0, tcf: '
-        !write(6,*) '+++ ', FGOUT_fgrids(ng)%last_output_time, tc0, tcf
+        !write(6,*) '+++ fgout%last_output_time, tc0, tcf: '
+        !write(6,*) '+++ ', fgout%last_output_time, tc0, tcf
 
-        if (FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt >= 
+        if (fgout%last_output_time + fgout%dt >= 
      &                                    tc0 * (1.d0 - 1d-13) .and.
-     &      FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt <=  
+     &      fgout%last_output_time + fgout%dt <=  
      &                                    tcf * (1.d0 + 1d-13)) then
 
 c        # fgout grid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
          write(6,*) '+++ fout_interp(1), tc0, level: ',tc0,level
-         call fgout_interp(1,FGOUT_fgrids(ng),tc0,q,nvar,mx,my,mbc,
+         call fgout_interp(1,fgout,tc0,q,nvar,mx,my,mbc,
      &                     dx,dy,xlowmbc,ylowmbc,maux,aux,0)
      
 c         # routine to spatially interpolate computational solution
@@ -235,18 +236,19 @@ c        # with source term:   use Godunov splitting
 c     ::::::::::::::::::::::::fgout data afterstep:::::::::::::::::::::::
 c     # fill in values at fixed grid points effected at time tcf
       do ng=1,FGOUT_num_grids
+       fgout => FGOUT_fgrids(ng)
      
-       if ((FGOUT_fgrids(ng)%x_low < xlowmbc + mx * dx) .and.
-     &    (FGOUT_fgrids(ng)%x_hi  > xlowmbc) .and.
-     &    (FGOUT_fgrids(ng)%y_low < ylowmbc + my * dy) .and.
-     &    (FGOUT_fgrids(ng)%y_hi  > ylowmbc) .and.
-     &    (FGOUT_fgrids(ng)%last_output_index 
-     &      < FGOUT_fgrids(ng)%num_output) .and.
-     &    (tcf >= FGOUT_fgrids(ng)%start_time * (1.d0 - 1d-13))) then
+       if ((fgout%x_low < xlowmbc + mx * dx) .and.
+     &    (fgout%x_hi  > xlowmbc) .and.
+     &    (fgout%y_low < ylowmbc + my * dy) .and.
+     &    (fgout%y_hi  > ylowmbc) .and.
+     &    (fgout%last_output_index 
+     &      < fgout%num_output) .and.
+     &    (tcf >= fgout%start_time * (1.d0 - 1d-13))) then
       
-        if (FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt >= 
+        if (fgout%last_output_time + fgout%dt >= 
      &                                    tc0 * (1.d0 - 1d-13) .and.
-     &      FGOUT_fgrids(ng)%last_output_time + FGOUT_fgrids(ng)%dt <=  
+     &      fgout%last_output_time + fgout%dt <=  
      &                                    tcf * (1.d0 + 1d-13)) then
 
 c        # fgout grid ng has an output time within [tc0,tcf] interval
@@ -254,7 +256,7 @@ c        # and it overlaps this computational grid spatially
 C         i0=i0fg(ng) !# index into the ng grid in the work array
 
         write(6,*) '+++ fgout_interp(2), tcf, level: ',tcf,level
-        call fgout_interp(2,FGOUT_fgrids(ng),tcf,q,nvar,mx,my,mbc,dx,dy,
+        call fgout_interp(2,fgout,tcf,q,nvar,mx,my,mbc,dx,dy,
      &                    xlowmbc,ylowmbc,maux,aux,0)
 
 c            # routine to interpolate solution
