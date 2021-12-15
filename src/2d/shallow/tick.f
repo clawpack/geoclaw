@@ -362,19 +362,17 @@ c     after all patches at finest level have been advanced.
         fgout => FGOUT_fgrids(ng)
         ttol = 1.d-13  ! tolerance on output time (??)
         
-        do i=1,fgout%num_output
-            if (fgout%output_frames(i) == -1) then
+        do ioutfg=1,fgout%num_output
+            if (fgout%output_frames(ioutfg) == -1) then
                 ! this time not yet written out
-                if (fgout%output_times(i) < tc0+ttol) then
-                     toutfg = fgout%output_times(i)
-                     ioutfg = fgout%last_output_index + 1
+                if (fgout%output_times(ioutfg) < tc0+ttol) then
+                     toutfg = fgout%output_times(ioutfg)
                      write(6,*) '+++ tick call fgrid_out, frame, t: ',
      &                          ioutfg,toutfg
                      call fgout_write(ng,fgout,toutfg,ioutfg)
-                     fgout%output_frames(i) = ioutfg
+                     fgout%output_frames(ioutfg) = ioutfg
                      fgout%last_output_time = toutfg
-                     fgout%last_output_index = 
-     &                      fgout%last_output_index + 1
+                     fgout%last_output_index = ioutfg
                 endif
             endif
         enddo

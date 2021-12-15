@@ -133,7 +133,7 @@ contains
 
                 ! Initialize last_output_time and index
                 fg%last_output_time = fg%start_time  - fg%dt
-                fg%last_output_index = -1  ! so first output is 0
+                fg%last_output_index = 0
                 ! NEED TO FIX FOR RESTARTS
 
                 ! Set spatial intervals dx and dy on each grid
