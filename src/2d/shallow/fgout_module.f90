@@ -16,6 +16,8 @@ module fgout_module
         ! Time Tracking and output types
         integer :: num_output,last_output_index
         real(kind=8) :: last_output_time,start_time,end_time,dt
+        integer, allocatable :: output_frames(:)
+        real(kind=8), allocatable :: output_times(:)
     end type fgout_grid    
 
 
@@ -33,7 +35,7 @@ contains
     ! appropriate data structures
     subroutine set_fgout(fname)
 
-        use amr_module, only: parmunit
+        use amr_module, only: parmunit, tstart_thisrun
 
         implicit none
         
@@ -42,8 +44,11 @@ contains
         
         ! Local storage
         integer, parameter :: unit = 7
-        integer :: i
+        integer :: i,k
         type(fgout_grid), pointer :: fg
+        real(kind=8) :: ttol
+        
+        ttol = 1.d-13  ! tolerance for output times?
 
         if (.not.module_setup) then
 
@@ -84,6 +89,8 @@ contains
                 read(unit,*) fg%x_low, fg%y_low
                 read(unit,*) fg%x_hi, fg%y_hi
                 
+                allocate(fg%output_times(fg%num_output))
+                allocate(fg%output_frames(fg%num_output))
                    
                 if (fg%point_style .ne. 2) then
                     print *, 'set_fgout: ERROR, unrecognized point_style = ',\
@@ -110,13 +117,24 @@ contains
                    else
                        fg%dt = (fg%end_time  - fg%start_time) &
                                            / (fg%num_output - 1)
+                       do k=1,fg%num_output
+                           fg%output_times(k) = fg%start_time + (k-1)*fg%dt
+                           if (fg%output_times(k) < tstart_thisrun - ttol) then
+                                ! will not output this time in this run
+                                ! (might have already be done when restarting)
+                                fg%output_frames(k) = -2
+                           else
+                                ! will be reset to frameno when this is written
+                                fg%output_frames(k) = -1
+                           endif
+                       enddo
                    endif
                 endif
 
                 ! Initialize last_output_time and index
-                fg%last_output_time = fg%start_time &
-                     - fg%dt
+                fg%last_output_time = fg%start_time  - fg%dt
                 fg%last_output_index = -1  ! so first output is 0
+                ! NEED TO FIX FOR RESTARTS
 
                 ! Set spatial intervals dx and dy on each grid
                 if (fg%mx > 1) then

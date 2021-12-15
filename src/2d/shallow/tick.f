@@ -28,6 +28,7 @@ c
       real(kind=8) cpu_start,cpu_finish
       type(fgrid), pointer :: fg
       type(fgout_grid), pointer :: fgout
+      real(kind=8) :: ttol
 
 c
 c :::::::::::::::::::::::::::: TICK :::::::::::::::::::::::::::::
@@ -351,7 +352,7 @@ c    &               ' tlevel = ',tlevel(1:level)
 c         When we reach here, we are done with grid patches at 
 c         the finest level with grids present at this time
 
-c     ---- fixed grid output ----
+c     ---- fgout output ----
 c     This used to be done in stepgrid.f, but only needs to be done
 c     after all patches at finest level have been advanced.
 
@@ -359,39 +360,26 @@ c     after all patches at finest level have been advanced.
       
       do ng=1,FGOUT_num_grids
         fgout => FGOUT_fgrids(ng)
-        if (tc0 > fgout%start_time * (1.d0 - 1d-13)  .and. 
-     &     fgout%last_output_index 
-     &     < fgout%num_output) then
-
-           if (fgout%dt > 0.d0) then
-             ioutfgend= 1+max(0,nint((tc0 - fgout%start_time) 
-     &                  / fgout%dt))
-           else
-             ioutfgend=1
-           endif
-           ioutfgend = min(ioutfgend,fgout%num_output)
-           ioutfgstart = fgout%last_output_index + 1
-c     # write-out fgrid times that are less than tlevel, 
-c     # and have not been written yet
-c          write(6,*) '+++ in tick, ioutfgstart,ioutfgend: ',
-c    &                ioutfgstart,ioutfgend
-           do ioutfg=ioutfgstart,ioutfgend
-             toutfg=fgout%start_time+ioutfg !(ioutfg-1)
-     &                *fgout%dt
-             if (toutfg < tc0 * (1.d0 - 1d-13)) then
-c               # write out the solution for fixed grid ng
-c               write(6,*) '+++ tick call fgrid_out, ioutfg,toutfg: ',
-c    &                     ioutfg,toutfg
-                call fgout_write(ng,fgout,toutfg,ioutfg)
-
-                fgout%last_output_time = toutfg
-                fgout%last_output_index = fgout%last_output_index + 1
-             endif
-           enddo
-
-        endif
+        ttol = 1.d-13  ! tolerance on output time (??)
+        
+        do i=1,fgout%num_output
+            if (fgout%output_frames(i) == -1) then
+                ! this time not yet written out
+                if (fgout%output_times(i) < tc0+ttol) then
+                     toutfg = fgout%output_times(i)
+                     ioutfg = fgout%last_output_index + 1
+                     write(6,*) '+++ tick call fgrid_out, frame, t: ',
+     &                          ioutfg,toutfg
+                     call fgout_write(ng,fgout,toutfg,ioutfg)
+                     fgout%output_frames(i) = ioutfg
+                     fgout%last_output_time = toutfg
+                     fgout%last_output_index = 
+     &                      fgout%last_output_index + 1
+                endif
+            endif
+        enddo
       enddo
-c     ---- end fixed grid output ----
+c     ---- end fgout output ----
 c
  105      if (level .eq. 1) go to 110
               if (ntogo(level) .gt. 0) then
