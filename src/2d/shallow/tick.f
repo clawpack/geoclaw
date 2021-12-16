@@ -15,7 +15,7 @@ c
       use storm_module, only: landfall, display_landfall_time
       use fgmax_module, only: FG_num_fgrids, FG_fgrids, fgrid
       use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids,
-     &                         fgout_write,fgout_grid
+     &                         fgout_write,fgout_grid, FGOUT_ttol
 
       implicit double precision (a-h,o-z)
 
@@ -28,7 +28,6 @@ c
       real(kind=8) cpu_start,cpu_finish
       type(fgrid), pointer :: fg
       type(fgout_grid), pointer :: fgout
-      real(kind=8) :: ttol
 
 c
 c :::::::::::::::::::::::::::: TICK :::::::::::::::::::::::::::::
@@ -357,15 +356,16 @@ c     This used to be done in stepgrid.f, but only needs to be done
 c     after all patches at finest level have been advanced.
 
       tc0 = tlevel(level)  ! current time on finest level present
+      write(6,*) '+++ tick: tc0 = ',tc0
       
       do ng=1,FGOUT_num_grids
         fgout => FGOUT_fgrids(ng)
-        ttol = 1.d-13  ! tolerance on output time (??)
         
         do ioutfg=1,fgout%num_output
             if (fgout%output_frames(ioutfg) == -1) then
                 ! this time not yet written out
-                if (fgout%output_times(ioutfg) < tc0+ttol) then
+                if (fgout%output_times(ioutfg) < 
+     &                 tc0*(1.d0+FGOUT_ttol)) then
                      toutfg = fgout%output_times(ioutfg)
                      write(6,*) '+++ tick call fgrid_out, frame, t: ',
      &                          ioutfg,toutfg
@@ -373,6 +373,7 @@ c     after all patches at finest level have been advanced.
                      fgout%output_frames(ioutfg) = ioutfg
                      fgout%last_output_time = toutfg
                      fgout%last_output_index = ioutfg
+                     fgout%next_output_index = ioutfg+1
                 endif
             endif
         enddo

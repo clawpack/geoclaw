@@ -14,8 +14,9 @@ module fgout_module
         real(kind=8) :: dx,dy,x_low,x_hi,y_low,y_hi
         
         ! Time Tracking and output types
-        integer :: num_output,last_output_index
+        integer :: num_output,last_output_index,next_output_index
         real(kind=8) :: last_output_time,start_time,end_time,dt
+
         integer, allocatable :: output_frames(:)
         real(kind=8), allocatable :: output_times(:)
     end type fgout_grid    
@@ -27,28 +28,31 @@ module fgout_module
     integer :: FGOUT_num_grids
     type(fgout_grid), target, allocatable :: FGOUT_fgrids(:)
     real(kind=8) :: FGOUT_tcfmax
+    real(kind=8), parameter :: FGOUT_ttol = 1.d-13 ! tolerance for times
+
 
 contains
                         
     
     ! Setup routine that reads in the fixed grids data file and sets up the
     ! appropriate data structures
-    subroutine set_fgout(fname)
+    
+    subroutine set_fgout(rest,fname)
 
         use amr_module, only: parmunit, tstart_thisrun
 
         implicit none
         
         ! Subroutine arguments
+        logical :: rest  ! restart?
         character(len=*), optional, intent(in) :: fname
         
         ! Local storage
         integer, parameter :: unit = 7
         integer :: i,k
         type(fgout_grid), pointer :: fg
-        real(kind=8) :: ttol
+        real(kind=8) :: ts
         
-        ttol = 1.d-13  ! tolerance for output times?
 
         if (.not.module_setup) then
 
@@ -91,6 +95,12 @@ contains
                 
                 allocate(fg%output_times(fg%num_output))
                 allocate(fg%output_frames(fg%num_output))
+                
+                ! Initialize last_output_time and index
+                ! (might be reset below in case of a restart)
+                fg%last_output_time = fg%start_time  - fg%dt
+                fg%last_output_index = 0  ! so first output is frame 1
+                fg%next_output_index = 1
                    
                 if (fg%point_style .ne. 2) then
                     print *, 'set_fgout: ERROR, unrecognized point_style = ',\
@@ -119,10 +129,21 @@ contains
                                            / (fg%num_output - 1)
                        do k=1,fg%num_output
                            fg%output_times(k) = fg%start_time + (k-1)*fg%dt
-                           if (fg%output_times(k) < tstart_thisrun - ttol) then
+                           if (rest) then
+                               ! don't write initial time or earlier
+                               ts = tstart_thisrun*(1+FGOUT_ttol)
+                           else
+                               ! do write initial time
+                               ts = tstart_thisrun*(1-FGOUT_ttol)
+                           endif
+                               
+                           if (fg%output_times(k) < ts) then
                                 ! will not output this time in this run
                                 ! (might have already be done when restarting)
                                 fg%output_frames(k) = -2
+                                fg%last_output_time = tstart_thisrun
+                                fg%last_output_index = k
+                                fg%next_output_index = k+1
                            else
                                 ! will be reset to frameno when this is written
                                 fg%output_frames(k) = -1
@@ -131,10 +152,7 @@ contains
                    endif
                 endif
 
-                ! Initialize last_output_time and index
-                fg%last_output_time = fg%start_time  - fg%dt
-                fg%last_output_index = 0
-                ! NEED TO FIX FOR RESTARTS
+
 
                 ! Set spatial intervals dx and dy on each grid
                 if (fg%mx > 1) then
