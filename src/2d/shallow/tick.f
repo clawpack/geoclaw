@@ -356,7 +356,7 @@ c     This used to be done in stepgrid.f, but only needs to be done
 c     after all patches at finest level have been advanced.
 
       tc0 = tlevel(level)  ! current time on finest level present
-      write(6,*) '+++ tick: tc0 = ',tc0
+      !write(6,*) '+++ tick: tc0 = ',tc0
       
       do ng=1,FGOUT_num_grids
         fgout => FGOUT_fgrids(ng)
@@ -367,12 +367,10 @@ c     after all patches at finest level have been advanced.
                 if (fgout%output_times(ioutfg) < 
      &                 tc0*(1.d0+FGOUT_ttol)) then
                      toutfg = fgout%output_times(ioutfg)
-                     write(6,*) '+++ tick call fgrid_out, frame, t: ',
-     &                          ioutfg,toutfg
+c                     write(6,*) '+++ tick call fgrid_out, frame, t: ',
+c     &                          ioutfg,toutfg
                      call fgout_write(ng,fgout,toutfg,ioutfg)
                      fgout%output_frames(ioutfg) = ioutfg
-                     fgout%last_output_time = toutfg
-                     fgout%last_output_index = ioutfg
                      fgout%next_output_index = ioutfg+1
                 endif
             endif

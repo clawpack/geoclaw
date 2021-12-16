@@ -14,8 +14,8 @@ module fgout_module
         real(kind=8) :: dx,dy,x_low,x_hi,y_low,y_hi
         
         ! Time Tracking and output types
-        integer :: num_output,last_output_index,next_output_index
-        real(kind=8) :: last_output_time,start_time,end_time,dt
+        integer :: num_output,next_output_index
+        real(kind=8) :: start_time,end_time,dt
 
         integer, allocatable :: output_frames(:)
         real(kind=8), allocatable :: output_times(:)
@@ -96,10 +96,8 @@ contains
                 allocate(fg%output_times(fg%num_output))
                 allocate(fg%output_frames(fg%num_output))
                 
-                ! Initialize last_output_time and index
+                ! Initialize next_output_index
                 ! (might be reset below in case of a restart)
-                fg%last_output_time = fg%start_time  - fg%dt
-                fg%last_output_index = 0  ! so first output is frame 1
                 fg%next_output_index = 1
                    
                 if (fg%point_style .ne. 2) then
@@ -141,8 +139,6 @@ contains
                                 ! will not output this time in this run
                                 ! (might have already be done when restarting)
                                 fg%output_frames(k) = -2
-                                fg%last_output_time = tstart_thisrun
-                                fg%last_output_index = k
                                 fg%next_output_index = k+1
                            else
                                 ! will be reset to frameno when this is written
@@ -470,11 +466,7 @@ contains
             iframe1 = iframe1/10
             enddo
             
-        write(6,*) '+++ grid_index, out_index: ',grid_index, out_index
-        write(6,*) '+++ cfgno, cframeno: ',cfgno, '    ', cframeno
-        !fg_filename = 'fgout' // cfgno // 'frame' // cframeno // '.txt'
         fg_filename = 'fgout' // cfgno // '.q' // cframeno 
-        print *, 'Writing to file ', fg_filename
 
         open(unit,file=fg_filename,status='unknown',form='formatted')
 
@@ -510,7 +502,6 @@ contains
         if (fgrid%output_format == 3) then
             ! binary output goes in .b file:
             fg_filename = 'fgout' // cfgno // '.b' // cframeno 
-            write(6,*) '+++ fgout filename: ',fg_filename
             open(unit=unit, file=fg_filename, status="unknown",    &
                  access='stream')
             write(unit) qeta
@@ -521,13 +512,12 @@ contains
 
         ! time info .t file:
         fg_filename = 'fgout' // cfgno // '.t' // cframeno 
-        write(6,*) '+++ fgout filename: ',fg_filename
         open(unit=unit, file=fg_filename, status='unknown', form='formatted')
         ! time, num_eqn+1, num_grids, num_aux, num_dim, num_ghost:
         write(unit, t_file_format) out_time, 4, 1, 0, 2, 0
         close(unit)
         
-        print "(a,i2,a,i2,a,e18.8)",'fgout for grid #',grid_index, &
+        print "(a,i2,a,i2,a,e18.8)",'Writing fgout grid #',grid_index, &
               '  frame ',out_index,' at time =',out_time
       
         ! Index into qeta for binary output
