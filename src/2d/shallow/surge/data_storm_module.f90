@@ -90,7 +90,6 @@ contains
             y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
 
             ! allocate arrays in storm object
-            allocate(storm%wind_speed(mx, my, mt))
             allocate(storm%pressure(mx, my, mt))
             allocate(storm%wind_u(mx, my, mt))
             allocate(storm%wind_v(mx, my, mt))
@@ -351,11 +350,19 @@ contains
             do i=1-mbc, mx+mbc
                 x = xlower + (i-0.5d0) * dx
 !                printt *, x,xΩ y, u_value
+!                if (x < minval(storm%longitude)) then
+!                    print *,  'x is outside', x
+!                end if
                 call interp_array_data(storm, x, y, wind_tu, u_value)
                 aux(wind_index, i, j) = u_value
                 call interp_array_data(storm, x, y, wind_tv, v_value)
                 aux(wind_index + 1, i, j) = v_value
                 call interp_array_data(storm, x, y, pressure_t, p_value)
+!                print *, p_value
+!                if (p_value == 0.0) then
+!                    p_value = 101300.d0
+!                end if
+!                print *, p_value
                 aux(pressure_index, i, j) = p_value
             end do
         end do
@@ -413,6 +420,7 @@ contains
                           storm%pressure(:,:,i - 1)
         end if
 
+!    print *, 'min p', minval(pressure_t), 'max p', maxval(pressure_t)
     end subroutine get_storm_time
     ! ==========================================================================
     ! interp_array_data() Obtains wind and pressure data for each patch
@@ -435,31 +443,76 @@ contains
         ! Get the data resolution
         storm_dx = storm%longitude(2) - storm%longitude(1)
         storm_dy = storm%latitude(2) - storm%latitude(1)
+!        print *, 'failing at ', x, y
+        ! Duplicate the boundary at the bottom corner
+        if (x < minval(storm%longitude) .and. y < maxval(storm%latitude)) then
+            value = interp_array(1, 1)
+        ! Duplicate the boundary at the top corner
+        elseif (x > maxval(storm%longitude) .and. y > maxval(storm%latitude)) then
+            value = interp_array(storm%mx, storm%my)
+        ! if x is to the west of the boundary but y is inside
+        elseif (x < minval(storm%longitude)) then
+            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            value = interp_array (xidx_low, yidx_low)
+        ! if x is to the east of the boundary but y is inside
+        elseif (x > maxval(storm%longitude)) then
+            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            value = interp_array(xidx_low, yidx_low)
+        ! if y is south of the boundary but x is inside
+        elseif (y < minval(storm%latitude)) then
+            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            value = interp_array(xidx_low, yidx_low)
+        ! if y is north of the boundary but x is inside
+        elseif (y > maxval(storm%latitude)) then
+            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            value = interp_array(xidx_low, yidx_low)
+        ! x and y both inside boundary
+        else
+!            print *, 'huh', x, y
+            call find_nearest(x - storm_dx, y - storm_dy, llon, llat, storm, xidx_low, yidx_low)
+            call find_nearest(x + storm_dx, y + storm_dy, ulon, ulat, storm, xidx_high, yidx_high)
+            ! Find the values at the corners
+            q11 = interp_array(xidx_low, yidx_low)
+            q12 = interp_array(xidx_low, yidx_high)
+            q21 = interp_array(xidx_high, yidx_low)
+            q22 = interp_array(xidx_high, yidx_high)
 
-        ! Get the nearest lat/lon values to use for interpolation box
-        call find_nearest(x - storm_dx, y - storm_dy, llon, llat, storm, xidx_low, yidx_low)
-        call find_nearest(x + storm_dx, y + storm_dy, ulon, ulat, storm, xidx_high, yidx_high)
-
-        ! Test to make sure upper and lower corners aren't the same
-        if (xidx_low == xidx_high) then
-            xidx_high = xidx_low + 1
-            ulon = storm%longitude(xidx_high)
-        elseif (yidx_low == yidx_high) then
-            yidx_high = yidx_low + 1
-            ulat = storm%latitude(yidx_high)
+            ! Calculate the value at the center of the box using bilinear interpolation
+            value = (q11 * (ulon - x) * (ulat -y) + &
+                     q21 * (x - llon) * (ulat - y) + &
+                     q12 * (ulon - x) * (y - llat) + &
+                     q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
         end if
 
-        ! Find the values at the corners
-        q11 = interp_array(xidx_low, yidx_low)
-        q12 = interp_array(xidx_low, yidx_high)
-        q21 = interp_array(xidx_high, yidx_low)
-        q22 = interp_array(xidx_high, yidx_high)
+!        print *, x, y, value
+!        ! Test to make sure upper and lower corners aren't the same
+!        if (xidx_low == xidx_high .and. xidx_low == 1) then
+!!            print *, 'bottom boundary', storm%longitude(xidx_low)
+!            xidx_high = xidx_low + 1
+!            ulon = storm%longitude(xidx_high)
+!        elseif (xidx_low == xidx_high .and. xidx_low == storm%mx) then
+!            xidx_low = xidx_low - 1
+!            llon = storm%longitude(xidx_low)
+!        endif
+!        if (yidx_low == yidx_high .and. yidx_low /= storm%my) then
+!            yidx_high = yidx_low + 1
+!            ulat = storm%latitude(yidx_high)
+!        elseif (yidx_low == yidx_high .and. yidx_low == storm%my) then
+!            yidx_low = yidx_low - 1
+!            llat = storm%latitude(yidx_low)
+!        end if
 
-        ! Calculate the value at the center of the box using bilinear interpolation
-        value = (q11 * (ulon - x) * (ulat -y) + &
-                 q21 * (x - llon) * (ulat - y) + &
-                 q12 * (ulon - x) * (y - llat) + &
-                 q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
+
+!     if (x < minval(storm%longitude) .and. y < minval(storm%latitude)) then
+!          print *, 'initial value with bi interp', value, x, y
+!            value = q11
+!         print *, 'ghost cell bottom', value
+!    elseif (x > maxval(storm%longitude) .and. y > maxval(storm%latitude)) then
+!          print *, 'initial value with bi interp', value, x,y
+!
+!        value = q22
+!         print *, 'ghost cell top', value
+!    end if
     end subroutine interp_array_data
 
     ! ==========================================================================
