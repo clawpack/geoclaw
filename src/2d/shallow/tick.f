@@ -369,7 +369,7 @@ c     after all patches at finest level have been advanced.
                      toutfg = fgout%output_times(ioutfg)
 c                     write(6,*) '+++ tick call fgrid_out, frame, t: ',
 c     &                          ioutfg,toutfg
-                     call fgout_write(ng,fgout,toutfg,ioutfg)
+                     call fgout_write(fgout,toutfg,ioutfg)
                      fgout%output_frames(ioutfg) = ioutfg
                      fgout%next_output_index = ioutfg+1
                 endif

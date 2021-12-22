@@ -368,14 +368,14 @@ contains
     !
     ! files now have the same format as frames produced by outval
     !=======================================================================
-    subroutine fgout_write(grid_index,fgrid,out_time,out_index)
+    subroutine fgout_write(fgrid,out_time,out_index)
 
         implicit none
         
         ! Subroutine arguments
         type(fgout_grid), intent(inout) :: fgrid
         real(kind=8), intent(in) :: out_time
-        integer, intent(in) :: grid_index,out_index
+        integer, intent(in) :: out_index
               
         ! I/O
         integer, parameter :: unit = 95
@@ -449,7 +449,7 @@ contains
 
         ! Make the file names and open output files
         cfgno = '0000'
-        ifg = grid_index
+        ifg = fgrid%fgno
         ifg1 = ifg
         do ipos=4,1,-1
             idigit = mod(ifg1,10)
@@ -517,7 +517,7 @@ contains
         write(unit, t_file_format) out_time, 4, 1, 0, 2, 0
         close(unit)
         
-        print "(a,i2,a,i2,a,e18.8)",'Writing fgout grid #',grid_index, &
+        print "(a,i2,a,i2,a,e18.8)",'Writing fgout grid #',fgrid%fgno, &
               '  frame ',out_index,' at time =',out_time
       
         ! Index into qeta for binary output
