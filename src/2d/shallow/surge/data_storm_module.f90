@@ -39,6 +39,9 @@ module data_storm_module
         ! Time steps from wind/pressure files in seconds
         integer, allocatable :: time(:)
 
+        ! eye location based on gradient of velocity field in lon/lat
+        real(kind=8), allocatable :: eye_loc(:,:)
+
     end type data_storm_type
 
     integer, private :: last_storm_index
@@ -46,6 +49,8 @@ module data_storm_module
     ! Time tracking tolerance allowance - allows for the beginning of the storm
     ! track to be close to but not equal the start time of the simulation
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
+    real(kind=8), parameter :: RAMP_WIDTH = 100.0d3
+    real(kind=8), parameter :: STORM_RADIUS = 300000.0d3
 
 contains
 
@@ -88,6 +93,7 @@ contains
             ! Get the dimension names and sizes from the file
             call get_dim_info(nc_fid, num_dims, x_dim_id, x_dim_name, mx, &
             y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
+            print *, 'mx', mx, 'my', my, 'mt', mt
 
             ! allocate arrays in storm object
             allocate(storm%pressure(mx, my, mt))
@@ -96,6 +102,7 @@ contains
             allocate(storm%longitude(mx))
             allocate(storm%latitude(my))
             allocate(storm%time(mt))
+            allocate(storm%eye_loc(2,mt))
 
             ! Set up lat/lon lengths in storm object for use in linear interpolation of time
             storm%mx = mx
@@ -103,11 +110,12 @@ contains
 
             ! Number of time steps in data
             storm%num_casts = mt
-
+            print *, 'storm mx is ' , storm%mx
             ! Fill out variable data/info
             do n = 1, nvars
                 ! read file for one variable and parse the data in storm object
                 call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
+!                print *, var_name, n
                 if ('PRESSURE' == Upper(var_name)) then
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
@@ -126,6 +134,9 @@ contains
                 elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == Upper(var_name))) then
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
+                elseif(ANY((/'EYE_LOCATION', 'EYE         ', 'LOCATION    ', 'EYE_LOC     '/) == Upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%eye_loc))
                 end if
             end do
         ! Close file to stop corrupting the netcdf files
@@ -153,7 +164,7 @@ contains
 
             module_setup = .true.
         end if
-
+        print *, 'reading the data', shape(storm%longitude)
     end subroutine set_storm
 
 
@@ -336,34 +347,30 @@ contains
         ! Local storage
         real(kind=8) :: u_value, v_value, p_value
         integer :: i, j
-        real(kind=8) :: x, y
+        real(kind=8) :: x, y, sloc(2), r
 
         ! wind and pressure arrays for current time step
         real(kind=8) :: wind_tu(storm%mx,storm%my), wind_tv(storm%mx, storm%my), pressure_t(storm%mx,storm%my)
 
         ! get the wind and pressure arrays for the current timestep
-        call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
-
+        call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, sloc, mx, my)
+!        print *, storm%wind_u
         ! Loop over every point in the patch and fill in the data
         do j=1-mbc, my+mbc
             y = ylower + (j-0.5d0) * dy
             do i=1-mbc, mx+mbc
                 x = xlower + (i-0.5d0) * dx
-!                printt *, x,xΩ y, u_value
-!                if (x < minval(storm%longitude)) then
-!                    print *,  'x is outside', x
-!                end if
+                call calc_r_radius(x, y, sloc, r)
+!                print *, sloc, r
                 call interp_array_data(storm, x, y, wind_tu, u_value)
                 aux(wind_index, i, j) = u_value
+!                print*, wind_tu
                 call interp_array_data(storm, x, y, wind_tv, v_value)
                 aux(wind_index + 1, i, j) = v_value
                 call interp_array_data(storm, x, y, pressure_t, p_value)
-!                print *, p_value
-!                if (p_value == 0.0) then
-!                    p_value = 101300.d0
-!                end if
-!                print *, p_value
                 aux(pressure_index, i, j) = p_value
+                call post_process_data(maux, mbc, mx, my, i, j, r, STORM_RADIUS, &
+                                        aux, wind_index, pressure_index, storm)
             end do
         end do
 
@@ -374,14 +381,14 @@ contains
     ! get_storm_time()
     ! Calculates the wind and pressure fields for the current time step
     ! ==========================================================================
-    subroutine get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
+    subroutine get_storm_time(storm, t, wind_tu, wind_tv,  pressure_t, sloc, mx, my)
         implicit none
         ! Subroutine IO
         type(data_storm_type), intent(in) :: storm
         integer, intent(in) :: mx, my
         real(kind=8), intent(in) :: t
         real(kind=8), intent(inout) :: wind_tu(storm%mx,storm%my), wind_tv(storm%mx, storm%my),pressure_t(storm%mx,storm%my)
-
+        real(kind=8), intent(out) :: sloc(2)
         ! Local storage
         integer :: i, j, k, mx_orig, my_orig
         real(kind=8) :: tn, tnm, weight
@@ -405,10 +412,12 @@ contains
         endif
         if (i == storm%num_casts + 1) then
             i = i -1
+            sloc = storm%eye_loc(:,i)
             wind_tu = storm%wind_u(:,:,i)
             wind_tv = storm%wind_v(:,:,i)
             pressure_t = storm%pressure(:,:,i)
         else
+            sloc = storm%eye_loc(:,i)
             tn = storm%time(i)
             tnm = storm%time(i - 1)
             weight = (t - tnm) / (tn - tnm)
@@ -484,36 +493,51 @@ contains
                      q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
         end if
 
-!        print *, x, y, value
-!        ! Test to make sure upper and lower corners aren't the same
-!        if (xidx_low == xidx_high .and. xidx_low == 1) then
-!!            print *, 'bottom boundary', storm%longitude(xidx_low)
-!            xidx_high = xidx_low + 1
-!            ulon = storm%longitude(xidx_high)
-!        elseif (xidx_low == xidx_high .and. xidx_low == storm%mx) then
-!            xidx_low = xidx_low - 1
-!            llon = storm%longitude(xidx_low)
-!        endif
-!        if (yidx_low == yidx_high .and. yidx_low /= storm%my) then
-!            yidx_high = yidx_low + 1
-!            ulat = storm%latitude(yidx_high)
-!        elseif (yidx_low == yidx_high .and. yidx_low == storm%my) then
-!            yidx_low = yidx_low - 1
-!            llat = storm%latitude(yidx_low)
-!        end if
-
-
-!     if (x < minval(storm%longitude) .and. y < minval(storm%latitude)) then
-!          print *, 'initial value with bi interp', value, x, y
-!            value = q11
-!         print *, 'ghost cell bottom', value
-!    elseif (x > maxval(storm%longitude) .and. y > maxval(storm%latitude)) then
-!          print *, 'initial value with bi interp', value, x,y
-!
-!        value = q22
-!         print *, 'ghost cell top', value
-!    end if
     end subroutine interp_array_data
+
+
+    pure subroutine post_process_data(maux, mbc, mx, my, i, j, r, STORM_RADIUS, &
+                                       aux, wind_index, pressure_index, storm)
+
+        use geoclaw_module, only: Pa => ambient_pressure
+
+        ! Subroutine i/o
+        type(data_storm_type), intent(in) :: storm
+        integer, intent(in) :: maux, mbc, mx, my, i, j
+        real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+        real(kind=8), intent(in) :: STORM_RADIUS, r
+        integer, intent(in) :: wind_index, pressure_index
+
+        ! Local storage
+        real(kind=8) :: ramp
+
+        ramp = 0.5d0 * (1.d0 - tanh((r - STORM_RADIUS) / RAMP_WIDTH))
+        aux(pressure_index, i, j) = Pa + (aux(pressure_index, i, j) - Pa) * ramp
+        aux(wind_index:wind_index+1, i,j) = aux(wind_index:wind_index + 1, i, j) &
+                * ramp
+
+    end subroutine post_process_data
+
+
+    ! ==========================================================================
+    ! calculates the radius from the eye to the current location
+    ! Uses grid cell center
+    ! ==========================================================================
+    pure subroutine calc_r_radius(x, y, sloc, r)
+        use geoclaw_module, only: deg2rad, coordinate_system
+        use geoclaw_module, only: spherical_distance
+
+        real(kind=8), intent(in) :: x, y, sloc(2)
+        real(kind=8), intent(out) :: r
+
+        if (coordinate_system == 2) then
+            ! Lat-long coordinates, uses haversine formula
+            r = spherical_distance(x, y, sloc(1), sloc(2))
+        else
+            ! Cartesian
+            r = sqrt( (x-sloc(1))**2 + (y-sloc(2))**2)
+        end if
+    end subroutine calc_r_radius
 
     ! ==========================================================================
     ! find_nearest() finds nearest value to x and y for interpolation points
