@@ -378,7 +378,7 @@ contains
         integer, intent(in) :: out_index
               
         ! I/O
-        integer, parameter :: unit = 95
+        integer, parameter :: unit = 87
         character(len=15) :: fg_filename
         character(len=4) :: cfgno, cframeno
         integer :: grid_number,ipos,idigit,out_number,columns
