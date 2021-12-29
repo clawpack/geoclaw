@@ -30,8 +30,8 @@ class FGoutGrid(object):
         self.npts = None
         self.nx = None
         self.ny = None
-        self.tstart_out =  None
-        self.tend_out = None
+        self.tstart =  None
+        self.tend = None
         self.nout = None
         self.fgno = None  # grid number
         self.output_format = 'binary'  # 'ascii' or 'binary'
@@ -67,8 +67,8 @@ class FGoutGrid(object):
                              % (fgno, data_file))
 
         self.fgno = fgno
-        self.tstart_out = float(fgout_input[0].split()[0])
-        self.tend_out = float(fgout_input[1].split()[0])
+        self.tstart = float(fgout_input[0].split()[0])
+        self.tend = float(fgout_input[1].split()[0])
         self.nout = int(fgout_input[2].split()[0])
         self.point_style = point_style = int(fgout_input[3].split()[0])
         output_format = int(fgout_input[4].split()[0])
@@ -109,8 +109,8 @@ class FGoutGrid(object):
         #fid = open(self.input_file_name,'w')
         fid.write("\n")
         fid.write("%i                           # fgno\n" % self.fgno)
-        fid.write("%16.10e            # tstart_out\n"  % self.tstart_out)
-        fid.write("%16.10e            # tend_out\n"  % self.tend_out)
+        fid.write("%16.10e            # tstart\n"  % self.tstart)
+        fid.write("%16.10e            # tend\n"  % self.tend)
         fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
         fid.write("%i %s              # point_style\n" \
                             % (self.point_style,12*" "))
