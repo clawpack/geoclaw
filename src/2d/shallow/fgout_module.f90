@@ -517,7 +517,7 @@ contains
         write(unit, t_file_format) out_time, 4, 1, 0, 2, 0
         close(unit)
         
-        print "(a,i2,a,i2,a,e18.8)",'Writing fgout grid #',fgrid%fgno, &
+        print "(a,i4,a,i4,a,e18.8)",'Writing fgout grid #',fgrid%fgno, &
               '  frame ',out_index,' at time =',out_time
       
         ! Index into qeta for binary output
