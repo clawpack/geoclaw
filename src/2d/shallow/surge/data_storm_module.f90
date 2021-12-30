@@ -93,7 +93,6 @@ contains
             ! Get the dimension names and sizes from the file
             call get_dim_info(nc_fid, num_dims, x_dim_id, x_dim_name, mx, &
             y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
-            print *, 'mx', mx, 'my', my, 'mt', mt
 
             ! allocate arrays in storm object
             allocate(storm%pressure(mx, my, mt))
@@ -110,12 +109,11 @@ contains
 
             ! Number of time steps in data
             storm%num_casts = mt
-            print *, 'storm mx is ' , storm%mx
+
             ! Fill out variable data/info
             do n = 1, nvars
                 ! read file for one variable and parse the data in storm object
                 call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
-!                print *, var_name, n
                 if ('PRESSURE' == Upper(var_name)) then
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
@@ -141,7 +139,6 @@ contains
             end do
         ! Close file to stop corrupting the netcdf files
         call check_netcdf_error(nf90_close(nc_fid))
-        ! end if setup
         end if
 
         ! Make sure first time step in setrun is inside the times in the data
@@ -164,7 +161,6 @@ contains
 
             module_setup = .true.
         end if
-        print *, 'reading the data', shape(storm%longitude)
     end subroutine set_storm
 
 
@@ -324,7 +320,6 @@ contains
     end function storm_index
 
 
-
     ! ==========================================================================
     ! set_owi_fields()
     ! Fills out data for current time step and current patch
@@ -354,17 +349,15 @@ contains
 
         ! get the wind and pressure arrays for the current timestep
         call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, sloc, mx, my)
-!        print *, storm%wind_u
+
         ! Loop over every point in the patch and fill in the data
         do j=1-mbc, my+mbc
             y = ylower + (j-0.5d0) * dy
             do i=1-mbc, mx+mbc
                 x = xlower + (i-0.5d0) * dx
                 call calc_r_radius(x, y, sloc, r)
-!                print *, sloc, r
                 call interp_array_data(storm, x, y, wind_tu, u_value)
                 aux(wind_index, i, j) = u_value
-!                print*, wind_tu
                 call interp_array_data(storm, x, y, wind_tv, v_value)
                 aux(wind_index + 1, i, j) = v_value
                 call interp_array_data(storm, x, y, pressure_t, p_value)
@@ -429,8 +422,9 @@ contains
                           storm%pressure(:,:,i - 1)
         end if
 
-!    print *, 'min p', minval(pressure_t), 'max p', maxval(pressure_t)
     end subroutine get_storm_time
+
+
     ! ==========================================================================
     ! interp_array_data() Obtains wind and pressure data for each patch
     ! Uses bilinear interpolation to get the data
@@ -452,7 +446,7 @@ contains
         ! Get the data resolution
         storm_dx = storm%longitude(2) - storm%longitude(1)
         storm_dy = storm%latitude(2) - storm%latitude(1)
-!        print *, 'failing at ', x, y
+
         ! Duplicate the boundary at the bottom corner
         if (x < minval(storm%longitude) .and. y < maxval(storm%latitude)) then
             value = interp_array(1, 1)
@@ -477,7 +471,6 @@ contains
             value = interp_array(xidx_low, yidx_low)
         ! x and y both inside boundary
         else
-!            print *, 'huh', x, y
             call find_nearest(x - storm_dx, y - storm_dy, llon, llat, storm, xidx_low, yidx_low)
             call find_nearest(x + storm_dx, y + storm_dy, ulon, ulat, storm, xidx_high, yidx_high)
             ! Find the values at the corners
@@ -543,7 +536,7 @@ contains
     ! find_nearest() finds nearest value to x and y for interpolation points
     ! Finds the nearest actual point to the patch values using minimum distance
     ! ==========================================================================
-    subroutine find_nearest(x, y, lon, lat, storm, xidx, yidx)
+    pure subroutine find_nearest(x, y, lon, lat, storm, xidx, yidx)
         implicit none
         ! Subroutine I/O
         type(data_storm_type), intent(in) :: storm
