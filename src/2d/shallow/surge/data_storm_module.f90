@@ -174,7 +174,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(data_storm_type), intent(in out) :: storm
+        type(data_storm_type), intent(inout) :: storm
 
         ! Output
         real(kind=8) :: location(2)
