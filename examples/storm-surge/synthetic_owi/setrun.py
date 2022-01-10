@@ -11,12 +11,16 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import os
+import glob
+import sys
 import datetime
 import shutil
 import gzip
 
 import numpy as np
+#from mapper import latlong
 
+from clawpack.geoclaw import fgmax_tools
 import clawpack.clawutil as clawutil
 from clawpack.geoclaw.surge.storm import Storm
 
@@ -67,11 +71,11 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_dim = num_dim
 
     # Lower and upper edge of computational domain:
-    clawdata.lower[0] = -99.0      # west longitude
-    clawdata.upper[0] = -70.0      # east longitude
+    clawdata.lower[0] = -90.0      # west longitude
+    clawdata.upper[0] = -57.5      # east longitude
 
-    clawdata.lower[1] = 8.0       # south latitude
-    clawdata.upper[1] = 32.0      # north latitude
+    clawdata.lower[1] = 5.0      # south latitude
+    clawdata.upper[1] = 47.5      # north latitude
 
     # Number of grid cells:
     degree_factor = 4 # (0.25º,0.25º) ~ (25237.5 m, 27693.2 m) resolution
@@ -98,7 +102,7 @@ def setrun(claw_pkg='geoclaw'):
     # -------------
     # Initial time:
     # -------------
-    clawdata.t0 = -days2seconds(2)
+    clawdata.t0 = days2seconds(1.0) # For OWI storms the first time step is at 0 seconds
 
     # Restart from checkpoint file of a previous run?
     # If restarting, t0 above should be from original run, and the
@@ -120,9 +124,8 @@ def setrun(claw_pkg='geoclaw'):
 
     if clawdata.output_style == 1:
         # Output nout frames at equally spaced times up to tfinal:
-        # clawdata.tfinal = days2seconds(date2days('2008091400'))
-        clawdata.tfinal = days2seconds(1.5)
-        recurrence = 4
+        clawdata.tfinal = days2seconds(3.00)
+        recurrence = 6 # one every hour
         clawdata.num_output_times = int((clawdata.tfinal - clawdata.t0) *
                                         recurrence / (60**2 * 24))
 
@@ -262,7 +265,7 @@ def setrun(claw_pkg='geoclaw'):
     amrdata = rundata.amrdata
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 2
+    amrdata.amr_levels_max = 3
 
     # List of refinement ratios at each level (length at least mxnest-1)
     amrdata.refinement_ratios_x = [2, 2, 2, 6, 16]
@@ -313,19 +316,7 @@ def setrun(claw_pkg='geoclaw'):
     regions = rundata.regiondata.regions
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
-    # Gauges from Ike AWR paper (2011 Dawson et al)
-    rundata.gaugedata.gauges.append([1, -95.04, 29.07,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([2, -94.71, 29.28,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([3, -94.39, 29.49,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([4, -94.13, 29.58,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
+    # Add gauge data here, for a synthetic storm there's no comparison
 
     # ------------------------------------------------------------------
     # GeoClaw specific parameters:
@@ -380,11 +371,9 @@ def setgeo(rundata):
     #   [topotype, fname]
     # See regions for control over these regions, need better bathy data for
     # the smaller domains
-    clawutil.data.get_remote_file(
-           "http://www.columbia.edu/~ktm2132/bathy/gulf_caribbean.tt3.tar.bz2")
-    topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
-    topo_data.topofiles.append([3, topo_path])
-
+    topo_data.topofiles.append([4, os.path.join(scratch_dir, 'gebco_2020_n45.0_s8.0_w-88.0_e-50.0.nc')])
+    topo_data.topofiles.append([4, os.path.join(scratch_dir, 'gebco_2021_n50.0_s21.0_w-90.0_e-55.0.nc')])
+    topo_data.topofiles.append([4, os.path.join(scratch_dir, 'gebco_2021_n53.0_s5.0_w-100.0_e-50.0.nc ')])
     # == setfixedgrids.data values ==
     rundata.fixed_grid_data.fixedgrids = []
     # for fixed grids append lines of the form
@@ -408,28 +397,28 @@ def setgeo(rundata):
     data.R_refine = [60.0e3, 40e3, 20e3]
 
     # Storm parameters - Parameterized storm (Holland 1980)
-    data.storm_specification_type = 'holland80'  # (type 1)
+    data.storm_specification_type = 'OWI'  # (type 1)
     data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
-                                         'isaac.storm'))
+                                         'NACCS_TP_0480_SYN_L2.nc'))
 
     # Convert ATCF data to GeoClaw format
-    clawutil.data.get_remote_file(
-                   "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-    atcf_path = os.path.join(scratch_dir, "bal092012.dat")
-    # Note that the get_remote_file function does not support gzip files which
-    # are not also tar files.  The following code handles this
-    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
-            open(atcf_path, 'w') as atcf_unzipped_file:
-        atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
-
-    # Uncomment/comment out to use the old version of the Ike storm file
-    isaac = Storm(path=atcf_path, file_format="ATCF")
-
-    # Calculate landfall time - Need to specify as the file above does not
-    # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
-    isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
-
-    isaac.write(data.storm_file, file_format='geoclaw')
+    # clawutil.data.get_remote_file(
+    #                "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
+    # atcf_path = os.path.join(scratch_dir, "bal092012.dat")
+    # # Note that the get_remote_file function does not support gzip files which
+    # # are not also tar files.  The following code handles this
+    # with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+    #         open(atcf_path, 'w') as atcf_unzipped_file:
+    #     atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
+    #
+    # # Uncomment/comment out to use the old version of the Ike storm file
+    # isaac = Storm(path=atcf_path, file_format="ATCF")
+    #
+    # # Calculate landfall time - Need to specify as the file above does not
+    # # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
+    # isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+    #
+    # isaac.write(data.storm_file, file_format='geoclaw')
 
     # =======================
     #  Set Variable Friction

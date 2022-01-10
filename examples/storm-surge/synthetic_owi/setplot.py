@@ -85,12 +85,12 @@ def setplot(plotdata=None):
     # ==========================================================================
     #   Plot specifications
     # ==========================================================================
-    regions = {"Gulf": {"xlimits": (clawdata.lower[0], clawdata.upper[0]),
+    regions = {"Atlantic": {"xlimits": (clawdata.lower[0], clawdata.upper[0]),
                         "ylimits": (clawdata.lower[1], clawdata.upper[1]),
                         "figsize": (6.4, 4.8)},
-                "Louisiana": {"xlimits": (-92, -83),
-                               "ylimits": (27.5, 30.5),
-                               "figsize": (8, 2.7)}}
+                "New England": {"xlimits": (-81, -70),
+                               "ylimits": (36.0, 45.0),
+                               "figsize": (6.4, 4.8)}}
 
     for (name, region_dict) in regions.items():
 
@@ -133,8 +133,8 @@ def setplot(plotdata=None):
     plotfigure.show = friction_data.variable_friction and True
 
     plotaxes = plotfigure.new_plotaxes()
-    plotaxes.xlimits = regions['Gulf']['xlimits']
-    plotaxes.ylimits = regions['Gulf']['ylimits']
+    plotaxes.xlimits = regions['Atlantic']['xlimits']
+    plotaxes.ylimits = regions['Atlantic']['ylimits']
     # plotaxes.title = "Manning's N Coefficient"
     plotaxes.afteraxes = friction_after_axes
     plotaxes.scaled = True
@@ -151,8 +151,8 @@ def setplot(plotdata=None):
     plotfigure.show = surge_data.pressure_forcing and True
 
     plotaxes = plotfigure.new_plotaxes()
-    plotaxes.xlimits = regions['Gulf']['xlimits']
-    plotaxes.ylimits = regions['Gulf']['ylimits']
+    plotaxes.xlimits = regions['Atlantic']['xlimits']
+    plotaxes.ylimits = regions['Atlantic']['ylimits']
     plotaxes.title = "Pressure Field"
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
@@ -164,8 +164,8 @@ def setplot(plotdata=None):
     plotfigure.show = surge_data.wind_forcing and True
 
     plotaxes = plotfigure.new_plotaxes()
-    plotaxes.xlimits = regions['Gulf']['xlimits']
-    plotaxes.ylimits = regions['Gulf']['ylimits']
+    plotaxes.xlimits = regions['Atlantic']['xlimits']
+    plotaxes.ylimits = regions['Atlantic']['ylimits']
     plotaxes.title = "Wind Field"
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
