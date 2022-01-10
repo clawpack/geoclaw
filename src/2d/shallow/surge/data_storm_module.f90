@@ -410,10 +410,11 @@ contains
             wind_tv = storm%wind_v(:,:,i)
             pressure_t = storm%pressure(:,:,i)
         else
-            sloc = storm%eye_loc(:,i)
             tn = storm%time(i)
             tnm = storm%time(i - 1)
             weight = (t - tnm) / (tn - tnm)
+            sloc = (storm%eye_loc(:,i) - storm%eye_loc(:,i - 1)) * weight + &
+                    storm%eye_loc(:,i - 1)
             wind_tu = (storm%wind_u(:,:,i) - storm%wind_u(:,:,i - 1)) * weight + &
                       storm%wind_u(:,:, i-1)
             wind_tv = (storm%wind_v(:,:,i) - storm%wind_v(:,:,i - 1)) * weight + &
