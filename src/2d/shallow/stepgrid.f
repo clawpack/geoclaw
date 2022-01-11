@@ -113,7 +113,7 @@ c::::::::::::::::::::::::Fixed Grid Output:::::::::::::::::::::::::::::::::
 !$OMP CRITICAL (FixedGrids)
 c     # see if any f-grids should be written out
       do ng=1,num_fixed_grids
-        if (tc0 > fgrids(ng)%start_time .and.
+        if (tc0 > fgrids(ng)%start_time .and. 
      &      fgrids(ng)%last_output_index < fgrids(ng)%num_output) then
 c     # fgrid ng may need to be written out
 c     # find the first output number that has not been written out and
@@ -141,7 +141,7 @@ c               # test if arrival times should be output
                 call fgrid_out(ng,fgrids(ng),toutfg,ioutfg,ioutflag)
 
                 fgrids(ng)%last_output_time = toutfg
-                fgrids(ng)%last_output_index =
+                fgrids(ng)%last_output_index = 
      &                               fgrids(ng)%last_output_index + 1
              endif
            enddo
@@ -153,7 +153,7 @@ c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
        call b4step2(mbc,mx,my,nvar,q,
      &             xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux,actualstep)
-
+      
 c::::::::::::::::::::::::FIXED GRID DATA before step:::::::::::::::::::::::
 c     # fill in values at fixed grid points effected at time tc0
 !$OMP CRITICAL (FixedGrids)
@@ -165,7 +165,7 @@ c     # fill in values at fixed grid points effected at time tc0
      &     (fgrids(ng)%y_hi  > ylowmbc) .and.
      &     (fgrids(ng)%last_output_index < fgrids(ng)%num_output) .and.
      &     (tcf >= fgrids(ng)%start_time) ) then
-
+         
          if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= tc0 .and.
      &       fgrids(ng)%last_output_time + fgrids(ng)%dt <= tcf) then
 
@@ -173,7 +173,7 @@ c        # fixedgrid ng has an output time within [tc0,tcf] interval
 c        # and it overlaps this computational grid spatially
          call fgrid_interp(1,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
      &                     xlowmbc,ylowmbc,maux,aux,0)
-
+     
 c         # routine to spatially interpolate computational solution
 c         # at tc0 to the fixed grid spatial points,
 c         #saving solution, variables and tc0 at every grid point
@@ -188,12 +188,12 @@ c        # at level 1.   Note that all grids are up to date at start of step on 
 c        # New feature added at end of this routine to check more frequently if
 c        # levelcheck > 0.
          if (level .eq. 1) then
-         if (fgrids(ng)%output_surface_max
+         if (fgrids(ng)%output_surface_max 
      &       + fgrids(ng)%output_arrival_times > 0) then
-
+     
          call fgrid_interp(3,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
      &                     xlowmbc,ylowmbc,maux,aux,2)
-
+     
          endif
          endif
 
@@ -218,7 +218,7 @@ c
      &              q,aux,dx,dy,dt,cflgrid,
      &              fm,fp,gm,gp,rpn2,rpt2)
 c
-c
+c            
         mptr_level = node(nestlevel,mptr)
 
 c       write(outunit,811) mptr, mptr_level, cflgrid
@@ -287,7 +287,7 @@ c     # fill in values at fixed grid points effected at time tcf
      &    (fgrids(ng)%y_hi  > ylowmbc) .and.
      &    (fgrids(ng)%last_output_index < fgrids(ng)%num_output) .and.
      &    (tcf >= fgrids(ng)%start_time)) then
-
+      
         if (fgrids(ng)%last_output_time + fgrids(ng)%dt >= tc0 .and.
      &      fgrids(ng)%last_output_time + fgrids(ng)%dt <= tcf) then
 
@@ -306,26 +306,26 @@ c            #saving solution and tcf at every grid point
 
 c        # fill in values for eta if they need to be saved for later checking max/mins
 c        # check for arrival times
-        if (fgrids(ng)%output_surface_max
+        if (fgrids(ng)%output_surface_max 
      &      + fgrids(ng)%output_arrival_times > 0) then
 
-        call fgrid_interp(3,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
+        call fgrid_interp(3,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy, 
      &                    xlowmbc,ylowmbc,maux,aux,1)
-
+     
         endif
-
-c        # RJL: Modified 8/20/11
+         
+c        # RJL: Modified 8/20/11 
 c        # If levelcheck > 0 then update max/mins at end of step on this grid.
 c        # Note that if there are finer grids then fgridoften will not have been updated
 c        # properly yet by those grids.  This modification allows checking max/min more
 c        # frequently than the original code (equivalent to levelcheck==0) when you know
 c        # what level is most relevant for this fixed grid.  Note also that if there are no
-c        # grids at levelcheck overlapping a portion of the fixed grid then the max/min values
+c        # grids at levelcheck overlapping a portion of the fixed grid then the max/min values 
 c        # will be updated only at start of next level 1 step.
-
-        levelcheck = 0
+ 
+        levelcheck = 0 
         if (level == levelcheck) then
-        if (fgrids(ng)%output_arrival_times
+        if (fgrids(ng)%output_arrival_times 
      &      + fgrids(ng)%output_surface_max > 0) then
 
         call fgrid_interp(3,fgrids(ng),tc0,q,nvar,mx,my,mbc,dx,dy,
@@ -391,4 +391,5 @@ c            write(*,545) i,j,(q(i,j,ivar),ivar=1,nvar)
 c
       return
       end
+
 

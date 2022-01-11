@@ -61,4 +61,5 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep
 
     ! Set wind and pressure aux variables for this grid
     call set_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,t,aux)
+
 end subroutine b4step2

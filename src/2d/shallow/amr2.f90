@@ -638,7 +638,7 @@ program amr2
     endif
     close(parmunit)
 
-
+ 
 
     ! --------------------------------------------------------
     !  Tick is the main routine which drives the computation:
@@ -650,12 +650,12 @@ program amr2
 
     ! Print out the fgmax files
     if (FG_num_fgrids > 0) call fgmax_finalize()
-
+    
     write(*,"('See fort.amr for more info on this run and memory usage')")
 
     ! call system_clock to get clock_finish and count_max for debug output:
     call system_clock(clock_finish,clock_rate,count_max)
-
+    
     !output timing data
     open(timing_unit, file=timing_base_name//"txt", status='unknown',       &
          form='formatted')
@@ -667,22 +667,22 @@ program amr2
 
     write(*,*)
     write(timing_unit,*)
-
+    
     !Integration time
     format_string="('Integration Time (stepgrid + BC + overhead)')"
     write(timing_unit,format_string)
     write(*,format_string)
-
+    
     !Advanc time
     format_string="('Level           Wall Time (seconds)    CPU Time (seconds)   Total Cell Updates')"
     write(timing_unit,format_string)
     write(*,format_string)
 
-    ! level counters are cumulative after restart, so initialize sums to zero
+    ! level counters are cumulative after restart, so initialize sums to zero 
     ! even after restart to sum up time over all levels
     ttotalcpu=0.d0
     ttotal=0
-
+      
     do level=1,mxnest
         format_string="(i3,'           ',1f15.3,'        ',1f15.3,'    ', e17.3)"
         write(timing_unit,format_string) level, &
@@ -692,52 +692,52 @@ program amr2
         ttotalcpu=ttotalcpu+tvollCPU(level)
         ttotal=ttotal+tvoll(level)
     end do
-
+    
     format_string="('total         ',1f15.3,'        ',1f15.3,'    ', e17.3)"
     write(timing_unit,format_string) &
              real(ttotal,kind=8) / real(clock_rate,kind=8), ttotalCPU, rvol
     write(*,format_string) &
              real(ttotal,kind=8) / real(clock_rate,kind=8), ttotalCPU, rvol
-
+    
     write(*,*)
     write(timing_unit,*)
-
-
+    
+    
     format_string="('All levels:')"
     write(*,format_string)
     write(timing_unit,format_string)
-
+    
     !stepgrid
     format_string="('stepgrid      ',1f15.3,'        ',1f15.3,'    ',e17.3)"
     write(timing_unit,format_string) &
          real(timeStepgrid,kind=8) / real(clock_rate,kind=8), timeStepgridCPU
     write(*,format_string) &
          real(timeStepgrid,kind=8) / real(clock_rate,kind=8), timeStepgridCPU
-
+    
     !bound
     format_string="('BC/ghost cells',1f15.3,'        ',1f15.3)"
     write(timing_unit,format_string) &
          real(timeBound,kind=8) / real(clock_rate,kind=8), timeBoundCPU
     write(*,format_string) &
          real(timeBound,kind=8) / real(clock_rate,kind=8), timeBoundCPU
-
+    
     !regridding time
     format_string="('Regridding    ',1f15.3,'        ',1f15.3,'  ')"
     write(timing_unit,format_string) &
             real(timeRegridding,kind=8) / real(clock_rate,kind=8), timeRegriddingCPU
     write(*,format_string) &
             real(timeRegridding,kind=8) / real(clock_rate,kind=8), timeRegriddingCPU
-
+    
     !output time
     format_string="('Output (valout)',1f14.3,'        ',1f15.3,'  ')"
     write(timing_unit,format_string) &
             real(timeValout,kind=8) / real(clock_rate,kind=8), timeValoutCPU
     write(*,format_string) &
             real(timeValout,kind=8) / real(clock_rate,kind=8), timeValoutCPU
-
+    
     write(*,*)
     write(timing_unit,*)
-
+    
     !Total Time
     format_string="('Total time:   ',1f15.3,'        ',1f15.3,'  ')"
 
@@ -746,16 +746,16 @@ program amr2
     write(timing_unit,format_string) real(timeTick,kind=8)/real(clock_rate,kind=8), &
             timeTickCPU
 
-
+    
     format_string="('Using',i3,' thread(s)')"
     write(timing_unit,format_string) maxthreads
     write(*,format_string) maxthreads
-
-
+    
+    
     write(*,*)
     write(timing_unit,*)
-
-
+    
+    
     write(*,"('Note: The CPU times are summed over all threads.')")
     write(timing_unit,"('Note: The CPU times are summed over all threads.')")
     write(*,"('      Total time includes more than the subroutines listed above')")
@@ -769,7 +769,7 @@ program amr2
     write(*, "('      in the file timing.csv.')")
     write(timing_unit, "('Note: timings are also recorded for each output step')")
     write(timing_unit, "('      in the file timing.csv.')")
-
+    
 
     write(*,*)
     write(timing_unit,*)
@@ -798,7 +798,7 @@ program amr2
         write(outunit,*) lentot," words not accounted for in memory cleanup"
         print *,         lentot," words not accounted for in memory cleanup"
     endif
-
+    
     !
     ! report on statistics
     !
