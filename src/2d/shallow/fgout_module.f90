@@ -152,7 +152,8 @@ contains
 
                 ! Set spatial intervals dx and dy on each grid
                 if (fg%mx > 1) then
-                   fg%dx = (fg%x_hi - fg%x_low) / (fg%mx - 1)
+                   !fg%dx = (fg%x_hi - fg%x_low) / (fg%mx - 1) ! points
+                   fg%dx = (fg%x_hi - fg%x_low) / fg%mx   ! cells
                 else if (fg%mx == 1) then
                    fg%dx = 0.d0
                 else
@@ -161,7 +162,8 @@ contains
                 endif
 
                 if (fg%my > 1) then
-                    fg%dy = (fg%y_hi - fg%y_low) / (fg%my - 1)
+                    !fg%dy = (fg%y_hi - fg%y_low) / (fg%my - 1) ! points
+                    fg%dy = (fg%y_hi - fg%y_low) / fg%my  ! cells
                 else if (fg%my == 1) then
                     fg%dy = 0.d0
                 else
@@ -198,7 +200,7 @@ contains
     !=======================================================================
     subroutine fgout_interp(fgrid_type,fgrid, &
                             t,q,meqn,mxc,myc,mbc,dxc,dyc,xlowc,ylowc, &
-                            maux,aux,maxcheck)
+                            maux,aux)
     
         use geoclaw_module, only: dry_tolerance  
         implicit none
@@ -206,11 +208,13 @@ contains
         ! Subroutine arguments
         integer, intent(in) :: fgrid_type
         type(fgout_grid), intent(inout) :: fgrid
-        integer, intent(in) :: meqn,mxc,myc,mbc,maux,maxcheck
+        integer, intent(in) :: meqn,mxc,myc,mbc,maux
         real(kind=8), intent(in) :: t,dxc,dyc,xlowc,ylowc
         real(kind=8), intent(in) :: q(meqn,1-mbc:mxc+mbc,1-mbc:myc+mbc)
         real(kind=8), intent(in) :: aux(maux,1-mbc:mxc+mbc,1-mbc:myc+mbc)
     
+        integer, parameter :: method = 0
+        
         ! Indices
         integer :: ifg,jfg,m,ic1,ic2,jc1,jc2
         integer :: bathy_index,eta_index
@@ -222,6 +226,8 @@ contains
         real(kind=8) :: xfg,yfg,xc1,xc2,yc1,yc2,xhic,yhic
         real(kind=8) :: geometry(4)
         
+        real(kind=8) :: points(2,2), eta_tmp
+        
         ! Work arrays for eta interpolation
         real(kind=8) :: eta(2,2),h(2,2)
         
@@ -230,10 +236,6 @@ contains
         integer :: num_vars
         real(kind=8), pointer :: fg_data(:,:,:)
         
-        if (maxcheck > 0) then
-            write(6,*) '*** Unexpected maxcheck = ',maxcheck
-            stop
-        endif
         
         ! Setup aliases for specific fixed grid
         if (fgrid_type == 1) then
@@ -246,8 +248,6 @@ contains
             write(6,*) '*** Unexpected fgrid_type = ', fgrid_type
             stop
             ! fgrid_type==3 is deprecated, use fgmax grids instead
-            !num_vars = fgrid%num_vars(2)
-            !fg_data => fgrid%often
         endif
             
         xhic = xlowc + dxc*mxc  
@@ -261,9 +261,11 @@ contains
     
         ! Primary interpolation loops 
         do ifg=1,fgrid%mx
-            xfg=fgrid%x_low + (ifg-1)*fgrid%dx
+            !xfg=fgrid%x_low + (ifg-1)*fgrid%dx      ! points
+            xfg=fgrid%x_low + (ifg-0.5d0)*fgrid%dx   ! cell centers
             do jfg=1,fgrid%my
-                yfg=fgrid%y_low + (jfg-1)*fgrid%dy
+                !yfg=fgrid%y_low + (jfg-1)*fgrid%dy      ! points
+                yfg=fgrid%y_low + (jfg-0.5d0)*fgrid%dy   ! cell centers
     
                 ! Check to see if this coordinate is inside of this grid
                 if (.not.((xfg < xlowc.or.xfg > xhic).or.(yfg < ylowc.or.yfg > yhic))) then
@@ -282,72 +284,73 @@ contains
                     xc2 = xlowc + dxc * (ic2 - 0.5d0)
                     yc2 = ylowc + dyc * (jc2 - 0.5d0)
          
-                    ! Calculate geometry of interpolant
-                    ! interpolate bilinear used to interpolate to xfg,yfg
-                    ! define constant parts of bilinear
-                    geometry = [(xfg - xc1) / dxc, &
-                                (yfg - yc1) / dyc, &
-                                (xfg - xc1) * (yfg - yc1) / (dxc*dyc), &
-                                1.d0]
+                    if (method == 1) then
+                        ! Calculate geometry of interpolant
+                        ! interpolate bilinear used to interpolate to xfg,yfg
+                        ! define constant parts of bilinear
+                        geometry = [(xfg - xc1) / dxc, &
+                                    (yfg - yc1) / dyc, &
+                                    (xfg - xc1) * (yfg - yc1) / (dxc*dyc), &
+                                    1.d0]
+                    endif
         
                     ! Interpolate for all conserved quantities and bathymetry
                     forall (m=1:meqn)
-                        fg_data(m,ifg,jfg) = interpolate([[q(m,ic1,jc1),q(m,ic1,jc2)], &
-                                    [q(m,ic2,jc1),q(m,ic2,jc2)]], geometry)
+                        fg_data(m,ifg,jfg) = &
+                            interpolate(q(m,ic1:ic2,jc1:jc2), geometry,method) 
+                            !interpolate([[q(m,ic1,jc1),q(m,ic1,jc2)], &
+                            !            [q(m,ic2,jc1),q(m,ic2,jc2)]], geometry)
                     end forall
-                    
-                    fg_data(bathy_index,ifg,jfg) = interpolate([[aux(1,ic1,jc1),aux(1,ic1,jc2)], &
-                                [aux(1,ic2,jc1),aux(1,ic2,jc2)]], geometry)
 
                     
-                    ! Interpolate surface eta, only use wet eta points near the shoreline
-                    eta(1,:) = [aux(1,ic1,jc1) + q(1,ic1,jc1), aux(1,ic1,jc2) + q(1,ic1,jc2)]
-                    eta(2,:) = [aux(1,ic2,jc1) + q(1,ic2,jc1), aux(1,ic2,jc2) + q(1,ic2,jc2)]
-                    h(1,:) = [q(1,ic1,jc1),q(1,ic1,jc2)]
-                    h(2,:) = [q(1,ic2,jc1),q(1,ic2,jc2)]
-                         
-                    depth_indicator= min(h(1,1),h(1,2),h(2,1),h(2,2))
-                    total_depth = sum(h)
-    
-                    ! We are near shoreline
-                    if (depth_indicator < dry_tolerance .and. &
-                        total_depth > 4.d0 * dry_tolerance) then
-                        ! Check to see if each cell around fixed grid point is 
-                        ! wet, if not re-balance
-                        if (h(1,1) < dry_tolerance) then
-                            eta(1,1) =  (h(1,2)*eta(1,2) &
-                                       + h(2,1)*eta(2,1) &
-                                       + h(2,2)*eta(2,2)) / total_depth
-                        endif
-                        if (h(1,2) < dry_tolerance) then
-                            eta(1,2) =  (h(1,1)*eta(1,1) &
-                                       + h(2,1)*eta(2,1) &
-                                       + h(2,2)*eta(2,2)) / total_depth
-                        endif
-                        if (h(2,1) < dry_tolerance) then
-                            eta(2,1) =  (h(1,1)*eta(1,1) &
-                                       + h(1,2)*eta(1,2) &
-                                       + h(2,2)*eta(2,2)) / total_depth
-                        endif
-                        if (h(2,2) < dry_tolerance) then
-                            eta(2,2)=  (h(1,2)*eta(1,2) &
-                                      + h(2,1)*eta(2,1) &
-                                      + h(1,1)*eta(1,1)) / total_depth
-                        endif            
+                    fg_data(bathy_index,ifg,jfg) = & 
+                            interpolate(aux(1,ic1:ic2,jc1:jc2),geometry,method)
+
+                    if (.false.) then
+                        write(6,*) '+++ yfg,geometry(2) = ',yfg,geometry(2)
+                        write(6,*) '+++ xfg,xc1,xc2,geometry(1): ', &
+                                    xfg,xc1,xc2,geometry(1)
+                        write(6,*) '+++ B11,B21: ', aux(1,ic1,jc1),aux(1,ic2,jc1)
+                        write(6,*) '+++ B12,B22: ', aux(1,ic1,jc2),aux(1,ic2,jc2)
+                        write(6,*) '+++ fg_data = ',fg_data(bathy_index,ifg,jfg)
+                        write(6,*) '+++ points(2,1) = ',points(2,1)
+                        write(6,*) '+++ '
                     endif
                     
-                    !if (total_depth <= 4.d0*dry_tolerance) then
-                    !    eta(2,2) = nan()
-                    !endif
-    
-                    ! evaluate the interpolant
-                    fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry)
+                    ! surface eta = h + B:
+                    eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
+                    fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry,method)
                     
-                    if (total_depth <= 4.d0*dry_tolerance) then
-                        ! surface eta = B topography
-                        eta(2,2) = fg_data(bathy_index,ifg,jfg)
+                    if (method == 0) then
+                        ! for pw constant we take B, h, eta from same cell,
+                        ! so setting eta = h+B should be fine even near shore,
+                        fg_data(eta_index,ifg,jfg) = fg_data(1,ifg,jfg) &
+                                + fg_data(bathy_index,ifg,jfg)
+                                
+                        ! test for debugging:
+                        eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
+                        eta_tmp = interpolate(eta,geometry,method)
+                        if (fg_data(eta_index,ifg,jfg) .ne. eta_tmp) then
+                            write(6,*) '*** unexpected eta_tmp = ',eta_tmp
+                            write(6,*) '***    fg_data(eta_index,ifg,jfg) = ', &
+                                    fg_data(eta_index,ifg,jfg)
+                        endif
+                        
+                    else if (method == 1) then
+                        ! method==1 we are doing pw bilinear and there may
+                        ! be a problem interpolating each separately
+                        ! NEED TO FIX
+                        eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
+                        fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry,method)
+                        continue
+                    endif
+                                                            
+                    if (.false.) then
+                        write(6,*) '+++ fg_data_eta = ',fg_data(eta_index,ifg,jfg)
+                        write(6,*) '+++ fg_data_h = ',fg_data(1,ifg,jfg)
                     endif
                     
+                    ! save the time this fgout point was computed:
                     fg_data(num_vars,ifg,jfg) = t
                     
                     !write(59,*) '+++',ifg,jfg
@@ -541,23 +544,40 @@ contains
     
     ! Interpolation function (in space)
     ! Given 4 points (points) and geometry from x,y,and cross terms
-    real(kind=8) pure function interpolate(points,geometry) result(interpolant)
+    real(kind=8) pure function interpolate(points,geometry,method) result(interpolant)
                             
         implicit none
                                 
         ! Function signature
         real(kind=8), intent(in) :: points(2,2)
         real(kind=8), intent(in) :: geometry(4)
+        integer, intent(in) :: method
+        integer :: icell, jcell
         
-        ! This is set up as a dot product between the approrpriate terms in 
-        ! the input data.  This routine could be vectorized or a BLAS routine
-        ! used instead of the intrinsics to ensure that the fastest routine
-        ! possible is being used
-        interpolant = sum([points(2,1)-points(1,1), &
+        if (method == 0) then                   
+            ! pw constant: value from cell fgmax point lies in
+            if (geometry(1) < 0.5d0) then
+                icell = 1
+            else
+                icell = 2
+            endif
+            if (geometry(2) < 0.5d0) then
+                jcell = 1
+            else
+                jcell = 2
+            endif   
+            interpolant = points(icell,jcell)
+        else if (method == 1) then
+            ! pw bilinear
+            ! This is set up as a dot product between the approrpriate terms in 
+            ! the input data.  This routine could be vectorized or a BLAS routine
+            ! used instead of the intrinsics to ensure that the fastest routine
+            ! possible is being used
+            interpolant = sum([points(2,1)-points(1,1), &
                            points(1,2)-points(1,1), &
                            points(1,1) + points(2,2) - (points(2,1) + points(1,2)), &
                            points(1,1)] * geometry)
-                           
+        endif
     end function interpolate
     
     ! Interpolation function in time

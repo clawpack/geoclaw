@@ -151,7 +151,7 @@ c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
      &             xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux,actualstep)
       
 c::::::::::::::::::::::::FGOUT DATA before step:::::::::::::::::::::::
-c     # fill in values at fixed grid points effected at time tc0
+c     # fill in values at fgout points affected at time tc0
       do ng=1,FGOUT_num_grids
           if (fgout_interp_needed(ng)) then
 c            # fgout grid ng has an output time within [tc0,tcf] interval
@@ -160,7 +160,7 @@ c            # and it overlaps this computational grid spatially
              fgout => FGOUT_fgrids(ng)
              !write(6,*) '+++ fout_interp(1), tc0, level: ',tc0,level
              call fgout_interp(1,fgout,tc0,q,nvar,mx,my,mbc,
-     &                         dx,dy,xlowmbc,ylowmbc,maux,aux,0)
+     &                         dx,dy,xlowmbc,ylowmbc,maux,aux)
 
 !$OMP       END CRITICAL (FixedGrids)
          endif
@@ -240,7 +240,7 @@ c        # with source term:   use Godunov splitting
          endif
 
 c     ::::::::::::::::::::::::fgout data afterstep:::::::::::::::::::::::
-c     # fill in values at fixed grid points effected at time tcf
+c     # fill in values at fgout points affected at time tcf
       do ng=1,FGOUT_num_grids
           if (fgout_interp_needed(ng)) then
 c            # fgout grid ng has an output time within [tc0,tcf] interval
@@ -249,7 +249,7 @@ c            # and it overlaps this computational grid spatially
              fgout => FGOUT_fgrids(ng)
              !write(6,*) '+++ fout_interp(2), tcf, level: ',tcf,level
              call fgout_interp(2,fgout,tcf,q,nvar,mx,my,mbc,
-     &                         dx,dy,xlowmbc,ylowmbc,maux,aux,0)
+     &                         dx,dy,xlowmbc,ylowmbc,maux,aux)
 
 !$OMP       END CRITICAL (FixedGrids)
          endif
