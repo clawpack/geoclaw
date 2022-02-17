@@ -386,11 +386,11 @@ def setgeo(rundata):
     topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
     topo_data.topofiles.append([3, topo_path])
 
-    # == setfixedgrids.data values ==
-    rundata.fixed_grid_data.fixedgrids = []
-    # for fixed grids append lines of the form
-    # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
-    #  ioutarrivaltimes,ioutsurfacemax]
+    # == fgout grids ==
+    # new style as of v5.9.0 (old rundata.fixed_grid_data is deprecated)
+    # set rundata.fgout_data.fgout_grids to be a 
+    # list of objects of class clawpack.geoclaw.fgout_tools.FGoutGrid:
+    #rundata.fgout_data.fgout_grids = []
 
     # ================
     #  Set Surge Data
