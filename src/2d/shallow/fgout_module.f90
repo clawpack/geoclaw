@@ -318,16 +318,21 @@ contains
                     endif
                     
                     ! surface eta = h + B:
-                    eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
-                    fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry,method)
                     
                     if (method == 0) then
                         ! for pw constant we take B, h, eta from same cell,
-                        ! so setting eta = h+B should be fine even near shore,
+                        ! so setting eta = h+B should be fine even near shore:
                         fg_data(eta_index,ifg,jfg) = fg_data(1,ifg,jfg) &
                                 + fg_data(bathy_index,ifg,jfg)
                                 
-                        ! test for debugging:
+                        ! tests for debugging:
+                        
+                        if ((fg_data(1,ifg,jfg) > 0) .and. &
+                            (fg_data(eta_index,ifg,jfg) > 10.d0)) then
+                            write(6,*) '*** unexpected eta = ',fg_data(eta_index,ifg,jfg)
+                            write(6,*) '*** ifg, jfg: ',ifg,jfg
+                        endif
+                            
                         eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
                         eta_tmp = interpolate(eta,geometry,method)
                         if (fg_data(eta_index,ifg,jfg) .ne. eta_tmp) then
@@ -413,7 +418,8 @@ contains
         integer :: i,j,m
         real(kind=8) :: t0,tf,tau, qaug(6)
         real(kind=8), allocatable :: qeta(:,:,:)
-    
+        real(kind=8) :: h_early,h_late,topo_early,topo_late
+        
         allocate(qeta(4, fgrid%mx, fgrid%my))  ! to store h,hu,hv,eta
         
         
@@ -436,15 +442,45 @@ contains
                     fgrid%late(m,i,j) = 0.d0
                 end forall
                 
-                ! interpolate in time:
-                qaug = (1.d0-tau)*fgrid%early(:,i,j) + tau*fgrid%late(:,i,j)
-                !write(6,*) '+++ tau, early, late: ',tau,fgrid%early(:,i,j),fgrid%late(:,i,j)
+                ! no interpolation in time, use soln from full step:
+                qaug = fgrid%late(:,i,j)
                 
-                ! Output the conserved quantities and topo value
+                ! note that CFL condition ==> waves can't move more than 1
+                ! cell per time step on each level, so solution from nearest
+                ! full step should be correct to within a cell width
+                
+                if (.false.) then
+                    ! interpolate in time:
+                    qaug = (1.d0-tau)*fgrid%early(:,i,j) + tau*fgrid%late(:,i,j)
+                    
+                    !write(6,*) '+++ tau, early, late: ',tau,fgrid%early(:,i,j),fgrid%late(:,i,j)
+                    
+                    ! if resolution changed between early and late time, may be
+                    ! problems near shore when interpolating B, h, eta separately
+                    if (qaug(1) > 0.d0) then
+                        topo_early = fgrid%early(4,i,j)
+                        topo_late = fgrid%late(4,i,j)
+                        if (topo_early .ne. topo_late) then
+                            h_early = fgrid%early(1,i,j)
+                            h_late = fgrid%late(1,i,j)
+                            if ((h_early == 0.d0) .xor. (h_late == 0.d0)) then
+                                qaug = fgrid%early(:,i,j) ! revert to early values
+                                write(6,*) '+++ reverting to early values at i,j, t0: ', i,j,t0
+                                write(6,*) '+++ topo_early, topo_late: ',topo_early, topo_late
+                            endif
+                        endif
+                    endif
+                endif
+                
+                ! Output the conserved quantities and eta value
                 qeta(1,i,j) = qaug(1)  ! h
                 qeta(2,i,j) = qaug(2)  ! hu
                 qeta(3,i,j) = qaug(3)  ! hv
                 qeta(4,i,j) = qaug(5)  ! eta
+                
+                if ((qaug(1)>0.d0) .and. (qaug(5)>10.d0)) then
+                    write(6,*) '*** unexpected i,j,qaug(5) = ',i,j,qaug(5)
+                endif
 
             enddo
         enddo
