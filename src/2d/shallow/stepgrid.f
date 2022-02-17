@@ -134,10 +134,11 @@ c     Check if fgout interpolation needed before and after step:
      &           (fgout_tnext >= tc0 - FGOUT_ttol) .and.
      &           (fgout_tnext <= tcf + FGOUT_ttol))
           endif
-c          write(6,*) '+++ tc0,tcf,needed: ',
-c     &               tc0,tcf,fgout_interp_needed(ng)
-c          write(6,*) '+++ next index: ',fgout%next_output_index
-c          write(6,*) '+++ fgout_tnext: ',fgout_tnext
+c         write(6,*) '+++ level, before- tc0,tcf,needed: ',
+c    &                level,tc0,tcf,fgout_interp_needed(ng)
+c         write(6,*) '+++ next index: ',fgout%next_output_index
+c         write(6,*) '+++ fgout_tnext, tcf + FGOUT_ttol: ',
+c    &                fgout_tnext, tcf + FGOUT_ttol
       enddo
 !$OMP END CRITICAL (FixedGrids)
 
@@ -158,7 +159,7 @@ c            # fgout grid ng has an output time within [tc0,tcf] interval
 c            # and it overlaps this computational grid spatially
 !$OMP        CRITICAL (FixedGrids)
              fgout => FGOUT_fgrids(ng)
-             !write(6,*) '+++ fout_interp(1), tc0, level: ',tc0,level
+c            write(6,*) '+++ fout_interp(1), tc0, level: ',tc0,level
              call fgout_interp(1,fgout,tc0,q,nvar,mx,my,mbc,
      &                         dx,dy,xlowmbc,ylowmbc,maux,aux)
 
@@ -247,12 +248,16 @@ c            # fgout grid ng has an output time within [tc0,tcf] interval
 c            # and it overlaps this computational grid spatially
 !$OMP        CRITICAL (FixedGrids)
              fgout => FGOUT_fgrids(ng)
-             !write(6,*) '+++ fout_interp(2), tcf, level: ',tcf,level
+c            write(6,*) '+++ fout_interp(2), tcf, level: ',tcf,level
              call fgout_interp(2,fgout,tcf,q,nvar,mx,my,mbc,
      &                         dx,dy,xlowmbc,ylowmbc,maux,aux)
 
 !$OMP       END CRITICAL (FixedGrids)
          endif
+c        write(6,*) '+++ level,after- tc0,tcf,needed: ',
+c    &                level,tc0,tcf,fgout_interp_needed(ng)
+c        write(6,*) '+++ next index: ',fgout%next_output_index
+c        write(6,*) '+++ fgout_tnext: ',fgout_tnext
       enddo
 c     :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 

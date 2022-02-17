@@ -365,7 +365,7 @@ c     after all patches at finest level have been advanced.
             if (fgout%output_frames(ioutfg) == -1) then
                 ! this time not yet written out
                 if (fgout%output_times(ioutfg) < 
-     &                 tc0*(1.d0+FGOUT_ttol)) then
+     &                 tc0+FGOUT_ttol) then
                      toutfg = fgout%output_times(ioutfg)
 c                     write(6,*) '+++ tick call fgrid_out, frame, t: ',
 c     &                          ioutfg,toutfg

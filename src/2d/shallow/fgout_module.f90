@@ -28,7 +28,7 @@ module fgout_module
     integer :: FGOUT_num_grids
     type(fgout_grid), target, allocatable :: FGOUT_fgrids(:)
     real(kind=8) :: FGOUT_tcfmax
-    real(kind=8), parameter :: FGOUT_ttol = 1.d-13 ! tolerance for times
+    real(kind=8), parameter :: FGOUT_ttol = 1.d-6 ! tolerance for times
 
 
 contains
@@ -129,10 +129,10 @@ contains
                            fg%output_times(k) = fg%start_time + (k-1)*fg%dt
                            if (rest) then
                                ! don't write initial time or earlier
-                               ts = tstart_thisrun*(1+FGOUT_ttol)
+                               ts = tstart_thisrun+FGOUT_ttol
                            else
                                ! do write initial time
-                               ts = tstart_thisrun*(1-FGOUT_ttol)
+                               ts = tstart_thisrun-FGOUT_ttol
                            endif
                                
                            if (fg%output_times(k) < ts) then
@@ -442,15 +442,17 @@ contains
                     fgrid%late(m,i,j) = 0.d0
                 end forall
                 
-                ! no interpolation in time, use soln from full step:
-                qaug = fgrid%late(:,i,j)
+                ! no interpolation in time, use solution from full step:
+                qaug = fgrid%early(:,i,j)
                 
                 ! note that CFL condition ==> waves can't move more than 1
                 ! cell per time step on each level, so solution from nearest
                 ! full step should be correct to within a cell width
+                ! Better to use early than late since for refinement tracking
+                ! wave moving out into still water.
                 
                 if (.false.) then
-                    ! interpolate in time:
+                    ! interpolate in time:  Not being done now
                     qaug = (1.d0-tau)*fgrid%early(:,i,j) + tau*fgrid%late(:,i,j)
                     
                     !write(6,*) '+++ tau, early, late: ',tau,fgrid%early(:,i,j),fgrid%late(:,i,j)
@@ -478,10 +480,6 @@ contains
                 qeta(3,i,j) = qaug(3)  ! hv
                 qeta(4,i,j) = qaug(5)  ! eta
                 
-                if ((qaug(1)>0.d0) .and. (qaug(5)>10.d0)) then
-                    write(6,*) '*** unexpected i,j,qaug(5) = ',i,j,qaug(5)
-                endif
-
             enddo
         enddo
 
