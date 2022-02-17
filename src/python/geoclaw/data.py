@@ -212,26 +212,28 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
+class FixedGridData(clawpack.clawutil.data.ClawData):
 
-class FGoutDataOld(clawpack.clawutil.data.ClawData):
+    """
+    Deprecated, starting in 5.9.0 use FGoutData instead.
+    """
 
     def __init__(self):
 
-        super(FGoutData,self).__init__()
+        super(FixedGridData,self).__init__()
 
-        # fgout Grids
-        self.add_attribute('fgout_grids',[])
+        # Fixed Grids
+        self.add_attribute('fixedgrids',[])
 
 
-    def write(self,data_source='setrun.py', out_file='fgout_grids.data'):
+    def write(self,data_source='setrun.py', out_file='fixed_grids.data'):
         # Fixed grid settings
-        self.open_data_file(out_file, data_source)
-        num_fgout_grids = len(self.fgout_grids)
-        self.data_write(value=num_fgout_grids,alt_name='num_fgout_grids')
-        self.data_write()
-        for fixedgrid in self.fgout_grids:
-            self._out_file.write(11*"%g  " % tuple(fixedgrid) +"\n")
-        self.close_data_file()
+        msg = 'rundata.fixed_grid_data is deprecated starting in v5.9.0,' \
+            + ' use rundata.fgout_data instead'
+        warnings.warn(msg)
+        if len(self.fixedgrids) > 0:
+            raise AttributeError(msg)
+
 
 class FGoutData(clawpack.clawutil.data.ClawData):
 
