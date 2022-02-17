@@ -213,7 +213,7 @@ contains
         real(kind=8), intent(in) :: q(meqn,1-mbc:mxc+mbc,1-mbc:myc+mbc)
         real(kind=8), intent(in) :: aux(maux,1-mbc:mxc+mbc,1-mbc:myc+mbc)
     
-        integer, parameter :: method = 0
+        integer, parameter :: method = 0 ! interpolate in space?
         
         ! Indices
         integer :: ifg,jfg,m,ic1,ic2,jc1,jc2
@@ -306,16 +306,6 @@ contains
                     fg_data(bathy_index,ifg,jfg) = & 
                             interpolate(aux(1,ic1:ic2,jc1:jc2),geometry,method)
 
-                    if (.false.) then
-                        write(6,*) '+++ yfg,geometry(2) = ',yfg,geometry(2)
-                        write(6,*) '+++ xfg,xc1,xc2,geometry(1): ', &
-                                    xfg,xc1,xc2,geometry(1)
-                        write(6,*) '+++ B11,B21: ', aux(1,ic1,jc1),aux(1,ic2,jc1)
-                        write(6,*) '+++ B12,B22: ', aux(1,ic1,jc2),aux(1,ic2,jc2)
-                        write(6,*) '+++ fg_data = ',fg_data(bathy_index,ifg,jfg)
-                        write(6,*) '+++ points(2,1) = ',points(2,1)
-                        write(6,*) '+++ '
-                    endif
                     
                     ! surface eta = h + B:
                     
@@ -324,44 +314,22 @@ contains
                         ! so setting eta = h+B should be fine even near shore:
                         fg_data(eta_index,ifg,jfg) = fg_data(1,ifg,jfg) &
                                 + fg_data(bathy_index,ifg,jfg)
-                                
-                        ! tests for debugging:
-                        
-                        if ((fg_data(1,ifg,jfg) > 0) .and. &
-                            (fg_data(eta_index,ifg,jfg) > 10.d0)) then
-                            write(6,*) '*** unexpected eta = ',fg_data(eta_index,ifg,jfg)
-                            write(6,*) '*** ifg, jfg: ',ifg,jfg
-                        endif
-                            
-                        eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
-                        eta_tmp = interpolate(eta,geometry,method)
-                        if (fg_data(eta_index,ifg,jfg) .ne. eta_tmp) then
-                            write(6,*) '*** unexpected eta_tmp = ',eta_tmp
-                            write(6,*) '***    fg_data(eta_index,ifg,jfg) = ', &
-                                    fg_data(eta_index,ifg,jfg)
-                        endif
                         
                     else if (method == 1) then
-                        ! method==1 we are doing pw bilinear and there may
-                        ! be a problem interpolating each separately
-                        ! NEED TO FIX
+                        ! Note that for pw bilinear interp there may
+                        ! be a problem interpolating each separately since
+                        ! interpolated h + interpolated B may be much larger
+                        ! than eta should be offshore.
                         eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
                         fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry,method)
                         continue
+                        ! NEED TO FIX                        
                     endif
-                                                            
-                    if (.false.) then
-                        write(6,*) '+++ fg_data_eta = ',fg_data(eta_index,ifg,jfg)
-                        write(6,*) '+++ fg_data_h = ',fg_data(1,ifg,jfg)
-                    endif
+                                                        
                     
                     ! save the time this fgout point was computed:
                     fg_data(num_vars,ifg,jfg) = t
                     
-                    !write(59,*) '+++',ifg,jfg
-                    !write(59,*) eta
-                    !write(59,*) geometry
-
                     
                 endif ! if fgout point is on this grid
             enddo ! fgout y-coordinate loop
@@ -378,6 +346,7 @@ contains
     !=======================================================================
     subroutine fgout_write(fgrid,out_time,out_index)
 
+        use geoclaw_module, only: dry_tolerance
         implicit none
         
         ! Subroutine arguments
@@ -391,6 +360,8 @@ contains
         character(len=4) :: cfgno, cframeno
         integer :: grid_number,ipos,idigit,out_number,columns
         integer :: ifg,ifg1, iframe,iframe1
+        
+        integer, parameter :: method = 0  ! interpolate in time?
         
         ! Output format strings 
         ! These are now the same as in outval for frame data, for compatibility
@@ -428,47 +399,61 @@ contains
         ! solution on the fixed grid at the two nearest computational times
         do j=1,fgrid%my
             do i=1,fgrid%mx
-                ! Fetch times for interpolation, this is done per grid point 
-                ! since each grid point may come from a different source
-                t0 = fgrid%early(fgrid%num_vars(1),i,j)
-                tf = fgrid%late(fgrid%num_vars(1),i,j)
-                tau = (out_time - t0) / (tf - t0)
                 
                 ! Check for small numbers
                 forall(m=1:fgrid%num_vars(1)-1,abs(fgrid%early(m,i,j)) < 1d-90)
                     fgrid%early(m,i,j) = 0.d0
                 end forall
-                forall(m=1:fgrid%num_vars(1)-1,abs(fgrid%late(m,i,j)) < 1d-90)
-                    fgrid%late(m,i,j) = 0.d0
-                end forall
+
+                if (method == 0) then
                 
-                ! no interpolation in time, use solution from full step:
-                qaug = fgrid%early(:,i,j)
+                    ! no interpolation in time, use solution from full step:
+                    qaug = fgrid%early(:,i,j)
+                    
+                    ! note that CFL condition ==> waves can't move more than 1
+                    ! cell per time step on each level, so solution from nearest
+                    ! full step should be correct to within a cell width
+                    ! Better to use early than late since for refinement tracking
+                    ! wave moving out into still water.
                 
-                ! note that CFL condition ==> waves can't move more than 1
-                ! cell per time step on each level, so solution from nearest
-                ! full step should be correct to within a cell width
-                ! Better to use early than late since for refinement tracking
-                ! wave moving out into still water.
+                else if (method == 1) then
                 
-                if (.false.) then
-                    ! interpolate in time:  Not being done now
+                    ! interpolate in time. May have problems near shore?
+                    
+                    ! Fetch times for interpolation, this is done per grid point 
+                    ! since each grid point may come from a different source
+                    t0 = fgrid%early(fgrid%num_vars(1),i,j)
+                    tf = fgrid%late(fgrid%num_vars(1),i,j)
+                    tau = (out_time - t0) / (tf - t0)
+                    
+                    ! check for small values:
+                    forall(m=1:fgrid%num_vars(1)-1,abs(fgrid%late(m,i,j)) < 1d-90)
+                        fgrid%late(m,i,j) = 0.d0
+                    end forall
+                    
+                    ! linear interpolation:
                     qaug = (1.d0-tau)*fgrid%early(:,i,j) + tau*fgrid%late(:,i,j)
                     
-                    !write(6,*) '+++ tau, early, late: ',tau,fgrid%early(:,i,j),fgrid%late(:,i,j)
+                    ! If resolution changed between early and late time, may be
+                    ! problems near shore when interpolating B, h, eta
+                    ! separately (at least in case when B changed and point
+                    ! was dry at one time and wet the other).
+                    ! Switch back to fgrid%early values, only in this case.
+                    ! This is implemented below but not extensively tested.
                     
-                    ! if resolution changed between early and late time, may be
-                    ! problems near shore when interpolating B, h, eta separately
                     if (qaug(1) > 0.d0) then
                         topo_early = fgrid%early(4,i,j)
                         topo_late = fgrid%late(4,i,j)
                         if (topo_early .ne. topo_late) then
+                            ! AMR resolution changed between times
                             h_early = fgrid%early(1,i,j)
                             h_late = fgrid%late(1,i,j)
-                            if ((h_early == 0.d0) .xor. (h_late == 0.d0)) then
-                                qaug = fgrid%early(:,i,j) ! revert to early values
-                                write(6,*) '+++ reverting to early values at i,j, t0: ', i,j,t0
-                                write(6,*) '+++ topo_early, topo_late: ',topo_early, topo_late
+                            if (((h_early < dry_tolerance) &
+                                    .and. (h_late >= dry_tolerance)) &
+                                .or. ((h_late < dry_tolerance) &
+                                    .and. (h_early >= dry_tolerance))) then
+                                ! point changed between wet and dry
+                                qaug = fgrid%early(:,i,j) ! don't interpolate
                             endif
                         endif
                     endif
