@@ -1,19 +1,25 @@
 r"""
 fgout_tools module: $CLAW/geoclaw/src/python/geoclaw/fgout_tools.py
 
-Tools to specify an fgout grid for output on a fixed grid at a sequence
-of times, regardless of the AMR structure.
+Tools to specify and work with fgout grids, used to output GeoClaw solutions
+on a fixed grid at a sequence of times, regardless of the AMR structure.
 
+Includes:
+
+- class FGoutFrame: used to hold a single frame of fgout output data
+- class FGoutGrid: used to specify and store info about an fgout grid, with
+                   methods to read and write info to fgout_grids.data
+- function make_fgout_fcn_xy: Takes an FGoutFrame object and produces an
+            interpolating function that can be evaluated for any (x,y).
+- function make_fgout_fcn_xyt: Takes 2 FGoutFrame objects and produces an
+            interpolating function that can be evaluated for any (x,y,t)
+            at intermediate times.
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
-from numpy import sqrt, ma
+from numpy import sqrt, ma, mod
 import numpy
 from six.moves import range
-from clawpack.geoclaw import topotools
-
 
 class FGoutFrame(object):
 
@@ -21,11 +27,14 @@ class FGoutFrame(object):
         self.fgout_grid = fgout_grid
         self.frameno = frameno
         self.t = None
+        self.t_hms = None
         self.X = None
         self.Y = None
         self.x = None
         self.y = None
-        self.extent = None
+        self.delta = None
+        self.extent_centers = None
+        self.extent_edges = None
 
         # private attributes for those that are only created if
         # needed by the user:
@@ -314,21 +323,30 @@ class FGoutGrid(object):
         #if self.plotdata is None:
         #   self.set_plotdata()
         
-        print('Reading fgout grid %i frame %i from %s' \
-                % (frameno,self.fgno,self.plotdata.outdir))
         try:
             fr = self.plotdata.getframe(frameno)
         except:
-            print('*** Could not read file')
+            print('*** Could not read fgout grid %i frame %i from %s' \
+                 % (frameno,self.fgno,self.plotdata.outdir))
             raise
         state = fr.states[0]  # only 1 AMR grid
         patch = state.patch
 
         fgout_frame = FGoutFrame(self, frameno)
+        fgout_frame.fgout_grid = self
 
         fgout_frame.q = state.q
 
         fgout_frame.t = state.t
+
+        # string version of t in H:M:S format for e.g. titles:
+        hours = int(fgout_frame.t/3600.)
+        tmin = mod(fgout_frame.t,3600.)
+        min = int(tmin/60.)
+        sec = int(mod(tmin,60.))
+        fgout_frame.t_hms = '%s:%s:%s' \
+                            % (hours,str(min).zfill(2),str(sec).zfill(2))
+    
         fgout_frame.frameno = frameno
         
         fgout_frame.X = patch.grid.p_centers[0]
@@ -336,8 +354,137 @@ class FGoutGrid(object):
 
         fgout_frame.x = fgout_frame.X[:,0]
         fgout_frame.y = fgout_frame.Y[0,:]
+        dx = fgout_frame.x[1] - fgout_frame.x[0]
+        dy = fgout_frame.y[1] - fgout_frame.y[0]
+        fgout_frame.delta = [dx, dy]
         
-        fgout_frame.extent = [fgout_frame.X.min(),fgout_frame.X.max(),\
-                              fgout_frame.Y.min(),fgout_frame.Y.max()]
+        fgout_frame.extent_centers = [fgout_frame.X.min(),fgout_frame.X.max(),\
+                                      fgout_frame.Y.min(),fgout_frame.Y.max()]
+                                      
+        fgout_frame.extent_edges = [fgout_frame.X.min() - dx/2, \
+                                    fgout_frame.X.max() + dx/2, \
+                                    fgout_frame.Y.min() - dy/2, \
+                                    fgout_frame.Y.max() + dy/2]
         return fgout_frame
 
+
+# ========================
+# Functions for interpolating from fgout grid to arbitrary points,
+# useful for example if using velocity field to model particle/debris motion
+
+def make_fgout_fcn_xy(fgout, qoi, method='nearest',
+                       bounds_error=False, fill_value=numpy.nan):
+    """
+    Create a function that can be called at (x,y) and return the qoi
+    interpolated in space from the fgout array.
+    
+    qoi should be a string (e.g. 'h', 'u' or 'v') corresponding to 
+    an attribute of fgout.
+    
+    The function returned takes arguments x,y that can be floats or 
+    (equal length) 1D arrays of values that lie within the spatial
+    extent of fgout. 
+    
+    bounds_error and fill_value determine the behavior if (x,y) is not in 
+    the bounds of the data, as in scipy.interpolate.RegularGridInterpolator.
+    """
+    
+    from scipy.interpolate import RegularGridInterpolator
+    
+    try:
+        q = getattr(fgout,qoi)
+    except:
+        print('*** fgout missing attribute qoi = %s?' % qoi)
+        
+    err_msg = '*** q must have same shape as fgout.X\n' \
+            + 'fgout.X.shape = %s,   q.shape = %s' % (fgout.X.shape,q.shape)
+    assert fgout.X.shape == q.shape, err_msg
+    
+    x1 = fgout.X[:,0]
+    y1 = fgout.Y[0,:]
+    fgout_fcn1 = RegularGridInterpolator((x1,y1), q, method=method,
+                bounds_error=bounds_error, fill_value=fill_value)
+
+    def fgout_fcn(x,y):
+        # evaluate at a single point or x,y arrays:
+        from numpy import array, vstack
+        xa = array(x)
+        ya = array(y)
+        xyout = vstack((xa,ya)).T
+        qout = fgout_fcn1(xyout)
+        if len(qout) == 1:
+            qout = qout[0]  # return scalar
+        return qout
+
+    return fgout_fcn
+
+
+def make_fgout_fcn_xyt(fgout1, fgout2, qoi, method_xy='nearest',
+                       method_t='linear', bounds_error=False,
+                       fill_value=numpy.nan):
+    """
+    Create a function that can be called at (x,y,t) and return the qoi
+    interpolated in space and time between the two frames fgout1 and fgout2.
+    
+    qoi should be a string (e.g. 'h', 'u' or 'v') corresponding to 
+    an attribute of fgout.
+    
+    method_xy is the method used in creating the spatial interpolator,
+    and is passed to make_fgout_fcn_xy.
+    
+    method_t is the method used for interpolation in time, currently only
+    'linear' is supported, which linearly interpolates.
+    
+    bounds_error and fill_value determine the behavior if (x,y,t) is not in 
+    the bounds of the data.
+    
+    The function returned takes arguments x,y (floats or equal-length 1D arrays)
+    of values that lie within the spatial extent of fgout1, fgout2
+    (which are assumed to cover the same uniform grid at different times)
+    and t should be a float that lies between fgout1.t and fgout2.t. 
+    """
+    
+    assert numpy.allclose(fgout1.X, fgout2.X), \
+                            '*** fgout1 and fgout2 must have same X'
+    assert numpy.allclose(fgout1.Y, fgout2.Y), \
+                            '*** fgout1 and fgout2 must have same Y'
+    
+    t1 = fgout1.t
+    t2 = fgout2.t
+    #assert t1 < t2, '*** expected fgout1.t < fgout2.t'
+    
+    fgout1_fcn_xy = make_fgout_fcn_xy(fgout1, qoi, method=method_xy,
+                       bounds_error=bounds_error, fill_value=fill_value)
+    fgout2_fcn_xy = make_fgout_fcn_xy(fgout2, qoi, method=method_xy,
+                       bounds_error=bounds_error, fill_value=fill_value)
+                
+    def fgout_fcn(x,y,t):
+        # function to evaluate at a single point or x,y arrays, at time t:
+        from numpy import array, ones
+        xa = array(x)
+        ya = array(y)
+        tol = 1e-6  # to make sure it works ok when called with t=t1 or t=t2
+        if t1-tol <= t <= t2+tol:
+            alpha = (t-t1)/(t2-t1)
+        elif bounds_error:
+            errmsg = '*** argument t=%g should be between t1=%g and t2=%g' \
+                     % (t,t1,t2)
+            raise InputError(errmsg)
+        else:
+            qout = fill_value * ones(xa.shape)
+            return qout
+
+        qout1 = fgout1_fcn_xy(x,y)
+        qout2 = fgout2_fcn_xy(x,y)
+
+        if method_t == 'linear':
+            if t1 <= t <= t2:
+                alpha = (t-t1)/(t2-t1)
+                qout = (1-alpha)*qout1 + alpha*qout2
+        else:
+            raise NotImplementedError('method_t = %s not supported' % method_t)
+            
+        return qout
+        
+    return fgout_fcn
+    
