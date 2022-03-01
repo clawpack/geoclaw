@@ -353,8 +353,6 @@ def setrun(claw_pkg='geoclaw'):
     refinement_data = rundata.refinement_data
     refinement_data.variable_dt_refinement_ratios = True
     refinement_data.wave_tolerance = 0.01
-    refinement_data.deep_depth = 1e2
-    refinement_data.max_level_deep = 3
 
     # == settopo.data values ==
     topo_data = rundata.topo_data
@@ -400,7 +398,7 @@ def setrun(claw_pkg='geoclaw'):
 
     fg = fgmax_tools.FGmaxGrid()
     fg.point_style = 2  # uniform rectangular x-y grid
-    fg.x1 = -120. + dx_fine/2.
+    fg.x1 = -120. + dx_fine/2.  # specify pts to align with FV cell centers
     fg.x2 = -60. - dx_fine/2.
     fg.y1 = -60. + dx_fine/2.
     fg.y2 = 0. - dx_fine/2.
@@ -426,9 +424,9 @@ def setrun(claw_pkg='geoclaw'):
     fgout.fgno = 1
     fgout.point_style = 2       # will specify a 2d grid of points
     fgout.output_format = 'binary'
-    fgout.nx = 201
-    fgout.ny = 251
-    fgout.x1 = -115.
+    fgout.nx = 200
+    fgout.ny = 250
+    fgout.x1 = -115.  # specify edges (fgout pts will be cell centers)
     fgout.x2 = -70.
     fgout.y1 = -55.
     fgout.y2 = -10.

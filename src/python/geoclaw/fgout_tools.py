@@ -285,16 +285,16 @@ class FGoutGrid(object):
             y1,y2 = self.y1, self.y2
             if self.nx is None:
                 dx = self.dx
-                nx = int(round((x2-x1)/dx)) + 1
+                nx = int(round((x2-x1)/dx))  # x1,x2 are cell edges
                 if abs((nx-1)*dx + x1 - x2) > 1e-6:
-                    print("Warning: abs((nx-1)*dx + x1 - x2) = ", \
-                          abs((nx-1)*dx + x1 - x2))
+                    print("Warning: abs(nx*dx + x1 - x2) = ", \
+                          abs(nx*dx + x1 - x2))
                     print("         old x2: %22.16e" % x2)
-                    x2 = x1 + dx*(nx-1)
+                    x2 = x1 + dx*nx
                     print("         resetting x2 to %22.16e" % x2)
             else:
                 nx = self.nx
-                dx = (x2-x1)/(nx+1.)
+                dx = (x2-x1)/nx   # x1,x2 are cell edges
                 if self.dx is not None:
                     print("*** Warning: dx specified over-ridden by: ",dx)
 
@@ -302,16 +302,16 @@ class FGoutGrid(object):
                 dy = self.dy
                 if dy is None:
                     dy = dx
-                ny = int(round((y2-y1)/dy)) + 1
+                ny = int(round((y2-y1)/dy))  # y1,y2 are cell edges
                 if abs((ny-1)*dy + y1 - y2) > 1e-6:
-                    print("Warning: abs((ny-1)*dy + y1 - y2) = ", \
-                          abs((ny-1)*dy + y1 - y2))
+                    print("Warning: abs(ny*dy + y1 - y2) = ", \
+                          abs(ny*dy + y1 - y2))
                     print("         old y2: %22.16e" % y2)
-                    y2 = y1 + dy*(ny-1)
+                    y2 = y1 + dy*ny
                     print("         resetting y2 to %22.16e" % y2)
             else:
                 ny = self.ny
-                dy = (y2-y1)/(ny+1.)
+                dy = (y2-y1)/ny   # y1,y2 are cell edges
                 if self.dy is not None:
                     print("*** Warning: dy specified over-ridden by: ",dy)
 
