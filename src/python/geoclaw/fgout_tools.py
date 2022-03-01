@@ -21,20 +21,28 @@ from numpy import sqrt, ma, mod
 import numpy
 from six.moves import range
 
+
 class FGoutFrame(object):
+
+    """
+    Class to hold a single frame of fgout data at one output time.
+    Several attributes are defined as properties that can be evaluated
+    and stored only when needed by the user.
+    """
 
     def __init__(self, fgout_grid=None, frameno=None):
         self.fgout_grid = fgout_grid
         self.frameno = frameno
         self.t = None
-        self.t_hms = None
+        self.t_hms = None           # string in h:m:s format
         self.X = None
         self.Y = None
         self.x = None
         self.y = None
-        self.delta = None
-        self.extent_centers = None
-        self.extent_edges = None
+        self.delta = None           # (dx,dy)
+        self.extent_centers = None  # defined by fgout points
+        self.extent_edges = None    # extended so points are cell centers
+        self.drytol = 1e-3          # used for computing u,v from hu,hv
 
         # private attributes for those that are only created if
         # needed by the user:
@@ -54,6 +62,7 @@ class FGoutFrame(object):
 
     @property
     def h(self):
+        """depth"""
         if self._h is None:
             #print('+++ setting _h...')
             self._h = self.q[0,:,:]
@@ -62,32 +71,34 @@ class FGoutFrame(object):
 
     @property
     def hu(self):
+        """momentum h*u"""
         if self._hu is None:
             self._hu = self.q[1,:,:]
         return self._hu
 
     @property
     def u(self):
+        """speed u, computed as hu/h or set to 0 if h<self.drytol"""
         if self._u is None:
-            # set u = hu/h where h>0.01 and to 0 elsewhere:
             self._u = numpy.divide(self.hu, self.h,\
                               out=numpy.zeros(self.h.shape, dtype=float), \
-                              where=(self.h>0.01))
+                              where=(self.h>self.drytol))
         return self._u
 
     @property
     def hv(self):
+        """momentum h*v"""
         if self._hv is None:
             self._hv = self.q[2,:,:]
         return self._hv
 
     @property
     def v(self):
+        """speed v, computed as hv/h or set to 0 if h<self.drytol"""
         if self._v is None:
-            # set v = hv/h where h>0.01 and to 0 elsewhere:
             self._v = numpy.divide(self.hv, self.h,\
                               out=numpy.zeros(self.h.shape, dtype=float), \
-                              where=(self.h>0.01))
+                              where=(self.h>self.drytol))
         return self._v
 
     @property
@@ -99,20 +110,21 @@ class FGoutFrame(object):
 
     @property
     def B(self):
+        """topography"""
         if self._B is None:
             self._B = self.q[-1,:,:] - self.q[0,:,:]
         return self._B
 
     @property
     def s(self):
-        """speed"""
+        """speed s = sqrt(u**2 + v**2)"""
         if self._s is None:
             self._s = numpy.sqrt(self.u**2 + self.v**2)
         return self._s
 
     @property
     def hss(self):
-        """momentum flux"""
+        """momentum flux h*s**2"""
         if self._hss is None:
             self._hss = self.h * self.s**2
         return self._hss
@@ -129,7 +141,7 @@ class FGoutGrid(object):
 
         # GeoClaw input values:
         self.id = ''  # identifier, optional
-        self.point_style = None
+        self.point_style = 2  # only option currently supported
         self.npts = None
         self.nx = None
         self.ny = None
@@ -234,6 +246,10 @@ class FGoutGrid(object):
 
 
     def write_to_fgout_data(self, fid):
+        """
+        Convert fgout data specified in setrun.py to file `fgout_grids.data`
+        read in by GeoClaw fortran code.
+        """
 
         print("\n---------------------------------------------- ")
         point_style = self.point_style
@@ -406,7 +422,9 @@ def make_fgout_fcn_xy(fgout, qoi, method='nearest',
                 bounds_error=bounds_error, fill_value=fill_value)
 
     def fgout_fcn(x,y):
-        # evaluate at a single point or x,y arrays:
+        """
+        Function that can be evaluated at single point or arrays (x,y).
+        """
         from numpy import array, vstack
         xa = array(x)
         ya = array(y)
@@ -459,7 +477,10 @@ def make_fgout_fcn_xyt(fgout1, fgout2, qoi, method_xy='nearest',
                        bounds_error=bounds_error, fill_value=fill_value)
                 
     def fgout_fcn(x,y,t):
-        # function to evaluate at a single point or x,y arrays, at time t:
+        """
+        Function that can be evaluated at single point or arrays (x,y)
+        at a single time t.
+        """
         from numpy import array, ones
         xa = array(x)
         ya = array(y)
