@@ -123,8 +123,10 @@ module described at https://www.clawpack.org/fgout_tools_module.html
 provides tools for reading frames and producing
 arrays that can then be worked with directly.
 
-An example of how this might be done is provided in
-`make_fgout_animation.py`, which reads in all the frames of fgout data
+
+An example of how this might be done is provided in `plot_fgout.py`,
+where a single frame is plotted.  The sample code in 
+`make_fgout_animation.py` reads in all the frames of fgout data
 and produces an animation as a stand-alone mp4 file.  The use of
 fgout grids provides a way to produce frequent outputs on a fixed grid
 resolution, as often desired for making smooth animations of a portion of
