@@ -17,12 +17,16 @@ Module provides provides tide prediction functions.
  - surge - predicts surge at NOAA gauge station
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 from collections.abc import Iterable
 from collections import OrderedDict, namedtuple
 from scipy.optimize import leastsq, fsolve
 from itertools import takewhile, count
 from datetime import datetime, timedelta
 from functools import reduce
+from six.moves.urllib.parse import urlencode
+from six.moves.urllib.request import urlopen
 
 try:
     from itertools import izip, ifilter
@@ -38,98 +42,335 @@ try:
     import pandas as pd
     import operator as op
     import numpy as np
+    import io
+    import os
+    import os.path
 except ImportError as e:
     print(e)
 
+#%env CLAW=/Users/jonathansocoy/clawpack
 
 d2r, r2d = np.pi/180.0, 180.0/np.pi
 
+NOAA_API_URL = 'https://tidesandcurrents.noaa.gov/api/datagetter'
+NOAA_home = 'https://tidesandcurrents.noaa.gov/harcon.html'
 
 ######################## Tide Prediction Functions ########################
 
-def retrieve_constituents(stationID):
-    #Forms URL
-    url = 'https://tidesandcurrents.noaa.gov/harcon.html?unit=0&timezone=0&id={}'.format(stationID)
-
-    #Requests URL 
-    page = requests.get(url)
-    doc = lh.fromstring(page.content)
-    tr_elements = doc.xpath('//tr')
-    col = [((t.text_content(),[])) for t in tr_elements[0]]
-    for j in range(1, len(tr_elements)):
-        T, i = tr_elements[j], 0
-        for t in T.iterchildren():
-            col[i][1].append(t.text_content())
-            i+=1
- 
-    #Appends data to csv file
-    component_dict = {title:column for (title,column) in col}
-    component_array = pd.DataFrame(component_dict)
-    #component_array.to_csv('{}_constituents.csv'.format(stationID), index=False)
+def retrieve_constituents(station, time_zone='GMT', units='meters', cache_dir=None,
+                         verbose=True):
+                         
+    """Fetch constituent data for given NOAA tide station.
+    By default, retrieved data is cached in the geoclaw scratch directory
+    located at:
+        $CLAW/geoclaw/scratch
+    :Required Arguments:
+      - station (string): 7 character station ID
+    :Optional Arguments:
+      - time_zone (string): see NOAA API documentation for possible values
+      - units (string): see NOAA API documentation for possible values
+      - cache_dir (string): alternative directory to use for caching data
+      - verbose (bool): whether to output informational messages
+    :Returns:
+      - constituent_dict (dictionary): dictionary of tidal constituents for NOAA gauge station
+    """
+                        
+    def units_num(units):
+        if (units == 'meters'):
+            return 0
+        elif (time_zone == 'feet'):
+            return 1
     
-    return component_dict
-
-
-def retrieve_water_levels(*args):
-    #NOAA api
-    api = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={}'\
-          '&end_date={}&'.format(args[1].strftime("%Y%m%d %H:%M"), args[2].strftime("%Y%m%d %H:%M"))
-    
-    #NOAA observed data 
-    obs_url = 'station={}&product=water_level&datum=MTL&units=metric&time_zone=gmt'\
-              '&application=ports_screen&format=json'.format(args[0])
-
-    obs_data_page = requests.get(api + obs_url)
-    obs_data = obs_data_page.json()['data']
-    obs_heights = [float(d['v']) for d in obs_data]
-    
-    NOAA_times = [datetime.strptime(d['t'], '%Y-%m-%d %H:%M') for d in obs_data]
+    def time_zone_num(time_zone):
+        if (time_zone == 'GMT'):
+            return 0
+        elif (time_zone == 'Local'):
+            return 1
         
-    component_dict = {'Datetimes': NOAA_times, 'Observed Heights': obs_heights}
-    component_array = pd.DataFrame(component_dict)
-    #component_array.to_csv('{}_NOAA_water_levels.csv'.format(args[0]), index=False)
+    def get_noaa_params(station, time_zone, units):
+        noaa_params = {
+            'unit': units_num(units),
+            'timezone': time_zone_num(time_zone),
+            'id': station
+        }
+        return noaa_params
     
-    return NOAA_times, obs_heights
+    # use geoclaw scratch directory for caching by default
+    if cache_dir is None:
+        if 'CLAW' not in os.environ:
+            raise ValueError('CLAW environment variable not set')
+        claw_dir = os.environ['CLAW']
+        cache_dir = os.path.join(claw_dir, 'geoclaw', 'scratch')    #### cache_dir
+ 
+    def get_cache_path(station, time_zone, units):
+        filename = '{}_{}_constituents'.format(time_zone, units)
+        abs_cache_dir = os.path.abspath(cache_dir)
+        return os.path.join(abs_cache_dir, 'constituents', station, filename)
+    
+    def save_to_cache(cache_path, data):
+        # make parent directories if they do not exist
+        parent_dir = os.path.dirname(cache_path)
+        if not os.path.exists(parent_dir):
+            os.makedirs(parent_dir)
+            
+        component_array = pd.DataFrame(data)
+        component_array.to_csv(cache_path, index=False)
+            
+    def parse(cache_path):
+        # read data into structured array, skipping header row if present
+        data = pd.read_csv(cache_path)
+        component_array = pd.DataFrame(data)
+        component_dict = component_array.to_dict(orient='list')
+        return component_dict
+
+    #Requests URL
+    def fetch_data(station, time_zone, units):
+        noaa_params = get_noaa_params(station, time_zone, units)
+        cache_path = get_cache_path(station, time_zone, units)
+        
+        # use cached data if available
+        if os.path.exists(cache_path):
+            if verbose:
+                print('Using cached constituent data for station {}'.format(station))
+            return parse(cache_path)
+            
+
+        # otherwise, retrieve data from NOAA and cache it
+        if verbose:
+            print('Fetching constituent data from NOAA for station {}'.format(station))
+  
+        #Forms URL
+        url = '{}?{}'.format(NOAA_home, urlencode(noaa_params))
+
+        page = requests.get(url)
+        doc = lh.fromstring(page.content)
+        tr_elements = doc.xpath('//tr')
+        col = [((t.text_content(),[])) for t in tr_elements[0]]
+        for j in range(1, len(tr_elements)):
+            T, i = tr_elements[j], 0
+            for t in T.iterchildren():
+                col[i][1].append(t.text_content())
+                i+=1
+                
+        constituent_dict = {title:column for (title,column) in col}
+
+        # if there were no errors, then cache response
+        save_to_cache(cache_path, constituent_dict)
+                
+        return constituent_dict
 
 
-def retrieve_predicted_tide(*args):
-    #NOAA api
-    api = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={}'\
-          '&end_date={}&'.format(args[1].strftime("%Y%m%d %H:%M"), args[2].strftime("%Y%m%d %H:%M"))
+    try:
+        constituents = fetch_data(station, time_zone, units)
+         
+    except:
+        print('*** Fetching NOAA Constituents failed, returning None')
+        constituents = None
     
-    #NOAA predicted data 
-    pred_url = 'station={}&product=predictions&datum=MTL&units=metric&time_zone=gmt'\
-               '&application=ports_screen&format=json'.format(args[0])
+    return constituents
+
+
+def fetch_noaa_tide_data(station, begin_date, end_date, datum='MTL', time_zone='GMT', units='metric', cache_dir=None, verbose=True):
+    """Fetch water levels and tide predictions at given NOAA tide station.
+    The data is returned in 6 minute intervals between the specified begin and
+    end dates/times.  A complete specification of the NOAA CO-OPS API for Data
+    Retrieval used to fetch the data can be found at:
+        https://tidesandcurrents.noaa.gov/api/
+    By default, retrieved data is cached in the geoclaw scratch directory
+    located at:
+        $CLAW/geoclaw/scratch
+    :Required Arguments:
+      - station (string): 7 character station ID
+      - begin_date (datetime): start of date/time range of retrieval
+      - end_date (datetime): end of date/time range of retrieval
+    :Optional Arguments:
+      - datum (string): see NOAA API documentation for possible values
+      - time_zone (string): see NOAA API documentation for possible values
+      - units (string): see NOAA API documentation for possible values
+      - cache_dir (string): alternative directory to use for caching data
+      - verbose (bool): whether to output informational messages
+    :Returns:
+      - date_time (numpy.ndarray): times corresponding to retrieved data
+      - water_level (numpy.ndarray): preliminary or verified water levels
+      - prediction (numpy.ndarray): tide predictions
+    """
+    # use geoclaw scratch directory for caching by default
+    if cache_dir is None:
+        if 'CLAW' not in os.environ:
+            raise ValueError('CLAW environment variable not set')
+        claw_dir = os.environ['CLAW']
+        cache_dir = os.path.join(claw_dir, 'geoclaw', 'scratch')
+
+    def fetch(product, expected_header, col_idx, col_types):
+        noaa_params = get_noaa_params(product)
+        cache_path = get_cache_path(product)
+
+        # use cached data if available
+        if os.path.exists(cache_path):
+            if verbose:
+                print('Using cached {} data for station {}'.format(
+                    product, station))
+            return parse(cache_path, col_idx, col_types, header=True)
+
+        # otherwise, retrieve data from NOAA and cache it
+        if verbose:
+            print('Fetching {} data from NOAA for station {}'.format(
+                product, station))
+        full_url = '{}?{}'.format(NOAA_API_URL, urlencode(noaa_params))
+        with urlopen(full_url) as response:
+            text = response.read().decode('utf-8')
+            with io.StringIO(text) as data:
+                # ensure that received header is correct
+                header = data.readline().strip()
+                if header != expected_header or 'Error' in text:
+                    # if not, response contains error message
+                    raise ValueError(text)
+
+                # if there were no errors, then cache response
+                save_to_cache(cache_path, text)
+
+                return parse(data, col_idx, col_types, header=False)
+
+    def get_noaa_params(product):
+        noaa_date_fmt = '%Y%m%d %H:%M'
+        noaa_params = {
+            'product': product,
+            'application': 'Clawpack',
+            'format': 'csv',
+            'station': station,
+            'begin_date': begin_date.strftime(noaa_date_fmt),
+            'end_date': end_date.strftime(noaa_date_fmt),
+            'time_zone': time_zone,
+            'datum': datum,
+            'units': units
+        }
+        return noaa_params
+
+    def get_cache_path(product):
+        cache_date_fmt = '%Y%m%d%H%M'
+        dates = '{}_{}'.format(begin_date.strftime(cache_date_fmt),
+                               end_date.strftime(cache_date_fmt))
+        filename = '{}_{}_{}'.format(time_zone, datum, units)
+        abs_cache_dir = os.path.abspath(cache_dir)
+        return os.path.join(abs_cache_dir, product, station, dates, filename)
+
+    def save_to_cache(cache_path, data):
+        # make parent directories if they do not exist
+        parent_dir = os.path.dirname(cache_path)
+        if not os.path.exists(parent_dir):
+            os.makedirs(parent_dir)
+
+        # write data to cache file
+        with open(cache_path, 'w') as cache_file:
+            cache_file.write(data)
+
+    def parse(data, col_idx, col_types, header):
+        # read data into structured array, skipping header row if present
+        a = np.genfromtxt(data, usecols=col_idx, dtype=col_types,
+                             skip_header=int(header), delimiter=',',
+                             missing_values='')
+
+        # return tuple of columns
+        return tuple(a[col] for col in a.dtype.names)
+
+    # only need first two columns of data; first column contains date/time,
+    # and second column contains corresponding value
+    col_idx = (0, 1)
+    col_types = 'datetime64[m], float'
+
+    # fetch water levels and tide predictions
+    try:
+        date_time, water_level = fetch(
+            'water_level', 'Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality',
+            col_idx, col_types)
+    except:
+        print('*** Fetching water_level failed, returning None')
+        date_time = None
+        water_level = None
+
+    try:
+        date_time2, prediction = fetch('predictions', 'Date Time, Prediction',
+                                       col_idx, col_types)
+        if date_time is None:
+            date_time = date_time2
+
+    except:
+        print('*** Fetching prediction failed, returning None')
+        date_time2 = None
+        prediction = None
+
+    # ensure that date/time ranges are the same
+    if (date_time is not None) and (date_time2 is not None):
+        if not np.array_equal(date_time, date_time2):
+            raise ValueError('Received data for different times')
+
+    return date_time, water_level, prediction
     
-    pred_data_page = requests.get(api + pred_url)
-    pred_data = pred_data_page.json()['predictions']
-    pred_heights = [float(d['v']) for d in pred_data]
     
-    return pred_heights
+def datum_value(station, datum, time_zone='GMT', units='metric'):
+    """Fetch datum value for given NOAA tide station.
+    :Required Arguments:
+      - station (string): 7 character station ID
+      - datum (string): MSL, MTL
+    :Optional Arguments:
+      - time_zone (string): see NOAA API documentation for possible values
+      - units (string): see NOAA API documentation for possible values
+    :Returns:
+      - datum_value (float): value for requested datum reference
+    """
+    def get_noaa_params(station, time_zone, units):
+        noaa_params = {
+            'product': 'datums',
+            'units': units,
+            'time_zone': time_zone,
+            'station': station,
+            'application': 'Clawpack',
+            'format':'json'
+        }
+        return noaa_params
     
-    
-def datum_value(stationID, datum): 
     #Scrapes MTL/MSL Datum Value
-    datum_url = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?&station={}&product=datums'\
-                '&units=metric&time_zone=gmt&application=ports_screen&format=json'.format(stationID)
-    page_data = requests.get(datum_url)
-    data = page_data.json()['datums']       
-    datum_value = [d['v'] for d in data if d['n'] == datum]
+    def get_datum(station, time_zone, units):
+        noaa_params = get_noaa_params(station, time_zone, units)
+        url = '{}?{}'.format(NOAA_API_URL, urlencode(noaa_params))
+        page_data = requests.get(url)
+        data = page_data.json()['datums']
+        datum_value = [d['v'] for d in data if d['n'] == datum]
+        return datum_value
     
-    return float(datum_value[0])
+    try:
+        datum_value = float(get_datum(station, time_zone, units)[0])
+    except:
+        print('*** Fetching datum value failed, returning None')
+        datum_value = None
+        
+    return datum_value
 
      
-def predict_tide(*args): 
-    #These are the NOAA constituents, in the order presented on their website.
+def predict_tide(station, begin_date, end_date, datum='MTL', time_zone='GMT', units='meters'):
+    """Fetch datum value for given NOAA tide station.
+    :Required Arguments:
+      - station (string): 7 character station ID
+      - begin_date (datetime): start of date/time range of prediction
+      - end_date (datetime): end of date/time range of prediction
+    :Optional Arguments:
+      - datum (string): MTL for tide prediction
+      - time_zone (string): see NOAA API documentation for possible values
+      - units (string): see NOAA API documentation for possible values
+    :Returns:
+      - heights (float): tide heights
+    """
+    #These are the NOAA constituents, in the order presented on NOAA's website.
     constituents = [c for c in noaa if c != _Z0]
-    noaa_values = retrieve_constituents(args[0])
+    noaa_values = retrieve_constituents(station, time_zone, units)
     noaa_amplitudes = [float(amplitude) for amplitude in noaa_values['Amplitude']]
     noaa_phases = [float(phases) for phases in noaa_values['Phase']] 
     
-    #We can add a constant offset (e.g. for a different datum, we will use relative to MLLW):
-    MTL = datum_value(args[0], 'MTL')
-    MSL = datum_value(args[0], 'MSL')
-    offset = MSL - MTL
+    #We can add a constant offset - set to MTL
+#    MTL = datum_value(args[0], 'MTL')
+    desired_datum = datum_value(station, datum)
+    MSL = datum_value(station, 'MSL')
+    offset = MSL - desired_datum
     constituents.append(_Z0)
     noaa_phases.append(0)
     noaa_amplitudes.append(offset)
@@ -143,35 +384,49 @@ def predict_tide(*args):
     tide = Tide(model = model, radians = False)
     
     #Time Calculations
-    delta = (args[2]-args[1])/timedelta(hours=1) + .1
-    times = Tide._times(args[1], np.arange(0, delta, .1))
+    delta = (end_date-begin_date)/timedelta(hours=1) + .1
+    times = Tide._times(begin_date, np.arange(0, delta, .1))
     
     #Height Calculations
     heights_arrays = [tide.at([times[i]]) for i in range(len(times))]
-    pytide_heights = [val for sublist in heights_arrays for val in sublist]
+    heights = [val for sublist in heights_arrays for val in sublist]
  
-    return pytide_heights 
+    return heights
 
 
-def datetimes(*args):
-    #Time Calculations 
-    delta = (args[1]-args[0])/timedelta(hours=1) + .1
-    times = Tide._times(args[1], np.arange(0, delta, .1))
-    
+def datetimes(begin_date, end_date):
+    #Time Calculations
+    delta = (end_date-begin_date)/timedelta(hours=1) + .1
+    times = Tide._times(begin_date, np.arange(0, delta, .1))
     return times
 
 
-def detide(*args):
+def detide(NOAA_observed_water_level, predicted_tide):
     # NOAA observed water level - predicted tide 
-    return [(args[0][i] - args[1][i]) for i in range(len(args[0]))] 
+    return [(NOAA_observed_water_level[i] - predicted_tide[i]) for i in range(len(NOAA_observed_water_level))]
 
-    
-def surge(*args):
-    #Surge Implementation
-    predicted_tide = predict_tide(args[0], args[1], args[2])
-    NOAA_times, NOAA_observed_water_level = retrieve_water_levels(args[0], args[1], args[2])
-    surge = detide(NOAA_observed_water_level, predicted_tide) 
-    times = [(time-args[3])/timedelta(days=1) for time in NOAA_times]
+#Surge Implementation
+def surge(station, beg_date, end_date, landfall_date):
+    """Fetch datum value for given NOAA tide station.
+    :Required Arguments:
+      - station (string): 7 character station ID
+      - begin_date (datetime): start of date/time range of prediction
+      - end_date (datetime): end of date/time range of prediction
+      - landfall_date (datetime): approximate time of landfall for reference
+    :Optional Arguments:
+      - datum (string): MTL for tide prediction and retrieval
+      - time_zone (string): see NOAA API documentation for possible values
+    :Returns:
+      - times (float): times with landfall event as reference
+      - surge (float): surge heights
+    """
+    predicted_tide = predict_tide(station, beg_date, end_date)
+    NOAA_times, NOAA_observed_water_level, NOAA_predicted_tide = fetch_noaa_tide_data(station, beg_date, end_date)
+
+    #detides NOAA observed water levels with predicted tide
+    surge = detide(NOAA_observed_water_level, predicted_tide)
+    #modifies NOAA times to datetimes
+    times = [((pd.to_datetime(time).to_pydatetime())-landfall_date)/timedelta(days=1) for time in NOAA_times]
     
     return times, surge
 
