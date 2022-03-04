@@ -131,3 +131,19 @@ and produces an animation as a stand-alone mp4 file.  The use of
 fgout grids provides a way to produce frequent outputs on a fixed grid
 resolution, as often desired for making smooth animations of a portion of
 the computational domain.
+
+Saving a sequence of fgout frames to a single netCDF file
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The script `make_netcdf.py` illustrates how to combine multiple fgout
+frames of data into a single netCDF file using `fgout_tools.write_netcdf`.
+This is easily done since all the fgout results are on the same uniform
+grid.  You can also select which quantities of interest to store and use
+32-bit floats to store them, so that the resulting file takes much less
+space than the original collection of fgout files.
+
+The script `make_netcdf.py` also illustrates how to read the arrays back in
+from the netCDF file.
+
+This example requires the Python module `netCDF4
+<https://unidata.github.io/netcdf4-python/>`__.

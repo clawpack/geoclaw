@@ -14,6 +14,14 @@ Includes:
 - function make_fgout_fcn_xyt: Takes 2 FGoutFrame objects and produces an
             interpolating function that can be evaluated for any (x,y,t)
             at intermediate times.
+- function write_netcdf: Write a specified set of qoi's from a list of
+            fgout frames, as a single netCDF file
+- function read_netcdf: Read a netCDF file and return a list of fgout frames,
+            assuming the file contains all the qoi's needed to reconstruct q.
+- function read_netcdf_arrays: Read a netCDF file and extract the 
+            requested quantities of interest as numpy arrays.
+- print_netcdf_info: Print info about the contents of a netCDF file containing
+            some fgout frames.
 """
 
 import os
@@ -508,4 +516,255 @@ def make_fgout_fcn_xyt(fgout1, fgout2, qoi, method_xy='nearest',
         return qout
         
     return fgout_fcn
+
+# ===============================
+# Functions for writing a set of fgout frames as a netCDF file, and
+# reading such a file:    
     
+def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
+                 qois = ['h','hu','hv','eta'], datatype='f4',
+                 include_B0=False, include_Bfinal=False,
+                 description='', verbose=True):
+    """
+    Write a list of fgout frames (at different times on the same rectangular
+    grid) to a single netCDF file, with some metadata and the topography,
+    if desired.
+    
+    fgout_frames should be a list of FGoutFrame objects, all of the same size
+    and at increasing times.
+    
+    fname_nc is the name of the file to write.
+    
+    qois is a list of strings, the quantities of interest to include in file.
+        This could include any of: 
+            'h', 'eta', 'hu', 'hv', 'u', 'v', 's', 'hss', 'B'.
+        All other quantities can be computed from h, hu, hv, eta,
+        the original fgout variables from GeoClaw, but for some applications
+        you might only want to save 'h' and 's', for example.
+    
+    datatype should be 'f4' [default] or 'f8', specifying bytes per qoi value.
+        'f8' has full precision of the original data, but the file will be
+        twice as large and may not be needed for downstream applications.
+        
+    Note that the topography B = eta - h, so it is not necessary to store all
+    three of these.  Also, B is often the same for all frames, so rather than
+    storing B at each frame as a qoi, two other options are also provided
+    (and then storing eta or h for all frames allows calculating the other):
+    
+    include_Bfinal: If True, include the topography B array from the final frame
+    as the Bfinal array.
+    
+    include_B0: If True, include the topography B array from the first frame
+    as the B0 array.  This is only useful if, e.g., the first frame is initial 
+    topography before co-seismic deformation, and at later times the topography
+    is always equal to Bfinal. 
+    
+    `description` is a string that will be added as metadata.
+    A metadata field `history` will also be added, which includes the 
+    time the file was created and the path to the directory where it was made. 
+    """    
+    
+    import netCDF4
+    from datetime import datetime, timedelta
+    from cftime import num2date, date2num
+    import time
+    timestr = time.ctime(time.time())  # current time for metadata
+    
+    fg_times = numpy.array([fg.t for fg in fgout_frames])
+    
+    if verbose:
+        print('Creating %s with fgout frames at times: ' % fname_nc)
+        print(fg_times)
+    
+    fg0 = fgout_frames[0]
+    x = fg0.x
+    y = fg0.y
+    
+    xs = numpy.array([fg.x for fg in fgout_frames])
+    ys = numpy.array([fg.y for fg in fgout_frames])
+    # assert same for all times
+    
+    units = {'h':'meters', 'eta':'meters', 'hu':'m^2/s', 'hv':'m^2/s',
+             'u':'m/s', 'v':'m/s', 's':'m/s', 'hss':'m^3/s^2', 'B':'meters'}
+
+    with netCDF4.Dataset(fname_nc, 'w') as rootgrp:
+
+        rootgrp.description = description
+        rootgrp.history = "Created " + timestr
+        rootgrp.history += " in %s;  " % os.getcwd()
+
+        lon = rootgrp.createDimension('lon', len(x))
+        longitudes = rootgrp.createVariable('lon','f8',('lon',))
+        longitudes[:] = x
+        longitudes.units = 'degrees_east'
+
+        lat = rootgrp.createDimension('lat', len(y))
+        latitudes = rootgrp.createVariable('lat','f8',('lat',))
+        latitudes[:] = y
+        latitudes.units = 'degrees_north'
+        
+        time = rootgrp.createDimension('time', len(fg_times))
+        times = rootgrp.createVariable('time','f8',('time',))
+        times[:] = fg_times
+        times.units = 'seconds'
+        
+        if 0:
+            # Could make times be datetimes relative to some event time, e.g.:
+            times.units = 'seconds since 1700-01-26 21:00:00.0'
+            times.calendar = 'gregorian'
+            dates = [datetime(1700,1,26,21) + timedelta(seconds=ss) \
+                        for ss in fg_times]
+            times[:] = date2num(dates,units=times.units,calendar=times.calendar)
+        
+        if include_B0:
+            B0 = rootgrp.createVariable('B0',datatype,('lon','lat',))
+            B0[:,:] = fg0.B
+            B0.units = 'meters'
+
+        if include_Bfinal:
+            fg_final = fgout_frames[-1]
+            Bfinal = rootgrp.createVariable('Bfinal',datatype,('lon','lat',))
+            Bfinal[:,:] = fg_final.B
+            Bfinal.units = 'meters'
+        
+        for qoi in qois:
+            qoi_frames = [getattr(fgout,qoi) for fgout in fgout_frames]
+            qoi_var = rootgrp.createVariable(qoi,datatype,('time','lon','lat',))
+            qoi_var[:,:,:] = qoi_frames
+            qoi_var.units = units[qoi]
+
+def get_as_array(var, rootgrp, verbose=True):
+    """
+    Utility function to retrieve variable from netCDF file and convert to 
+    numpy array.
+    """
+    a = rootgrp.variables.get(var, None)
+    if a is not None:
+        if verbose: print('    Loaded %s with shape %s' % (var,repr(a.shape)))
+        return numpy.array(a)
+    else:
+        if verbose: print('    Did not find %s' % var)
+        return None    
+
+
+def read_netcdf_arrays(fname_nc, qois, verbose=True):
+    """
+    Read a netCDF file and extract the quantities of interest denoted by
+    strings in the list qois, which can include:
+        'h', 'eta', 'hu', 'hv', 'u', 'v', 's', 'hss', 'B'.
+    qois can also include the time-independent 'B0' and/or 'Bfinal'
+    
+    Returns 
+        x, y, t, qoi_arrays
+    where x,y define the longitude, latitudes, t is the times of the frames,
+    and qoi_arrays is a dictionary indexed by the strings from qois.
+    
+    Each dict element is an array with shape (len(t), len(x), len(y))
+    for time-dependent qoi's, or (len(x), len(y)) for B0 or Bfinal,
+    or None if that qoi was not found in the netCDF file.
+    """
+     
+    import netCDF4
+
+    with netCDF4.Dataset(fname_nc, 'r') as rootgrp:
+        if verbose:
+            print('Reading data to fgout frames from nc file',fname_nc)
+            print('        nc file description: ', rootgrp.description)
+            print('History:  ', rootgrp.history)
+
+        x = get_as_array('lon', rootgrp, verbose)
+        y = get_as_array('lat', rootgrp, verbose)
+        t = get_as_array('time', rootgrp, verbose)
+        
+        vars = list(rootgrp.variables)
+        
+        qoi_arrays = {}
+        for qoi in qois:
+            qoi_array = get_as_array(qoi, rootgrp, verbose)
+            qoi_arrays[qoi] = qoi_array
+            
+    return x,y,t,qoi_arrays
+            
+            
+
+def read_netcdf(fname_nc, fgout_grid=None, verbose=True):
+    """
+    Read a netCDF file and return a list of FGoutFrame instances.
+    This will only be possible if the netCDF file contains at least
+    the qoi's 'h','hu','hv','eta' required to reconstruct the q array
+    as output by GeoClaw.
+    """
+    
+    import netCDF4
+
+    with netCDF4.Dataset(fname_nc, 'r') as rootgrp:
+        if 1:
+            print('Reading data to fgout frames from nc file',fname_nc)
+            print('        nc file description: ', rootgrp.description)
+            print('History:  ', rootgrp.history)
+
+        x = get_as_array('lon', rootgrp, verbose)
+        y = get_as_array('lat', rootgrp, verbose)
+        t = get_as_array('time', rootgrp, verbose)
+
+        vars = list(rootgrp.variables)
+        
+
+        for qoi in ['h','hu','hv','eta']:
+            errmsg = '*** Cannot reconstruct fgout frame without %s' % qoi
+            assert qoi in vars, errmsg
+        h = get_as_array('h', rootgrp, verbose)
+        hu = get_as_array('hu', rootgrp, verbose)
+        hv = get_as_array('hv', rootgrp, verbose)
+        eta = get_as_array('eta', rootgrp, verbose)
+        
+        if (x is None) or (y is None):
+            print('*** Could not create grid')
+        else:
+            X,Y = numpy.meshgrid(x,y)
+        
+        fgout_frames = []
+                
+        for k in range(eta.shape[0]):
+            fgout = FGoutFrame(fgout_grid=fgout_grid, frameno=k)
+            fgout.x = x
+            fgout.y = y
+            fgout.t = t[k]
+            fgout.q = numpy.empty((4,eta.shape[1],eta.shape[2]))
+            fgout.q[0,:,:] = h[k,:,:]
+            fgout.q[1,:,:] = hu[k,:,:]
+            fgout.q[2,:,:] = hv[k,:,:]
+            fgout.q[3,:,:] = eta[k,:,:]
+            fgout.X = X
+            fgout.Y = Y
+            fgout_frames.append(fgout)
+            
+        print('Created fgout_frames as list of length %i' % len(fgout_frames))
+        
+    return fgout_frames
+
+def print_netcdf_info(fname_nc):
+    """
+    Print out info about the contents of a netCDF file contining fgout frames,
+    written using write_netcdf.
+    """
+    import netCDF4
+
+    with netCDF4.Dataset(fname_nc, 'r') as rootgrp:
+        x = get_as_array('lon', rootgrp, verbose=False)
+        y = get_as_array('lat', rootgrp, verbose=False)
+        t = get_as_array('time', rootgrp, verbose=False)
+
+        vars = list(rootgrp.variables)
+        
+        print('===================================================')
+        print('netCDF file %s contains:' % fname_nc)
+        print('description: \n', rootgrp.description)
+        print('history: \n', rootgrp.history)
+        print('%i longitudes from %.6f to %.6f' % (len(x),x[0],x[-1]))
+        print('%i latitudes from %.6f to %.6f' % (len(y),y[0],y[-1]))
+        print('%i times from %.3f to %.3f' % (len(t),t[0],t[-1]))
+        print('variables: ',vars)
+        print('===================================================')
+    
+        
