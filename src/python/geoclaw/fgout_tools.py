@@ -42,7 +42,6 @@ class FGoutFrame(object):
         self.fgout_grid = fgout_grid
         self.frameno = frameno
         self.t = None
-        self.t_hms = None           # string in h:m:s format
         self.X = None
         self.Y = None
         self.x = None
@@ -344,9 +343,8 @@ class FGoutGrid(object):
         Read a single frame of fgout data.
         """
 
-        #if self.plotdata is None:
-        #   self.set_plotdata()
-        
+        from datetime import timedelta
+
         try:
             fr = self.plotdata.getframe(frameno)
         except:
@@ -362,14 +360,6 @@ class FGoutGrid(object):
         fgout_frame.q = state.q
 
         fgout_frame.t = state.t
-
-        # string version of t in H:M:S format for e.g. titles:
-        hours = int(fgout_frame.t/3600.)
-        tmin = mod(fgout_frame.t,3600.)
-        min = int(tmin/60.)
-        sec = int(mod(tmin,60.))
-        fgout_frame.t_hms = '%s:%s:%s' \
-                            % (hours,str(min).zfill(2),str(sec).zfill(2))
     
         fgout_frame.frameno = frameno
         

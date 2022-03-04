@@ -58,13 +58,11 @@ def setplot(plotdata):
     plotaxes.scaled = True
 
     def fixup(current_data):
-        import pylab
+        from pylab import title
+        from datetime import timedelta
         addgauges(current_data)
         t = current_data.t
-        t = t / 3600.  # hours
-        pylab.title('Surface at %4.2f hours' % t, fontsize=20)
-        pylab.xticks(fontsize=15)
-        pylab.yticks(fontsize=15)
+        title('Surface at time %s' % timedelta(seconds=t))
     plotaxes.afteraxes = fixup
 
     # Water

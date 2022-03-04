@@ -13,6 +13,7 @@ import os
 from clawpack.visclaw import plottools, geoplot
 from clawpack.visclaw import animation_tools
 from matplotlib import animation, colors
+from datetime import timedelta
 
 from clawpack.geoclaw import fgout_tools
     
@@ -53,7 +54,7 @@ eta_plot = plottools.pcolorcells(fgout1.X,fgout1.Y,eta,
 clim(-0.3,0.3)
 cb = colorbar(eta_plot, extend='both', shrink=0.7)
 cb.set_label('meters')
-title_text = title('Surface eta at %s after quake' % fgout1.t_hms)
+title_text = title('Surface at time %s' % timedelta(seconds=fgout1.t))
 
 ax.set_aspect(1./cos(ylat*pi/180.))
 ticklabel_format(useOffset=False)
@@ -73,12 +74,15 @@ def update(fgframeno, *update_artists):
     """
     
     fgout = fgout_grid.read_frame(fgframeno)
-    print('Updating plot at time %s' % fgout.t_hms)    
+    print('Updating plot at time %s' % timedelta(seconds=fgout.t))
     
     # unpack update_artists (must agree with definition above):
     eta_plot, title_text = update_artists
         
-    title_text.set_text('Surface eta at %s after quake' % fgout.t_hms)
+    # reset title to current time:
+    title_text.set_text('Surface at time %s' % timedelta(seconds=fgout.t))
+
+    # reset surface eta to current state:
     eta = ma.masked_where(fgout.h<0.001, fgout.eta)
     eta_plot.set_array(eta.T.flatten())
         

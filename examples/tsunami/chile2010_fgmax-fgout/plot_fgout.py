@@ -31,7 +31,7 @@ imshow(flipud(eta_water.T), extent=fgout.extent_edges,
 
 clim(-0.2, 0.2)
 
-title('Surface at time %s' % fgout.t_hms)
+title('Surface at time %s' % timedelta(seconds=fgout.t))
 
 fname = 'fgout_frame%s.png' % str(fgframe).zfill(4)
 savefig(fname)
