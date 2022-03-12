@@ -38,18 +38,10 @@ class FGoutFrame(object):
     and stored only when needed by the user.
     """
 
-    def __init__(self, fgout_grid=None, frameno=None):
+    def __init__(self, fgout_grid, frameno=None):
         self.fgout_grid = fgout_grid
         self.frameno = frameno
         self.t = None
-        self.X = None
-        self.Y = None
-        self.x = None
-        self.y = None
-        self.delta = None           # (dx,dy)
-        self.extent_centers = None  # defined by fgout points
-        self.extent_edges = None    # extended so points are cell centers
-        self.drytol = 1e-3          # used for computing u,v from hu,hv
 
         # private attributes for those that are only created if
         # needed by the user:
@@ -63,6 +55,41 @@ class FGoutFrame(object):
         self._s = None
         self._hss = None
 
+    # Define shortcuts to attributes of self.fgout_grid that are the same
+    # for all frames (e.g. X,Y) to avoid storing grid for every frame.
+    
+    @property
+    def x(self):
+        return self.fgout_grid.x
+
+    @property
+    def y(self):
+        return self.fgout_grid.y
+        
+    @property
+    def X(self):
+        return self.fgout_grid.X
+        
+    @property
+    def Y(self):
+        return self.fgout_grid.Y
+        
+    @property
+    def delta(self):
+        return self.fgout_grid.delta
+
+    @property
+    def extent_centers(self):
+        return self.fgout_grid.extent_centers
+        
+    @property
+    def extent_edges(self):
+        return self.fgout_grid.extent_edges
+        
+    @property
+    def drytol(self):
+        return self.fgout_grid.drytol
+            
     # Define attributes such as h as @properties with lazy evaluation:
     # the corresponding array is created and stored only when first
     # accessed by the user.  Those not needed are not created.
@@ -136,6 +163,7 @@ class FGoutFrame(object):
             self._hss = self.h * self.s**2
         return self._hss
 
+
 class FGoutGrid(object):
 
     """
@@ -158,16 +186,77 @@ class FGoutGrid(object):
         self.fgno = fgno
         self.outdir = outdir
         self.output_format = output_format
+        
+        self.drytol = 1e-3          # used for computing u,v from hu,hv
 
-        # Other possible GeoClaw inputs:
-        self.x = None
-        self.y = None
-        self.X = None
-        self.Y = None
-        self.dx = None
-        self.dy = None
+        # private attributes for those that are only created if
+        # needed by the user:
+        
+        self._X = None
+        self._Y = None
+        self._x = None
+        self._y = None
+        self._delta = None           # (dx,dy)
+        self._extent_centers = None  # defined by fgout points
+        self._extent_edges = None    # extended so points are cell centers
 
         self._plotdata = None
+
+    @property
+    def x(self):
+        """1D array x of longitudes (cell centers)"""
+        if self._x is None:
+            dx = (self.x2 - self.x1)/self.nx
+            self._x = numpy.linspace(self.x1+dx/2, self.x2-dx/2, self.nx)
+        return self._x
+
+    @property
+    def y(self):
+        """1D array y of latitudes (cell centers)"""
+        if self._y is None:
+            dy = (self.y2 - self.y1)/self.ny
+            self._y = numpy.linspace(self.y1+dy/2, self.y2-dy/2, self.ny)
+        return self._y
+        
+    @property
+    def X(self):
+        """2D array X of longitudes (cell centers)"""
+        if self._X is None:
+            self._X = numpy.meshgrid(self.x, self.y)[0].T
+        return self._X
+
+    @property
+    def Y(self):
+        """2D array Y of latitudes (cell centers)"""
+        if self._Y is None:
+            self._Y = numpy.meshgrid(self.x, self.y)[1].T
+        return self._Y
+
+    @property
+    def delta(self):
+        if self._delta is None:
+            dx = (self.x2 - self.x1)/self.nx
+            dy = (self.y2 - self.y1)/self.ny
+            self._delta = (dx,dy)
+        return self._delta
+        
+    @property
+    def extent_centers(self):
+        """Extent of cell centers [xmin,xmax,ymin,ymax]"""
+        if self._extent_centers is None:
+            self._extent_centers = [self.x.min(), self.x.max(),\
+                                    self.y.min(), self.y.max()]
+        return self._extent_centers
+        
+    @property
+    def extent_edges(self):
+        """Extent of cell edges [xmin,xmax,ymin,ymax]"""
+        if self._extent_edges is None:
+            dx,dy = self.delta
+            self._extent_edges = [self.x.min()-dx/2, self.x.max()+dx/2,\
+                                    self.y.min()-dy/2, self.y.max()+dy/2]
+        return self._extent_edges
+        
 
     # Create plotdata of class clawpack.visclaw.ClawPlotData
     # only when needed for reading GeoClaw output, 
@@ -241,12 +330,12 @@ class FGoutGrid(object):
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 2:
-            self.nx = nx = int(fgmax_input[5].split()[0])
-            self.ny = ny = int(fgmax_input[5].split()[1])
-            self.x1 = float(fgmax_input[6].split()[0])
-            self.y1 = float(fgmax_input[6].split()[1])
-            self.x2 = float(fgmax_input[7].split()[0])
-            self.y2 = float(fgmax_input[7].split()[1])
+            self.nx = nx = int(fgout_input[5].split()[0])
+            self.ny = ny = int(fgout_input[5].split()[1])
+            self.x1 = float(fgout_input[6].split()[0])
+            self.y1 = float(fgout_input[6].split()[1])
+            self.x2 = float(fgout_input[7].split()[0])
+            self.y2 = float(fgout_input[7].split()[1])
         else:
             raise NotImplementedError("fgout not implemented for point_style %i" \
                 % point_style)
@@ -259,10 +348,13 @@ class FGoutGrid(object):
         """
 
         print("\n---------------------------------------------- ")
+        assert self.point_style is not None, 'Need to set point_style'
+
         point_style = self.point_style
         if point_style not in [2]:
-            raise NotImplementedError("fgout not implemented for point_style %i" \
-                % point_style)
+            errmsg = 'point_style %s is not implement, only point_style==2' \
+                                    % point_style
+            raise NotImplementedError(errmsg)
                 
         if self.output_format == 'ascii':
             output_format = 1
@@ -271,6 +363,11 @@ class FGoutGrid(object):
         else:
             raise NotImplementedError("fgout output_format must be ascii or binary")
 
+        assert self.tstart is not None, 'Need to set tstart'
+        assert self.tend is not None, 'Need to set tend'
+        assert self.nout is not None, 'Need to set nout'
+        assert self.point_style is not None, 'Need to set point_style'
+        
         # write header, independent of point_style:
         #fid = open(self.input_file_name,'w')
         fid.write("\n")
@@ -290,37 +387,10 @@ class FGoutGrid(object):
             # 2d grid of points
             x1,x2 = self.x1, self.x2
             y1,y2 = self.y1, self.y2
-            if self.nx is None:
-                dx = self.dx
-                nx = int(round((x2-x1)/dx))  # x1,x2 are cell edges
-                if abs((nx-1)*dx + x1 - x2) > 1e-6:
-                    print("Warning: abs(nx*dx + x1 - x2) = ", \
-                          abs(nx*dx + x1 - x2))
-                    print("         old x2: %22.16e" % x2)
-                    x2 = x1 + dx*nx
-                    print("         resetting x2 to %22.16e" % x2)
-            else:
-                nx = self.nx
-                dx = (x2-x1)/nx   # x1,x2 are cell edges
-                if self.dx is not None:
-                    print("*** Warning: dx specified over-ridden by: ",dx)
+            nx,ny = self.nx, self.ny
 
-            if self.ny is None:
-                dy = self.dy
-                if dy is None:
-                    dy = dx
-                ny = int(round((y2-y1)/dy))  # y1,y2 are cell edges
-                if abs((ny-1)*dy + y1 - y2) > 1e-6:
-                    print("Warning: abs(ny*dy + y1 - y2) = ", \
-                          abs(ny*dy + y1 - y2))
-                    print("         old y2: %22.16e" % y2)
-                    y2 = y1 + dy*ny
-                    print("         resetting y2 to %22.16e" % y2)
-            else:
-                ny = self.ny
-                dy = (y2-y1)/ny   # y1,y2 are cell edges
-                if self.dy is not None:
-                    print("*** Warning: dy specified over-ridden by: ",dy)
+            dx = (x2-x1)/nx   # x1,x2 are cell edges
+            dy = (y2-y1)/ny   # y1,y2 are cell edges
 
             npts = nx*ny
 
@@ -328,15 +398,14 @@ class FGoutGrid(object):
                                 % (nx,ny,10*" "))
             fid.write("%16.10e   %20.10e            # x1, y1\n" % (x1,y1))
             fid.write("%16.10e   %20.10e            # x2, y2\n" % (x2,y2))
-            #fid.close()
 
-
-            #print("Created file ", self.input_file_name)
             print("   specifying fgout grid with shape %i by %i, with  %i points" \
                     % (nx,ny,npts))
             print("   lower left  = (%15.10f,%15.10f)" % (x1,y1))
             print("   upper right = (%15.10f,%15.10f)" % (x2,y2))
             print("   dx = %15.10e,  dy = %15.10e" % (dx,dy))
+            
+
 
     def read_frame(self, frameno):
         """
@@ -363,22 +432,45 @@ class FGoutGrid(object):
     
         fgout_frame.frameno = frameno
         
-        fgout_frame.X = patch.grid.p_centers[0]
-        fgout_frame.Y = patch.grid.p_centers[1]
-
-        fgout_frame.x = fgout_frame.X[:,0]
-        fgout_frame.y = fgout_frame.Y[0,:]
-        dx = fgout_frame.x[1] - fgout_frame.x[0]
-        dy = fgout_frame.y[1] - fgout_frame.y[0]
-        fgout_frame.delta = [dx, dy]
+        X,Y = patch.grid.p_centers[:2]
         
-        fgout_frame.extent_centers = [fgout_frame.X.min(),fgout_frame.X.max(),\
-                                      fgout_frame.Y.min(),fgout_frame.Y.max()]
-                                      
-        fgout_frame.extent_edges = [fgout_frame.X.min() - dx/2, \
-                                    fgout_frame.X.max() + dx/2, \
-                                    fgout_frame.Y.min() - dy/2, \
-                                    fgout_frame.Y.max() + dy/2]
+        try:
+            fgoutX = self.X
+            fgoutY = self.Y
+        except:
+            # presumably x,y, etc. were not set for this fgout_grid
+            # (e.g. by read_fgout_grids_data) so infer from this frame and set
+            
+            # reset most attributes including private _x etc to None:
+            self.__init__(fgno=self.fgno,outdir=self.outdir,
+                          output_format=self.output_format)
+                          
+            print('    Setting grid attributes based on Frame %i:' % frameno)
+            x = X[:,0]
+            y = Y[0,:]
+            dx = x[1] - x[0]
+            dy = y[1] - y[0]
+            self.x1 = x[0] - dx/2
+            self.x2 = x[-1] + dx/2
+            self.y1 = y[0] - dy/2
+            self.y2 = y[-1] + dy/2
+            self.nx = len(x)
+            self.ny = len(y)
+            fgoutX = self.X  # will be computed from info above
+            fgoutY = self.Y  # will be computed from info above
+            print('      Grid edges: ',self.extent_edges)
+            print('      with %i cells in x and %i cells in y' \
+                    % (self.nx,self.ny))
+            
+            
+        if not numpy.allclose(X, fgoutX):
+            errmsg = '*** X read from output does not match fgout_grid.X'
+            raise ValueError(errmsg)
+
+        if not numpy.allclose(Y, fgoutY):
+            errmsg = '*** Y read from output does not match fgout_grid.Y'
+            raise ValueError(errmsg)
+                
         return fgout_frame
 
 
