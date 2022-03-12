@@ -5,7 +5,7 @@ from clawpack.visclaw import plottools, geoplot
 from clawpack.visclaw import animation_tools
 from matplotlib import animation, colors
 from clawpack.geoclaw import fgout_tools
-
+from datetime import timedelta 
 
 fgno = 1
 outdir = '_output'
@@ -16,6 +16,7 @@ fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, output_format)
 
 # Plot one frame of fgout data 
 fgframe = 20
+fgout = fgout_grid.read_frame(2)
 
 fgout = fgout_grid.read_frame(fgframe)
 
