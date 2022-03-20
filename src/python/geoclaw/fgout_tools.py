@@ -291,6 +291,13 @@ class FGoutGrid(object):
             file_prefix_str = plotdata.file_prefix + '.b'
         else:
             file_prefix_str = plotdata.file_prefix + '.q'
+        
+        # Contrary to usual default, set save_frames to False so that all
+        # the fgout frames read in are not saved in plotdata.framesoln_dict.
+        # Otherwise this might be a memory hog when making an animation with
+        # many frames on a fine fgout grid.
+        plotdata.save_frames = False
+
         return plotdata
 
 
