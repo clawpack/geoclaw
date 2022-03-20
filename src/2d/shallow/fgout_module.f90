@@ -581,7 +581,6 @@ contains
         ! Function signature
         real(kind=8), intent(in) :: points(2,2)
         real(kind=8), intent(in) :: geometry(4)
-        integer, intent(in) :: method
         integer :: icell, jcell
         
         ! pw bilinear
