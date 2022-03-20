@@ -230,7 +230,7 @@ class FixedGridData(clawpack.clawutil.data.ClawData):
         # Fixed grid settings
         msg = 'rundata.fixed_grid_data is deprecated starting in v5.9.0,' \
             + ' use rundata.fgout_data instead'
-        warnings.warn(msg)
+        #warnings.warn(msg)
         if len(self.fixedgrids) > 0:
             raise AttributeError(msg)
 
