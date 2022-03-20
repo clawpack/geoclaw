@@ -261,68 +261,77 @@ contains
     
         ! Primary interpolation loops 
         do ifg=1,fgrid%mx
-            !xfg=fgrid%x_low + (ifg-1)*fgrid%dx      ! points
             xfg=fgrid%x_low + (ifg-0.5d0)*fgrid%dx   ! cell centers
             do jfg=1,fgrid%my
-                !yfg=fgrid%y_low + (jfg-1)*fgrid%dy      ! points
                 yfg=fgrid%y_low + (jfg-0.5d0)*fgrid%dy   ! cell centers
     
                 ! Check to see if this coordinate is inside of this grid
-                if (.not.((xfg < xlowc.or.xfg > xhic).or.(yfg < ylowc.or.yfg > yhic))) then
+                if (.not.((xfg < xlowc.or.xfg > xhic) &
+                    .or.(yfg < ylowc.or.yfg > yhic))) then
     
-                    ! find where xfg,yfg is in the computational grid and compute the indices
-                    ! and relevant coordinates of each corner
-                    ic1 = int((xfg-(xlowc+0.5d0*dxc))/(dxc))+1
-                    jc1 = int((yfg-(ylowc+0.5d0*dyc))/(dyc))+1
-                    if (ic1.eq.mxc) ic1=mxc-1
-                    if (jc1.eq.myc) jc1=myc-1 
-                    ic2 = ic1 + 1
-                    jc2 = jc1 + 1
-                        
-                    xc1 = xlowc + dxc * (ic1 - 0.5d0)
-                    yc1 = ylowc + dyc * (jc1 - 0.5d0)
-                    xc2 = xlowc + dxc * (ic2 - 0.5d0)
-                    yc2 = ylowc + dyc * (jc2 - 0.5d0)
-         
-                    if (method == 1) then
-                        ! Calculate geometry of interpolant
-                        ! interpolate bilinear used to interpolate to xfg,yfg
-                        ! define constant parts of bilinear
-                        geometry = [(xfg - xc1) / dxc, &
-                                    (yfg - yc1) / dyc, &
-                                    (xfg - xc1) * (yfg - yc1) / (dxc*dyc), &
-                                    1.d0]
-                    endif
-        
-                    ! Interpolate for all conserved quantities and bathymetry
-                    forall (m=1:meqn)
-                        fg_data(m,ifg,jfg) = &
-                            interpolate(q(m,ic1:ic2,jc1:jc2), geometry,method) 
-                            !interpolate([[q(m,ic1,jc1),q(m,ic1,jc2)], &
-                            !            [q(m,ic2,jc1),q(m,ic2,jc2)]], geometry)
-                    end forall
-
-                    
-                    fg_data(bathy_index,ifg,jfg) = & 
-                            interpolate(aux(1,ic1:ic2,jc1:jc2),geometry,method)
-
-                    
-                    ! surface eta = h + B:
+                    ! find where xfg,yfg is in the computational grid and 
+                    ! compute the indices
+                    !   (Note: may be subject to rounding error if fgout point
+                    !    is right on a cell edge!)
+                    ic1 = int((xfg - xlowc + dxc)/dxc)
+                    jc1 = int((yfg - ylowc + dyc)/dyc)
                     
                     if (method == 0) then
+                    
+                        ! piecewise constant: take values from cell (ic1,jc1):
+                        
+                        forall (m=1:meqn)
+                            fg_data(m,ifg,jfg) = q(m,ic1,jc1)
+                        end forall
+                        
+                        fg_data(bathy_index,ifg,jfg) = aux(1,ic1,jc1)
+                        
                         ! for pw constant we take B, h, eta from same cell,
                         ! so setting eta = h+B should be fine even near shore:
                         fg_data(eta_index,ifg,jfg) = fg_data(1,ifg,jfg) &
                                 + fg_data(bathy_index,ifg,jfg)
                         
+         
                     else if (method == 1) then
+                    
+                        ! bilinear used to interpolate to xfg,yfg
+                        ! (not recommended)
+                        
+                        ! define constant parts of bilinear
+                        if (ic1.eq.mxc) ic1=mxc-1
+                        if (jc1.eq.myc) jc1=myc-1 
+                        ic2 = ic1 + 1
+                        jc2 = jc1 + 1
+                            
+                        xc1 = xlowc + dxc * (ic1 - 0.5d0)
+                        yc1 = ylowc + dyc * (jc1 - 0.5d0)
+                        xc2 = xlowc + dxc * (ic2 - 0.5d0)
+                        yc2 = ylowc + dyc * (jc2 - 0.5d0)
+                    
+                        geometry = [(xfg - xc1) / dxc, &
+                                    (yfg - yc1) / dyc, &
+                                    (xfg - xc1) * (yfg - yc1) / (dxc*dyc), &
+                                    1.d0]
+                    
+        
+                        ! Interpolate all conserved quantities and bathymetry
+                        forall (m=1:meqn)
+                            fg_data(m,ifg,jfg) = &
+                                interpolate(q(m,ic1:ic2,jc1:jc2), geometry) 
+                        end forall
+
+                        fg_data(bathy_index,ifg,jfg) = & 
+                                interpolate(aux(1,ic1:ic2,jc1:jc2),geometry)
+
+                        
+                        ! surface eta = h + B:
+                        
                         ! Note that for pw bilinear interp there may
                         ! be a problem interpolating each separately since
                         ! interpolated h + interpolated B may be much larger
                         ! than eta should be offshore.
                         eta = q(1,ic1:ic2,jc1:jc2) + aux(1,ic1:ic2,jc1:jc2)
-                        fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry,method)
-                        continue
+                        fg_data(eta_index,ifg,jfg) = interpolate(eta,geometry)
                         ! NEED TO FIX                        
                     endif
                                                         
@@ -552,6 +561,7 @@ contains
     ! =========================================================================
     ! Utility functions for this module
     ! Returns back a NaN
+    
     real(kind=8) function nan()
         real(kind=8) dnan
         integer inan(2)
@@ -563,7 +573,8 @@ contains
     
     ! Interpolation function (in space)
     ! Given 4 points (points) and geometry from x,y,and cross terms
-    real(kind=8) pure function interpolate(points,geometry,method) result(interpolant)
+    
+    real(kind=8) pure function interpolate(points,geometry) result(interpolant)
                             
         implicit none
                                 
@@ -573,47 +584,17 @@ contains
         integer, intent(in) :: method
         integer :: icell, jcell
         
-        if (method == 0) then                   
-            ! pw constant: value from cell fgmax point lies in
-            if (geometry(1) < 0.5d0) then
-                icell = 1
-            else
-                icell = 2
-            endif
-            if (geometry(2) < 0.5d0) then
-                jcell = 1
-            else
-                jcell = 2
-            endif   
-            interpolant = points(icell,jcell)
-        else if (method == 1) then
-            ! pw bilinear
-            ! This is set up as a dot product between the approrpriate terms in 
-            ! the input data.  This routine could be vectorized or a BLAS routine
-            ! used instead of the intrinsics to ensure that the fastest routine
-            ! possible is being used
-            interpolant = sum([points(2,1)-points(1,1), &
-                           points(1,2)-points(1,1), &
-                           points(1,1) + points(2,2) - (points(2,1) + points(1,2)), &
-                           points(1,1)] * geometry)
-        endif
+        ! pw bilinear
+        ! This is set up as a dot product between the approrpriate terms in 
+        ! the input data.  This routine could be vectorized or a BLAS routine
+        ! used instead of the intrinsics to ensure that the fastest routine
+        ! possible is being used
+        interpolant = sum([points(2,1)-points(1,1), &
+                       points(1,2)-points(1,1), &
+                       points(1,1) + points(2,2) - (points(2,1) + points(1,2)), &
+                       points(1,1)] * geometry)
+                       
     end function interpolate
-    
-    ! Interpolation function in time
-    pure function interpolate_time(num_vars,early,late,tau) result(interpolant)
-        
-        implicit none
-        
-        ! Input arguments
-        integer, intent(in) :: num_vars
-        real(kind=8), intent(in) :: early(num_vars),late(num_vars),tau
-        
-        ! Return value
-        real(kind=8) :: interpolant(num_vars)
-
-        interpolant = (1.d0 - tau) * early(:) + tau * late(:)
-
-    end function interpolate_time
     
 
 end module fgout_module
