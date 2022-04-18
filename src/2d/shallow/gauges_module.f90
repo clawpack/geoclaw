@@ -675,14 +675,14 @@ contains
         integer, intent(in) :: gauge_num
 
         ! Locals
-        integer :: j, k, myunit
-        integer :: omp_get_thread_num, mythread
+        integer :: j, k
         character(len=32) :: out_format
 
-        ! Open unit dependent on thread number
-        mythread = 0
-!$      mythread = omp_get_thread_num()
-        myunit = OUTGAUGEUNIT + mythread
+        ! Rewritten for v5.9.0 with this subroutine in a critical block
+        ! so that the same OUTGAUGEUNIT can be used for all gauges,
+        ! rather than unique unit number based on OMP thread number.
+
+!$OMP CRITICAL(printg)
 
         ! ASCII output
         if (gauges(gauge_num)%file_format == 1) then
@@ -692,7 +692,7 @@ contains
                                         gauges(gauge_num)%num_out_vars + 1,    &
                                         gauges(gauge_num)%display_format, ")"
 
-            open(unit=myunit, file=gauges(gauge_num)%file_name, status='old', &
+            open(unit=OUTGAUGEUNIT, file=gauges(gauge_num)%file_name, status='old', &
                               position='append', form='formatted')
           
             !if (gauges(gauge_num)%gtype == 2) then
@@ -709,19 +709,20 @@ contains
             ! reset buffer_index back to beginning of buffer since we are emptying
             ! the buffer here
             do j = 1, gauges(gauge_num)%buffer_index - 1
-                write(myunit, out_format) gauges(gauge_num)%level(j),    &
+                write(OUTGAUGEUNIT, out_format) gauges(gauge_num)%level(j),    &
                     (gauges(gauge_num)%data(k, j), k=1,                  &
                                              gauges(gauge_num)%num_out_vars + 1)
             end do
             gauges(gauge_num)%buffer_index = 1                        
 
             ! close file
-            close(myunit)
+            close(OUTGAUGEUNIT)
         else
             print *, "Unhandled file format ", gauges(gauge_num)%file_format
             stop
         end if
 
+!$OMP END CRITICAL(printg)
       end subroutine print_gauges_and_reset_nextLoc
 
 end module gauges_module
