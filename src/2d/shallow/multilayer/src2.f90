@@ -138,8 +138,8 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
                     hv = q(layer + 3,i,j)
                     ! Note that these are not really hu, hv but rho * hu and 
                     ! rho * hv actually
-                    q(2,i,j) = hu * a(1,1) + hv * a(1,2)
-                    q(3,i,j) = hu * a(2,1) + hv * a(2,2)
+                    q(layer + 2,i,j) = hu * a(1,1) + hv * a(1,2)
+                    q(layer + 3,i,j) = hu * a(2,1) + hv * a(2,2)
                 end do
             enddo
         enddo
