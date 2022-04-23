@@ -1,7 +1,7 @@
 Clawpack Git Status 
 Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
 
-Fri, 22 Apr 2022 18:12:57 PDT
+Sat, 23 Apr 2022 07:59:12 PDT
 $CLAW = /Users/rjl/clawpack_src/clawpack_master
 $FC = gfortran
 
@@ -63,11 +63,10 @@ pyclaw
 /Users/rjl/clawpack_src/clawpack_master/pyclaw
 
 --- last commit ---
-0109c06 (HEAD -> master, tag: v5.8.2, origin/master, origin/HEAD) Create main.yml
+12f484b (HEAD -> gauge_binary_output, rjleveque/gauge_binary_output) update gauges.py to support binary files
 
 --- branch and status ---
-## master...origin/master
- M src/pyclaw/gauges.py
+## gauge_binary_output
 
 
 ===========
@@ -100,11 +99,8 @@ geoclaw
 /Users/rjl/clawpack_src/clawpack_master/geoclaw
 
 --- last commit ---
-3c1405a (HEAD -> gauge_binary_output) put print_gauges in critical block and use same output unit number for all
+e08d06c (HEAD -> gauge_binary_output) redo tests/dtopo1 so binary gauge data produced is compared with archived ascii data for portability
 
 --- branch and status ---
 ## gauge_binary_output
- M src/2d/shallow/gauges_module.f90
  M tests/dtopo1/regression_data/claw_git_status.txt
- M tests/dtopo1/regression_tests.py
- M tests/dtopo1/setrun.py
