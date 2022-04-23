@@ -1,3 +1,0 @@
-# gauge_id=     2 location=( -0.4500000000E+00  0.5000000000E-01 ) num_var=  4
-# Stationary gauge
-# level, time, q[  1  2  3], eta, aux[]
