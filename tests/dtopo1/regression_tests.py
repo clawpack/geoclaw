@@ -94,7 +94,10 @@ class DTopoTests(test.GeoClawRegressionTest):
         self.run_code()
 
         # Perform tests
-        self.check_gauges(save=save, indices=(2, 3))
+        self.check_gauges(save=save, gauge_id=1, indices=(2, 3))
+        print('gauge 1 ascii agrees')
+        self.check_gauges(save=save, gauge_id=2, indices=(2, 3))
+        print('gauge 2 binary agrees')
 
         # If we have gotten here then we do not need to copy the run results
         self.success = True
