@@ -285,7 +285,7 @@ contains
                                            trim(aux_column)
                    close(OUTGAUGEUNIT)
 
-               endif  ! end of file header for ascii
+               endif  ! end of ascii header file
 
 
             end do
@@ -690,7 +690,8 @@ contains
         integer, intent(in) :: gauge_num
 
         ! Locals
-        integer :: j, k
+        integer :: j, k, myunit
+        integer :: omp_get_thread_num, mythread
         character(len=32) :: out_format
         real(kind=8) :: rlevel
 
@@ -707,11 +708,10 @@ contains
             gauges(gauge_num)%y_last_written = gauges(gauge_num)%data(4, j)
         endif
 
-        ! Rewritten for v5.9.0 with the file operations in a critical block,
-        ! so that the same OUTGAUGEUNIT can be used for all gauges,
-        ! rather than unique unit number based on OMP thread number.
-
-!$OMP CRITICAL(printg)
+        ! Open unit dependent on thread number
+        mythread = 0
+!$      mythread = omp_get_thread_num()
+        myunit = OUTGAUGEUNIT + mythread
 
         if (gauges(gauge_num)%file_format == 1) then
 
@@ -724,11 +724,11 @@ contains
                                         gauges(gauge_num)%display_format, ")"
 
             ! Open gauge file:
-            open(unit=OUTGAUGEUNIT, file=gauges(gauge_num)%file_name,       &
+            open(unit=myunit, file=gauges(gauge_num)%file_name,       &
                  status='unknown', position='append', form='formatted')
 
             do j = 1, gauges(gauge_num)%buffer_index - 1
-                write(OUTGAUGEUNIT, out_format) gauges(gauge_num)%level(j), &
+                write(myunit, out_format) gauges(gauge_num)%level(j), &
                       (gauges(gauge_num)%data(k, j),                        &
                        k=1,gauges(gauge_num)%num_out_vars + 1)
             end do
@@ -737,13 +737,13 @@ contains
 
             ! binary output
 
-            open(unit=OUTGAUGEUNIT, file=gauges(gauge_num)%file_name_bin, &
+            open(unit=myunit, file=gauges(gauge_num)%file_name_bin, &
                  status='unknown', position='append',access='stream')
           
             do j = 1, gauges(gauge_num)%buffer_index - 1
                 ! convert level from int to real for binary output:
                 rlevel = real(gauges(gauge_num)%level(j), kind=8)
-                write(OUTGAUGEUNIT) rlevel,                     &
+                write(myunit) rlevel,                     &
                       (gauges(gauge_num)%data(k, j),            &
                        k=1,gauges(gauge_num)%num_out_vars + 1)
             end do
@@ -754,9 +754,7 @@ contains
         end if
 
         ! close file
-        close(OUTGAUGEUNIT)
-
-!$OMP END CRITICAL(printg)
+        close(myunit)
 
         gauges(gauge_num)%buffer_index = 1                        
 
