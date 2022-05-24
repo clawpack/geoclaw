@@ -56,6 +56,7 @@ module gauges_module
     type gauge_type
         ! Gauge number
         integer :: gauge_num
+        integer :: gdata_bytes
 
         character(len=14) :: file_name      ! for header (and data if 'ascii')
         character(len=14) :: file_name_bin  ! used if file_format='binary'
@@ -214,7 +215,7 @@ contains
                     num = num / 10
                 end do
 
-                if (gauges(i)%file_format == 2) then
+                if (gauges(i)%file_format >= 2) then
                     gauges(i)%file_name_bin = gauges(i)%file_name
                     gauges(i)%file_name_bin(12:14) = 'bin'
                 endif
@@ -225,7 +226,7 @@ contains
                 
                 if (.not. restart) then
 
-                    if (gauges(i)%file_format == 2) then
+                    if (gauges(i)%file_format >= 2) then
                         ! remove old binary file if it exists:
                         !write(6,*) 'Removing old file ',gauges(i)%file_name_bin
                         open(unit=OUTGAUGEUNIT, file=gauges(i)%file_name_bin, &
@@ -283,6 +284,17 @@ contains
                     write(OUTGAUGEUNIT, "(a,a,a,a)") "# level, time, q",       &
                                            trim(q_column), " eta, aux",        &
                                            trim(aux_column)
+                    if (gauges(i)%file_format == 1) then
+                        write(OUTGAUGEUNIT, '(a)') &
+                          "# file format ascii, time series follow in this file"
+                    else if (gauges(i)%file_format == 2) then
+                        write(OUTGAUGEUNIT, '(a)') &
+                            "# file format binary64, time series in .bin file"
+                    else if (gauges(i)%file_format == 3) then
+                        write(OUTGAUGEUNIT, '(a)') &
+                            "# file format binary32, time series in .bin file"
+                    endif
+                    
                    close(OUTGAUGEUNIT)
 
                endif  ! end of ascii header file
@@ -690,10 +702,11 @@ contains
         integer, intent(in) :: gauge_num
 
         ! Locals
-        integer :: j, k, myunit
+        integer :: j, k, myunit, nvals, ntimes
         integer :: omp_get_thread_num, mythread
         character(len=32) :: out_format
-        real(kind=8) :: rlevel
+        real(kind=4), allocatable :: gdata4(:,:)
+        real(kind=8), allocatable :: gdata8(:,:)
 
         ! Loop through gauge's buffer writing out all available data.  Also
         ! reset buffer_index back to beginning of buffer since we are emptying
@@ -707,6 +720,9 @@ contains
             gauges(gauge_num)%x_last_written = gauges(gauge_num)%data(3, j)
             gauges(gauge_num)%y_last_written = gauges(gauge_num)%data(4, j)
         endif
+        
+        nvals = gauges(gauge_num)%num_out_vars + 1
+        ntimes = gauges(gauge_num)%buffer_index - 1
 
         ! Open unit dependent on thread number
         mythread = 0
@@ -727,26 +743,34 @@ contains
             open(unit=myunit, file=gauges(gauge_num)%file_name,       &
                  status='unknown', position='append', form='formatted')
 
-            do j = 1, gauges(gauge_num)%buffer_index - 1
+            do j = 1, ntimes
                 write(myunit, out_format) gauges(gauge_num)%level(j), &
-                      (gauges(gauge_num)%data(k, j),                        &
-                       k=1,gauges(gauge_num)%num_out_vars + 1)
+                      (gauges(gauge_num)%data(k, j), k=1,nvals)
             end do
 
-        else if (gauges(gauge_num)%file_format == 2) then
+        else if (gauges(gauge_num)%file_format >= 2) then
 
             ! binary output
 
             open(unit=myunit, file=gauges(gauge_num)%file_name_bin, &
                  status='unknown', position='append',access='stream')
-          
-            do j = 1, gauges(gauge_num)%buffer_index - 1
-                ! convert level from int to real for binary output:
-                rlevel = real(gauges(gauge_num)%level(j), kind=8)
-                write(myunit) rlevel,                     &
-                      (gauges(gauge_num)%data(k, j),            &
-                       k=1,gauges(gauge_num)%num_out_vars + 1)
-            end do
+            
+            if (gauges(gauge_num)%file_format == 3) then
+                allocate(gdata4(nvals+1, ntimes))
+                gdata4(1, 1:ntimes) = real(gauges(gauge_num)%level(1:ntimes), kind=4)
+                gdata4(2:nvals+1, 1:ntimes) = &
+                        real(gauges(gauge_num)%data(1:nvals,1:ntimes), kind=4)
+                write(myunit) gdata4
+                deallocate(gdata4)  
+            else
+                allocate(gdata8(nvals+1, ntimes))
+                gdata8(1, 1:ntimes) = real(gauges(gauge_num)%level(1:ntimes), kind=8)
+                gdata8(2:nvals+1, 1:ntimes) = &
+                        real(gauges(gauge_num)%data(1:nvals,1:ntimes), kind=8)
+                write(myunit) gdata8
+                deallocate(gdata8)
+            endif
+
 
         else
             print *, "Unhandled file format ", gauges(gauge_num)%file_format
