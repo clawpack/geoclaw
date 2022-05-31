@@ -15,7 +15,7 @@ c
       dimension intrtx(maxlv),intrty(maxlv),intrtt(maxlv)
       type(fgrid), pointer :: fg
 
-      integer :: num_gauges_previous, i, ii
+      integer :: num_gauges_previous, i, ii, previous_gauge_num
 c
 c :::::::::::::::::::::::::::: RESTRT ::::::::::::::::::::::::::::::::
 c read back in the check point files written by subr. check.

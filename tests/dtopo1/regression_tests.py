@@ -74,6 +74,69 @@ class DTopoTests(test.GeoClawRegressionTest):
                                  self.temp_path)
 
 
+    def check_gauges(self, save=False, gauge_id=1, regression_gauge_id=1, 
+                     indices=[0], rtol=1e-14, atol=1e-8, tolerance=None):
+
+        r"""Basic test to assert gauge equality
+
+        :Input:
+         - *save* (bool) - If *True* will save the output from this test to 
+           the file *regresion_data.txt*.  Default is *False*.
+         - *gauge_id* (int) - The gauge to test.
+         - *regression_gauge_id* (int) - The gauge to test against.
+         - *indices* (tuple) - Contains indices to compare in the gague 
+           comparison.  Defaults to *(0)*.
+         - *rtol* (float) - Relative tolerance used in the comparison, default 
+           is *1e-14*.  Note that the old *tolerance* input is now synonymous 
+           with this parameter.
+         - *atol* (float) - Absolute tolerance used in the comparison, default
+           is *1e-08*.
+        """
+
+        import clawpack.pyclaw.gauges as gauges
+        import clawpack.clawutil.claw_git_status as claw_git_status
+
+        if isinstance(tolerance, float):
+            rtol = tolerance
+
+        if not(isinstance(indices, tuple) or isinstance(indices, list)):
+            indices = tuple(indices)
+
+        # Get gauge data
+        gauge = gauges.GaugeSolution(gauge_id, path=self.temp_path)
+
+        # Get regression comparison data
+        regression_data_path = os.path.join(self.test_path, "regression_data")
+        if save:
+            gauge_file_name = "gauge%s.txt" % str(regression_gauge_id).zfill(5)
+            shutil.copy(os.path.join(self.temp_path, gauge_file_name), 
+                                                           regression_data_path)
+            claw_git_status.make_git_status_file(outdir=regression_data_path)
+
+        regression_gauge = gauges.GaugeSolution(regression_gauge_id,
+                                                path=regression_data_path)
+
+        # Compare data
+        try:
+            for n in indices:
+                numpy.testing.assert_allclose(gauge.q[n, :],
+                                              regression_gauge.q[n, :], 
+                                              rtol=rtol, atol=atol, 
+                                              verbose=False)
+        except AssertionError as e:
+            err_msg = "\n".join((e.args[0], 
+                                "Gauge Match Failed for gauge = %s" % gauge_id))
+            err_msg = "\n".join((err_msg, "  failures in fields:"))
+            failure_indices = []
+            for n in indices:
+                if ~numpy.allclose(gauge.q[n, :], regression_gauge.q[n, :], 
+                                                          rtol=rtol, atol=atol):
+                    failure_indices.append(str(n))
+            index_str = ", ".join(failure_indices)
+            raise AssertionError(" ".join((err_msg, index_str)))
+
+
+
     def runTest(self, save=False, indices=(2, 3)):
         r"""DTopography basic regression test
 
@@ -94,7 +157,12 @@ class DTopoTests(test.GeoClawRegressionTest):
         self.run_code()
 
         # Perform tests
-        self.check_gauges(save=save, indices=(2, 3))
+        self.check_gauges(save=save, gauge_id=1, regression_gauge_id=1,
+                          indices=(2, 3))
+        print('gauge 1 ascii agrees')
+        self.check_gauges(save=save, gauge_id=2, regression_gauge_id=1,
+                          indices=(2, 3), rtol=1e-6, atol=1e-6)
+        print('gauge 2 binary agrees')
 
         # If we have gotten here then we do not need to copy the run results
         self.success = True

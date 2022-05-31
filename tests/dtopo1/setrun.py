@@ -332,6 +332,10 @@ def setrun(claw_pkg='geoclaw'):
     # == setgauges.data values ==
     # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
     rundata.gaugedata.gauges.append([1,-0.45,0.05,0,1e10])
+    rundata.gaugedata.gauges.append([2,-0.45,0.05,0,1e10])
+    rundata.gaugedata.file_format = {}
+    rundata.gaugedata.file_format[2] = 'binary'
+
 
     return rundata
     # end of function setrun
