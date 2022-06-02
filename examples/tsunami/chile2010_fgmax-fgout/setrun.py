@@ -138,7 +138,7 @@ def setrun(claw_pkg='geoclaw'):
         clawdata.output_t0 = True
         
 
-    clawdata.output_format = 'ascii'      # 'ascii' or 'netcdf' 
+    clawdata.output_format = 'binary32'      # 'ascii', 'binary32', 'binary64'
 
     clawdata.output_q_components = 'all'   # need all
     clawdata.output_aux_components = 'none'  # eta=h+B is in q
@@ -423,7 +423,7 @@ def setrun(claw_pkg='geoclaw'):
     fgout = fgout_tools.FGoutGrid()
     fgout.fgno = 1
     fgout.point_style = 2       # will specify a 2d grid of points
-    fgout.output_format = 'binary'
+    fgout.output_format = 'binary32'  # 4-byte, float32
     fgout.nx = 200
     fgout.ny = 250
     fgout.x1 = -115.  # specify edges (fgout pts will be cell centers)
@@ -434,7 +434,7 @@ def setrun(claw_pkg='geoclaw'):
     fgout.tend = 6.*3600
     fgout.nout = 25
     fgout_grids.append(fgout)    # written to fgout_grids.data
-    
+
 
     #  ----- For developers ----- 
     # Toggle debugging print statements:

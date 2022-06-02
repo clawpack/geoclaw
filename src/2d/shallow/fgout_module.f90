@@ -367,6 +367,7 @@ contains
         integer, parameter :: unit = 87
         character(len=15) :: fg_filename
         character(len=4) :: cfgno, cframeno
+        character(len=8) :: file_format
         integer :: grid_number,ipos,idigit,out_number,columns
         integer :: ifg,ifg1, iframe,iframe1
         
@@ -392,12 +393,14 @@ contains
                                            "i6,'                 ngrids'/," // &
                                            "i6,'                 naux'/,"   // &
                                            "i6,'                 ndim'/,"   // &
-                                           "i6,'                 nghost'/,/)"
+                                           "i6,'                 nghost'/," // &
+                                           "a10,'             format'/,/)"
         
         ! Other locals
         integer :: i,j,m
         real(kind=8) :: t0,tf,tau, qaug(6)
         real(kind=8), allocatable :: qeta(:,:,:)
+        real(kind=4), allocatable :: qeta4(:,:,:)
         real(kind=8) :: h_early,h_late,topo_early,topo_late
         
         allocate(qeta(4, fgrid%mx, fgrid%my))  ! to store h,hu,hv,eta
@@ -531,21 +534,45 @@ contains
         close(unit)
         
         if (fgrid%output_format == 3) then
-            ! binary output goes in .b file:
+            ! binary output goes in .b file as full 8-byte (float64):
             fg_filename = 'fgout' // cfgno // '.b' // cframeno 
             open(unit=unit, file=fg_filename, status="unknown",    &
                  access='stream')
             write(unit) qeta
+            close(unit)
+        else if (fgrid%output_format == 2) then
+            ! binary output goes in .b file as 4-byte (float32):
+            fg_filename = 'fgout' // cfgno // '.b' // cframeno 
+            open(unit=unit, file=fg_filename, status="unknown",    &
+                 access='stream')
+            allocate(qeta4(4, fgrid%mx, fgrid%my))  ! for 4-byte binary output
+            qeta4 = real(qeta, kind=4)
+            write(unit) qeta4
+            deallocate(qeta4)
             close(unit)
         endif
         
         deallocate(qeta)
 
         ! time info .t file:
+
+        
+        if (fgrid%output_format == 1) then
+            file_format = 'ascii'
+        else if (fgrid%output_format == 2) then
+            file_format = 'binary32'
+        else if (fgrid%output_format == 3) then
+            file_format = 'binary64'
+        else 
+            write(6,*) '*** unrecognized fgrid%output_format = ', &
+                        fgrid%output_format
+            write(6,*) '*** should be ascii, binary32, or binary64'
+        endif
+    
         fg_filename = 'fgout' // cfgno // '.t' // cframeno 
         open(unit=unit, file=fg_filename, status='unknown', form='formatted')
         ! time, num_eqn+1, num_grids, num_aux, num_dim, num_ghost:
-        write(unit, t_file_format) out_time, 4, 1, 0, 2, 0
+        write(unit, t_file_format) out_time, 4, 1, 0, 2, 0, file_format
         close(unit)
         
         print "(a,i4,a,i4,a,e18.8)",'Writing fgout grid #',fgrid%fgno, &

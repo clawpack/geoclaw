@@ -287,7 +287,8 @@ class FGoutGrid(object):
         plotdata.outdir = self.outdir
         plotdata.format = self.output_format
         plotdata.file_prefix = 'fgout%s' % str(self.fgno).zfill(4)
-        if self.output_format=='binary':
+        if self.output_format[:6]=='binary':
+            # could be 'binary', 'binary32' or 'binary64'
             file_prefix_str = plotdata.file_prefix + '.b'
         else:
             file_prefix_str = plotdata.file_prefix + '.q'
@@ -365,7 +366,9 @@ class FGoutGrid(object):
                 
         if self.output_format == 'ascii':
             output_format = 1
-        elif self.output_format == 'binary':
+        elif self.output_format == 'binary32':
+            output_format = 2
+        elif self.output_format == 'binary64':
             output_format = 3
         else:
             raise NotImplementedError("fgout output_format must be ascii or binary")
