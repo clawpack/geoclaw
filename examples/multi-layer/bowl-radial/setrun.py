@@ -131,7 +131,7 @@ def setrun(claw_pkg='geoclaw'):
         clawdata.output_t0 = True
         
 
-    clawdata.output_format = 'binary32'      # 'ascii' or 'binary' 
+    clawdata.output_format = 'ascii'      # 'ascii', 'binary32' or 'binary64'
 
     clawdata.output_q_components = 'all'   # could be list such as [True,True]
     clawdata.output_aux_components = 'none'  # could be list
