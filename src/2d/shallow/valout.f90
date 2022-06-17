@@ -266,7 +266,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     end do
     close(out_unit)
 
-    if (output_format == 3) then
+    if (output_format==2 .or. output_format==3) then
         close(binary_unit)
 #ifdef HDF5
     else if (output_format == 4) then
