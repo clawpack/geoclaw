@@ -629,7 +629,9 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
     
     qois is a list of strings, the quantities of interest to include in file.
         This could include any of: 
+
             'h', 'eta', 'hu', 'hv', 'u', 'v', 's', 'hss', 'B'.
+
         All other quantities can be computed from h, hu, hv, eta,
         the original fgout variables from GeoClaw, but for some applications
         you might only want to save 'h' and 's', for example.
@@ -743,11 +745,15 @@ def read_netcdf_arrays(fname_nc, qois, verbose=True):
     """
     Read a netCDF file and extract the quantities of interest denoted by
     strings in the list qois, which can include:
+
         'h', 'eta', 'hu', 'hv', 'u', 'v', 's', 'hss', 'B'.
+
     qois can also include the time-independent 'B0' and/or 'Bfinal'
     
     Returns 
+
         x, y, t, qoi_arrays
+
     where x,y define the longitude, latitudes, t is the times of the frames,
     and qoi_arrays is a dictionary indexed by the strings from qois.
     
