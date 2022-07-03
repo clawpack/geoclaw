@@ -179,6 +179,10 @@ class FGmaxGrid(object):
 
 
     def write_to_fgmax_data(self, fid):
+        """
+        Write the fgmax grid data to the file specified by `fid`, normally
+        the `fgmax_grids.data` file that is read in by the GeoClaw Fortran code.
+        """
 
         print("\n---------------------------------------------- ")
         point_style = self.point_style
@@ -507,6 +511,9 @@ class FGmaxGrid(object):
 
 
     def bounding_box(self):
+        """
+        Return the bounding box of the grid as a list [x1,x2,y1,y2]
+        """
         x1 = self.X.min()
         x2 = self.X.max()
         y1 = self.Y.min()
@@ -598,6 +605,11 @@ class FGmaxGrid(object):
 
 def adjust_fgmax_1d(x1_desired, x2_desired, x1_domain, dx):
     """
+    Adjust the upper and lower limits of a grid so that equally spaced
+    grid points with spacing `dx` lie exactly at cell centers, so that
+    no interpolation is needed for fgmax values.  Note that parameter
+    names refer to `x` limits, but works equally well for `y` values.
+
     :Input:
      - x1_desired, x2_desired: approximate desired limits of fgmax grid
      - x1_domain:  lower edge of computational domain
@@ -605,7 +617,8 @@ def adjust_fgmax_1d(x1_desired, x2_desired, x1_domain, dx):
     :Output:
      - x1_new, x2_new: limits to set so (x2-x1) is integer multiple
        of dx and points are at cell centers of computational grid
-     - npoints: number of points
+     - npoints: number of points to specify, so that
+       `linspace(x1_new, x2_new, npoints) gives points with spacing `dx`.
     """
 
     i1 = numpy.floor((x1_desired-x1_domain - 0.5*dx)/dx)
