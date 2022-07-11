@@ -381,12 +381,12 @@ def setgeo(rundata):
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
     #   [fname]
 
-    # == setfixedgrids.data values ==
-    fixedgrids = rundata.fixed_grid_data
-    # for fixed grids append lines of the form
-    # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
-    #  ioutarrivaltimes,ioutsurfacemax]
-    
+    # == fgout_grids.data values ==
+    # NEW IN v5.9.0
+    # Set rundata.fgout_data.fgout_grids to be a list of
+    # objects of class clawpack.geoclaw.fgout_tools.FGoutGrid:
+    fgout_grids = rundata.fgout_data.fgout_grids  # empty list initially
+
     # == fgmax.data values ==
     rundata.fgmax_data.num_fgmax_val = 2
     fgmax_grids = rundata.fgmax_data.fgmax_grids  # empty list to start

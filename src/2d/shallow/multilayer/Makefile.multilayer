@@ -50,7 +50,7 @@ COMMON_MODULES += \
   $(GEOLIB)/topo_module.f90 \
   $(GEOLIB)/qinit_module.f90 \
   $(GEOLIB)/refinement_module.f90 \
-  $(GEOLIB)/fixedgrids_module.f90 \
+  $(GEOLIB)/fgout_module.f90 \
   $(GEOLIB)/fgmax_module.f90 \
   $(GEOLIB)/friction_module.f90 \
   $(GEOLIB)/adjointsup_module.f90 

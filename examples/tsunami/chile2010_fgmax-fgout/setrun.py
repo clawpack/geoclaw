@@ -6,10 +6,18 @@ that will be read in by the Fortran code.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
 import numpy as np
+from clawpack.geoclaw import fgmax_tools
+from clawpack.geoclaw import fgout_tools
+
+try:
+    CLAW = os.environ['CLAW']
+except:
+    raise Exception("*** Must first set CLAW enviornment variable")
+
+# Scratch directory for storing topo and dtopo files:
+scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
 
 
 #------------------------------
@@ -34,11 +42,16 @@ def setrun(claw_pkg='geoclaw'):
     num_dim = 2
     rundata = data.ClawRunData(claw_pkg, num_dim)
 
-    #------------------------------------------------------------------
-    # GeoClaw specific parameters:
-    #------------------------------------------------------------------
-    rundata = setgeo(rundata)
 
+    #------------------------------------------------------------------
+    # Problem-specific parameters to be written to setprob.data:
+    #------------------------------------------------------------------
+    
+    #probdata = rundata.new_UserData(name='probdata',fname='setprob.data')
+
+
+    #------------------------------------------------------------------
+    # GeoClaw specific parameters are set later
     #------------------------------------------------------------------
     # Standard Clawpack parameters to be written to claw.data:
     #   (or to amr2ez.data for AMR)
@@ -49,7 +62,6 @@ def setrun(claw_pkg='geoclaw'):
     # Set single grid parameters first.
     # See below for AMR parameters.
 
-
     # ---------------
     # Spatial domain:
     # ---------------
@@ -58,18 +70,15 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_dim = num_dim
 
     # Lower and upper edge of computational domain:
-    clawdata.lower[0] = -2.0
-    clawdata.upper[0] = 2.0
+    clawdata.lower[0] = -120.0      # west longitude
+    clawdata.upper[0] = -60.0       # east longitude
 
-    clawdata.lower[1] = -2.0
-    clawdata.upper[1] = 2.0
-
-
+    clawdata.lower[1] = -60.0       # south latitude
+    clawdata.upper[1] = 0.0         # north latitude
 
     # Number of grid cells: Coarsest grid
-    clawdata.num_cells[0] = 41
-    clawdata.num_cells[1] = 41
-
+    clawdata.num_cells[0] = 30
+    clawdata.num_cells[1] = 30
 
     # ---------------
     # Size of system:
@@ -79,11 +88,10 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.num_eqn = 3
 
     # Number of auxiliary variables in the aux array (initialized in setaux)
-    clawdata.num_aux = 1
+    clawdata.num_aux = 3
 
     # Index of aux array corresponding to capacity function, if there is one:
-    clawdata.capa_index = 0
-
+    clawdata.capa_index = 2
     
     
     # -------------
@@ -94,12 +102,14 @@ def setrun(claw_pkg='geoclaw'):
 
 
     # Restart from checkpoint file of a previous run?
+    # Note: If restarting, you must also change the Makefile to set:
+    #    RESTART = True
     # If restarting, t0 above should be from original run, and the
     # restart_file 'fort.chkNNNNN' specified below should be in 
     # the OUTDIR indicated in Makefile.
 
     clawdata.restart = False               # True to restart from prior results
-    clawdata.restart_file = 'fort.chk00006'  # File to use for restart data
+    clawdata.restart_file = 'fort.chk00036'  # File to use for restart data
 
     # -------------
     # Output times:
@@ -111,28 +121,28 @@ def setrun(claw_pkg='geoclaw'):
 
     clawdata.output_style = 1
 
-    if clawdata.output_style == 1:
+    if clawdata.output_style==1:
         # Output nout frames at equally spaced times up to tfinal:
-        clawdata.num_output_times = 16
-        clawdata.tfinal = 4.4857014654663745
-        clawdata.output_t0 = True  # output at initial (or restart) time?
+        clawdata.num_output_times = 5
+        clawdata.tfinal = 10*3600.0
+        clawdata.output_t0 = False  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:
         # Specify a list of output times.
-        clawdata.output_times = [0.5, 1.0]
+        clawdata.output_times = [30., 60., 300., 600.]
 
     elif clawdata.output_style == 3:
         # Output every iout timesteps with a total of ntot time steps:
         clawdata.output_step_interval = 1
-        clawdata.total_steps = 1
+        clawdata.total_steps = 3
         clawdata.output_t0 = True
         
 
-    clawdata.output_format = 'ascii'      # 'ascii' or 'binary' 
+    clawdata.output_format = 'binary32'      # 'ascii', 'binary32', 'binary64'
 
-    clawdata.output_q_components = 'all'   # could be list such as [True,True]
-    clawdata.output_aux_components = 'none'  # could be list
-    clawdata.output_aux_onlyonce = True    # output aux arrays only at t0
+    clawdata.output_q_components = 'all'   # need all
+    clawdata.output_aux_components = 'none'  # eta=h+B is in q
+    clawdata.output_aux_onlyonce = False    # output aux arrays each frame
 
 
 
@@ -143,8 +153,7 @@ def setrun(claw_pkg='geoclaw'):
     # The current t, dt, and cfl will be printed every time step
     # at AMR levels <= verbosity.  Set verbosity = 0 for no printing.
     #   (E.g. verbosity == 2 means print only on levels 1 and 2.)
-    clawdata.verbosity = 3
-
+    clawdata.verbosity = 1
 
 
     # --------------
@@ -157,7 +166,7 @@ def setrun(claw_pkg='geoclaw'):
 
     # Initial time step for variable dt.
     # If dt_variable==0 then dt=dt_initial for all steps:
-    clawdata.dt_initial = 0.0001
+    clawdata.dt_initial = 0.2
 
     # Max time step to be allowed if variable dt used:
     clawdata.dt_max = 1e+99
@@ -169,8 +178,6 @@ def setrun(claw_pkg='geoclaw'):
 
     # Maximum number of time steps to allow between output times:
     clawdata.steps_max = 5000
-
-
 
 
     # ------------------
@@ -230,6 +237,12 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.bc_lower[1] = 'extrap'
     clawdata.bc_upper[1] = 'extrap'
 
+
+
+    # --------------
+    # Checkpointing:
+    # --------------
+
     # Specify when checkpoint files should be created that can be
     # used to restart a computation.
 
@@ -258,20 +271,23 @@ def setrun(claw_pkg='geoclaw'):
     # ---------------
     amrdata = rundata.amrdata
 
+    # maximum size of patches in each direction (matters in parallel):
+    amrdata.max1d = 60
+
     # max number of refinement levels:
-    amrdata.amr_levels_max = 2
+    amrdata.amr_levels_max = 3
 
     # List of refinement ratios at each level (length at least mxnest-1)
-    amrdata.refinement_ratios_x = [4,4]
-    amrdata.refinement_ratios_y = [4,4]
-    amrdata.refinement_ratios_t = [2,6]
+    amrdata.refinement_ratios_x = [4,3]
+    amrdata.refinement_ratios_y = [4,3]
+    amrdata.refinement_ratios_t = [4,3]
 
 
     # Specify type of each aux variable in amrdata.auxtype.
     # This must be a list of length maux, each element of which is one of:
     #   'center',  'capacity', 'xleft', or 'yleft'  (see documentation).
 
-    amrdata.aux_type = ['center']
+    amrdata.aux_type = ['center','capacity','yleft']
 
 
     # Flag using refinement routine flag2refine rather than richardson error
@@ -293,6 +309,133 @@ def setrun(claw_pkg='geoclaw'):
     amrdata.verbosity_regrid = 0  
 
 
+    # ---------------
+    # Regions:
+    # ---------------
+    rundata.regiondata.regions = []
+    # to specify regions of refinement append lines of the form
+    #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
+    #rundata.regiondata.regions.append([1, 2, 0., 1e9, -360,360,-90,90])
+    rundata.regiondata.regions.append([3, 3, 0., 600., -76,-72,-38,-33])
+
+    # ---------------
+    # Gauges:
+    # ---------------
+    rundata.gaugedata.gauges = []
+    # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
+    rundata.gaugedata.gauges.append([32412, -86.392, -17.975, 0., 1.e10])
+
+    # --------------------
+    # GeoClaw parameters:
+
+    try:
+        geo_data = rundata.geo_data
+    except:
+        print("*** Error, this rundata has no geo_data attribute")
+        raise AttributeError("Missing geo_data attribute")
+       
+    # == Physics ==
+    geo_data.gravity = 9.81
+    geo_data.coordinate_system = 2
+    geo_data.earth_radius = 6367.5e3
+
+    # == Forcing Options
+    geo_data.coriolis_forcing = False
+
+    # == Algorithm and Initial Conditions ==
+    geo_data.sea_level = 0.0
+    geo_data.dry_tolerance = 1.e-3
+    geo_data.friction_forcing = True
+    geo_data.manning_coefficient =.025
+    geo_data.friction_depth = 1e6
+
+    # Refinement settings
+    refinement_data = rundata.refinement_data
+    refinement_data.variable_dt_refinement_ratios = True
+    refinement_data.wave_tolerance = 0.01
+
+    # == settopo.data values ==
+    topo_data = rundata.topo_data
+    # for topography, append lines of the form
+    #    [topotype, fname]
+    topo_path = os.path.join(scratch_dir, 'etopo10min120W60W60S0S.asc')
+    topo_data.topofiles.append([2, topo_path])
+
+    # == setdtopo.data values ==
+    dtopo_data = rundata.dtopo_data
+    # for moving topography, append lines of the form :   (<= 1 allowed for now!)
+    #   [topotype, fname]
+    dtopo_path = os.path.join(scratch_dir, 'dtopo_usgs100227.tt3')
+    dtopo_data.dtopofiles.append([3,dtopo_path])
+    dtopo_data.dt_max_dtopo = 0.2
+
+
+    # == setqinit.data values ==
+    rundata.qinit_data.qinit_type = 0
+    rundata.qinit_data.qinitfiles = []
+    # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
+    #   [minlev, maxlev, fname]
+
+    # == setfixedgrids.data values ==  
+    # rundata.fixed_grid_data removed in v5.9.0; instead use fgmax and/or fgout
+
+
+    # == fgmax_grids.data values ==
+    # NEW STYLE STARTING IN v5.7.0
+
+    # set num_fgmax_val = 1 to save only max depth,
+    #                     2 to also save max speed,
+    #                     5 to also save max hs,hss,hmin
+    rundata.fgmax_data.num_fgmax_val = 2  # Save depth and speed
+
+    fgmax_grids = rundata.fgmax_data.fgmax_grids  # empty list to start
+
+    # Now append to this list objects of class fgmax_tools.FGmaxGrid
+    # specifying any fgmax grids.
+
+    # Points on a uniform 2d grid:
+    dx_fine = 2./(3.*4.)  # grid resolution at finest level
+
+    fg = fgmax_tools.FGmaxGrid()
+    fg.point_style = 2  # uniform rectangular x-y grid
+    fg.x1 = -120. + dx_fine/2.  # specify pts to align with FV cell centers
+    fg.x2 = -60. - dx_fine/2.
+    fg.y1 = -60. + dx_fine/2.
+    fg.y2 = 0. - dx_fine/2.
+    fg.dx = dx_fine
+    fg.tstart_max =  10.      # when to start monitoring max values
+    fg.tend_max = 1.e10       # when to stop monitoring max values
+    fg.dt_check = 60.         # target time (sec) increment between updating 
+                              # max values
+    fg.min_level_check = 3    # which levels to monitor max on
+    fg.arrival_tol = 1.e-2    # tolerance for flagging arrival
+
+    fg.interp_method = 0      # 0 ==> pw const in cells, recommended
+    fgmax_grids.append(fg)    # written to fgmax_grids.data
+
+
+    # == fgout_grids.data values ==
+    # NEW IN v5.9.0
+    # Set rundata.fgout_data.fgout_grids to be a list of
+    # objects of class clawpack.geoclaw.fgout_tools.FGoutGrid:
+    fgout_grids = rundata.fgout_data.fgout_grids  # empty list initially
+
+    fgout = fgout_tools.FGoutGrid()
+    fgout.fgno = 1
+    fgout.point_style = 2       # will specify a 2d grid of points
+    fgout.output_format = 'binary32'  # 4-byte, float32
+    fgout.nx = 200
+    fgout.ny = 250
+    fgout.x1 = -115.  # specify edges (fgout pts will be cell centers)
+    fgout.x2 = -70.
+    fgout.y1 = -55.
+    fgout.y2 = -10.
+    fgout.tstart = 0.
+    fgout.tend = 6.*3600
+    fgout.nout = 25
+    fgout_grids.append(fgout)    # written to fgout_grids.data
+
+
     #  ----- For developers ----- 
     # Toggle debugging print statements:
     amrdata.dprint = False      # print domain flags
@@ -303,87 +446,15 @@ def setrun(claw_pkg='geoclaw'):
     amrdata.pprint = False      # proj. of tagged points
     amrdata.rprint = False      # print regridding summary
     amrdata.sprint = False      # space/memory output
-    amrdata.tprint = False      # time step reporting each level
+    amrdata.tprint = True       # time step reporting each level
     amrdata.uprint = False      # update/upbnd reporting
     
     # More AMR parameters can be set -- see the defaults in pyclaw/data.py
-
-    # == setregions.data values ==
-    regions = rundata.regiondata.regions
-    # to specify regions of refinement append lines of the form
-    #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
-
-    # == setgauges.data values ==
-    # for gauges append lines of the form  [gaugeno, x, y, t1, t2]
-    # rundata.gaugedata.gauges.append([])
-
+    
     return rundata
+    
     # end of function setrun
     # ----------------------
-
-
-#-------------------
-def setgeo(rundata):
-#-------------------
-    """
-    Set GeoClaw specific runtime parameters.
-    For documentation see ....
-    """
-
-    try:
-        geo_data = rundata.geo_data
-    except:
-        print("*** Error, this rundata has no geo_data attribute")
-        raise AttributeError("Missing geo_data attribute")
-
-       
-    # == Physics ==
-    geo_data.gravity = 9.81
-    geo_data.coordinate_system = 1
-    geo_data.earth_radius = 6367.5e3
-
-    # == Forcing Options
-    geo_data.coriolis_forcing = False
-
-    # == Algorithm and Initial Conditions ==
-    geo_data.sea_level = -10.0
-    geo_data.dry_tolerance = 1.e-3
-    geo_data.friction_forcing = False
-    geo_data.manning_coefficient = 0.0
-    geo_data.friction_depth = 1.e6
-
-    # Refinement data
-    refinement_data = rundata.refinement_data
-    refinement_data.wave_tolerance = 1.e-2
-    refinement_data.variable_dt_refinement_ratios = True
-
-    # == settopo.data values ==
-    topo_data = rundata.topo_data
-    # for topography, append lines of the form
-    #    [topotype, fname]
-    topo_data.topofiles.append([4, 'bowl.nc'])
-
-    # == setdtopo.data values ==
-    dtopo_data = rundata.dtopo_data
-    # for moving topography, append lines of the form :   (<= 1 allowed for now!)
-    #   [topotype, fname]
-
-    # == setqinit.data values ==
-    rundata.qinit_data.qinit_type = 0
-    rundata.qinit_data.qinitfiles = []
-    # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
-    #   [fname]
-
-    # == fgout grids ==
-    # new style as of v5.9.0 (old rundata.fixed_grid_data is deprecated)
-    # set rundata.fgout_data.fgout_grids to be a 
-    # list of objects of class clawpack.geoclaw.fgout_tools.FGoutGrid:
-    #rundata.fgout_data.fgout_grids = []
-
-    return rundata
-    # end of function setgeo
-    # ----------------------
-
 
 
 if __name__ == '__main__':

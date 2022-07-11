@@ -14,8 +14,8 @@ c
 
       use storm_module, only: landfall, display_landfall_time
       use fgmax_module, only: FG_num_fgrids, FG_fgrids, fgrid
-
-
+      use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids,
+     &                         fgout_write,fgout_grid, FGOUT_ttol
 
       implicit double precision (a-h,o-z)
 
@@ -27,6 +27,7 @@ c
       character(len=128) :: time_format
       real(kind=8) cpu_start,cpu_finish
       type(fgrid), pointer :: fg
+      type(fgout_grid), pointer :: fgout
 
 c
 c :::::::::::::::::::::::::::: TICK :::::::::::::::::::::::::::::
@@ -343,6 +344,39 @@ c            #  check if should adjust finer grid time step to start wtih
              possk(level) = possk(level-1)/ntogo(level)
              go to 60
           endif
+
+c         write(6,*) '+++ in tick, done with level',level,
+c    &               ' tlevel = ',tlevel(1:level)
+      
+c         When we reach here, we are done with grid patches at 
+c         the finest level with grids present at this time
+
+c     ---- fgout output ----
+c     This used to be done in stepgrid.f, but only needs to be done
+c     after all patches at finest level have been advanced.
+
+      tc0 = tlevel(level)  ! current time on finest level present
+      !write(6,*) '+++ tick: tc0 = ',tc0
+      
+      do ng=1,FGOUT_num_grids
+        fgout => FGOUT_fgrids(ng)
+        
+        do ioutfg=1,fgout%num_output
+            if (fgout%output_frames(ioutfg) == -1) then
+                ! this time not yet written out
+                if (fgout%output_times(ioutfg) < 
+     &                 tc0+FGOUT_ttol) then
+                     toutfg = fgout%output_times(ioutfg)
+c                     write(6,*) '+++ tick call fgrid_out, frame, t: ',
+c     &                          ioutfg,toutfg
+                     call fgout_write(fgout,toutfg,ioutfg)
+                     fgout%output_frames(ioutfg) = ioutfg
+                     fgout%next_output_index = ioutfg+1
+                endif
+            endif
+        enddo
+      enddo
+c     ---- end fgout output ----
 c
  105      if (level .eq. 1) go to 110
               if (ntogo(level) .gt. 0) then

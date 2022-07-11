@@ -4,7 +4,7 @@ c
       subroutine advanc (level,nvar,dtlevnew,vtime,naux)
 c
       use amr_module
-      use fixedgrids_module
+c     use fgout_module, only: ?
       use topo_module, only: topo_finalized
 
       implicit double precision (a-h,o-z)
