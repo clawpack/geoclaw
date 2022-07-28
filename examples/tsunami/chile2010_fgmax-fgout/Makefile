@@ -63,10 +63,13 @@ topo:
 
 fgout_plots: 
 	$(MAKE) plots SETPLOT_FILE=setplot_fgout.py PLOTDIR=_plots_fgout
+	python make_fgout_animation.py
+	mv fgout_animation.* _plots_fgout/
 
 all: 
 	$(MAKE) topo
 	$(MAKE) .plots
 	$(MAKE) fgout_plots
 	$(MAKE) .htmls
+	@echo 'See _plots and _plots_fgout'
 
