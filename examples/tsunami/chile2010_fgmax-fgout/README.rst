@@ -88,20 +88,13 @@ To test::
     make all
 
 as suggested above also makes `_plots_fgout` with illustrations of 
-fgout plots and animations.  Alternatively, you can do::
+fgout plots and animations.  
 
-    make topo
-    make .output
-    make fgout_plots                # creates _plots_fgout directory
-
-while `make fgout_plots` is defined in the `Makefile` as shorthand for::
+This does the following, which you can also do directly at the command line::
 
     make plots SETPLOT_FILE=setplot_fgout.py PLOTDIR=_plots_fgout
-    python make_fgout_animation.py
-    mv fgout_animation.* _plots_fgout/
 
-The `make plots` command above
-illustrates one approach to plotting fgout grid results: A setplot
+This illustrates one approach to plotting fgout grid results: A setplot
 function is specified (in this case by `setplot_fgout.py`) that has the
 same form as a setplot function for plotting standard GeoClaw/Clawpack
 output frames, but in `setplot_fgout.py` we set ::
@@ -119,6 +112,8 @@ resulting fgout plots.  In this example we have called this directory
 to differentiate it from the directory
 `_plots <./_plots/_PlotIndex.html>`_ 
 which contains the usual plots from output times.
+
+
 
 Loading and plotting fgout results directly, and making an mp4 animation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -144,8 +139,9 @@ html files.  To run this code, do::
 
     python make_fgout_animation.py
 
-Note that this is done automatically by `make fgout_plots`, in which case
-the resulting animatins `fgout_animation.mp4` and `fgout_animation.html` are
+Note that this is done automatically by `make fgout_plots` (which in turn is
+done automatically by `make all`), in which case
+the resulting animations `fgout_animation.mp4` and `fgout_animation.html` are
 also moved into `_plots_fgout`.  
 
 The use of fgout grids provides a way to produce frequent outputs

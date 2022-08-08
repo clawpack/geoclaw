@@ -63,7 +63,7 @@ topo:
 
 fgout_plots: 
 	$(MAKE) plots SETPLOT_FILE=setplot_fgout.py PLOTDIR=_plots_fgout
-	python make_fgout_animation.py
+	$(CLAW_PYTHON) make_fgout_animation.py
 	mv fgout_animation.* _plots_fgout/
 
 all: 
