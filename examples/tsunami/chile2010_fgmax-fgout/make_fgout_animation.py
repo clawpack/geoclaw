@@ -114,8 +114,10 @@ if __name__ == '__main__':
     name = 'fgout_animation'
 
     fname_mp4 = name + '.mp4'
-    fname_html = None # name + '.html'
-    
+
+    #fname_html = None
+    fname_html = name + '.html'
+
     if fname_mp4:
         fps = 5
         print('Making mp4...')
@@ -125,7 +127,6 @@ if __name__ == '__main__':
 
     if fname_html:
         # html version:
-        fname_html = name + '.html'
         animation_tools.make_html(anim, file_name=fname_html, title=name)
     
     

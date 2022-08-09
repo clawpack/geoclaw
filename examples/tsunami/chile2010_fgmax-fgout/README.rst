@@ -85,19 +85,19 @@ are output only every 2 hours.
 
 To test::
 
-    make topo
-    make .output
-    make fgout_plots                # creates _plots_fgout directory
-    python make_fgout_animation.py  # creates fgout_animation.mp4
+    make all
 
-Note that `make fgout_plots` is defined in the `Makefile` as shorthand for::
+as suggested above also makes `_plots_fgout` with illustrations of 
+fgout plots and animations.  
+
+This does the following, which you can also do directly at the command line::
 
     make plots SETPLOT_FILE=setplot_fgout.py PLOTDIR=_plots_fgout
 
 This illustrates one approach to plotting fgout grid results: A setplot
 function is specified (in this case by `setplot_fgout.py`) that has the
 same form as a setplot function for plotting standard GeoClaw/Clawpack
-output frames, but setting ::
+output frames, but in `setplot_fgout.py` we set ::
 
     plotdata.file_prefix = 'fgout0001'  # for fgout grid fgno==1
 
@@ -113,6 +113,8 @@ to differentiate it from the directory
 `_plots <./_plots/_PlotIndex.html>`_ 
 which contains the usual plots from output times.
 
+
+
 Loading and plotting fgout results directly, and making an mp4 animation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -125,12 +127,26 @@ arrays that can then be worked with directly.
 
 
 An example of how this might be done is provided in `plot_fgout.py`,
-where a single frame is plotted.  The sample code in 
-`make_fgout_animation.py` reads in all the frames of fgout data
-and produces an animation as a stand-alone mp4 file.  The use of
-fgout grids provides a way to produce frequent outputs on a fixed grid
-resolution, as often desired for making smooth animations of a portion of
-the computational domain.
+where a single frame is plotted.  To test this do::
+
+    python plot_fgout.py
+
+and a single png file will be created.
+
+The sample code in `make_fgout_animation.py` reads in all the frames
+of fgout data and produces an animation as stand-alone mp4 and/or
+html files.  To run this code, do::
+
+    python make_fgout_animation.py
+
+Note that this is done automatically by `make fgout_plots` (which in turn is
+done automatically by `make all`), in which case
+the resulting animations `fgout_animation.mp4` and `fgout_animation.html` are
+also moved into `_plots_fgout`.  
+
+The use of fgout grids provides a way to produce frequent outputs
+on a fixed grid resolution, as often desired for making smooth
+animations of a portion of the computational domain.
 
 Saving a sequence of fgout frames to a single netCDF file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -139,11 +155,12 @@ The script `make_netcdf.py` illustrates how to combine multiple fgout
 frames of data into a single netCDF file using `fgout_tools.write_netcdf`.
 This is easily done since all the fgout results are on the same uniform
 grid.  You can also select which quantities of interest to store and use
-32-bit floats to store them, so that the resulting file takes much less
-space than the original collection of fgout files.
+32-bit floats to store them.
 
 The script `make_netcdf.py` also illustrates how to read the arrays back in
-from the netCDF file.
+from the netCDF file.  Test it using::
+
+    python make_netcdf.py
 
 This example requires the Python module `netCDF4
 <https://unidata.github.io/netcdf4-python/>`__.

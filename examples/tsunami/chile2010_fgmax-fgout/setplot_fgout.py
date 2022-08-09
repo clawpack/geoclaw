@@ -155,8 +155,14 @@ def setplot(plotdata):
     #-----------------------------------------
     # Figures for fgmax - max values on fixed grids
     #-----------------------------------------
-    otherfigure = plotdata.new_otherfigure(name='max amplitude and arrival times', 
-                    fname='amplitude_times.png')
+    # This creates links, and  assumes make_fgout_animation.py has been run 
+    # and the resulting .mp4 and .html files moved to plotdir:
+
+    otherfigure = plotdata.new_otherfigure(name='fgout_animation.mp4', 
+                    fname='fgout_animation.mp4')
+
+    otherfigure = plotdata.new_otherfigure(name='fgout_animation.html', 
+                    fname='fgout_animation.html')
 
 
 
