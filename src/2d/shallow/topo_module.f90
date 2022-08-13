@@ -3,7 +3,7 @@
 ! ============================================================================
 module topo_module
 
-    use amr_module, only: xlower,xupper,ylower,yupper
+    use amr_module, only: xlower,xupper,ylower,yupper,hxposs,hyposs,nghost
     implicit none
 
     logical, private :: module_setup = .false.
@@ -944,9 +944,9 @@ contains
                 dx = xlocs(2) - xlocs(1)
                 dy = ylocs(2) - ylocs(1)
                 
-                ! find which locs are within domain (with a dx/dy buffer around domain)
-                x_in_dom = (xlocs.gt.(xlower-dx)) .and. (xlocs.lt.(xupper+dx))
-                y_in_dom = (ylocs.gt.(ylower-dy)) .and. (ylocs.lt.(yupper+dy))
+                ! find which locs are within domain (with a dx/dy buffer around domain + ghost cells)
+                x_in_dom = (xlocs.gt.(xlower-dx-hxposs(1)*nghost)) .and. (xlocs.lt.(xupper+dx+hxposs(1)*nghost))
+                y_in_dom = (ylocs.gt.(ylower-dy-hyposs(1)*nghost)) .and. (ylocs.lt.(yupper+dy+hyposs(1)*nghost))
                 
                 xll = minval(xlocs, mask=x_in_dom)
                 yll = minval(ylocs, mask=y_in_dom)
