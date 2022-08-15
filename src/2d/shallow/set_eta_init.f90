@@ -30,8 +30,8 @@ subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
     real(kind=8), intent(inout) :: veta(1-mbc:mx+mbc,1-mbc:my+mbc)
     
     ! Local
-    integer :: i,j,i1,i2,j1,j2,idtopo,jdtopo,kdtopo, &
-               index0_dtopowork,ij,m
+    integer :: i,j,i1,i2,j1,j2,idtopo,jdtopo,kdtopo,m
+    integer(kind=8) :: index0_dtopowork, ij
     real(kind=8) :: x,y
     real(kind=8) :: x1_lake,x2_lake,y1_lake,y2_lake, lake_level
 
@@ -94,7 +94,7 @@ subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
             kdtopo = max(kdtopo,1)
           endif
 
-        index0_dtopowork = i0dtopo(m) + (kdtopo-1)*mxdtopo(m)*mydtopo(m)
+        index0_dtopowork = i0dtopo(m) + int(kdtopo-1, 8)*int(mxdtopo(m), 8)*int(mydtopo(m), 8)
         !write(6,*) '+++ index0_dtopowork = ',index0_dtopowork
 
         ! Adjust eta_init by dtopo on part of patch that overlaps dtopo.
@@ -111,7 +111,7 @@ subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
                 idtopo = max(1, min(mxdtopo(m)-1, idtopo))
                 jdtopo = int(floor((yhidtopo(m)-y)/dydtopo(m))) + 1
                 jdtopo = max(1, min(mydtopo(m)-1, jdtopo))
-                ij = index0_dtopowork + (jdtopo-1)*mxdtopo(m) + idtopo-1
+                ij = index0_dtopowork + int(jdtopo-1, 8)*int(mxdtopo(m) + idtopo-1, 8)
 
                 veta(i,j) = veta(i,j) + dtopowork(ij)
 
