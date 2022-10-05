@@ -429,7 +429,7 @@ class FGoutGrid(object):
             fr = self.plotdata.getframe(frameno)
         except:
             print('*** Could not read fgout grid %i frame %i from %s' \
-                 % (frameno,self.fgno,self.plotdata.outdir))
+                 % (self.fgno,frameno,self.plotdata.outdir))
             raise
         state = fr.states[0]  # only 1 AMR grid
         patch = state.patch
