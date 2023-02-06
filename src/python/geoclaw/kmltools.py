@@ -1385,7 +1385,7 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
         
         
     # This is called from plotpages, in <plotdir>.
-    plt.savefig(cb_filename,Transparent=True)
+    plt.savefig(cb_filename,transparent=True)
     
     if close_figs:
         plt.close(fig)
