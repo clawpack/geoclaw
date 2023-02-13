@@ -277,7 +277,7 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
         #print('+++ flagregion name = ',name)
         
         if not combined:
-            if name is '':
+            if name == '':
                 fname = 'FlagRegion_%s.kml' % str(rnum).zfill(2)
             else:
                 fname = name + '.kml'
