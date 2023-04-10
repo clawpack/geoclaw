@@ -748,7 +748,7 @@ def kml_line(mapping):
     if len(mapping['color'])==6:
         mapping['color'] = 'FF' + mapping['color']
 
-        line_text = """
+    line_text = """
 {x1:.9f},{y1:.9f},{elev:.9f}
 {x2:.9f},{y2:.9f},{elev:.9f}
 """.format(**mapping).replace(' ','')
