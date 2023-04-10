@@ -277,7 +277,7 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
         #print('+++ flagregion name = ',name)
         
         if not combined:
-            if name is '':
+            if name == '':
                 fname = 'FlagRegion_%s.kml' % str(rnum).zfill(2)
             else:
                 fname = name + '.kml'
@@ -748,7 +748,7 @@ def kml_line(mapping):
     if len(mapping['color'])==6:
         mapping['color'] = 'FF' + mapping['color']
 
-        line_text = """
+    line_text = """
 {x1:.9f},{y1:.9f},{elev:.9f}
 {x2:.9f},{y2:.9f},{elev:.9f}
 """.format(**mapping).replace(' ','')
@@ -1385,7 +1385,7 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
         
         
     # This is called from plotpages, in <plotdir>.
-    plt.savefig(cb_filename,transparent=True)
+    plt.savefig(cb_filename,transparent=False)
     
     if close_figs:
         plt.close(fig)
