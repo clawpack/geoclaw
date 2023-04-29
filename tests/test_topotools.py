@@ -20,7 +20,10 @@ import nose
 
 import clawpack.geoclaw.topotools as topotools
 import clawpack.clawutil.data
+import numpy.testing as npt
 from six.moves import range
+from clawpack.geoclaw.topotools import Topography
+from scipy.integrate import dblquad, nquad
 
 # Set local test directory to get local files
 testdir = os.path.dirname(__file__)
@@ -427,6 +430,122 @@ def plot_kahului():
     plt.savefig(fname)
     print("Created ",fname)
 
+def integral_topotool(func, mfile, funcflag):
+    r"""
+    integral_topotool is used for testing a set of functions which compute
+    cell integrals and cell averages in topotools.py.
+    
+    :Input:
+     - *func* (function).
+     - *mfile* (int) The number of the topo objects.
+     - *funcflag* (bool) Whether the function, "func" is discontinuous.
+    """
+
+    dx = []
+    data = []
+    topo = []
+    mtopoorder = []
+    
+    # Set boundary for the coarsest topo
+    xlow = 5; xhi = 8
+    xarray = numpy.linspace(xlow, xhi, mfile * 5)
+    ylow = 2; yhi = 5
+    yarray = numpy.linspace(ylow, yhi, mfile * 5)
+    
+    # Set a set of topo data
+    for i in range(mfile):
+        if i == 0:
+            
+            # Set the topo data set which covers the whole patch
+            x = xarray; y = yarray
+            dx.append(x[1] - x[0])
+        else:
+            
+            # Set x coordinate of the topo data set
+            n1 = int(3 * i)
+            n2 = int(3 * i + 1.2 * mfile)
+            x1 = xarray[n1]; x2 = xarray[n2]
+            dx.append(dx[i-1] - 0.0012)
+            mx = int((x2 - x1) / dx[i])
+            x2 = x1 + dx[i] * (mx - 1)
+            x = numpy.linspace(x1, x2, mx)
+
+            # Set y coordinate of the topo data set
+            m1 = int(3 * i)
+            m2 = int(3 * i + 1.2 * mfile)
+            y1 = yarray[m1]; y2 = yarray[m2]
+            my = int((y2 - y1) / dx[i])
+            y2 = y1 + dx[i] * (my - 1)
+            y = numpy.linspace(y1, y2, my)
+        
+        # Set Topography objects parameters
+        topo1 = Topography()
+        
+        # Whether the function is discontinuous function
+        if funcflag:
+            z = numpy.empty((len(x), len(y)))
+            for m in range(len(x)):
+                for n in range(len(y)):
+                    z[m][n] = func(x[m], y[n])
+            topo1.Z = z
+        else:
+            topo_x, topo_y = numpy.meshgrid(x, y)
+            topo1.Z = func(topo_x, topo_y)
+        topo1.x = x; topo1.y = y
+        mtopoorder.append(mfile - 1 - i)
+        topo.append(topo1)
+    
+    # Set patch data
+    patch_x = numpy.linspace(xlow + 0.1, xhi - 0.1, 5)
+    patch_y = numpy.linspace(ylow + 0.1, yhi - 0.1, 4)
+    patch = {'x':patch_x, 'y':patch_y}
+    
+    # Accurate cell value
+    real_value = numpy.empty((len(patch['y']) - 1, len(patch['x']) - 1))
+    for i in range(len(patch['y']) - 1):
+        for j in range(len(patch['x']) - 1):
+            area = (patch['x'][j+1] - patch['x'][j]) * (patch['y'][i+1] - patch['y'][i])
+            if funcflag:
+                options = {'limit':1000}
+                real_value[i][j] = nquad(func=func, ranges=[[patch['x'][j], patch['x'][j+1]],
+                                         [patch['y'][i], patch['y'][i+1]]], args=None,
+                                         opts=[options,options])[0] / float(area)
+            else:
+                real_value[i][j] = dblquad(func=func, a=patch['y'][i], b=patch['y'][i+1],
+                                           gfun=patch['x'][j],
+                                           hfun=patch['x'][j+1])[0] / float(area)
+        
+    
+    # Cell value calculated by functions
+    calculated_value = topotools.cell_average_patch(patch, mtopoorder, mfile, topo)
+        
+    # Whether calculated value achieve the expected resolution
+    npt.assert_almost_equal(real_value, calculated_value, decimal=3)
+    return None
+
+
+def testcontinuous():
+    r"""
+    testcontinuous is used to test continuous functions with `integral_topotool`.
+    """
+    
+    integral_topotool(lambda x, y: numpy.sin(x**2 + x * y) + x + y, 20, False)
+    integral_topotool(lambda x, y: numpy.exp(0.5 * x + 0.1 * y), 20, False)
+    integral_topotool(lambda x, y: x**2 + x * y + y**2 + 1, 20, False)
+    return None
+    
+    
+def testdiscontinuous():
+    r"""
+    testdiscontinuous is used to test discontinuous function with `integral_topotool`.
+    """
+    
+    def fun(x, y):
+        for i in range(20):
+            if int(x * 100) % 20 == i:
+                return 9.99 + 0.001 * i
+    integral_topotool(fun, 20, True)
+    return None
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
