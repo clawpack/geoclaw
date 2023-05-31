@@ -1120,6 +1120,7 @@ class Storm(object):
 
     # =========================================================================
     # Other Useful Routines
+	
     def category(self, categorization="NHC", cat_names=False):
         r"""Categorizes storm based on relevant storm data
 
