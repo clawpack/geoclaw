@@ -16,13 +16,15 @@ from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.lines as mlines
+import pandas
 
 import clawpack.visclaw.colormaps as colormaps
 import clawpack.visclaw.gaugetools as gaugetools
 import clawpack.visclaw.geoplot as geoplot
 import clawpack.geoclaw.data as geodata
 
-# TODO:  Assign these absed on data files
+# TODO:  Assign these based on data files
 bathy_index = 0
 friction_field = 3
 wind_field = 4
@@ -138,10 +140,12 @@ def friction(cd):
 
 
 def wind_x(cd):
+    # print(cd.aux[wind_field, :, :])
     return cd.aux[wind_field, :, :]
 
 
 def wind_y(cd):
+    # print(cd.aux[wind_field+1, :, :])
     return cd.aux[wind_field+1, :, :]
 
 
@@ -152,6 +156,9 @@ def wind_speed(cd):
 def pressure(cd):
     # The division by 100.0 is to convert from Pa to millibars
     return cd.aux[pressure_field, :, :] / 100.0
+
+# def category(Storm, cd):
+#     return cd.aux[Storm.category, :, :]
 
 
 # ========================================================================
@@ -452,9 +459,129 @@ def plot_track(t, x, y, wind_radius, wind_speed, Pc, name=None):
 
     axes = fig.add_subplot(132)
     axes.plot(sec2days(t), wind_radius)
-    axes.set_title("Maximum Wind Radius%s" % names)
+    axes.set_title("Maximum Wind Radius%s" % name)
 
     axes = fig.add_subplot(133)
     axes.plot(sec2days(t), Pc)
     axes.plot(sec2days(t), np.ones(t.shape) * divide, 'k--')
     axes.set_title("Central Pressure%s" % name)
+
+
+"""Plot the track and optionally the intensity of the storm
+
+Easily plot the track and intensity of a storm using a mapping package.
+
+:Input:
+    - *axes* (matplotlib.pyplot.axes) Axes to plot into.  Default is *None*
+    - *intensity* (bool) Plot the intensity of storm along the track.
+    Defaults to *False*.
+    - *track_color* (str) String or specification of plotting color to use
+    for the track if *intensity* is not being plotted.
+    - *category_color* (dict) Dictionary containing mapping between
+    category numerical value and colors.  Defaults to [-1, 5] -> ['gray',
+    'black', 'violet', 'blue', 'yellow', 'orange', 'red']
+    - *categorization* (str) Type of categorization, always use *"NHC"*
+- *legend_loc* (str) Location of legend. Available options are 'best' (0), 'upper right' (1),
+    'upper left'(2), 'lower left'(3), 'lower right'(4), 'right'(5), 'center left'(6), 'center right'(7), 
+    'lower center'(8), 'upper center'(9), 'center'(10). Default is 'best'.
+
+:Output:
+    - (matplotlib.pyplot.axes) Axes object that was plotted into.
+"""
+# ========================================================================
+#  Returns axes
+#  Storm with category plotting function
+# ========================================================================
+def add_track(Storm, axes, plot_package=None, category_color=None, legend_loc='best', 
+              intensity=False, categorization="NHC", limits=None, track_color='red'):
+
+    if category_color is None:
+            category_color = {5: 'red',
+                              4: 'orange',
+                              3: 'yellow',
+                              2: 'blue', # edit color
+                              1: 'violet',
+                              0: 'black',
+                             -1: 'gray'}
+    category = Storm.category(categorization=categorization)
+            
+    # make it if intensity = true
+
+    # basic plotting
+    longitude = Storm.eye_location[:, 0]
+    latitude = Storm.eye_location[:, 1]
+    for i in range(len(longitude)):
+        if intensity:
+            color = category_color[category[i]]
+        else:
+            color = track_color
+        axes.plot(longitude[i:i + 2], latitude[i:i + 2], color=color)
+
+    axes.set_xlabel("Longitude")
+    axes.set_ylabel("Latitude")
+
+
+
+    categories_legend = []
+
+    if intensity and categorization is "NHC": 
+        categories_legend = []
+            # plotitem = plotaxes.new_plotitem(name='category', plot_type='1d_plot')
+
+        if (-1 in category):
+            negativeone = mlines.Line2D([], [], color=category_color[-1], marker='s', ls='', label="Tropical Depression")
+            categories_legend.append(negativeone)
+
+        if (0 in category):
+            zero = mlines.Line2D([], [], color=category_color[0], marker='s', ls='', label="Tropical Storn")
+            categories_legend.append(zero)
+
+        if (1 in category):
+            one = mlines.Line2D([], [], color=category_color[1], marker='s', ls='', label="Category 1")
+            categories_legend.append(one)
+
+        if (2 in category):
+            two = mlines.Line2D([], [], color=category_color[2], marker='s', ls='', label="Category 2")
+            categories_legend.append(two)
+
+        if (3 in category):
+            three = mlines.Line2D([], [], color=category_color[3], marker='s', ls='', label="Category 3")
+            categories_legend.append(three)
+
+        if (4 in category):
+            four = mlines.Line2D([], [], color=category_color[4], marker='s', ls='', label="Category 4")
+            categories_legend.append(four)
+
+        if (5 in category):
+            five = mlines.Line2D([], [], color=category_color[5], marker='s', ls='', label="Category 5")
+            categories_legend.append(five)
+
+        plt.legend(handles=categories_legend, loc=legend_loc)
+    
+    # if bounds is not None:
+    #     plotitem.pcolor_cmin = bounds[0]
+    #     plotitem.pcolor_cmax = bounds[1]
+
+    return axes
+
+
+
+    # if plot_type == 'pcolor' or plot_type == 'imshow':
+    #     plotitem = plotaxes.new_plotitem(name='wind', plot_type='2d_pcolor')
+    #     plotitem.plot_var = wind_speed
+    #     plotitem.pcolor_cmap = wind_cmap
+    #     if bounds is not None:
+    #         plotitem.pcolor_cmin = bounds[0]
+    #         plotitem.pcolor_cmax = bounds[1]
+    #     plotitem.add_colorbar = True
+    #     plotitem.colorbar_shrink = shrink
+    #     plotitem.colorbar_label = "Wind Speed (m/s)"
+    #     plotitem.amr_celledges_show = [0] * 10
+    #     plotitem.amr_patchedges_show = [1, 1, 1, 1, 1, 0, 0]
+
+    # elif plot_type == 'contour':
+    #     plotitem = plotaxes.new_plotitem(name='wind', plot_type='2d_contour')
+    #     plotitem.plot_var = wind_speed
+    #     plotitem.contour_nlevels = len(surge_data.wind_refine)
+    #     plotitem.countour_min = surge_data.wind_refine[0]
+    #     plotitem.patchedges_show = 1
