@@ -371,7 +371,7 @@ class FGoutGrid(object):
         elif self.output_format in ['binary','binary64']:
             output_format = 3
         else:
-            errmsg = "fgout output_format must be ascii, binary32, or binary63"
+            errmsg = "fgout output_format must be ascii, binary32, or binary64"
             raise NotImplementedError(errmsg)
 
         assert self.tstart is not None, 'Need to set tstart'
