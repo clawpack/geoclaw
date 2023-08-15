@@ -371,8 +371,6 @@ class DTopoData(clawpack.clawutil.data.ClawData):
     def read(self, path, force=False):
         r"""Read a dtopography data file."""
 
-        print(self.dtopofiles)
-
         with open(os.path.abspath(path), 'r') as data_file:
 
             file_name = None
@@ -611,6 +609,7 @@ class FrictionData(clawpack.clawutil.data.ClawData):
         # File support
         self.add_attribute('friction_files', [])
 
+
     def write(self, out_file='friction.data', data_source='setrun.py'):
 
         self.open_data_file(out_file, data_source)
@@ -645,6 +644,49 @@ class FrictionData(clawpack.clawutil.data.ClawData):
                 self._out_file.write("'%s' %s\n " % fname)
 
         self.close_data_file()
+
+
+    def read(self, path="friction.data"):
+
+        super(FrictionData, self).read(path)
+
+        with open(os.path.abspath(path), 'r') as data_file:
+            # Skip header
+            for line in data_file:
+                if "#" != line[0]:
+                    break
+            value, tail = data_file.readline().split("=:")
+            self.variable_friction = bool(value)
+            value, tail = data_file.readline().split("=:")
+            self.friction_index = int(value)
+            data_file.readline()
+
+            value, tail = data_file.readline().split("=:")
+            num_friction_regions = int(value)
+            data_file.readline()
+
+            # Read in each region
+            self.friction_regions = []
+            for i in range(num_friction_regions):
+                # Read in region
+                region = []
+                for j in range(4):
+                    values, tail = data_file.readline().split("=:")
+                    region.append( [float(value) for value in values.split()] )
+                # Check
+                if len(region[3]) != len(region[2]) - 1:
+                    raise ValueError("Incorrect number of depths and coefficients.")
+
+                self.friction_regions.append(region)
+                data_file.readline()
+
+            # Read in files   
+            value, tail = data_file.readline().split("=:")
+            num_friction_files = int(value)
+            if num_friction_files > 0:
+                raise NotImplementedError("Friction files are not supported ",
+                                          "yet.")
+
 
 
 class MultilayerData(clawpack.clawutil.data.ClawData):
