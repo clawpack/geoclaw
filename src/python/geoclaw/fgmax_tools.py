@@ -23,6 +23,8 @@ class FGmaxGrid(object):
 
     def __init__(self):
 
+        super(FGmaxGrid, self).__init__()
+
         # GeoClaw input values:
         self.id = ''  # identifier, optional
         self.point_style = None
