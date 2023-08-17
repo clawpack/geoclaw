@@ -12,7 +12,6 @@ import os
 from numpy import sqrt, ma
 import numpy
 from six.moves import range
-from clawpack.geoclaw import topotools
 
 
 class FGmaxGrid(object):
@@ -23,6 +22,8 @@ class FGmaxGrid(object):
     """
 
     def __init__(self):
+
+        super(FGmaxGrid, self).__init__()
 
         # GeoClaw input values:
         self.id = ''  # identifier, optional
@@ -541,6 +542,7 @@ class FGmaxGrid(object):
             print('Will map fgmax points onto masked arrays defined by file:')
             print('     %s' % self.xy_fname)
 
+        from clawpack.geoclaw import topotools
         pts_chosen = topotools.Topography(path=self.xy_fname, topo_type=3)
         X = pts_chosen.X
         Y = pts_chosen.Y

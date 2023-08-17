@@ -29,6 +29,8 @@ import numpy
 import clawpack.clawutil.data
 import warnings
 
+import clawpack.geoclaw.fgmax_tools
+
 # Radius of earth in meters.
 # For consistency, should always use this value when needed, e.g.
 # in setrun.py or topotools:
@@ -295,11 +297,11 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         self.open_data_file(out_file, data_source)
         num_fgmax_val = self.num_fgmax_val
         if num_fgmax_val not in [1,2,5]:
-            raise NotImplementedError( \
-                    "Expecting num_fgmax_val in [1,2,5], got %s" % num_fgmax_val)
-        self.data_write(value=num_fgmax_val,alt_name='num_fgmax_val')
+            raise NotImplementedError(
+                   "Expecting num_fgmax_val in [1,2,5], got %s" % num_fgmax_val)
+        self.data_write(value=num_fgmax_val, alt_name='num_fgmax_val')
         num_fgmax_grids = len(self.fgmax_grids)
-        self.data_write(value=num_fgmax_grids,alt_name='num_fgmax_grids')
+        self.data_write(value=num_fgmax_grids, alt_name='num_fgmax_grids')
         self.data_write()
 
         fgno_unset = 0  # to use if fg.fgno not set by user
@@ -328,6 +330,42 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
+    def read(self, path="fgmax_grids.data", force=False):
+        r"""Read a FGMax data file."""
+
+        super(FGmaxData, self).read(path, force=force)
+
+        # Look for basic parameters
+        fig_numbers = []
+        with open(os.path.abspath(path), 'r') as data_file:
+            # Forward to first parameter
+            for line in data_file:
+                # Regular parameter setting
+                if "=:" in line:
+                    value, tail = line.split("=:")
+                    varname = tail.split()[0]
+
+                    if varname == "num_fgmax_val":
+                        self.num_fgmax_val = int(value)
+                    elif varname == "num_fgmax_grids":
+                        num_fgmax_grids = int(value)
+                
+                # Contains a fixed grid number
+                elif "# fgno" in line:
+                    value, tail = line.split("#")
+                    fig_numbers.append(int(value))
+
+        if len(fig_numbers) != num_fgmax_grids:
+            raise ValueError("Number of FGMaxGrid numbers found does not ", 
+                             "equal the number of grids recorded.")
+        
+        # Read each fgmax grid
+        for (i, grid_num) in enumerate(fig_numbers):
+            new_fgmax_grid = clawpack.geoclaw.fgmax_tools.FGmaxGrid()
+            new_fgmax_grid.read_fgmax_grids_data(grid_num, data_file=path)
+            self.fgmax_grids.append(new_fgmax_grid)
+
+
 
 class DTopoData(clawpack.clawutil.data.ClawData):
 
@@ -339,7 +377,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dtopofiles',[])
         self.add_attribute('dt_max_dtopo', 1.e99)
 
-    def write(self,data_source='setrun.py', out_file='dtopo.data'):
+    def write(self, data_source='setrun.py', out_file='dtopo.data'):
 
         # Moving topography settings
         self.open_data_file(out_file, data_source)
@@ -368,7 +406,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
-    def read(self, path, force=False):
+    def read(self, path="dtopo.data", force=False):
         r"""Read a dtopography data file."""
 
         print(self.dtopofiles)
