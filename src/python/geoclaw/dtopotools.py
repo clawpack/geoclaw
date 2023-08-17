@@ -1342,6 +1342,12 @@ class SubFault(object):
                                      [None, None, None], # 2 
                                      [None, None, None]] # 3
 
+        # for 1d:
+        if self.coordinate_specification == 'top':
+            self.coordinate_specification = 'top center'
+        if self.coordinate_specification == 'bottom':
+            self.coordinate_specification = 'bottom center'
+            
         # Set depths
         if self.coordinate_specification == 'top center' or \
            self.coordinate_specification == 'noaa sift' or \
