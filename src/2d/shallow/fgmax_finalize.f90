@@ -29,7 +29,7 @@ subroutine fgmax_finalize()
 
         fg => FG_fgrids(ifg)   
 
-        ifg1 = ifg
+        ifg1 = fg%fgno  ! use the fgno specified for filename, not ifg
         do ipos=4,1,-1
             idigit = mod(ifg1,10)
             cfgno(ipos:ipos) = char(ichar('0') + idigit)
