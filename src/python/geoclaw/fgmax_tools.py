@@ -12,7 +12,6 @@ import os
 from numpy import sqrt, ma
 import numpy
 from six.moves import range
-from clawpack.geoclaw import topotools
 
 
 class FGmaxGrid(object):
@@ -360,19 +359,19 @@ class FGmaxGrid(object):
                 raise ValueError('for point_style==4, require xy_fname')
 
     def read_output(self, fgno=None, outdir=None, verbose=True, 
-                    indexing='xy'):
+                    indexing='ij'):
         r"""
         Read the GeoClaw results on the fgmax grid numbered *fgno*.
         
-        Note that X,Y and other arrays will have indexing=='xy' 
-        by default, to conform with topo arrays, so
+        indexing='ij' gives backward compatibility.
+           X[i,j],Y[i,j] corresponds to point x[i],y[j]
+
+        Alternatively, can set indexing=='xy' so that X,Y and other
+        arrays have same layout as topo arrays:
            X[j,i],Y[j,i] corresponds to point x[i],y[j]
+        This is useful if you want to save the fgmax results in same format as 
+        topofiles, using topotools.Topography.write().
            
-        Warning: For point_style in [2,3] this has changed
-        from v5.9 and prior, and now confirms to the indexing of 
-        point_style==4 and topo objects.
-        
-        indexing='ij' can be specified for backward compatibility if needed.
         """
 
         if indexing == 'xy':
@@ -537,6 +536,7 @@ class FGmaxGrid(object):
                 self.x = self.X[0,:]
                 self.y = self.Y[:,0]
             else:
+                # for indexing=='ij' this fixes bug in v5.9.0 version:
                 self.x = self.X[:,0]
                 self.y = self.Y[0,:]
         else:
@@ -575,6 +575,7 @@ class FGmaxGrid(object):
             print('Will map fgmax points onto masked arrays defined by file:')
             print('     %s' % self.xy_fname)
 
+        from clawpack.geoclaw import topotools
         pts_chosen = topotools.Topography(path=self.xy_fname, topo_type=3)
         X = pts_chosen.X
         Y = pts_chosen.Y

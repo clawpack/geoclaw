@@ -29,7 +29,6 @@ import numpy
 import clawpack.clawutil.data
 import warnings
 
-import clawpack.geoclaw.fgmax_tools
 
 # Radius of earth in meters.
 # For consistency, should always use this value when needed, e.g.
@@ -360,6 +359,7 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
                              "equal the number of grids recorded.")
         
         # Read each fgmax grid
+        import clawpack.geoclaw.fgmax_tools
         for (i, grid_num) in enumerate(fig_numbers):
             new_fgmax_grid = clawpack.geoclaw.fgmax_tools.FGmaxGrid()
             new_fgmax_grid.read_fgmax_grids_data(grid_num, data_file=path)
