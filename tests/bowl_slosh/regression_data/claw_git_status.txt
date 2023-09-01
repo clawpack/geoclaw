@@ -1,113 +1,110 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/bowl_slosh/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/git/clawpack/geoclaw/tests/bowl_slosh/regression_data/claw_git_diffs.txt
 
-Fri, 23 Oct 2020 16:12:16 PDT
-$CLAW = /Users/rjl/clawpack_src/clawpack_master
-$FC = gfortran
+Fri, 01 Sep 2023 12:31:28 PDT
+$CLAW = /Users/rjl/git/clawpack
+$FC = not set
 
 
 ===========
 clawpack
 ===========
-/Users/rjl/clawpack_src/clawpack_master/
+/Users/rjl/git/clawpack/
 
 --- last commit ---
-be2b38d (HEAD -> master, origin/master, origin/HEAD) Merge pull request #189 from clawpack/no_version_repetition
+cc03572 (HEAD -> geoclaw_1d) need geoclaw_1d in __init__.py until it's merged into geoclaw proper
 
 --- branch and status ---
-## master...origin/master
+## geoclaw_1d
  M amrclaw
  M classic
+ M clawutil
  M geoclaw
  M pyclaw
- M riemann
  M visclaw
 
 
 ===========
 classic
 ===========
-/Users/rjl/clawpack_src/clawpack_master/classic
+/Users/rjl/git/clawpack/classic
 
 --- last commit ---
-13f06a2 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
+4fb4d1a (HEAD -> pytest, rjleveque/pytest) Using pytest instead of nose requires renaming to regression_test.py
 
 --- branch and status ---
-## master...origin/master
+## pytest
 
 
 ===========
 amrclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/amrclaw
+/Users/rjl/git/clawpack/amrclaw
 
 --- last commit ---
-6da6e17 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #266 from rjleveque/region_tools_ixy
+dc5c685 (HEAD -> pytest, rjleveque/pytest) rename regression_test.py for pytest
 
 --- branch and status ---
-## master...origin/master
+## pytest
 
 
 ===========
 clawutil
 ===========
-/Users/rjl/clawpack_src/clawpack_master/clawutil
+/Users/rjl/git/clawpack/clawutil
 
 --- last commit ---
-116ffb7 (HEAD -> master, tag: v5.7.1, origin/master, origin/HEAD) Merge pull request #151 from rjleveque/b4run
+a118b82 (HEAD -> test_save_gauge_binary, rjleveque/test_save_gauge_binary) Modify test.py so that when saving regression data, check for binary gauge file
 
 --- branch and status ---
-## master...origin/master
+## test_save_gauge_binary
 
 
 ===========
 pyclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/pyclaw
+/Users/rjl/git/clawpack/pyclaw
 
 --- last commit ---
-41e15d8 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #650 from kbarnhart/barnhark/fix_vtk_docstring_formatting
+53766ffc (HEAD -> importlib, rjleveque/importlib) replace imp by importlib
 
 --- branch and status ---
-## master...origin/master
+## importlib
 
 
 ===========
 visclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/visclaw
+/Users/rjl/git/clawpack/visclaw
 
 --- last commit ---
-b03b0d4 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #280 from rjleveque/mapc2p_exists
+2f5b832 (HEAD -> more_plot_attributes, rjleveque/more_plot_attributes) add time_label_fontsize to gaugetools.py
+
+--- branch and status ---
+## more_plot_attributes
+
+
+===========
+riemann
+===========
+/Users/rjl/git/clawpack/riemann
+
+--- last commit ---
+d177660 (HEAD -> master, tag: v5.9.0, tag: v5.8.2, tag: v5.8.1, rjleveque/master, origin/master, origin/HEAD) Merge pull request #163 from carlosmunozmoncayo/fix_dry_states_hlle
 
 --- branch and status ---
 ## master...origin/master
 
 
 ===========
-riemann
-===========
-/Users/rjl/clawpack_src/clawpack_master/riemann
-
---- last commit ---
-e326696 (HEAD -> rpt2_geoclaw) refactor rpt2_geoclaw.f, cleaned up and modified behavior
-
---- branch and status ---
-## rpt2_geoclaw
-
-
-===========
 geoclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/geoclaw
+/Users/rjl/git/clawpack/geoclaw
 
 --- last commit ---
-13ff68f (HEAD -> rpt2_regression_data) Merge branch 'master' into rpt2_regression_data
+0b41f48a (HEAD -> pytest, rjleveque/pytest) simplify tests/dtopo1/regression_test.py and save gauge00002 data
 
 --- branch and status ---
-## rpt2_regression_data
+## pytest
  M tests/bowl_slosh/regression_data/claw_git_status.txt
- M tests/chile2010_adjoint/regression_data/claw_git_status.txt
- M tests/chile2010_adjoint/regression_data/gauge00001.txt
- M tests/storm_surge/regression_data/claw_git_status.txt
- M tests/storm_surge/regression_data/gauge00001.txt
+ M tests/bowl_slosh/regression_data/gauge00001.txt
