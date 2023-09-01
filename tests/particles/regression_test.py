@@ -52,9 +52,9 @@ class ParticlesTest(test.GeoClawRegressionTest):
 
         import clawpack.pyclaw.gauges as gauges
         gauge = gauges.GaugeSolution(1, path=self.temp_path)
-        print('+++ Gauge 1:\n', gauge.q)
+        #print('+++ Gauge 1:\n', gauge.q)
         gauge = gauges.GaugeSolution(2, path=self.temp_path)
-        print('+++ Gauge 2:\n', gauge.q)
+        #print('+++ Gauge 2:\n', gauge.q)
 
         # Perform tests
         self.check_gauges(save=save, gauge_id=1, indices=(1, 2))
