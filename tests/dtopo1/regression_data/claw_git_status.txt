@@ -1,93 +1,97 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/git/clawpack/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
 
-Sat, 23 Apr 2022 07:59:12 PDT
-$CLAW = /Users/rjl/clawpack_src/clawpack_master
-$FC = gfortran
+Fri, 01 Sep 2023 12:24:02 PDT
+$CLAW = /Users/rjl/git/clawpack
+$FC = not set
 
 
 ===========
 clawpack
 ===========
-/Users/rjl/clawpack_src/clawpack_master/
+/Users/rjl/git/clawpack/
 
 --- last commit ---
-531a8fb (HEAD -> master, tag: v5.8.2, origin/master, origin/HEAD) Merge pull request #208 from rjleveque/v5.8.2rc
+cc03572 (HEAD -> geoclaw_1d) need geoclaw_1d in __init__.py until it's merged into geoclaw proper
 
 --- branch and status ---
-## master...origin/master
+## geoclaw_1d
  M amrclaw
+ M classic
+ M clawutil
  M geoclaw
  M pyclaw
+ M visclaw
 
 
 ===========
 classic
 ===========
-/Users/rjl/clawpack_src/clawpack_master/classic
+/Users/rjl/git/clawpack/classic
 
 --- last commit ---
-13f06a2 (HEAD -> master, tag: v5.8.2, tag: v5.8.1, tag: v5.8.0, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
+4fb4d1a (HEAD -> pytest, rjleveque/pytest) Using pytest instead of nose requires renaming to regression_test.py
 
 --- branch and status ---
-## master...origin/master
+## pytest
 
 
 ===========
 amrclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/amrclaw
+/Users/rjl/git/clawpack/amrclaw
 
 --- last commit ---
-3cae22c (HEAD -> gauge_format_comment, rjleveque/gauge_format_comment) fix the comment written to gauges.data about file_formats to the right place
+dc5c685 (HEAD -> pytest, rjleveque/pytest) rename regression_test.py for pytest
 
 --- branch and status ---
-## gauge_format_comment
+## pytest
 
 
 ===========
 clawutil
 ===========
-/Users/rjl/clawpack_src/clawpack_master/clawutil
+/Users/rjl/git/clawpack/clawutil
 
 --- last commit ---
-7c2cca5 (HEAD -> master, tag: v5.8.2, origin_push/master, origin/master, origin/HEAD) minor change to print dir in make_all.py
+5ec7587 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #153 from TrellixVulnTeam/master
 
 --- branch and status ---
 ## master...origin/master
+ M src/python/clawutil/test.py
 
 
 ===========
 pyclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/pyclaw
+/Users/rjl/git/clawpack/pyclaw
 
 --- last commit ---
-12f484b (HEAD -> gauge_binary_output, rjleveque/gauge_binary_output) update gauges.py to support binary files
+53766ffc (HEAD -> importlib, rjleveque/importlib) replace imp by importlib
 
 --- branch and status ---
-## gauge_binary_output
+## importlib
 
 
 ===========
 visclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/visclaw
+/Users/rjl/git/clawpack/visclaw
 
 --- last commit ---
-b5c137e (HEAD -> master, tag: v5.8.2, tag: v5.8.1, origin/master, origin/HEAD) Merge pull request #283 from clawpack/revert-282-master
+2f5b832 (HEAD -> more_plot_attributes, rjleveque/more_plot_attributes) add time_label_fontsize to gaugetools.py
 
 --- branch and status ---
-## master...origin/master
+## more_plot_attributes
 
 
 ===========
 riemann
 ===========
-/Users/rjl/clawpack_src/clawpack_master/riemann
+/Users/rjl/git/clawpack/riemann
 
 --- last commit ---
-d177660 (HEAD -> master, tag: v5.8.2, tag: v5.8.1, origin/master, origin/HEAD) Merge pull request #163 from carlosmunozmoncayo/fix_dry_states_hlle
+d177660 (HEAD -> master, tag: v5.9.0, tag: v5.8.2, tag: v5.8.1, rjleveque/master, origin/master, origin/HEAD) Merge pull request #163 from carlosmunozmoncayo/fix_dry_states_hlle
 
 --- branch and status ---
 ## master...origin/master
@@ -96,11 +100,13 @@ d177660 (HEAD -> master, tag: v5.8.2, tag: v5.8.1, origin/master, origin/HEAD) M
 ===========
 geoclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/geoclaw
+/Users/rjl/git/clawpack/geoclaw
 
 --- last commit ---
-e08d06c (HEAD -> gauge_binary_output) redo tests/dtopo1 so binary gauge data produced is compared with archived ascii data for portability
+9bb634b6 (HEAD -> pytest) update tests/*/setrun.py to latest form for topofile specification, remove max_level_deep
 
 --- branch and status ---
-## gauge_binary_output
+## pytest
  M tests/dtopo1/regression_data/claw_git_status.txt
+ M tests/dtopo1/regression_data/gauge00001.txt
+ M tests/dtopo1/regression_test.py
