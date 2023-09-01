@@ -1131,7 +1131,7 @@ class Fault(object):
         is set to static.
         """
 
-        if self.rupture_type is 'static':
+        if self.rupture_type == 'static':
             raise ValueError("Rupture type is set to static.")
 
         self.dynamic_t = t
