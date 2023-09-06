@@ -16,7 +16,6 @@ import numpy
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
-from clawpack.clawutil.test import wip
 
 
 try:
