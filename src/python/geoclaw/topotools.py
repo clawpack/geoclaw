@@ -417,7 +417,7 @@ class Topography(object):
         return self._delta
 
 
-    def __init__(self, path=None, topo_func=None, topo_type=None, 
+    def __init__(self, path=None, topo_type=None, topo_func=None, 
                        unstructured=False):
         r"""Topography initialization routine.
         
@@ -446,11 +446,9 @@ class Topography(object):
 
         self.coordinate_transform = lambda x,y: (x,y)
 
-        # RJL: should we read in by default if path is specified?
-        #      If not, why include all these parameters in __init__?
-        #if path:
-        #    self.read(path=path, topo_type=topo_type, unstructured=unstructured,
-        #     mask=mask, filter_region=filter_region)
+        if path:
+            self.read(path=path, topo_type=topo_type,
+                      unstructured=unstructured)
 
     def set_xyZ(self, X, Y, Z):
         r"""
