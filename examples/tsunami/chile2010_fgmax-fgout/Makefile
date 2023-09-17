@@ -59,7 +59,7 @@ include $(CLAWMAKE)
 # Construct the topography data
 .PHONY: topo all fgout_plots
 topo:
-	python maketopo.py
+	$(CLAW_PYTHON) maketopo.py
 
 fgout_plots: 
 	$(MAKE) plots SETPLOT_FILE=setplot_fgout.py PLOTDIR=_plots_fgout
