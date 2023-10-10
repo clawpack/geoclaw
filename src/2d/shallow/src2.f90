@@ -40,9 +40,6 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     ! friction source term
     real(kind=8), parameter :: depth_tolerance = 1.0d-30
 
-    ! eventually move this to geoclaw_module and allow setting in setrun.py:
-    !integer :: sphere_source
-
     ! Physics
     ! Nominal density of water
     real(kind=8), parameter :: rho = 1025.d0
@@ -51,15 +48,10 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     ! Spherical geometry source term(s)
     !
     ! These should be included for shallow water on the sphere, 
-    ! at least in the mass term, but were only added in v5.9.0.
-    ! For now sphere_source is a local variable and is set to 0 for backward
-    ! compatibility.  To test adding source term(s), copy this routine
-    ! and modify sphere_source before recompiling.
-    !
-    ! (Plan for v5.10.1: move to geoclaw_module and allow setting in setrun.py,
-    ! and make sphere_source = 1 the default.)
-
-    !sphere_source = 0   ! for backward compatibility  ! now a setrun param
+    ! at least in the mass term, but were only added in v5.9.0 as an option.
+    ! rundata.geo_data.sphere_source can now be set in setrun.py
+    ! Set sphere_source = 0 to omit source terms for backward compatibility
+    ! sphere_source = 1 should become the default?
 
     if ((coordinate_system == 2) .and. (sphere_source > 0)) then
         ! add in spherical source term in mass equation 
