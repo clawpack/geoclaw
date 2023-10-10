@@ -7,7 +7,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     use geoclaw_module, only: spherical_distance, coordinate_system
     use geoclaw_module, only: RAD2DEG, pi, dry_tolerance, DEG2RAD
     use geoclaw_module, only: rho_air
-    use geoclaw_module, only: earth_radius
+    use geoclaw_module, only: earth_radius, sphere_source
       
     use storm_module, only: wind_forcing, pressure_forcing, wind_drag
     use storm_module, only: wind_index, pressure_index
@@ -41,7 +41,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     real(kind=8), parameter :: depth_tolerance = 1.0d-30
 
     ! eventually move this to geoclaw_module and allow setting in setrun.py:
-    integer :: sphere_source
+    !integer :: sphere_source
 
     ! Physics
     ! Nominal density of water
@@ -59,7 +59,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     ! (Plan for v5.10.1: move to geoclaw_module and allow setting in setrun.py,
     ! and make sphere_source = 1 the default.)
 
-    sphere_source = 0   ! for backward compatibility
+    !sphere_source = 0   ! for backward compatibility  ! now a setrun param
 
     if ((coordinate_system == 2) .and. (sphere_source > 0)) then
         ! add in spherical source term in mass equation 

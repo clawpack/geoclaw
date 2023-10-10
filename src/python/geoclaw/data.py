@@ -55,6 +55,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('ambient_pressure', 101.3e3) # Nominal atmos pressure
         self.add_attribute('earth_radius',Rearth)
         self.add_attribute('coordinate_system',1)
+        self.add_attribute('sphere_source',0)  # should set to 1 by default?
         self.add_attribute('coriolis_forcing',True)
         self.add_attribute('theta_0',45.0)
         self.add_attribute('friction_forcing',True)
@@ -78,7 +79,10 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write('ambient_pressure',
                                 description="(Nominal atmospheric pressure Pa)")
         self.data_write('earth_radius', description="(Radius of the earth m)")
-        self.data_write('coordinate_system')
+        self.data_write('coordinate_system',
+                        description="(1=meters, 2=lon-lat)")
+        self.data_write('sphere_source',
+                        description="(0=none, 1=only in mass eqn, 2=all)")
         self.data_write('sea_level')
         self.data_write()
 
