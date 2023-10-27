@@ -741,58 +741,6 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
 
 
 
-class GeoClawData1D(clawpack.clawutil.data.ClawData):
-    r"""
-    1D Geoclaw data object
-
-    """
-    def __init__(self):
-        super(GeoClawData1D,self).__init__()
-
-        # GeoClaw physics parameters
-        self.add_attribute('gravity',9.8)
-        self.add_attribute('earth_radius',Rearth)
-        self.add_attribute('coordinate_system',1)
-        self.add_attribute('friction_forcing',True)
-        self.add_attribute('friction_coefficient',0.025)
-
-        # GeoClaw algorithm parameters
-        self.add_attribute('dry_tolerance',1e-3)
-        self.add_attribute('friction_depth',1.0e6)
-        self.add_attribute('sea_level',0.0)
-
-
-    def write(self,data_source='setrun.py'):
-
-        self.open_data_file('geoclaw.data',data_source)
-
-        self.data_write('gravity')
-        self.data_write('earth_radius')
-        self.data_write('coordinate_system')
-        self.data_write('sea_level')
-
-        friction = self.friction_forcing
-        if isinstance(self.friction_forcing,bool):
-            if self.friction_forcing:
-                friction = 1
-            else:
-                friction = 0
-        elif isinstance(self.friction_forcing,str):
-            if self.friction_forcing in ['Manning','manning','MANNING']:
-                friction = 1
-            elif self.friction_forcing in ['Coulomb','coulomb','COULOMB']:
-                friction = 2
-            else:
-                friction = 0
-        self.friction_forcing = friction
-
-
-        self.data_write('friction_forcing')
-        self.data_write('friction_coefficient')
-        self.data_write('friction_depth')
-        self.data_write('dry_tolerance')
-
-        self.close_data_file()
 
 #  Gauge data object
 
@@ -879,6 +827,9 @@ class GridData1D(clawpack.clawutil.data.ClawData):
 
         self.add_attribute('grid_type',0)
         self.add_attribute('fname_celledges',None)
+        self.add_attribute('monitor_fgmax',False)
+        self.add_attribute('monitor_runup',False)
+        self.add_attribute('monitor_total_zeta',False)
 
     def write(self,out_file='grid.data',data_source='setrun.py'):
 
@@ -895,7 +846,13 @@ class GridData1D(clawpack.clawutil.data.ClawData):
             fname = os.path.abspath(os.path.join(os.path.dirname(out_file),
                                     self.fname_celledges))
             self._out_file.write("\n'%s'   =: fname_celledges\n " % fname)
-            #self.data_write('fname_celledges')
+
+        self._out_file.write("\n%s   =: monitor_fgmax" \
+                             % str(self.monitor_fgmax)[0])
+        self._out_file.write("\n%s   =: monitor_runup" \
+                             % str(self.monitor_runup)[0])
+        self._out_file.write("\n%s   =: monitor_total_zeta" \
+                             % str(self.monitor_total_zeta)[0])
         self.close_data_file()
 
     def read(self, path, force=False):
@@ -918,21 +875,15 @@ class BoussData1D(clawpack.clawutil.data.ClawData):
     def __init__(self):
         super(BoussData1D,self).__init__()
 
-        self.add_attribute('bouss',True)
-        self.add_attribute('ibouss',1)
-        self.add_attribute('B_param',1./15.)
-        self.add_attribute('sw_depth0',20.)
-        self.add_attribute('sw_depth1',10.)
+        self.add_attribute('boussEquations',2)
+        self.add_attribute('boussMinDepth',20.)
 
     def write(self,out_file='bouss.data',data_source='setrun.py'):
 
         self.open_data_file(out_file,data_source)
 
-        self.data_write('bouss')
-        self.data_write('ibouss')
-        self.data_write('B_param')
-        self.data_write('sw_depth0')
-        self.data_write('sw_depth1')
+        self.data_write('boussEquations')
+        self.data_write('boussMinDepth')
 
         self.close_data_file()
 
