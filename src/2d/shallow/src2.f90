@@ -5,8 +5,9 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     use geoclaw_module, only: manning_coefficient
     use geoclaw_module, only: manning_break, num_manning
     use geoclaw_module, only: spherical_distance, coordinate_system
-    use geoclaw_module, only: RAD2DEG, pi, dry_tolerance
+    use geoclaw_module, only: RAD2DEG, pi, dry_tolerance, DEG2RAD
     use geoclaw_module, only: rho_air
+    use geoclaw_module, only: earth_radius, sphere_source
       
     use storm_module, only: wind_forcing, pressure_forcing, wind_drag
     use storm_module, only: wind_index, pressure_index
@@ -31,8 +32,10 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     real(kind=8) :: u, v, hu0, hv0
     real(kind=8) :: tau, wind_speed, theta, phi, psi, P_gradient(2), S(2)
     real(kind=8) :: Ddt, sloc(2)
+    real(kind=8) :: tanyR, huv, huu, hvv
 
     ! Algorithm parameters
+
     ! Parameter controls when to zero out the momentum at a depth in the
     ! friction source term
     real(kind=8), parameter :: depth_tolerance = 1.0d-30
@@ -41,6 +44,43 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     ! Nominal density of water
     real(kind=8), parameter :: rho = 1025.d0
 
+    ! ----------------------------------------------------------------
+    ! Spherical geometry source term(s)
+    !
+    ! These should be included for shallow water on the sphere, 
+    ! at least in the mass term, but were only added in v5.9.0 as an option.
+    ! rundata.geo_data.sphere_source can now be set in setrun.py
+    ! Set sphere_source = 0 to omit source terms for backward compatibility
+    ! sphere_source = 1 should become the default?
+
+    if ((coordinate_system == 2) .and. (sphere_source > 0)) then
+        ! add in spherical source term in mass equation 
+        ! if sphere_source in [1,2],
+        ! and also in momentum equations if sphere_source == 2
+        do j=1,my
+            y = ylower + (j - 0.5d0) * dy
+            tanyR = tan(y*DEG2RAD) / earth_radius
+            do i=1,mx
+                if (q(1,i,j) > dry_tolerance) then
+                    ! source term in mass equation:
+                    q(1,i,j) = q(1,i,j) + dt * tanyR * q(3,i,j)
+
+                    if (sphere_source == 2) then
+                        ! Momentum source terms that drop out if linearized:
+                        ! These seem to have very little effect for
+                        ! practical problems
+                        huv = q(2,i,j)*q(3,i,j)/q(1,i,j)
+                        huu = q(2,i,j)*q(2,i,j)/q(1,i,j)
+                        hvv = q(3,i,j)*q(3,i,j)/q(1,i,j)
+                        q(2,i,j) = q(2,i,j) + dt * tanyR * 2.d0*huv
+                        q(3,i,j) = q(3,i,j) + dt * tanyR * (hvv - huu)
+                    endif
+                endif
+            enddo
+        enddo
+    endif
+                
+    ! ----------------------------------------------------------------                
     ! Friction source term
     if (friction_forcing) then
         do j=1,my

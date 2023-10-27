@@ -12,7 +12,6 @@ import os
 from numpy import sqrt, ma
 import numpy
 from six.moves import range
-from clawpack.geoclaw import topotools
 
 
 class FGmaxGrid(object):
@@ -23,6 +22,8 @@ class FGmaxGrid(object):
     """
 
     def __init__(self):
+
+        super(FGmaxGrid, self).__init__()
 
         # GeoClaw input values:
         self.id = ''  # identifier, optional
@@ -357,13 +358,31 @@ class FGmaxGrid(object):
             else:
                 raise ValueError('for point_style==4, require xy_fname')
 
-    def read_output(self, fgno=None, outdir=None, verbose=True):
+    def read_output(self, fgno=None, outdir=None, verbose=True, 
+                    indexing='ij'):
         r"""
         Read the GeoClaw results on the fgmax grid numbered *fgno*.
+        
+        indexing='ij' gives backward compatibility.
+           X[i,j],Y[i,j] corresponds to point x[i],y[j]
+
+        Alternatively, can set indexing=='xy' so that X,Y and other
+        arrays have same layout as topo arrays:
+           X[j,i],Y[j,i] corresponds to point x[i],y[j]
+        This is useful if you want to save the fgmax results in same format as 
+        topofiles, using topotools.Topography.write().
+           
         """
 
+        if indexing == 'xy':
+            reshape_order = 'C'
+        elif indexing == 'ij':
+            reshape_order = 'F'
+        else:
+            raise InputError("*** indexing must by 'xy' or 'ij'")
+            
         if self.point_style is None:
-            raise IOError("*** point_style is not set, need to read input?")
+            raise InputError("*** point_style is not set, need to read input?")
         point_style = self.point_style
 
         if fgno is not None:
@@ -434,32 +453,40 @@ class FGmaxGrid(object):
         if point_style in [0,1,4]:
             fg_shape = (self.npts,)
         elif point_style == 2:
-            fg_shape = (self.nx,self.ny)
+            if indexing == 'xy':
+                fg_shape = (self.ny,self.nx)
+            else:
+                fg_shape = (self.nx,self.ny)
+
         elif point_style == 3:
-            fg_shape = (self.n12,self.n23)
+            if indexing == 'xy':
+                fg_shape = (self.n23,self.n12)
+            else:
+                fg_shape = (self.n12,self.n23)
         else:
             raise NotImplementedError("Not implemented for point_style %s" \
                 % point_style)
 
-        X = numpy.reshape(d[:,0],fg_shape,order='F')
-        Y = numpy.reshape(d[:,1],fg_shape,order='F')
+        X = numpy.reshape(d[:,0],fg_shape,order=reshape_order)
+        Y = numpy.reshape(d[:,1],fg_shape,order=reshape_order)
         y0 = 0.5*(Y.min() + Y.max())   # mid-latitude for scaling plots
-        h = numpy.reshape(d[:,ind_h],fg_shape,order='F')
+        h = numpy.reshape(d[:,ind_h],fg_shape,order=reshape_order)
 
         # AMR level used for each fgmax value:
-        level = numpy.reshape(d[:,ind_level].astype('int'),fg_shape,order='F')
+        level = numpy.reshape(d[:,ind_level].astype('int'),fg_shape,
+                              order=reshape_order)
 
         # Set B = topo array
-        B = numpy.reshape(d[:,ind_B],fg_shape,order='F')
+        B = numpy.reshape(d[:,ind_B],fg_shape,order=reshape_order)
 
         mask = (h < -1e50)  # points that were never set
         B = ma.masked_where(mask, B)
         h = ma.masked_where(mask, h)
 
         def set_q_time(ind_q, ind_q_time):
-            q = numpy.reshape(d[:,ind_q],fg_shape,order='F')
+            q = numpy.reshape(d[:,ind_q],fg_shape,order=reshape_order)
             q = ma.masked_where(mask,q)
-            q_time = numpy.reshape(d[:,ind_q_time],fg_shape,order='F')
+            q_time = numpy.reshape(d[:,ind_q_time],fg_shape,order=reshape_order)
             q_time = ma.masked_where(mask, q_time)
             return q, q_time
 
@@ -472,7 +499,8 @@ class FGmaxGrid(object):
             self.hmin, self.hmin_time = set_q_time(ind_hmin, ind_hmin_time)
 
         # last column is arrival times:
-        arrival_time = numpy.reshape(d[:,ind_arrival_time],fg_shape,order='F')
+        arrival_time = numpy.reshape(d[:,ind_arrival_time],
+                                     fg_shape,order=reshape_order)
         arrival_time = ma.masked_where(arrival_time < -1e50, arrival_time)
         arrival_time = ma.masked_where(mask, arrival_time)
         self.arrival_time = arrival_time
@@ -504,10 +532,16 @@ class FGmaxGrid(object):
                 raise
 
         if self.X.ndim==2:
-            self.x = self.X[0,:]
-        if self.Y.ndim==2:
-            self.y = self.Y[:,0]
-
+            if indexing=='xy':
+                self.x = self.X[0,:]
+                self.y = self.Y[:,0]
+            else:
+                # for indexing=='ij' this fixes bug in v5.9.0 version:
+                self.x = self.X[:,0]
+                self.y = self.Y[0,:]
+        else:
+                self.x = self.X
+                self.y = self.Y
 
 
     def bounding_box(self):
@@ -541,6 +575,7 @@ class FGmaxGrid(object):
             print('Will map fgmax points onto masked arrays defined by file:')
             print('     %s' % self.xy_fname)
 
+        from clawpack.geoclaw import topotools
         pts_chosen = topotools.Topography(path=self.xy_fname, topo_type=3)
         X = pts_chosen.X
         Y = pts_chosen.Y

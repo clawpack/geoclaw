@@ -591,7 +591,7 @@ def make_fgout_fcn_xyt(fgout1, fgout2, qoi, method_xy='nearest',
         elif bounds_error:
             errmsg = '*** argument t=%g should be between t1=%g and t2=%g' \
                      % (t,t1,t2)
-            raise InputError(errmsg)
+            raise ValueError(errmsg)
         else:
             qout = fill_value * ones(xa.shape)
             return qout

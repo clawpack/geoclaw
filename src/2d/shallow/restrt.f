@@ -16,6 +16,7 @@ c
       type(fgrid), pointer :: fg
 
       integer :: num_gauges_previous, i, ii, previous_gauge_num
+      integer matlabu0
 c
 c :::::::::::::::::::::::::::: RESTRT ::::::::::::::::::::::::::::::::
 c read back in the check point files written by subr. check.
@@ -43,6 +44,8 @@ c     rstfile  = 'restart.data'
       endif
       open(rstunit,file=trim(rstfile),status='old',form='unformatted')
       rewind rstunit
+
+      matlabu0 = matlabu ! value set by amr2, 0 if output_t0, else 1
 
       !read(rstunit) lenmax,lendim,isize
       !! new version has flexible node size, so need to read current size maxgr
@@ -134,6 +137,8 @@ c     Check for any lagrangian gauges, and if present reset x,y location:
 
 c
       close(rstunit) 
+
+      matlabu = matlabu - 1 + matlabu0 ! redo previous frame if output_t0
 
       write(outunit,100) nsteps,time
       write(6,100) nsteps,time
