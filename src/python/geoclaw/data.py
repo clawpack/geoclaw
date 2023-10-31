@@ -875,15 +875,15 @@ class BoussData1D(clawpack.clawutil.data.ClawData):
     def __init__(self):
         super(BoussData1D,self).__init__()
 
-        self.add_attribute('boussEquations',2)
-        self.add_attribute('boussMinDepth',20.)
+        self.add_attribute('bouss_equations',2)
+        self.add_attribute('bouss_min_depth',20.)
 
     def write(self,out_file='bouss.data',data_source='setrun.py'):
 
         self.open_data_file(out_file,data_source)
 
-        self.data_write('boussEquations')
-        self.data_write('boussMinDepth')
+        self.data_write('bouss_equations')
+        self.data_write('bouss_min_depth')
 
         self.close_data_file()
 
