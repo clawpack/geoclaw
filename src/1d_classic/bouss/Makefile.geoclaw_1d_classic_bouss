@@ -1,0 +1,31 @@
+#get the directory of this makefile
+GEOLIB:=$(CLAW)/geoclaw/src/1d_classic/shallow
+BOUSSLIB:=$(CLAW)/geoclaw/src/1d_classic/bouss
+
+#list of common sources:
+COMMON_MODULES += \
+  $(GEOLIB)/claw_module.f90 \
+  $(GEOLIB)/utility_module.f90 \
+  $(GEOLIB)/geoclaw_module.f90 \
+  $(GEOLIB)/gauges_module.f90 \
+  $(GEOLIB)/grid_module.f90 \
+  $(GEOLIB)/topo_module.f90 \
+  $(BOUSSLIB)/bouss_module.f90 \
+
+COMMON_SOURCES += \
+  $(BOUSSLIB)/claw1ez.f \
+  $(GEOLIB)/claw1.f \
+  $(GEOLIB)/rp1_geoclaw.f90 \
+  $(GEOLIB)/bc1.f \
+  $(GEOLIB)/setaux.f \
+  $(GEOLIB)/out1.f \
+  $(GEOLIB)/setprob.f90 \
+  $(GEOLIB)/b4step1.f90 \
+  $(GEOLIB)/qinit.f90 \
+  $(BOUSSLIB)/src1.f90 \
+  $(CLAW)/classic/src/1d/driver.f90 \
+  $(CLAW)/classic/src/1d/inlinelimiter.f90 \
+  $(CLAW)/classic/src/1d/step1.f90 \
+  $(CLAW)/classic/src/1d/copyq1.f \
+  $(CLAW)/classic/src/1d/opendatafile.f \
+  $(CLAW)/riemann/src/geoclaw_riemann_utils.f \
