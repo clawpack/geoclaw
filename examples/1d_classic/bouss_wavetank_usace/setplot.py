@@ -1,12 +1,6 @@
 
 import os, sys
-
-try:
-    from clawpack.geoclaw import geoplot1d as geoplot
-except:
-    print('Could not import geoplot1d')
-
-
+from clawpack.visclaw import geoplot
 from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 from clawpack.clawutil.data import ClawData
 import numpy
@@ -43,24 +37,11 @@ def setplot(plotdata):
         mapc2p2, mx_edge, xp_edge = make_mapc2p(os.path.join(outdir2,'celledges.data'))
 
 
-    def fixticks1(current_data):
-        from pylab import ticklabel_format, grid,tight_layout
-        ticklabel_format(useOffset=False)
-        grid(True)
+    def fix_layout(current_data):
+        from pylab import tight_layout
         tight_layout()
-        #import pdb; pdb.set_trace()
 
-    def fixticks(current_data):
-        from pylab import ticklabel_format, plot,grid,gca
-        ticklabel_format(useOffset=False)
-        grid(True)
         
-    def velocity(current_data):
-        from pylab import where
-        q = current_data.q
-        u = where(q[0,:]>1e-3, q[1,:] / q[0,:], 0.)
-        return u
-
     plotfigure = plotdata.new_plotfigure(name='domain', figno=0)
     plotfigure.kwargs = {'figsize':(8,7)}
     plotaxes = plotfigure.new_plotaxes()
@@ -69,7 +50,6 @@ def setplot(plotdata):
     plotaxes.ylimits = [-0.05,0.2]
     plotaxes.grid = True
     plotaxes.title = 'Surface displacement'
-    plotaxes.afteraxes = fixticks
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = geoplot.surface
@@ -98,12 +78,11 @@ def setplot(plotdata):
     plotaxes.ylimits = [-0.6,0.6]
     plotaxes.grid = True
     plotaxes.title = 'Velocity'
-    plotaxes.afteraxes = fixticks1
     plotitem.MappedGrid = True
     plotitem.mapc2p = mapc2p1
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.velocity
+    plotitem.plot_var = geoplot.u_velocity
     plotitem.color = 'b'
     plotitem.MappedGrid = True
     plotitem.mapc2p = mapc2p1
@@ -111,7 +90,7 @@ def setplot(plotdata):
     if outdir2:
         plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
         plotitem.outdir = outdir2
-        plotitem.plot_var = geoplot.velocity
+        plotitem.plot_var = geoplot.u_velocity
         plotitem.plotstyle = 'r--'
         plotitem.MappedGrid = True
         plotitem.mapc2p = mapc2p2
@@ -122,7 +101,7 @@ def setplot(plotdata):
     plotaxes.ylimits = [-0.25,0.1]
     plotaxes.grid = True
     plotaxes.title = 'Full depth'
-    plotaxes.afteraxes = fixticks1
+    plotaxes.afteraxes = fix_layout
     plotitem.MappedGrid = True
     plotitem.mapc2p = mapc2p1
     

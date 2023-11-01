@@ -1,12 +1,7 @@
 
 
 import os, sys
-
-try:
-    from clawpack.geoclaw import geoplot1d as geoplot
-except:
-    print('Could not import geoplot1d')
-
+from clawpack.visclaw import geoplot
 from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 import numpy
 
@@ -38,21 +33,6 @@ def setplot(plotdata):
     outdir1 = plotdata.outdir
     mapc2p1, mx_edge, xp_edge = make_mapc2p(fname_celledges)
 
-    def fixticks1(current_data):
-        from pylab import ticklabel_format, grid,tight_layout
-        ticklabel_format(useOffset=False)
-        grid(True)
-        tight_layout()
-
-    def fixticks(current_data):
-        from pylab import ticklabel_format, plot,grid,gca
-        ticklabel_format(useOffset=False)
-        if xmax is not None:
-            plot(xmax, etamax, 'r')
-        grid(True)
-        legend_tools.add_legend(['surface eta', 'maximum eta'],
-            colors=['b','r'], loc='lower right')
-            
     def fix_layout(current_data):
         from pylab import tight_layout
         tight_layout()
@@ -65,13 +45,6 @@ def setplot(plotdata):
             add_legend(['max eta over simulation','surface elevation eta'],
                    ['r','b'], framealpha=1)
         
-    def velocity(current_data):
-        from pylab import where,nan
-        q = current_data.q
-        hpos = where(q[0,:] < 1e-3, nan, q[0,:])
-        u = q[1,:] / hpos
-        return u
-
     plotfigure = plotdata.new_plotfigure(name='domain', figno=0)
     plotfigure.kwargs = {'figsize':(8,7)}
     plotaxes = plotfigure.new_plotaxes()
@@ -104,7 +77,7 @@ def setplot(plotdata):
     plotitem.mapc2p = mapc2p1
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = velocity
+    plotitem.plot_var = geoplot.u_velocity
     plotitem.color = 'b'
     plotitem.MappedGrid = True
     plotitem.mapc2p = mapc2p1

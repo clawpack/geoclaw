@@ -1,13 +1,7 @@
 
 
 import os, sys
-
-try:
-    from clawpack.geoclaw import geoplot1d as geoplot
-except:
-    print('Could not import geoplot1d')
-
-
+from clawpack.visclaw import geoplot
 from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 import numpy
 
