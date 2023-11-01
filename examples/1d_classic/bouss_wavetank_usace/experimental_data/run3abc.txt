@@ -1,0 +1,13 @@
+       RUN3ABC
+Time created 2:40pm  9/27/95
+Maximum Vertical Runup Height Distribution, Cases A, B and C
+Benchmark 3,  Runup of Solitary Waves on a Vertical Wall
+
+Water Depth, cm = 21.8 
+
+            Target   Actual   Runup   
+Case          H/d      H/d    R, cm      R/d
+
+A            0.05    0.039     2.74     0.13
+B            0.30    0.264    45.72     2.10
+C            0.70    0.696    27.43     1.26
