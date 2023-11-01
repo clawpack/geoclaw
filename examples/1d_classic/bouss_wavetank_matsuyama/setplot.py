@@ -30,27 +30,19 @@ def setplot(plotdata):
     mapc2p1, mx_edge, xp_edge = make_mapc2p(fname_celledges)
 
 
-    def fixticks1(current_data):
-        from pylab import ticklabel_format, grid,tight_layout
-        ticklabel_format(useOffset=False)
-        grid(True)
+    def fix_layout(current_data):
+        from pylab import tight_layout
         tight_layout()
-        #import pdb; pdb.set_trace()
 
-    def fixticks(current_data):
-        from pylab import ticklabel_format, plot,grid,gca
-        ticklabel_format(useOffset=False)
-        grid(True)
-        
 
     plotfigure = plotdata.new_plotfigure(name='domain', figno=0)
-    plotfigure.kwargs = {'figsize':(8,7)}
+    plotfigure.figsize = (8,7)
     plotaxes = plotfigure.new_plotaxes()
     plotaxes.axescmd = 'subplot(311)'
     plotaxes.xlimits = xlimits
     plotaxes.ylimits = [-0.3,0.6]
+    plotaxes.grid = True
     plotaxes.title = 'Surface displacement'
-    plotaxes.afteraxes = fixticks
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = geoplot.surface
@@ -79,8 +71,8 @@ def setplot(plotdata):
     plotaxes.axescmd = 'subplot(312)'
     plotaxes.xlimits = xlimits
     plotaxes.ylimits = [-1,1]
+    plotaxes.grid = True
     plotaxes.title = 'Velocity'
-    plotaxes.afteraxes = fixticks1
     plotitem.MappedGrid = True
     plotitem.mapc2p = mapc2p1
 
@@ -102,8 +94,10 @@ def setplot(plotdata):
     plotaxes.axescmd = 'subplot(313)'
     plotaxes.xlimits = xlimits
     plotaxes.ylimits = [-5,2]
+    plotaxes.grid = True
     plotaxes.title = 'Full depth'
-    plotaxes.afteraxes = fixticks1
+    plotaxes.grid = True
+    plotaxes.afteraxes = fix_layout
     plotitem.MappedGrid = True
     plotitem.mapc2p = mapc2p1
     
@@ -129,80 +123,23 @@ def setplot(plotdata):
     plotitem.mapc2p = mapc2p1
 
 
-    #----------
-
-    plotfigure = plotdata.new_plotfigure(name='shore', figno=1)
-    #plotfigure.kwargs = {'figsize':(9,11)}
-    plotfigure.show = False
-    
-
-    plotaxes = plotfigure.new_plotaxes()
-    plotaxes.axescmd = 'subplot(211)'
-    plotaxes.xlimits = [0,80e3]
-    plotaxes.ylimits = [-4,4]
-    plotaxes.title = 'Zoom on shelf'
-
-    plotaxes.afteraxes = fixticks
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.surface
-    #plotitem = plotaxes.new_plotitem(plot_type='1d_fill_between')
-    #plotitem.plot_var = geoplot.surface
-    #plotitem.plot_var2 = geoplot.topo
-    plotitem.color = 'b'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.topo
-    plotitem.color = 'k'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-    plotaxes = plotfigure.new_plotaxes()
-    plotaxes.axescmd = 'subplot(212)'
-    #plotaxes.xlimits = [-2000,2000]
-    plotaxes.xlimits = [-1000,1000]
-    #plotaxes.ylimits = [-10,40]
-    plotaxes.ylimits = [-20,60]
-    plotaxes.title = 'Zoom around shore'
-
-    plotaxes.afteraxes = fixticks
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.show = False
-    plotitem.plot_var = geoplot.surface
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_fill_between')
-    plotitem.plot_var = geoplot.surface
-    plotitem.plot_var2 = geoplot.topo
-    plotitem.color = 'b'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.topo
-    plotitem.color = 'k'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-
-
 
     #-----------------------------------------
     # Figures for gauges
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='q', figno=300, \
                                          type='each_gauge')
-    plotfigure.kwargs = {'figsize':(12,3)}
+    plotfigure.figsize = (12,3)
     plotfigure.clf_each_gauge = True
 
     plotaxes = plotfigure.new_plotaxes()
     plotaxes.xlimits = 'auto'
     #plotaxes.ylimits = [-2,2]
+    plotaxes.grid = True
     plotaxes.title = 'Surface elevation eta'
 
-    def addgrid(current_data):
-        from pylab import grid, xlim
-        grid(True)
+    def setxlim(current_data):
+        from pylab import xlim
         gno = current_data.gaugeno
         if gno == 150:
             xlim(0,60)
@@ -218,7 +155,7 @@ def setplot(plotdata):
             xlim(50,100)
         elif gno == 10:
             xlim(60,110)
-    plotaxes.afteraxes = addgrid
+    plotaxes.afteraxes = setxlim
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = 2  # eta

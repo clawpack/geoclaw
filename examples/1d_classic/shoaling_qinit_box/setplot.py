@@ -33,12 +33,7 @@ def setplot(plotdata=None):
         return x_km
 
 
-    def fixticks1(current_data):
-        from pylab import ticklabel_format, grid
-        ticklabel_format(useOffset=False)
-        grid(True)
-
-    def fixticks(current_data):
+    def add_annotations(current_data):
         from pylab import ticklabel_format, plot,grid,ones,sqrt, \
             legend,title,ylabel,text
         ticklabel_format(useOffset=False)
@@ -90,7 +85,7 @@ def setplot(plotdata=None):
     #plotaxes.xlimits = [-100e3,-20e3]
     plotaxes.ylimits = [-1,3]
     plotaxes.title = 'Surface displacement'
-    plotaxes.afteraxes = fixticks
+    plotaxes.afteraxes = add_annotations
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = geoplot.surface

@@ -33,12 +33,7 @@ def setplot(plotdata=None):
         return x_km
 
 
-    def fixticks1(current_data):
-        from pylab import ticklabel_format, grid
-        ticklabel_format(useOffset=False)
-        grid(True)
-
-    def fixticks(current_data):
+    def add_annotation(current_data):
         from pylab import ticklabel_format, plot,grid,ones,sqrt, \
             legend,title,ylabel,text
         ticklabel_format(useOffset=False)
@@ -46,12 +41,12 @@ def setplot(plotdata=None):
         hl = 3200.
         hr = 200.
         greens = (hl/hr)**(0.25)
-        print('greens = ',greens)
+        #print('greens = ',greens)
         #plot(current_data.x, greens*ones(current_data.x.shape),'g--')
         plot(xlimits,[greens,greens],'g--', label='$C_g$, Greens Law')
         ctrans = 2*sqrt(hl)/(sqrt(hl)+sqrt(hr))
         crefl = (sqrt(hl)-sqrt(hr))/(sqrt(hl)+sqrt(hr))
-        print('ctrans = ',ctrans)
+        #print('ctrans = ',ctrans)
         plot(xlimits,[ctrans,ctrans],'r--', label='$C_T$, Transmission coefficient')
         legend(loc='upper left')
         title('')
@@ -63,7 +58,7 @@ def setplot(plotdata=None):
         h = current_data.q[0,:]
         mx2 = int(round(len(h)/2.))
         etamax2 = (h[:mx2] - hl).max()
-        print('mx2 = %i, etamax2 = %g' % (mx2,etamax2))
+        #print('mx2 = %i, etamax2 = %g' % (mx2,etamax2))
 
     plotfigure = plotdata.new_plotfigure(name='domain', figno=0)
     plotfigure.kwargs = {'figsize':(7,6.5)}
@@ -73,7 +68,7 @@ def setplot(plotdata=None):
     #plotaxes.xlimits = [-100e3,-20e3]
     plotaxes.ylimits = [-1,3]
     plotaxes.title = 'Surface displacement'
-    plotaxes.afteraxes = fixticks
+    plotaxes.afteraxes = add_annotation
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = geoplot.surface

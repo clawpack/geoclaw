@@ -67,6 +67,7 @@ def setplot(plotdata):
     plotaxes.axescmd = 'subplot(311)'
     plotaxes.xlimits = xlimits
     plotaxes.ylimits = [-0.05,0.2]
+    plotaxes.grid = True
     plotaxes.title = 'Surface displacement'
     plotaxes.afteraxes = fixticks
 
@@ -95,6 +96,7 @@ def setplot(plotdata):
     plotaxes.axescmd = 'subplot(312)'
     plotaxes.xlimits = xlimits
     plotaxes.ylimits = [-0.6,0.6]
+    plotaxes.grid = True
     plotaxes.title = 'Velocity'
     plotaxes.afteraxes = fixticks1
     plotitem.MappedGrid = True
@@ -118,6 +120,7 @@ def setplot(plotdata):
     plotaxes.axescmd = 'subplot(313)'
     plotaxes.xlimits = xlimits
     plotaxes.ylimits = [-0.25,0.1]
+    plotaxes.grid = True
     plotaxes.title = 'Full depth'
     plotaxes.afteraxes = fixticks1
     plotitem.MappedGrid = True
@@ -145,62 +148,6 @@ def setplot(plotdata):
     plotitem.mapc2p = mapc2p1
 
 
-    #----------
-
-    plotfigure = plotdata.new_plotfigure(name='shore', figno=1)
-    #plotfigure.kwargs = {'figsize':(9,11)}
-    plotfigure.show = False
-    
-
-    plotaxes = plotfigure.new_plotaxes()
-    plotaxes.axescmd = 'subplot(211)'
-    plotaxes.xlimits = [0,80e3]
-    plotaxes.ylimits = [-4,4]
-    plotaxes.title = 'Zoom on shelf'
-
-    plotaxes.afteraxes = fixticks
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.surface
-    #plotitem = plotaxes.new_plotitem(plot_type='1d_fill_between')
-    #plotitem.plot_var = geoplot.surface
-    #plotitem.plot_var2 = geoplot.topo
-    plotitem.color = 'b'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.topo
-    plotitem.color = 'k'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-    plotaxes = plotfigure.new_plotaxes()
-    plotaxes.axescmd = 'subplot(212)'
-    #plotaxes.xlimits = [-2000,2000]
-    plotaxes.xlimits = [-1000,1000]
-    #plotaxes.ylimits = [-10,40]
-    plotaxes.ylimits = [-20,60]
-    plotaxes.title = 'Zoom around shore'
-
-    plotaxes.afteraxes = fixticks
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.show = False
-    plotitem.plot_var = geoplot.surface
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_fill_between')
-    plotitem.plot_var = geoplot.surface
-    plotitem.plot_var2 = geoplot.topo
-    plotitem.color = 'b'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-
-    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.topo
-    plotitem.color = 'k'
-    plotitem.MappedGrid = True
-    plotitem.mapc2p = mapc2p1
-
 
 
     #-----------------------------------------
@@ -209,22 +156,23 @@ def setplot(plotdata):
     plotfigure = plotdata.new_plotfigure(name='q', figno=300, \
                                          type='each_gauge')
     plotfigure.clf_each_gauge = True
+    plotfigure.figsize = (12,3)
 
     plotaxes = plotfigure.new_plotaxes()
     
     def fixgauge(current_data):
-        from pylab import grid, title
-        grid(True)
+        from pylab import title
         gaugeno = current_data.gaugeno
         xc = gauge_xc[gaugeno]
         xp = mapc2p1(xc)
-        print('+++ xc,xp:', xc,xp)
+        #print('+++ xc,xp:', xc,xp)
         title('Surface elevation at Gauge %i, x = %.0f m' \
               % (gaugeno, xp))
 
     plotaxes.afteraxes = fixgauge
-    plotaxes.xlimits = 'auto'
+    plotaxes.xlimits = [0,25]
     plotaxes.ylimits = [-0.02, 0.08]
+    plotaxes.grid = True
     plotaxes.title = 'Surface elevation eta'
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = 2  # eta
