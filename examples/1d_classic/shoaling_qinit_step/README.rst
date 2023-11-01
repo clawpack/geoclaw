@@ -56,6 +56,5 @@ To use::
 Version
 -------
 
-Pre-release, April, 2021
+Updated when merged into geoclaw, November 2023
 
-Updated August, 2023

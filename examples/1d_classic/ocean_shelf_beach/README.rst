@@ -44,4 +44,6 @@ To use::
 Version
 -------
 
-October 2023
+Updated when merged into geoclaw, November 2023
+
+

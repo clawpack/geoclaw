@@ -10,17 +10,6 @@ except:
 from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 import numpy
 
-try:
-    fname = '_output/fort.hmax'
-    d = numpy.loadtxt(fname)
-    etamax = numpy.where(d[:,1]>1e-6, d[:,2], numpy.nan)
-    xmax = d[:,0]
-    jmax = numpy.where(d[:,1]>0)[0].max()
-    print("run-in = %8.2f,  run-up = %8.2f" % (d[jmax,0],d[jmax,2]))
-    print('Loaded hmax from ',fname)
-except:
-    xmax = None
-    print("Failed to load fort.hmax")
 
 xlimits = [-160,40]
 
@@ -51,8 +40,6 @@ def setplot(plotdata):
     def fixticks(current_data):
         from pylab import ticklabel_format, plot,grid,gca
         ticklabel_format(useOffset=False)
-        if xmax is not None:
-            plot(xmax, etamax, 'r')
         grid(True)
         
 
@@ -238,13 +225,22 @@ def setplot(plotdata):
     plotitem.plotstyle = 'b-'
 
 
-    plotdata.printfigs = True          # Whether to output figures
-    plotdata.print_format = 'png'      # What type of output format
-    plotdata.print_framenos = 'all'      # Which frames to output
-    plotdata.print_fignos = 'all'      # Which figures to print
-    plotdata.html = True               # Whether to create HTML files
-    plotdata.latex = False             # Whether to make LaTeX output
-    plotdata.parallel = True
+    #-----------------------------------------
+
+    # Parameters used only when creating html and/or latex hardcopy
+    # e.g., via pyclaw.plotters.frametools.printframes:
+    
+    plotdata.printfigs = True                # print figures
+    plotdata.print_format = 'png'            # file format
+    plotdata.print_framenos = 'all'          # list of frames to print
+    plotdata.print_gaugenos = 'all'          # list of gauges to print
+    plotdata.print_fignos = 'all'            # list of figures to print
+    plotdata.html = True                     # create html files of plots?
+    plotdata.html_homelink = '../README.html'   # pointer for top of index
+    plotdata.latex = True                    # create latex file of plots?
+    plotdata.latex_figsperline = 2           # layout of plots
+    plotdata.latex_framesperline = 1         # layout of plots
+    plotdata.latex_makepdf = False           # also run pdflatex?
+    plotdata.parallel = True                 # make multiple frame png's at once
 
     return plotdata
-

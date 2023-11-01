@@ -58,4 +58,5 @@ To use::
 Version
 -------
 
-July 2023, For initial release of geoclaw 1d code in Clawpack v5.10
+Updated when merged into geoclaw, November 2023
+

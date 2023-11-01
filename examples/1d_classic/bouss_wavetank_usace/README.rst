@@ -87,5 +87,5 @@ This should produce a figure similar to
 Version
 -------
 
-August, 2023
+Updated when merged into geoclaw, November 2023
 

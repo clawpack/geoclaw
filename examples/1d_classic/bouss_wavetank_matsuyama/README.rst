@@ -61,5 +61,6 @@ data_wavegauge.csv (kindly provided by Prof. Matsuyama).
 Version
 -------
 
-August, 2023
+Updated when merged into geoclaw, November 2023
+
 
