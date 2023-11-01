@@ -30,17 +30,17 @@ if run_code:
     rundata = setrun.setrun()
 
     # Boussinesq, MS:
-    rundata.bouss_data.boussEquations = 1
+    rundata.bouss_data.bouss_equations = 1
     rundata.write()
     runclaw(xclawcmd='xgeo',outdir=outdir_ms)   # run clawpack code
 
     # Boussinesq, SGN:
-    rundata.bouss_data.boussEquations = 2
+    rundata.bouss_data.bouss_equations = 2
     rundata.write()
     runclaw(xclawcmd='xgeo',outdir=outdir_sgn)   # run clawpack code
     
     # Shallow water equations:
-    rundata.bouss_data.boussEquations = 0
+    rundata.bouss_data.bouss_equations = 0
     rundata.write()
     runclaw(xclawcmd='xgeo',outdir=outdir_swe)   # run clawpack code
     

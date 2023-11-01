@@ -3,7 +3,7 @@ Make piecewise linear topography for wave tank.
 """
 
 from pylab import *
-from clawpack.geoclaw_1d import nonuniform_grid_tools
+from clawpack.geoclaw import nonuniform_grid_tools
 
 xlower = -15. #-0.98
 xupper = 8.19

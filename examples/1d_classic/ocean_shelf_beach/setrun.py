@@ -8,7 +8,7 @@ that will be read in by the Fortran code.
 
 import os, sys
 import numpy as np
-from clawpack.geoclaw_1d.nonuniform_grid_tools import make_mapc2p
+from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 
 
 # Read in nonuniform computational cell edges, which should have

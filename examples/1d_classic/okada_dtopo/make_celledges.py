@@ -10,7 +10,7 @@ near shore and onshore where the water depth is less than `hmin`.
 """
 
 from pylab import *
-from clawpack.geoclaw_1d import nonuniform_grid_tools
+from clawpack.geoclaw import nonuniform_grid_tools
 
 
 x1 = -200e3

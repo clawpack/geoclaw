@@ -8,7 +8,7 @@ that will be read in by the Fortran code.
 
 import os, sys
 import numpy as np
-from clawpack.geoclaw_1d.nonuniform_grid_tools import make_mapc2p
+from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 
 
 # Read in nonuniform computational cell edges, which should have
@@ -93,7 +93,7 @@ def setrun(claw_pkg='geoclaw'):
 
     # To use Boussinesq solver, add bouss_data parameters here
     # Also make sure to use the correct Makefile pointing to bouss version
-    from clawpack.geoclaw_1d.data import BoussData1D
+    from clawpack.geoclaw.data import BoussData1D
     rundata.add_data(BoussData1D(),'bouss_data')
 
     rundata.bouss_data.bouss_equations = 2    # 0=SWE, 1=MS, 2=SGN

@@ -14,7 +14,7 @@ from pylab import *
 from clawpack.geoclaw.data import LAT2METER
 from importlib import reload
 
-from clawpack.geoclaw_1d import dtopotools
+from clawpack.geoclaw import dtopotools
 reload(dtopotools)
 
 fault = dtopotools.Fault1d()

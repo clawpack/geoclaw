@@ -4,11 +4,11 @@ import os, sys
 import numpy
 
 try:
-    from clawpack.geoclaw_1d import geoplot
+    from clawpack.geoclaw import geoplot1d as geoplot
 except:
-    print('Could not import from geoclaw_1d')
+    print('Could not import geoplot1d')
 
-from clawpack.geoclaw_1d.nonuniform_grid_tools import make_mapc2p
+from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 
 fname_celledges = os.path.abspath('celledges.data')
 

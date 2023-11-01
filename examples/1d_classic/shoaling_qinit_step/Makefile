@@ -31,7 +31,7 @@ FFLAGS ?=
 # package sources for this program:
 # ---------------------------------
 
-GEOLIB = $(CLAW)/geoclaw_1d/src/1d_classic/shallow
+GEOLIB = $(CLAW)/geoclaw/src/1d_classic/shallow
 include $(GEOLIB)/Makefile.geoclaw_1d_classic
 
 # ---------------------------------------
