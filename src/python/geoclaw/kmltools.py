@@ -36,10 +36,6 @@ the full 8 digits if you want it transparent).
  - strip_archive_extensions - strip off things like .tar or .gz
 """
 
-
-from __future__ import absolute_import
-from __future__ import print_function
-from six.moves import range
 try:
     from importlib import reload
 except:
