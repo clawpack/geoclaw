@@ -117,7 +117,6 @@ contains
     !alpha = 1.d0
     alpha = 1.153d0
 
-    read(7,*) boussEquations
 
     ! modify write statements to say what value of Bparam or alpha is used:
 
@@ -190,7 +189,6 @@ contains
          write(*,*)"==> Using SWE until then."
          startWithBouss = .false.
       endif
-     endif
 
     close(unit=iunit)
 
