@@ -1,13 +1,11 @@
-#get the directory of this makefile
-#BOUSSAMRLIB:=$(CLAW)/amrclaw/src/2d
-#GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
-CLAWMASTER = /Users/berger/clawpackMaster/
-BOUSSAMRLIB:=$(BoussDev)/amrclaw_2d
-BOUSSGEOLIB:=$(BoussDev)/geoclaw_2d_shallow
-#AMRLIB:=$(CLAWMASTER)/amrclaw/src/2d
-#GEOLIB:=$(CLAWMASTER)/geoclaw/src/2d/shallow
-AMRLIB:=$(BoussDev)/amrclaw_2d
-GEOLIB:=$(BoussDev)/geoclaw_2d_shallow
+
+# changed files are all in this directory:
+BOUSSAMRLIB:=$(CLAW)/geoclaw/src/2d/bouss
+BOUSSGEOLIB:=$(CLAW)/geoclaw/src/2d/bouss
+
+# unchanged files:
+AMRLIB:=$(CLAW)/amrclaw/src/2d
+GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
 
 
 #list of common sources for amr 2d codes
@@ -121,7 +119,7 @@ COMMON_SOURCES += \
 
 # list of source files from GEOCLAW library. 
 COMMON_SOURCES += \
-  $(BOUSSGEOLIB)/setprob.f90 \
+  $(GEOLIB)/setprob.f90 \
   $(BOUSSGEOLIB)/qinit.f90 \
   $(GEOLIB)/topo_update.f90 \
   $(GEOLIB)/cellgridintegrate2.f \
