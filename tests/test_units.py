@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-from __future__ import absolute_import
-from __future__ import print_function
-import six
-from six.moves import range
-
 import numpy
 
 from clawpack.geoclaw.units import units, convert

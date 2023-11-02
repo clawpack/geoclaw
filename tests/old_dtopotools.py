@@ -11,8 +11,6 @@ dtopo files, and calculating Okada based deformations.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
 import sys
 import copy
@@ -23,7 +21,6 @@ import numpy
 
 # Poisson ratio for Okada 
 from clawpack.geoclaw.util import DEG2RAD, LAT2METER
-from six.moves import range
 poisson = 0.25
 
 class DTopo(object):

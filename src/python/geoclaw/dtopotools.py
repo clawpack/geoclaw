@@ -27,12 +27,6 @@ writing out dtopo files, and calculating Okada based deformations.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-
-import six
-from six.moves import range
-
 import os
 import sys
 import re
@@ -653,7 +647,7 @@ class Fault(object):
             new_subfault = SubFault()
             new_subfault.coordinate_specification = coordinate_specification
             
-            for (var, column) in six.iteritems(column_map):
+            for (var, column) in column_map.items():
                 if isinstance(column, tuple) or isinstance(column, list):
                     setattr(new_subfault, var, [None for k in column])
                     for (k, index) in enumerate(column):
@@ -662,7 +656,7 @@ class Fault(object):
                     setattr(new_subfault, var, data[n, column])
 
             if defaults is not None:
-                for param in six.iterkeys(defaults):
+                for param in defaults.keys():
                     setattr(new_subfault, param, defaults[param]) 
 
             new_subfault.convert_to_standard_units(self.input_units)
@@ -2825,7 +2819,7 @@ class SiftFault(Fault):
                     and value = magnitude of slip to assign (in meters).
         """
         self.subfaults = []
-        for k,v in six.iteritems(sift_slip):
+        for k,v in sift_slip.items():
             subfault = self.sift_subfaults[k]
             subfault.slip = v
             self.subfaults.append(subfault)
