@@ -138,9 +138,9 @@ contains
 
     ! CHECK ORDER!
     
-    read(7,*) boussMinDepth
     read(7,*) minLevelBouss
     read(7,*) maxLevelBouss
+    read(7,*) boussMinDepth
     read(7,*) isolver
     read(7,*) startBoussTime
 
