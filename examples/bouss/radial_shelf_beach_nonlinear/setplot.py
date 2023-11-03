@@ -40,8 +40,8 @@ if outdir_2d is not None:
 #outdir_1d = os.path.abspath('1d_radial/_output_swe')
 #outdir_1d = os.path.abspath('1d_radial/_output_sgna')
 #outdir_1d = os.path.abspath('1d_radial/_output_sgna_10m')
-outdir_1d = os.path.abspath('1d_radial/_output')
-#outdir_1d = None
+#outdir_1d = os.path.abspath('1d_radial/_output')
+outdir_1d = None
 print('Comparing to 1d solution in ', outdir_1d)
 
 if outdir_1d is not None:
