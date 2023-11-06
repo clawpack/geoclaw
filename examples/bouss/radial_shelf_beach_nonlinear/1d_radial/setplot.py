@@ -2,20 +2,12 @@
 
 import os, sys
 
-try:
-    from clawpack.geoclaw_1d import geoplot
-except:
-    print('Could not import from geoclaw_1d')
-
-
-from clawpack.geoclaw_1d.nonuniform_grid_tools import make_mapc2p
+from clawpack.geoclaw import geoplot
+from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 import numpy
 from scipy import fft
 from numpy import exp,cos,pi
 from pylab import figure,clf,plot,title
-
-#sys.path.insert(0,os.path.abspath('../../initialization'))
-#import linear_waves
 
 xlimits = [0, 124e3]
 
