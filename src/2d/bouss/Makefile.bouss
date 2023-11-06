@@ -176,6 +176,6 @@ COMMON_SOURCES += \
   $(BOUSSGEOLIB)/resetBoussStuff.f \
   $(BOUSSGEOLIB)/simpleBound.f90 \
   $(BOUSSGEOLIB)/umfpack_support.f \
-  $(BOUSSGEOLIB)/rpt2_geoclaw.f \
   $(BOUSSGEOLIB)/rpn2_geoclaw.f \
+  $(BOUSSGEOLIB)/rpt2_geoclaw_sym.f \
   $(BOUSSGEOLIB)/geoclaw_riemann_utils.f \
