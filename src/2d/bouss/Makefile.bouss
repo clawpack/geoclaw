@@ -1,21 +1,16 @@
 
 # changed files are all in this directory:
-BOUSSAMRLIB:=$(CLAW)/geoclaw/src/2d/bouss
-BOUSSGEOLIB:=$(CLAW)/geoclaw/src/2d/bouss
+BOUSSLIB:=$(CLAW)/geoclaw/src/2d/bouss
 
-# unchanged files:
+# unchanged files are in one of these directories:
 AMRLIB:=$(CLAW)/amrclaw/src/2d
 GEOLIB:=$(CLAW)/geoclaw/src/2d/shallow
 
 
-#list of common sources for amr 2d codes
 COMMON_MODULES += \
- $(BOUSSAMRLIB)/amr_module.f90 \
+ $(BOUSSLIB)/amr_module.f90 \
  $(AMRLIB)/regions_module.f90 \
- $(AMRLIB)/adjoint_module.f90
-
-#list of common sources needed for geoclaw codes (subset of amr dependencies)
-COMMON_MODULES += \
+ $(AMRLIB)/adjoint_module.f90 \
  $(GEOLIB)/utility_module.f90 \
  $(GEOLIB)/geoclaw_module.f90 \
  $(GEOLIB)/topo_module.f90 \
@@ -29,18 +24,15 @@ COMMON_MODULES += \
  $(GEOLIB)/multilayer/multilayer_module.f90 \
  $(GEOLIB)/friction_module.f90 \
  $(GEOLIB)/adjointsup_module.f90 \
- $(BOUSSGEOLIB)/fgout_module.f90 \
- $(BOUSSGEOLIB)/bouss_module.f90  \
+ $(BOUSSLIB)/fgout_module.f90 \
+ $(BOUSSLIB)/bouss_module.f90  \
 
-# $(GEOLIB)/fixedgrids_module.f90 \
-
-# list of source files from AMR library. 
 COMMON_SOURCES += \
   $(AMRLIB)/prefilp.f90 \
   $(AMRLIB)/trimbd.f90 \
-  $(BOUSSAMRLIB)/bound.f90 \
+  $(BOUSSLIB)/bound.f90 \
   $(AMRLIB)/intfil.f90 \
-  $(BOUSSAMRLIB)/flagregions2.f90  \
+  $(BOUSSLIB)/flagregions2.f90  \
   $(AMRLIB)/quick_sort1.f \
   $(AMRLIB)/quick_sort_reals.f \
   $(AMRLIB)/estdt.f \
@@ -52,12 +44,12 @@ COMMON_SOURCES += \
   $(AMRLIB)/cleanup.f \
   $(AMRLIB)/colate2.f \
   $(AMRLIB)/bufnst2.f \
-  $(BOUSSAMRLIB)/flagger.f \
+  $(BOUSSLIB)/flagger.f \
   $(AMRLIB)/fixcapaq.f \
-  $(BOUSSAMRLIB)/flglvl2.f \
+  $(BOUSSLIB)/flglvl2.f \
   $(AMRLIB)/fluxad.f \
   $(AMRLIB)/fluxsv.f \
-  $(BOUSSAMRLIB)/grdfit2.f \
+  $(BOUSSLIB)/grdfit2.f \
   $(AMRLIB)/moment.f90 \
   $(AMRLIB)/nestck2.f \
   $(AMRLIB)/prepc.f \
@@ -69,19 +61,19 @@ COMMON_SOURCES += \
   $(AMRLIB)/putnod.f \
   $(AMRLIB)/putsp.f \
   $(AMRLIB)/setuse.f \
-  $(BOUSSAMRLIB)/stst1.f \
+  $(BOUSSLIB)/stst1.f \
   $(AMRLIB)/nodget.f \
   $(AMRLIB)/basic.f \
-  $(BOUSSAMRLIB)/outval.f \
+  $(BOUSSLIB)/outval.f \
   $(AMRLIB)/copysol.f \
   $(AMRLIB)/outvar.f \
-  $(BOUSSAMRLIB)/outmsh.f \
+  $(BOUSSLIB)/outmsh.f \
   $(AMRLIB)/outtre.f \
-  $(BOUSSAMRLIB)/domain.f  \
-  $(BOUSSAMRLIB)/cellave.f \
-  $(BOUSSAMRLIB)/fdisc.f \
-  $(BOUSSAMRLIB)/fss.f \
-  $(BOUSSAMRLIB)/zeroin.f \
+  $(BOUSSLIB)/domain.f  \
+  $(BOUSSLIB)/cellave.f \
+  $(BOUSSLIB)/fdisc.f \
+  $(BOUSSLIB)/fss.f \
+  $(BOUSSLIB)/zeroin.f \
   $(AMRLIB)/setflags.f \
   $(AMRLIB)/shiftset2.f \
   $(AMRLIB)/domshrink.f \
@@ -115,67 +107,64 @@ COMMON_SOURCES += \
   $(AMRLIB)/resize_nodes.f90 \
   $(AMRLIB)/init_alloc.f90 \
   $(AMRLIB)/restrt_alloc.f90 \
-  $(AMRLIB)/resize_alloc.f90
-
-# list of source files from GEOCLAW library. 
-COMMON_SOURCES += \
+  $(AMRLIB)/resize_alloc.f90 \
   $(GEOLIB)/setprob.f90 \
-  $(BOUSSGEOLIB)/qinit.f90 \
+  $(BOUSSLIB)/qinit.f90 \
   $(GEOLIB)/topo_update.f90 \
   $(GEOLIB)/cellgridintegrate2.f \
   $(GEOLIB)/topointegral.f \
   $(GEOLIB)/bilinearintegral.f \
-  $(BOUSSGEOLIB)/stepgrid.f \
+  $(BOUSSLIB)/stepgrid.f \
   $(GEOLIB)/src2.f90 \
   $(GEOLIB)/src1d.f90 \
-  $(BOUSSGEOLIB)/set_eta_init.f90 \
+  $(BOUSSLIB)/set_eta_init.f90 \
   $(GEOLIB)/step2.f90 \
   $(GEOLIB)/flux2fw.f \
   $(GEOLIB)/qad.f \
-  $(BOUSSGEOLIB)/valout.f90 \
-  $(BOUSSGEOLIB)/filval.f90 \
-  $(BOUSSGEOLIB)/filpatch.f90 \
-  $(BOUSSGEOLIB)/bc2amr.f90 \
-  $(BOUSSGEOLIB)/update.f90 \
+  $(BOUSSLIB)/valout.f90 \
+  $(BOUSSLIB)/filval.f90 \
+  $(BOUSSLIB)/filpatch.f90 \
+  $(BOUSSLIB)/bc2amr.f90 \
+  $(BOUSSLIB)/update.f90 \
   $(GEOLIB)/setaux.f90 \
-  $(BOUSSGEOLIB)/flag2refine2.f90  \
+  $(BOUSSLIB)/flag2refine2.f90  \
   $(GEOLIB)/b4step2.f90 \
   $(GEOLIB)/upbnd.f  \
-  $(BOUSSGEOLIB)/tick.f \
-  $(BOUSSGEOLIB)/setgrd.f \
-  $(BOUSSGEOLIB)/gfixup.f \
+  $(BOUSSLIB)/tick.f \
+  $(BOUSSLIB)/setgrd.f \
+  $(BOUSSLIB)/gfixup.f \
   $(GEOLIB)/ginit.f \
-  $(BOUSSGEOLIB)/getmaxspeed.f90 \
-  $(BOUSSGEOLIB)/advanc_splitRev2Calls.f \
-  $(BOUSSGEOLIB)/amr2.f90 \
+  $(BOUSSLIB)/getmaxspeed.f90 \
+  $(BOUSSLIB)/advanc_splitRev2Calls.f \
+  $(BOUSSLIB)/amr2.f90 \
   $(GEOLIB)/fgmax_read.f90 \
   $(GEOLIB)/fgmax_frompatch.f90 \
   $(GEOLIB)/fgmax_interp.f90 \
   $(GEOLIB)/fgmax_values.f90 \
   $(GEOLIB)/fgmax_finalize.f90 \
-  $(BOUSSGEOLIB)/regrid.f \
-  $(BOUSSGEOLIB)/conck.f90 \
-  $(BOUSSGEOLIB)/check.f \
-  $(BOUSSGEOLIB)/restrt.f \
+  $(BOUSSLIB)/regrid.f \
+  $(BOUSSLIB)/conck.f90 \
+  $(BOUSSLIB)/check.f \
+  $(BOUSSLIB)/restrt.f \
   $(GEOLIB)/errest.f \
-  $(BOUSSGEOLIB)/errf1.f \
+  $(BOUSSLIB)/errf1.f \
   $(GEOLIB)/coarsen.f \
   $(GEOLIB)/auxcoarsen.f \
   $(GEOLIB)/prepbigstep.f \
   $(GEOLIB)/prepregstep.f \
-  $(BOUSSGEOLIB)/setMatrixIndex.f90 \
-  $(BOUSSGEOLIB)/setBoussFlag.f90 \
-  $(BOUSSGEOLIB)/implicit_update_bouss_2Calls.f90 \
-  $(BOUSSGEOLIB)/prepBuildSparseMatrixSGN_withtopo.f90 \
-  $(BOUSSGEOLIB)/cleanBuildSparseMatrixSGN_withtopo.f90 \
-  $(BOUSSGEOLIB)/buildSparseMatrix.f90 \
-  $(BOUSSGEOLIB)/matvec.f90 \
-  $(BOUSSGEOLIB)/petsc_driver.f90 \
-  $(BOUSSGEOLIB)/pardiso_driver.f90 \
-  $(BOUSSGEOLIB)/lookAtGrid.f90 \
-  $(BOUSSGEOLIB)/resetBoussStuff.f \
-  $(BOUSSGEOLIB)/simpleBound.f90 \
-  $(BOUSSGEOLIB)/umfpack_support.f \
-  $(BOUSSGEOLIB)/rpn2_geoclaw.f \
-  $(BOUSSGEOLIB)/rpt2_geoclaw_sym.f \
-  $(BOUSSGEOLIB)/geoclaw_riemann_utils.f \
+  $(BOUSSLIB)/setMatrixIndex.f90 \
+  $(BOUSSLIB)/setBoussFlag.f90 \
+  $(BOUSSLIB)/implicit_update_bouss_2Calls.f90 \
+  $(BOUSSLIB)/prepBuildSparseMatrixSGN_withtopo.f90 \
+  $(BOUSSLIB)/cleanBuildSparseMatrixSGN_withtopo.f90 \
+  $(BOUSSLIB)/buildSparseMatrix.f90 \
+  $(BOUSSLIB)/matvec.f90 \
+  $(BOUSSLIB)/petsc_driver.f90 \
+  $(BOUSSLIB)/pardiso_driver.f90 \
+  $(BOUSSLIB)/lookAtGrid.f90 \
+  $(BOUSSLIB)/resetBoussStuff.f \
+  $(BOUSSLIB)/simpleBound.f90 \
+  $(BOUSSLIB)/umfpack_support.f \
+  $(BOUSSLIB)/rpn2_geoclaw.f \
+  $(BOUSSLIB)/rpt2_geoclaw_sym.f \
+  $(BOUSSLIB)/geoclaw_riemann_utils.f \

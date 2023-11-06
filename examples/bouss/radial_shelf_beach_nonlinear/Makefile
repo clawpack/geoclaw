@@ -13,9 +13,10 @@ CLAWMAKE = $(CLAW)/clawutil/src/Makefile.common
 
 CLAW_PKG = geoclaw                  # Clawpack package to use
 
+# These environment variables need to be set properly, usually in your shell:
 #PETSC_DIR=/Users/rjl/git/Clones/petsc
 #PETSC_ARCH=$(PETSC_DIR)/arch-darwin-c-opt
-#PETSC_OPTIONS=-options_file $(PETSC_DIR)/petscMPIoptions # from MJB
+#PETSC_OPTIONS=-options_file $(PETSC_DIR)/petscMPIoptions
 
 EXE = $(PWD)/xgeoclaw
 RUNEXE="${PETSC_ARCH}/bin/mpiexec -n 6 ${EXE}"
@@ -43,13 +44,14 @@ LFLAGS += -Wl,-rpath,/Users/rjl/git/Clones/petsc/arch-darwin-c-opt/lib -Wl,-rpat
 # package sources for this program:
 # ---------------------------------
 
-#GEOLIB = $(CLAW)/geoclaw/src/2d/shallow
-#BOUSSLIB = $(CLAW)/geoclaw/src/2d/bouss
+# BOUSSLIB contains library code for Boussinesq solvers,
+# AMRLIB and GEOLIB are standard libraries, defined in case you need to
+# exclude some modele or source file from one of these.
+BOUSSLIB = $(CLAW)/geoclaw/src/2d/bouss
+AMRLIB = $(CLAW)/amrclaw/src/2d
+GEOLIB = $(CLAW)/geoclaw/src/2d/shallow
 
-# for testing:
-GEOLIB = /Users/rjl/clawpack_src/clawpack_bouss/geoclaw/src/2d/shallow
-BOUSSLIB = /Users/rjl/clawpack_src/clawpack_bouss/geoclaw/src/2d/bouss
-
+# See this Makefile for the list of library routines used:
 include $(BOUSSLIB)/Makefile.bouss
 
 # ---------------------------------------
