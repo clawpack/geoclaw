@@ -143,7 +143,7 @@ COMMON_SOURCES += \
   $(GEOLIB)/upbnd.f  \
   $(BOUSSGEOLIB)/tick.f \
   $(BOUSSGEOLIB)/setgrd.f \
-  $(GEOLIB)/gfixup.f \
+  $(BOUSSGEOLIB)/gfixup.f \
   $(GEOLIB)/ginit.f \
   $(BOUSSGEOLIB)/getmaxspeed.f90 \
   $(BOUSSGEOLIB)/advanc_splitRev2Calls.f \
@@ -176,3 +176,6 @@ COMMON_SOURCES += \
   $(BOUSSGEOLIB)/resetBoussStuff.f \
   $(BOUSSGEOLIB)/simpleBound.f90 \
   $(BOUSSGEOLIB)/umfpack_support.f \
+  $(BOUSSGEOLIB)/rpt2_geoclaw.f \
+  $(BOUSSGEOLIB)/rpn2_geoclaw.f \
+  $(BOUSSGEOLIB)/geoclaw_riemann_utils.f \
