@@ -27,8 +27,6 @@ Includes:
 import os
 from numpy import sqrt, ma, mod
 import numpy
-from six.moves import range
-
 
 class FGoutFrame(object):
 

@@ -16,15 +16,13 @@ Module provides provides utility functions.
  - fetch_noaa_tide_data - Fetches water levels and tide predictions
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import io
 import os
 import os.path
 
 import numpy
-from six.moves.urllib.parse import urlencode
-from six.moves.urllib.request import urlopen
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 # ==============================================================================
 #  Constants

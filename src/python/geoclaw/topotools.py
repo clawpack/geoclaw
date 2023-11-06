@@ -30,8 +30,6 @@ topography (bathymetry) files.
  - Add more robust plotting capabilities
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
 
 import numpy
@@ -39,8 +37,6 @@ import numpy
 import clawpack.geoclaw.util as util
 import clawpack.clawutil.data
 import clawpack.geoclaw.data
-import six
-from six.moves import range
 
 # ==============================================================================
 #  Topography Related Functions
@@ -730,7 +726,7 @@ class Topography(object):
                     x_var = nc_params.get('x_var', None)
                     y_var = nc_params.get('y_var', None)
                     z_var = nc_params.get('z_var', None)
-                    for (key, var) in six.iteritems(nc_file.variables):
+                    for (key, var) in nc_file.variables.items():
                         if 'axis' in var.ncattrs():
                             if var.axis.lower() == "x" and x_var is None:
                                 x_var = key

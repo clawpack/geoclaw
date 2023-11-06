@@ -13,6 +13,12 @@ Classes representing parameters for GeoClaw runs
  - FGmaxData
  - DTopoData
  - QinitData
+ - SurgeData
+ - MultilayerData
+ - FrictionData 
+ - BoussData
+ - GridData1D
+ - BoussData1D
 
 :Constants:
 
@@ -739,6 +745,8 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
                                      'eigenspace)'))
         self.close_data_file()
 
+
+
 class BoussData(clawpack.clawutil.data.ClawData):
     r"""
      data object for Boussinesq info in 2D geoclaw
@@ -768,3 +776,84 @@ class BoussData(clawpack.clawutil.data.ClawData):
         self.data_write('bouss_tstart', description='time to switch from SWE')
 
         self.close_data_file()
+
+
+# ==================================
+# data objects for 1d_classic code
+# ==================================
+
+
+#  Gauge data object removed, version from amrclaw works in 1d
+#class GaugeData1D(clawpack.clawutil.data.ClawData):
+
+
+class GridData1D(clawpack.clawutil.data.ClawData):
+    r"""
+    1D data object for grid info
+
+    """
+    def __init__(self):
+        super(GridData1D,self).__init__()
+
+        self.add_attribute('grid_type',0)
+        self.add_attribute('fname_celledges',None)
+        self.add_attribute('monitor_fgmax',False)
+        self.add_attribute('monitor_runup',False)
+        self.add_attribute('monitor_total_zeta',False)
+
+    def write(self,out_file='grid.data',data_source='setrun.py'):
+
+        self.open_data_file(out_file,data_source)
+
+        self.data_write('grid_type')
+        if self.grid_type == 2:
+            if self.fname_celledges is None:
+                self.fname_celledges = 'celledges.txt'
+                print('*** grid_type ==2 and fname_celledges not specified,')
+                print('*** using celledges.txt')
+            # if path is relative in setrun, assume it's relative to the
+            # same directory that out_file comes from
+            fname = os.path.abspath(os.path.join(os.path.dirname(out_file),
+                                    self.fname_celledges))
+            self._out_file.write("\n'%s'   =: fname_celledges\n " % fname)
+
+        self._out_file.write("\n%s   =: monitor_fgmax" \
+                             % str(self.monitor_fgmax)[0])
+        self._out_file.write("\n%s   =: monitor_runup" \
+                             % str(self.monitor_runup)[0])
+        self._out_file.write("\n%s   =: monitor_total_zeta" \
+                             % str(self.monitor_total_zeta)[0])
+        self.close_data_file()
+
+    def read(self, path, force=False):
+        with open(os.path.abspath(path), 'r') as data_file:
+            for line in data_file:
+                if "=:" in line:
+                    value, tail = line.split("=:")
+                    varname = tail.split()[0]
+                    if varname == 'grid_type':
+                        self.grid_type = int(value)
+                    elif varname == 'fname_celledges':
+                        self.fname_celledges = value.strip()
+
+
+class BoussData1D(clawpack.clawutil.data.ClawData):
+    r"""
+    1D data object for Boussinesq info
+
+    """
+    def __init__(self):
+        super(BoussData1D,self).__init__()
+
+        self.add_attribute('bouss_equations',2)
+        self.add_attribute('bouss_min_depth',20.)
+
+    def write(self,out_file='bouss.data',data_source='setrun.py'):
+
+        self.open_data_file(out_file,data_source)
+
+        self.data_write('bouss_equations')
+        self.data_write('bouss_min_depth')
+
+        self.close_data_file()
+

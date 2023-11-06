@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
 import sys
 import shutil
@@ -13,7 +11,6 @@ import numpy
 import nose
 
 import clawpack.geoclaw.dtopotools as dtopotools
-import six
 
 # Set local test directory to get local files
 testdir = os.path.dirname(__file__)
@@ -275,7 +272,7 @@ def test_geometry():
 
                     }
 
-        for (values, coord_test) in six.iteritems(coord_tests):
+        for (values, coord_test) in coord_tests.items():
             assert numpy.allclose(coord_test['test'], coord_test['computed']), \
                    "Specification = %s, coords= %s:\n%s !=\n%s" % (
                                                          specification, 

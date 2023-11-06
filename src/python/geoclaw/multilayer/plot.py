@@ -7,13 +7,11 @@ Plotting routines for multilayer simulations with GeoClaw
     Kyle Mandli (2011-2-07) Initial version
 """
 
-from __future__ import absolute_import
 import numpy
 import matplotlib.pyplot as plt
 
 from clawpack.visclaw import colormaps, geoplot, gaugetools
 from clawpack.visclaw.data import ClawPlotData
-from six.moves import range
 import clawpack.geoclaw.data
 import os
 plotdata = ClawPlotData()
