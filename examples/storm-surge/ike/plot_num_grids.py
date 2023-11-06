@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import
 import os
 import sys
 import glob
@@ -10,7 +9,6 @@ import numpy
 
 # Plot customization
 import matplotlib
-from six.moves import range
 
 # Markers and line widths
 matplotlib.rcParams['lines.linewidth'] = 2.0

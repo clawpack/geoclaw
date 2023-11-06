@@ -6,13 +6,9 @@ and to read in the fgmax output after doing a GeoClaw run.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
 from numpy import sqrt, ma
 import numpy
-from six.moves import range
-
 
 class FGmaxGrid(object):
 

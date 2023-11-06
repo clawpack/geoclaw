@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
 import sys
 import tempfile
@@ -20,7 +18,6 @@ import nose
 
 import clawpack.geoclaw.topotools as topotools
 import clawpack.clawutil.data
-from six.moves import range
 
 # Set local test directory to get local files
 testdir = os.path.dirname(__file__)

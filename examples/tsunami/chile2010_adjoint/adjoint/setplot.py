@@ -7,14 +7,10 @@ function setplot is called to set the plot parameters.
     
 """ 
 
-from __future__ import absolute_import
-from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 
 from clawpack.geoclaw import topotools
-from six.moves import range
-
 
 #--------------------------
 def setplot(plotdata=None):

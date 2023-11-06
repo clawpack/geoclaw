@@ -3,14 +3,11 @@
 
 r"""Calculate refinement resolutions given ratios provided"""
 
-from __future__ import absolute_import
-from __future__ import print_function
 import argparse
 
 import numpy as np
 
 from . import topotools
-from six.moves import range
 
 def calculate_resolution(ratios, base_resolutions=[0.25,0.25], 
                                  lat_long=True,
