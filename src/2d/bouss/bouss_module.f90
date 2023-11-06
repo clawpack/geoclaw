@@ -81,12 +81,13 @@ module bouss_module
     KSP kspTower(maxlv)
 #endif
 
-
-
+    ! for restarts:
+    integer :: minLevelBouss_orig,maxLevelBouss_orig
+    real(kind=8) :: boussMinDepth_orig,startBoussTime_orig
 
 contains
 
-    subroutine set_bouss(rest)
+    subroutine set_bouss(rest,time,naux)
 
     ! Set Bparam and bc choices for Boussinesq implicit solver
 
@@ -95,9 +96,13 @@ contains
 
     use amr_module, only: mthbc, outunit
     implicit none
-    logical rest
+    logical, intent(in) :: rest
+    real(kind=8), intent(in) :: time
+    integer, intent(in) :: naux
+    
     integer iunit,i
     character(len=25) fname
+    real(kind=8) :: eps
 
 #ifdef WHERE_AM_I
     write(*,*) 'starting set_bouss'
@@ -135,8 +140,6 @@ contains
        write(outunit,*)" Unrecognized option for equation set"
        stop
     endif
-
-    ! CHECK ORDER!
     
     read(7,*) minLevelBouss
     read(7,*) maxLevelBouss
@@ -144,6 +147,49 @@ contains
     read(7,*) isolver
     read(7,*) startBoussTime
 
+    !------------------------------------------
+    if (rest) then
+        ! for restart, parameters should not have changed from original run:
+        if ((minLevelBouss .ne. minLevelBouss_orig) .or. &
+            (maxLevelBouss .ne. maxLevelBouss_orig) .or. &
+            (boussMinDepth .ne. boussMinDepth_orig)) then
+          write(*,*)"*** Cannot change these bouss params on restart:"
+          write(*,*)"*** Old params:"
+          write(*,922) minLevelBouss_orig,maxLevelBouss_orig,boussMinDepth_orig
+          write(*,*)"*** New params:"
+          write(*,922) minLevelBouss,maxLevelBouss,boussMinDepth
+  922     format("min/max Bousslevel "2i5," boussMinDepth ",f10.2)
+          stop
+        endif
+
+        ! check if later startBoussTime than orig, only allowed if not yet using Bouss
+        eps = 1.d-13
+        ! allowing for roundoff between different compilers in testing
+        ! if starting time has  changed
+        if (abs(startBoussTime-startBoussTime_orig) .gt. eps)  then
+            if (startBoussTime .ge. startBoussTime_orig) then
+                if (startBoussTime_orig .lt. time) then
+                    write(*,904)
+                    write(outunit,904)
+  904               format("Cannot postpone Bouss solves if already using it")
+                    stop
+                else
+                    write(*,905) startBoussTime
+                    write(outunit,905) startBoussTime
+  905               format("Changing Bouss solves to start at time ", e15.7)
+                endif
+            else 
+                write(*,906) time,startBoussTime_orig, startBoussTime
+                write(outunit,906) time,startBoussTime_orig,startBoussTime
+  906           format(" Already using Bouss at time",d15.7,/, &
+                   " new start time ",d15.7," orig start time ",d15.7)
+            endif
+        endif
+        ! allocate the data structures for the bouss info
+        call resetBoussStuff(naux)
+
+    endif  ! end checking parameters on restart
+    !------------------------------------------
 
  99   write(*,900) minLevelBouss, maxLevelBouss
       write(outunit,900) minLevelBouss, maxLevelBouss

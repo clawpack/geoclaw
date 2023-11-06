@@ -519,7 +519,7 @@ program amr2
         call set_storm()                  ! Set storm parameters
         call set_regions()                ! Set refinement regions
         call read_adjoint_data()          ! Read adjoint solution
-        call set_bouss(rest)              ! Set Boussinesq parameters
+        call set_bouss(rest,time,naux)    ! Set Boussinesq parameters
         ! turn off initial stuff with SWE if a restart run
 
     else
@@ -557,7 +557,7 @@ program amr2
         call set_gauges(rest, nvar, naux) ! Set gauge output
         call set_fgmax()
         call read_adjoint_data()          ! Read adjoint solution
-        call set_bouss(rest)              ! Set Boussinesq parameters
+        call set_bouss(rest,time,naux)    ! Set Boussinesq parameters
 
         cflmax = 0.d0   ! otherwise use previously heckpointed val
 

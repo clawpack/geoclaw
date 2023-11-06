@@ -11,13 +11,13 @@ c
       use topo_module, only: aux_finalized
       implicit double precision (a-h,o-z)
       logical   ee
-      logical startWithBouss_orig
  
       logical foundFile
       dimension intrtx(maxlv),intrty(maxlv),intrtt(maxlv)
       type(fgrid), pointer :: fg
 
       integer :: num_gauges_previous, i, ii, previous_gauge_num
+      integer matlabu0
 c
 c :::::::::::::::::::::::::::: RESTRT ::::::::::::::::::::::::::::::::
 c read back in the check point files written by subr. check.
@@ -45,7 +45,8 @@ c     rstfile  = 'restart.data'
       endif
       open(rstunit,file=trim(rstfile),status='old',form='unformatted')
       rewind rstunit
-      matlabu0 = matlabu
+
+      matlabu0 = matlabu ! value set by amr2, 0 if output_t0, else 1
 
       !read(rstunit) lenmax,lendim,isize
       !! new version has flexible node size, so need to read current size maxgr
@@ -147,15 +148,12 @@ c     Check for any lagrangian gauges, and if present reset x,y location:
 c
       close(rstunit) 
 
+      matlabu = matlabu - 1 + matlabu0 ! redo previous frame if output_t0
+
       write(outunit,100) nsteps,time
       write(6,100) nsteps,time
  100  format(/,' RESTARTING the calculation after ',i5,' steps',
      1        /,'  (time = ',e15.7,')')
-c
-c     bug fix frame number in case of "no output_t0" 
-c     used to overwrite previous frame, which was ok if output_to 
-c     set this way since valout increments frame number AFTER writing file
-      matlabu = matlabu + matlabu0
 c
 c     error checking that refinement ratios have not changed
 c     ### new feature: when using variable refinement in time
@@ -334,43 +332,6 @@ c     bndry list for faster ghost cell filling
          call makeBndryList(level)
       end do
 c
-      if ((minLevelBouss .ne. minLevelBouss_orig) .or.
-     &         (maxLevelBouss .ne. maxLevelBouss_orig) .or.
-     &         (boussMinDepth .ne. boussMinDepth_orig)) then
-          write(*,*)"can't change these bouss params on restart"
-          write(*,*)"Old params:"
-          write(*,922) minLevelBouss_orig,maxLevelBouss_orig
-          write(*,*)"New params:"
-          write(*,922) minLevelBouss,maxLevelBouss,boussMinDepth
- 922      format("min/max Bousslevel "2i5," boussMinDepth ",f10.2)
-          stop
-      endif
 
-      ! check if later startBoussTime than orig, only allowed if not yet using Bouss
-      eps = 1.d-13
-      ! allowing for roundoff between different compilers in testing
-      ! if starting time has  changed
-      if (abs(startBoussTime-startBoussTime_orig) .gt. eps)  then
-        if (startBoussTime .ge. startBoussTime_orig) then
-           if (startBoussTime_orig .lt. time) then
-             write(*,904)
-             write(outunit,904)
- 904         format("Cannot postpone Bouss solves if already using it")
-             stop
-           else
-             write(*,905) startBoussTime
-             write(outunit,905) startBoussTime
- 905         format("Changing Bouss solves to start at time ", e15.7)
-           endif
-        else 
-          write(*,906) time,startBoussTime_orig, startBoussTime
-          write(outunit,906) time,startBoussTime_orig,startBoussTime
- 906      format(" Already using Bouss at time",d15.7,/,
-     &           " new start time ",d15.7," orig start time ",d15.7)
-        endif
-      endif
-      ! allocate the data structures for the bouss info
-      call resetBoussStuff(naux)
-c
       return
       end
