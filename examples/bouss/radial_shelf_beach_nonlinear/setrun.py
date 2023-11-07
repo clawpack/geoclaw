@@ -301,10 +301,10 @@ def setrun(claw_pkg='geoclaw'):
     amrdata = rundata.amrdata
 
     # maximum size of patches in each direction (matters in parallel):
-    amrdata.max1d = 1000
+    amrdata.max1d = 100
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 3
+    amrdata.amr_levels_max = 2
 
     # List of refinement ratios at each level (length at least amr_level_max-1)
     # 2km, 500m, 100m, 10m, 5m

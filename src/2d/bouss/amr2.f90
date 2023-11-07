@@ -163,7 +163,6 @@ program amr2
 !   needs to be very first line in main
       call PetscInitialize(ierr)
       CHKERRA(ierr);
-!    call mpi_init(ierr)
 #endif
 
     ! Open parameter and debug files
@@ -818,9 +817,10 @@ program amr2
     endif
 
     
-    format_string="('Using',i3,' thread(s)')"
+    format_string="('OpenMP is using',i3,' thread(s)')"
     write(timing_unit,format_string) maxthreads
     write(*,format_string) maxthreads
+    format_string="('MPI    is using',i3,' process(es)')"
     
     
     write(*,*)
@@ -933,11 +933,7 @@ program amr2
     close(dbugunit)
 
 #ifdef HAVE_PETSC
-!   also needs to be last line in main
-!  if (isolver .eq. 3) then
       call PetscFinalize(ierr)
-!  endif
-!   call MPI_FINALIZE(ierr)
 #endif
 
 end program amr2
