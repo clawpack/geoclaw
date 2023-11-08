@@ -484,6 +484,10 @@ c             ! use same alg. as when setting refinement when first make new fin
 
        if ((mod(ncycle,iout).eq.0) .or. dumpout) then
          call valout(1,lfine,time,nvar,naux)
+         if (abs(checkpt_style).eq.4) then
+            call check(ncycle,time,nvar,naux)
+            dumpchk = .true.
+         endif
          if (printout) call outtre(mstart,.true.,nvar,naux)
          if (num_gauges .gt. 0) then
             do ii = 1, num_gauges

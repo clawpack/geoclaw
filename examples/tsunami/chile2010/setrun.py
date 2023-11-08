@@ -254,7 +254,7 @@ def setrun(claw_pkg='geoclaw'):
     # Specify when checkpoint files should be created that can be
     # used to restart a computation.
 
-    clawdata.checkpt_style = 0
+    clawdata.checkpt_style = -4
 
     if clawdata.checkpt_style == 0:
         # Do not checkpoint at all
@@ -272,6 +272,10 @@ def setrun(claw_pkg='geoclaw'):
         # Checkpoint every checkpt_interval timesteps (on Level 1)
         # and at the final time.
         clawdata.checkpt_interval = 5
+
+    elif np.abs(clawdata.checkpt_style) == 4:
+        # option means checkpt at same time as valout
+        pass
 
 
     # ---------------
