@@ -7,39 +7,16 @@ function setplot is called to set the plot parameters.
     
 """ 
 
-from __future__ import absolute_import
-from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 import os,sys
 
-from importlib import reload
-from six.moves import range
-from clawpack.geoclaw_1d.nonuniform_grid_tools import make_mapc2p
+from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 
 
-try:
-    BoussDev = os.environ['BoussDev']
-except: 
-    print("*** Need to define environment variable BoussDev to path")
+from clawpack.visclaw import gridtools  # would work with v5.7.0
 
-new_python_dir = os.path.join(BoussDev, 'new_python')
-sys.path.insert(0, new_python_dir)
-import gridtools
-sys.path = sys.path[1:]  # remove from path
-
-#from clawpack.visclaw import gridtools  # would work with v5.7.0
-
-outdir_2d = None
-#outdir_2d = os.path.abspath('_output_swe_5levels_5m')
-#outdir_2d = os.path.abspath('_output')
-if outdir_2d is not None:
-    print('Using 2d output from ', outdir_2d)
-
-
-#outdir_1d = os.path.abspath('1d_radial/_output_swe')
-#outdir_1d = os.path.abspath('1d_radial/_output_sgna')
-#outdir_1d = os.path.abspath('1d_radial/_output_sgna_10m')
+# for comparing transects to 1d results
 outdir_1d = os.path.abspath('1d_radial/_output')
 #outdir_1d = None
 print('Comparing to 1d solution in ', outdir_1d)
@@ -72,11 +49,8 @@ def setplot(plotdata=None):
         from clawpack.visclaw.data import ClawPlotData
         plotdata = ClawPlotData()
 
-    if outdir_2d:
-        plotdata.outdir = outdir_2d
-
     plotdata.clearfigures()  # clear any old figures,axes,items data
-    plotdata.format = 'binary'    # 'ascii' or 'binary' to match setrun.py
+    #plotdata.format = 'binary'    # 'ascii' or 'binary' to match setrun.py
 
 
     # To plot gauge locations on pcolor or contour plot, use this as
@@ -86,60 +60,14 @@ def setplot(plotdata=None):
         from clawpack.visclaw import gaugetools
         gaugetools.plot_gauge_locations(current_data.plotdata, \
              gaugenos='all', format_string='ko', add_labels=True)
-    
-
-    def surface_or_depth(current_data):
-        """
-        Modified from geoplot version to use eta = q[-1,:,:], which
-        should work for either num_eqn = 3 or 5.
-        
-        Return a masked array containing the surface elevation where the topo is
-        below sea level or the water depth where the topo is above sea level.
-        Mask out dry cells.  Assumes sea level is at topo=0.
-        Surface is eta = h+topo, assumed to be output as 4th column of fort.q
-        files.
-        """
-        import numpy
-
-        #drytol = getattr(current_data.user, 'drytol', drytol_default)
-        drytol = 1e-3
-        q = current_data.q
-        h = q[0,:,:]
-        eta = q[-1,:,:]
-        topo = eta - h
-
-        # With this version, the land is transparent.
-        surface_or_depth = numpy.ma.masked_where(h <= drytol,
-                                                 numpy.where(topo<0, eta, h))
-
-        try:
-            # Use mask covering coarse regions if it's set:
-            m = current_data.mask_coarse
-            surface_or_depth = numpy.ma.masked_where(m, surface_or_depth)
-        except:
-            pass
-
-        return surface_or_depth
-
-    def topo(current_data):
-       """
-       Return topography = eta - h.
-       Surface eta is assumed to be output as last column of fort.q files.
-       Modified from geoplot version.
-       """
-       q = current_data.q
-       h = q[0,:,:]
-       eta = q[-1,:,:]
-       topo = eta - h
-       return topo
-    
 
     #-----------------------------------------
     # Figure for surface
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='Surface', figno=20)
-    plotfigure.show = False
-    plotfigure.kwargs = {'figsize': (8,8)}
+    #plotfigure.show = False
+    plotfigure.figsize = (8,8)
+    plotfigure.facecolor = 'w'
 
     # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes('pcolor')
@@ -150,7 +78,7 @@ def setplot(plotdata=None):
     # Water
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
     #plotitem.show = False
-    plotitem.plot_var = surface_or_depth
+    plotitem.plot_var = geoplot.surface_or_depth
     plotitem.pcolor_cmap = geoplot.tsunami_colormap
     plotitem.pcolor_cmin = -4.
     plotitem.pcolor_cmax = 4.
@@ -169,7 +97,7 @@ def setplot(plotdata=None):
     
     plotitem = plotaxes.new_plotitem(plot_type='2d_contour')
     plotitem.show = False
-    plotitem.plot_var = surface_or_depth
+    plotitem.plot_var = geoplot.surface_or_depth
     plotitem.contour_levels = [-4,-2,2,4]
     plotitem.amr_contour_colors = ['k']  # color on each level
     plotitem.kwargs = {'linestyles':'solid','linewidths':1}
@@ -179,7 +107,7 @@ def setplot(plotdata=None):
     # Land
     plotitem = plotaxes.new_plotitem(plot_type='2d_imshow')
     #plotitem.show = False
-    plotitem.plot_var = topo  #geoplot.land
+    plotitem.plot_var = geoplot.topo  #geoplot.land
     plotitem.imshow_cmap = geoplot.land_colors
     plotitem.imshow_cmin = 0.0
     plotitem.imshow_cmax = 100.0
@@ -199,7 +127,7 @@ def setplot(plotdata=None):
 
     plotitem = plotaxes.new_plotitem(plot_type='2d_schlieren')
     plotitem.show = False
-    plotitem.plot_var = surface_or_depth
+    plotitem.plot_var = geoplot.surface_or_depth
     plotitem.schlieren_cmin = 0.0
     plotitem.schlieren_cmax = 2.0
 
@@ -260,7 +188,6 @@ def setplot(plotdata=None):
             with open(fortt_file,'r') as f:
                 line = f.read()
                 t1d = float(line.split()[0])
-                print('t1d = %.3f' % t1d)
             if abs(t1d - current_data.t) < 1e-8:
                 fortq_file = '%s/fort.q%s' % (outdir_1d, str(frameno).zfill(4))
                 q1d = loadtxt(fortq_file, skiprows=5)
@@ -288,7 +215,9 @@ def setplot(plotdata=None):
     # Figure for surface and transect side by side
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='For paper', figno=120)
-    plotfigure.kwargs = {'figsize': (13,6), 'facecolor':'w'}
+    plotfigure.figsize = (13,6)
+    plotfigure.facecolor = 'w'
+    plotfigure.show = False
 
     # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes('pcolor')
@@ -315,7 +244,7 @@ def setplot(plotdata=None):
     # Water
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
     #plotitem.show = False
-    plotitem.plot_var = surface_or_depth
+    plotitem.plot_var = geoplot.surface_or_depth
     plotitem.pcolor_cmap = geoplot.tsunami_colormap
     plotitem.pcolor_cmin = -4.
     plotitem.pcolor_cmax = 4.
@@ -330,7 +259,7 @@ def setplot(plotdata=None):
     # Land
     plotitem = plotaxes.new_plotitem(plot_type='2d_imshow')
     #plotitem.show = False
-    plotitem.plot_var = topo  #geoplot.land
+    plotitem.plot_var = geoplot.topo  #geoplot.land
     plotitem.imshow_cmap = geoplot.land_colors
     plotitem.imshow_cmin = 0.0
     plotitem.imshow_cmax = 100.0
@@ -377,7 +306,6 @@ def setplot(plotdata=None):
         pd = current_data.plotdata
         frameno = current_data.frameno
         framesoln = Solution(frameno, path=pd.outdir, file_format=pd.format)
-        print('+++ in plot_xsec')
 
         if 1:
             #xout = linspace(xmin,xmax,14150)
@@ -396,7 +324,6 @@ def setplot(plotdata=None):
             with open(fortt_file,'r') as f:
                 line = f.read()
                 t1d = float(line.split()[0])
-                print('t1d = %.3f' % t1d)
             if abs(t1d - current_data.t) < 1e-8:
                 fortq_file = '%s/fort.q%s' % (outdir_1d, str(frameno).zfill(4))
                 q1d = loadtxt(fortq_file, skiprows=5)
@@ -442,8 +369,8 @@ def setplot(plotdata=None):
     # Figure for radial velocity
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='Radial momentum', figno=21)
-    plotfigure.show = False
-    plotfigure.kwargs = {'figsize': (8,8)}
+    #plotfigure.show = False
+    plotfigure.figsize = (8,8)
 
     # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes('pcolor')
@@ -553,8 +480,9 @@ def setplot(plotdata=None):
     # Figure for huc corrections
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='huc', figno=25)
-    plotfigure.show = False
-    plotfigure.kwargs = {'figsize': (8,8)}
+    #plotfigure.show = False
+    plotfigure.figsize = (8,8)
+    plotfigure.facecolor = 'w'
     ihuc = 3
 
     # Set up for axes in this figure:
@@ -567,16 +495,14 @@ def setplot(plotdata=None):
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
     plotitem.plot_var = ihuc
     plotitem.pcolor_cmap = geoplot.tsunami_colormap
-    #plotitem.pcolor_cmin = 0.
-    #plotitem.pcolor_cmin = 970.
-    #plotitem.pcolor_cmax = 2000.
-    #plotitem.pcolor_cmax = 1030.
+    plotitem.pcolor_cmin = -0.002
+    plotitem.pcolor_cmax =  0.003  
     plotitem.add_colorbar = True
     plotitem.amr_celledges_show = [0,0,0]
     plotitem.patchedges_show = 1
 
     plotitem = plotaxes.new_plotitem(plot_type='2d_contour')
-    #plotitem.show = False
+    plotitem.show = False
     plotitem.plot_var = geoplot.topo
     plotitem.contour_levels = [-990, -800, -600, -400, -210]
     plotitem.amr_contour_colors = ['g']  # color on each level
@@ -636,7 +562,8 @@ def setplot(plotdata=None):
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='hvc', figno=26)
     plotfigure.show = False
-    plotfigure.kwargs = {'figsize': (8,8)}
+    plotfigure.figsize = (8,8)
+    plotfigure.facecolor = 'w'
     ihvc = 4
 
     # Set up for axes in this figure:
@@ -649,10 +576,8 @@ def setplot(plotdata=None):
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
     plotitem.plot_var = ihvc
     plotitem.pcolor_cmap = geoplot.tsunami_colormap
-    #plotitem.pcolor_cmin = 0.
-    #plotitem.pcolor_cmin = 970.
-    #plotitem.pcolor_cmax = 2000.
-    #plotitem.pcolor_cmax = 1030.
+    plotitem.pcolor_cmin = -0.002
+    plotitem.pcolor_cmax =  0.003  
     plotitem.add_colorbar = True
     plotitem.amr_celledges_show = [0,0,0]
     plotitem.patchedges_show = 1
