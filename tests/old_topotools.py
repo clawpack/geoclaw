@@ -1,12 +1,9 @@
 r"""Basic functions from the old version of topotools for testing purposes."""
 
-from __future__ import absolute_import
-from __future__ import print_function
 import numpy
 import re
 
 import nose
-from six.moves import range
 
 def topo1writer(outfile, topo, xlower, xupper, ylower, yupper, nxpoints,
                              nypoints):

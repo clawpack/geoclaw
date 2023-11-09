@@ -6,10 +6,7 @@ topotools.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os, glob, re
-from six.moves import range
 
 def most2tt3(fname, fname2=None):
     """

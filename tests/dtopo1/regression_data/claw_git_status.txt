@@ -1,31 +1,33 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/git/clawpack/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/dtopo1/regression_data/claw_git_diffs.txt
 
-Wed, 11 Nov 2020 17:15:02 PST
-$CLAW = /Users/rjl/git/clawpack
+Sat, 23 Apr 2022 07:59:12 PDT
+$CLAW = /Users/rjl/clawpack_src/clawpack_master
 $FC = gfortran
 
 
 ===========
 clawpack
 ===========
-/Users/rjl/git/clawpack/
+/Users/rjl/clawpack_src/clawpack_master/
 
 --- last commit ---
-c8f3e6b (HEAD -> master, origin/master, origin/HEAD) Merge pull request #196 from rjleveque/read_memsize
+531a8fb (HEAD -> master, tag: v5.8.2, origin/master, origin/HEAD) Merge pull request #208 from rjleveque/v5.8.2rc
 
 --- branch and status ---
 ## master...origin/master
+ M amrclaw
  M geoclaw
+ M pyclaw
 
 
 ===========
 classic
 ===========
-/Users/rjl/git/clawpack/classic
+/Users/rjl/clawpack_src/clawpack_master/classic
 
 --- last commit ---
-13f06a2 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
+13f06a2 (HEAD -> master, tag: v5.8.2, tag: v5.8.1, tag: v5.8.0, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
 
 --- branch and status ---
 ## master...origin/master
@@ -34,22 +36,22 @@ classic
 ===========
 amrclaw
 ===========
-/Users/rjl/git/clawpack/amrclaw
+/Users/rjl/clawpack_src/clawpack_master/amrclaw
 
 --- last commit ---
-ee85c1f (HEAD -> master, origin/master, origin/HEAD) Merge pull request #267 from rjleveque/read_memsize
+3cae22c (HEAD -> gauge_format_comment, rjleveque/gauge_format_comment) fix the comment written to gauges.data about file_formats to the right place
 
 --- branch and status ---
-## master...origin/master
+## gauge_format_comment
 
 
 ===========
 clawutil
 ===========
-/Users/rjl/git/clawpack/clawutil
+/Users/rjl/clawpack_src/clawpack_master/clawutil
 
 --- last commit ---
-116ffb7 (HEAD -> master, rjleveque/master, origin/master, origin/HEAD) Merge pull request #151 from rjleveque/b4run
+7c2cca5 (HEAD -> master, tag: v5.8.2, origin_push/master, origin/master, origin/HEAD) minor change to print dir in make_all.py
 
 --- branch and status ---
 ## master...origin/master
@@ -58,22 +60,22 @@ clawutil
 ===========
 pyclaw
 ===========
-/Users/rjl/git/clawpack/pyclaw
+/Users/rjl/clawpack_src/clawpack_master/pyclaw
 
 --- last commit ---
-41e15d8 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #650 from kbarnhart/barnhark/fix_vtk_docstring_formatting
+12f484b (HEAD -> gauge_binary_output, rjleveque/gauge_binary_output) update gauges.py to support binary files
 
 --- branch and status ---
-## master...origin/master
+## gauge_binary_output
 
 
 ===========
 visclaw
 ===========
-/Users/rjl/git/clawpack/visclaw
+/Users/rjl/clawpack_src/clawpack_master/visclaw
 
 --- last commit ---
-b03b0d4 (HEAD -> master, rjleveque/master, origin/master, origin/HEAD) Merge pull request #280 from rjleveque/mapc2p_exists
+b5c137e (HEAD -> master, tag: v5.8.2, tag: v5.8.1, origin/master, origin/HEAD) Merge pull request #283 from clawpack/revert-282-master
 
 --- branch and status ---
 ## master...origin/master
@@ -82,10 +84,10 @@ b03b0d4 (HEAD -> master, rjleveque/master, origin/master, origin/HEAD) Merge pul
 ===========
 riemann
 ===========
-/Users/rjl/git/clawpack/riemann
+/Users/rjl/clawpack_src/clawpack_master/riemann
 
 --- last commit ---
-78c2236 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #159 from rjleveque/rpt2_geoclaw
+d177660 (HEAD -> master, tag: v5.8.2, tag: v5.8.1, origin/master, origin/HEAD) Merge pull request #163 from carlosmunozmoncayo/fix_dry_states_hlle
 
 --- branch and status ---
 ## master...origin/master
@@ -94,14 +96,11 @@ riemann
 ===========
 geoclaw
 ===========
-/Users/rjl/git/clawpack/geoclaw
+/Users/rjl/clawpack_src/clawpack_master/geoclaw
 
 --- last commit ---
-5700120 (HEAD -> remove_allowflag) update tests/bowl_slosh/setrun.py, no change in results
+e08d06c (HEAD -> gauge_binary_output) redo tests/dtopo1 so binary gauge data produced is compared with archived ascii data for portability
 
 --- branch and status ---
-## remove_allowflag
+## gauge_binary_output
  M tests/dtopo1/regression_data/claw_git_status.txt
- M tests/dtopo1/regression_data/gauge00001.txt
- M tests/dtopo1/setplot.py
- M tests/dtopo1/setrun.py

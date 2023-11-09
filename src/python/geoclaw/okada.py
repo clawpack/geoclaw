@@ -17,20 +17,13 @@ Going forward, dtopotools.okadamap should be used instead.
     Xiaoming Wang.
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-import pdb
 import numpy
-#import scipy
 from numpy import *
-#from scipy import *
 from matplotlib import *
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as pyplot
-import os
 import string
 from .datatools import *
-from six.moves import range
 
 #=================================================================================
 def builddeffile (okadaparamfile,faultparamfile,outfile):
@@ -49,7 +42,6 @@ def builddeffile (okadaparamfile,faultparamfile,outfile):
         dZ=fixdata.fillbaddata(dZ,ind)
 
     dZ = filtermask(dZ,faultparams)
-    #pdb.set_trace()
     for jj in range(faultparams['my']):
         j=-1-jj
         for i in range(faultparams['mx']) :
@@ -77,7 +69,6 @@ def builddynamicdeffile (okadaparamfile,faultparamfile,outfile,t0=0.0, tend=1.0,
         dZ=fixdata.fillbaddata(dZ,ind)
 
     dZ = filtermask(dZ,faultparams)
-    #pdb.set_trace()
     for it in T:
         alpha=(it-t0)/(tend-t0)
         for jj in range(faultparams['my']):

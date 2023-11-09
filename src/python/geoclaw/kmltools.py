@@ -21,6 +21,7 @@ the full 8 digits if you want it transparent).
  - topo2kml - create a kml outline for each topo grid specified in setrun
  - dtopo2kml - create a kml outline for each dtopo grid specified in setrun
  - fgmax2kml - create a kml outline for each fgmax grid specified in setrun
+ - fgout2kml - create a kml outline for each fgout grid specified in setrun
  - make_input_data_kmls - make kml files for many things specified in setrun
  - pcolorcells_for_kml - version of pcolormesh with appropriate dpi and size
  - png2kml - create kml file wrapping a png figure to be viewed on GE
@@ -35,10 +36,6 @@ the full 8 digits if you want it transparent).
  - strip_archive_extensions - strip off things like .tar or .gz
 """
 
-
-from __future__ import absolute_import
-from __future__ import print_function
-from six.moves import range
 try:
     from importlib import reload
 except:
@@ -276,7 +273,7 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
         #print('+++ flagregion name = ',name)
         
         if not combined:
-            if name is '':
+            if name == '':
                 fname = 'FlagRegion_%s.kml' % str(rnum).zfill(2)
             else:
                 fname = name + '.kml'
@@ -747,7 +744,7 @@ def kml_line(mapping):
     if len(mapping['color'])==6:
         mapping['color'] = 'FF' + mapping['color']
 
-        line_text = """
+    line_text = """
 {x1:.9f},{y1:.9f},{elev:.9f}
 {x2:.9f},{y2:.9f},{elev:.9f}
 """.format(**mapping).replace(' ','')
@@ -962,6 +959,53 @@ def fgmax2kml(rundata=None,fname='fgmax_grids.kml',verbose=True,combined=False):
                   % fg.point_style)
 
 
+def fgout2kml(rundata=None,fname='fgout_grids.kml',verbose=True,combined=False):
+
+    """
+    Create a KML box for each fgout grid specified for a GeoClaw run.
+
+    :Inputs:
+
+      - *rundata* - an object of class *ClawRunData* or None
+
+        If *rundata==None*, try to create based on executing function *setrun*
+        from the `setrun.py` file in the current directory.
+
+      - *fname* (str) - resulting kml file.
+
+      - *verbose* (bool) - If *True*, print out info about each region found
+
+      - *combined* (bool) - If *True*, combine into single kml file with
+        name given by *fname*.  NOT YET IMPLEMENTED.
+        If False, *fname* is ignored and individual files are created for
+        each fgout grid.
+
+    """
+
+    from numpy import cos,pi,floor
+
+    if rundata is None:
+        try:
+            import setrun
+            reload(setrun)
+            rundata = setrun.setrun()
+        except:
+            raise IOError("*** cannot execute setrun file")
+
+    if combined:
+        fname_combined = 'fgout_grids.kml'
+        print('*** combined fgout kml files not yet supported')
+        print('    making a kml file for each fgout grid')
+    
+    fgout_grids = rundata.fgout_data.fgout_grids
+
+    for fg in fgout_grids:
+        fname_root = 'fgout%s' % str(fg.fgno).zfill(4)
+        kml_file = fname_root + '.kml'
+        xy = ([fg.x1,fg.x2], [fg.y1,fg.y2])
+        box2kml(xy, kml_file, fname_root, color='8888FF')
+
+
 def make_input_data_kmls(rundata=None, combined=False):
     """
     Produce kml files for the computational domain, all gauges and regions 
@@ -993,6 +1037,7 @@ def make_input_data_kmls(rundata=None, combined=False):
     regions2kml(rundata, combined=combined)
     gauges2kml(rundata)
     fgmax2kml(rundata)
+    fgout2kml(rundata)
 
     topofiles = rundata.topo_data.topofiles
     for f in topofiles:
@@ -1336,7 +1381,7 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
         
         
     # This is called from plotpages, in <plotdir>.
-    plt.savefig(cb_filename,Transparent=True)
+    plt.savefig(cb_filename,transparent=False)
     
     if close_figs:
         plt.close(fig)

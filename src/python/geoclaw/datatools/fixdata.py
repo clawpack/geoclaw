@@ -12,14 +12,12 @@ fixdata
 
 """
 
-from __future__ import absolute_import
 import string
 import re
 import numpy
 from numpy import *
 
 from . import iotools
-from six.moves import range
 
 #==============================================================================
 def findbadindices (Z,badvalue=inf,removenans=True):

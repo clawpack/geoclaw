@@ -13,6 +13,11 @@ Classes representing parameters for GeoClaw runs
  - FGmaxData
  - DTopoData
  - QinitData
+ - SurgeData
+ - MultilayerData
+ - FrictionData 
+ - GridData1D
+ - BoussData1D
 
 :Constants:
 
@@ -28,6 +33,7 @@ import os
 import numpy
 import clawpack.clawutil.data
 import warnings
+
 
 # Radius of earth in meters.
 # For consistency, should always use this value when needed, e.g.
@@ -54,6 +60,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('ambient_pressure', 101.3e3) # Nominal atmos pressure
         self.add_attribute('earth_radius',Rearth)
         self.add_attribute('coordinate_system',1)
+        self.add_attribute('sphere_source',0)  # should set to 1 by default?
         self.add_attribute('coriolis_forcing',True)
         self.add_attribute('theta_0',45.0)
         self.add_attribute('friction_forcing',True)
@@ -77,7 +84,10 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write('ambient_pressure',
                                 description="(Nominal atmospheric pressure Pa)")
         self.data_write('earth_radius', description="(Radius of the earth m)")
-        self.data_write('coordinate_system')
+        self.data_write('coordinate_system',
+                        description="(1=meters, 2=lon-lat)")
+        self.data_write('sphere_source',
+                        description="(0=none, 1=only in mass eqn, 2=all)")
         self.data_write('sea_level')
         self.data_write()
 
@@ -212,8 +222,11 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
-
 class FixedGridData(clawpack.clawutil.data.ClawData):
+
+    """
+    Deprecated, starting in 5.9.0 use FGoutData instead.
+    """
 
     def __init__(self):
 
@@ -225,12 +238,49 @@ class FixedGridData(clawpack.clawutil.data.ClawData):
 
     def write(self,data_source='setrun.py', out_file='fixed_grids.data'):
         # Fixed grid settings
+        msg = 'rundata.fixed_grid_data is deprecated starting in v5.9.0,' \
+            + ' use rundata.fgout_data instead'
+        #warnings.warn(msg)
+        if len(self.fixedgrids) > 0:
+            raise AttributeError(msg)
+
+
+class FGoutData(clawpack.clawutil.data.ClawData):
+
+    def __init__(self):
+
+        super(FGoutData,self).__init__()
+
+        # File name for fgout points and parameters:
+        self.add_attribute('fgout_grids',[])
+
+
+    def write(self,data_source='setrun.py', out_file='fgout_grids.data'):
         self.open_data_file(out_file, data_source)
-        nfixedgrids = len(self.fixedgrids)
-        self.data_write(value=nfixedgrids,alt_name='nfixedgrids')
+        num_fgout_grids = len(self.fgout_grids)
+        self.data_write(value=num_fgout_grids,alt_name='num_fgout_grids')
         self.data_write()
-        for fixedgrid in self.fixedgrids:
-            self._out_file.write(11*"%g  " % tuple(fixedgrid) +"\n")
+
+        fgno_unset = 0  # to use if fg.fgno not set by user
+        fgno_list = []  # to check for uniqueness of fgno's
+
+        for fg in self.fgout_grids:
+            # if path is relative in setrun, assume it's relative to the
+            # same directory that out_file comes from
+
+            if fg.fgno is None:
+                # not set by user in setrun
+                fgno_unset += 1
+                fg.fgno = fgno_unset
+
+            if fg.fgno in fgno_list:
+                msg = 'Trying to set fgout grid number to fgno = %i' % fg.fgno \
+                      + '\n             but this fgno was already used' \
+                      + '\n             Set unique fgno for each fgout grid'
+                raise ValueError(msg)
+
+            fgno_list.append(fg.fgno)
+            fg.write_to_fgout_data(self._out_file)
         self.close_data_file()
 
 class FGmaxData(clawpack.clawutil.data.ClawData):
@@ -255,11 +305,11 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         self.open_data_file(out_file, data_source)
         num_fgmax_val = self.num_fgmax_val
         if num_fgmax_val not in [1,2,5]:
-            raise NotImplementedError( \
-                    "Expecting num_fgmax_val in [1,2,5], got %s" % num_fgmax_val)
-        self.data_write(value=num_fgmax_val,alt_name='num_fgmax_val')
+            raise NotImplementedError(
+                   "Expecting num_fgmax_val in [1,2,5], got %s" % num_fgmax_val)
+        self.data_write(value=num_fgmax_val, alt_name='num_fgmax_val')
         num_fgmax_grids = len(self.fgmax_grids)
-        self.data_write(value=num_fgmax_grids,alt_name='num_fgmax_grids')
+        self.data_write(value=num_fgmax_grids, alt_name='num_fgmax_grids')
         self.data_write()
 
         fgno_unset = 0  # to use if fg.fgno not set by user
@@ -288,6 +338,43 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
+    def read(self, path="fgmax_grids.data", force=False):
+        r"""Read a FGMax data file."""
+
+        super(FGmaxData, self).read(path, force=force)
+
+        # Look for basic parameters
+        fig_numbers = []
+        with open(os.path.abspath(path), 'r') as data_file:
+            # Forward to first parameter
+            for line in data_file:
+                # Regular parameter setting
+                if "=:" in line:
+                    value, tail = line.split("=:")
+                    varname = tail.split()[0]
+
+                    if varname == "num_fgmax_val":
+                        self.num_fgmax_val = int(value)
+                    elif varname == "num_fgmax_grids":
+                        num_fgmax_grids = int(value)
+                
+                # Contains a fixed grid number
+                elif "# fgno" in line:
+                    value, tail = line.split("#")
+                    fig_numbers.append(int(value))
+
+        if len(fig_numbers) != num_fgmax_grids:
+            raise ValueError("Number of FGMaxGrid numbers found does not ", 
+                             "equal the number of grids recorded.")
+        
+        # Read each fgmax grid
+        import clawpack.geoclaw.fgmax_tools
+        for (i, grid_num) in enumerate(fig_numbers):
+            new_fgmax_grid = clawpack.geoclaw.fgmax_tools.FGmaxGrid()
+            new_fgmax_grid.read_fgmax_grids_data(grid_num, data_file=path)
+            self.fgmax_grids.append(new_fgmax_grid)
+
+
 
 class DTopoData(clawpack.clawutil.data.ClawData):
 
@@ -299,7 +386,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dtopofiles',[])
         self.add_attribute('dt_max_dtopo', 1.e99)
 
-    def write(self,data_source='setrun.py', out_file='dtopo.data'):
+    def write(self, data_source='setrun.py', out_file='dtopo.data'):
 
         # Moving topography settings
         self.open_data_file(out_file, data_source)
@@ -328,7 +415,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
-    def read(self, path, force=False):
+    def read(self, path="dtopo.data", force=False):
         r"""Read a dtopography data file."""
 
         print(self.dtopofiles)
@@ -657,3 +744,82 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
                         description=('(Method for calculating inundation ',
                                      'eigenspace)'))
         self.close_data_file()
+
+
+
+
+
+#  Gauge data object removed, version from amrclaw works in 1d
+#class GaugeData1D(clawpack.clawutil.data.ClawData):
+
+
+class GridData1D(clawpack.clawutil.data.ClawData):
+    r"""
+    1D data object for grid info
+
+    """
+    def __init__(self):
+        super(GridData1D,self).__init__()
+
+        self.add_attribute('grid_type',0)
+        self.add_attribute('fname_celledges',None)
+        self.add_attribute('monitor_fgmax',False)
+        self.add_attribute('monitor_runup',False)
+        self.add_attribute('monitor_total_zeta',False)
+
+    def write(self,out_file='grid.data',data_source='setrun.py'):
+
+        self.open_data_file(out_file,data_source)
+
+        self.data_write('grid_type')
+        if self.grid_type == 2:
+            if self.fname_celledges is None:
+                self.fname_celledges = 'celledges.txt'
+                print('*** grid_type ==2 and fname_celledges not specified,')
+                print('*** using celledges.txt')
+            # if path is relative in setrun, assume it's relative to the
+            # same directory that out_file comes from
+            fname = os.path.abspath(os.path.join(os.path.dirname(out_file),
+                                    self.fname_celledges))
+            self._out_file.write("\n'%s'   =: fname_celledges\n " % fname)
+
+        self._out_file.write("\n%s   =: monitor_fgmax" \
+                             % str(self.monitor_fgmax)[0])
+        self._out_file.write("\n%s   =: monitor_runup" \
+                             % str(self.monitor_runup)[0])
+        self._out_file.write("\n%s   =: monitor_total_zeta" \
+                             % str(self.monitor_total_zeta)[0])
+        self.close_data_file()
+
+    def read(self, path, force=False):
+        with open(os.path.abspath(path), 'r') as data_file:
+            for line in data_file:
+                if "=:" in line:
+                    value, tail = line.split("=:")
+                    varname = tail.split()[0]
+                    if varname == 'grid_type':
+                        self.grid_type = int(value)
+                    elif varname == 'fname_celledges':
+                        self.fname_celledges = value.strip()
+
+
+class BoussData1D(clawpack.clawutil.data.ClawData):
+    r"""
+    1D data object for Boussinesq info
+
+    """
+    def __init__(self):
+        super(BoussData1D,self).__init__()
+
+        self.add_attribute('bouss_equations',2)
+        self.add_attribute('bouss_min_depth',20.)
+
+    def write(self,out_file='bouss.data',data_source='setrun.py'):
+
+        self.open_data_file(out_file,data_source)
+
+        self.data_write('bouss_equations')
+        self.data_write('bouss_min_depth')
+
+        self.close_data_file()
+

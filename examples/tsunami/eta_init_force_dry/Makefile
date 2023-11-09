@@ -61,7 +61,7 @@ include $(CLAWMAKE)
 .PHONY: input all
 
 input:
-	python make_input_files.py
+	$(CLAW_PYTHON) make_input_files.py
 
 all: 
 	$(MAKE) input

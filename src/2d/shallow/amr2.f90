@@ -97,12 +97,12 @@ program amr2
     use geoclaw_module, only: set_geo
     use topo_module, only: read_topo_settings, read_dtopo_settings
     use qinit_module, only: set_qinit
-    use fixedgrids_module, only: set_fixed_grids
     use refinement_module, only: set_refinement
     use storm_module, only: set_storm
     use friction_module, only: setup_variable_friction
     use gauges_module, only: set_gauges, num_gauges
     use regions_module, only: set_regions
+    use fgout_module, only: set_fgout
     use fgmax_module, only: set_fgmax, FG_num_fgrids
     use multilayer_module, only: set_multilayer
     use adjoint_module, only: read_adjoint_data
@@ -491,7 +491,7 @@ program amr2
         call read_dtopo_settings()        ! specifies file with dtopo from earthquake
         call read_topo_settings(rest)     ! specifies topography (bathymetry) files
         call set_qinit()                  ! specifies file with dh if this used instead
-        call set_fixed_grids()            ! Fixed grid settings
+        call set_fgout(rest)            ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
         !call set_multilayer()             ! Set multilayer SWE parameters
         call set_storm()                  ! Set storm parameters
@@ -526,7 +526,7 @@ program amr2
         call read_dtopo_settings()        ! specifies file with dtopo from earthquake
         call read_topo_settings(rest)     ! specifies topography (bathymetry) files
         call set_qinit()                  ! specifies file with dh if this used instead
-        call set_fixed_grids()            ! Fixed grid settings
+        call set_fgout(rest)            ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
         call set_multilayer()             ! Set multilayer SWE parameters
         call set_storm()                  ! Set storm parameters

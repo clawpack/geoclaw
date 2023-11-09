@@ -64,11 +64,11 @@ include $(CLAWMAKE)
 .PHONY: input all fgmax_plots
 
 input:
-	python maketopo.py
-	python make_input_files.py
+	$(CLAW_PYTHON) maketopo.py
+	$(CLAW_PYTHON) make_input_files.py
 
 fgmax_plots:
-	python process_fgmax.py
+	$(CLAW_PYTHON) process_fgmax.py
 
 all: 
 	$(MAKE) .exe

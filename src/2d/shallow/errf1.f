@@ -24,8 +24,6 @@ c
       real(kind=8), intent(in) :: auxcrse(naux,mi2tot,mj2tot)
       real(kind=8), intent(inout) :: rctflg(mibuff,mjbuff)
 
-      logical :: allowflag
-      external allowflag
 
 c     Local variables
       integer :: i, j, ifine, jfine, jj, ii, levm, m

@@ -437,11 +437,11 @@ def setgeo(rundata):
     rundata.qinit_data.qinitfiles.append(['hump.xyz'])
 
 
-    # == setfixedgrids.data values ==
-    fixed_grids = rundata.fixed_grid_data
-    # for fixed grids append lines of the form
-    # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
-    #  ioutarrivaltimes,ioutsurfacemax]
+    # == fgout grids ==
+    # new style as of v5.9.0 (old rundata.fixed_grid_data is deprecated)
+    # set rundata.fgout_data.fgout_grids to be a 
+    # list of objects of class clawpack.geoclaw.fgout_tools.FGoutGrid:
+    #rundata.fgout_data.fgout_grids = []
 
     return rundata
     # end of function setgeo
