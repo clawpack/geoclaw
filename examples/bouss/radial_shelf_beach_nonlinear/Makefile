@@ -15,7 +15,7 @@ CLAW_PKG = geoclaw                  # Clawpack package to use
 
 # These environment variables need to be set properly, usually in your shell:
 #PETSC_DIR=/Users/rjl/git/Clones/petsc
-#PETSC_ARCH=$(PETSC_DIR)/arch-darwin-c-opt
+#PETSC_ARCH=arch-darwin-c-opt
 #PETSC_OPTIONS=-options_file $(PETSC_DIR)/petscMPIoptions
 PETSC_DIR=/Users/berger/petsc
 PETSC_ARCH=arch-mpi-opt
