@@ -424,7 +424,7 @@ def setgeo(rundata):
     
     # CHECK ORDER!
 
-    rundata.bouss_data.bouss_equations = 1    # 0=SWE, 1=MS, 2=SGN
+    rundata.bouss_data.bouss_equations = 2    # 0=SWE, 1=MS, 2=SGN
     rundata.bouss_data.bouss_min_level = 1    # coarsest level to apply bouss
     rundata.bouss_data.bouss_max_level = 10   # finest level to apply bouss
     rundata.bouss_data.bouss_min_depth = 1.  # depth to switch to SWE

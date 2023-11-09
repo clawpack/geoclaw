@@ -78,7 +78,6 @@ MODULES = \
 
 SOURCES = \
   ./qinit.f90 \
-  ./flag2refine2.f90 \
 
 
 
@@ -86,15 +85,3 @@ SOURCES = \
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
 
-# Construct the topography data
-.PHONY: topo all
-topo:
-	python maketopo.py
-
-all: 
-	$(MAKE) topo
-	$(MAKE) .plots
-	$(MAKE) .htmls
-
-run:
-	$(RUNEXE)
