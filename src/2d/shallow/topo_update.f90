@@ -1,15 +1,15 @@
 !======================================================================
 subroutine topo_update(t)
-   !======================================================================
-   !
-   !  called to update topography grids to the current time t
-   !  topo arrays are modified directly from topo0 and dtopo
-   !
-   !  this routine replaces the old method implemented in movetopo
-   !  where dtopo modified aux arrays directly. Now aux values are
-   !  always determined from topography grids.
-   !
-   !                   David George, dgeorge@usgs.gov, December 20 2013
+!======================================================================
+!
+!  called to update topography grids to the current time t
+!  topo arrays are modified directly from topo0 and dtopo
+!
+!  this routine replaces the old method implemented in movetopo
+!  where dtopo modified aux arrays directly. Now aux values are
+!  always determined from topography grids.
+!
+!                   David George, dgeorge@usgs.gov, December 20 2013
 
 
    use topo_module
@@ -38,28 +38,28 @@ subroutine topo_update(t)
    do m=1,num_dtopo
       ! Find indices and times of dtopo arrays bracketing time t, and
       ! also taudtopo, the fraction of step between, used for interpolation.
-      ! Note that if t < t0dtopo(m) then index is set to 1 but later
+      ! Note that if t < t0dtopo(m) then index is set to 1 but later 
       ! this dtopo array is skipped altogether in this case and doesn't
       ! affect topography at time t.
       if (mtdtopo(m) == 1) then
-         ! Special case: instantaneous displacement at one instant in time
-         kdtopo1(m) = 1
-         kdtopo2(m) = 1
-         tdtopo1(m) = t
-         tdtopo2(m) = t
-         taudtopo(m) = 0.d0
-      else
-         kdtopo1(m) = int(floor((t-t0dtopo(m))/dtdtopo(m)))+1
-         kdtopo2(m) = int(ceiling((t-t0dtopo(m))/dtdtopo(m)))+1
-         kdtopo1(m) = min(kdtopo1(m),mtdtopo(m))
-         kdtopo2(m) = min(kdtopo2(m),mtdtopo(m))
-         kdtopo1(m) = max(kdtopo1(m),1)
-         kdtopo2(m) = max(kdtopo2(m),1)
-         tdtopo1(m) = t0dtopo(m)+ dtdtopo(m)*real(kdtopo1(m)-1,kind=8) ! <= t
-         tdtopo2(m) = t0dtopo(m)+ dtdtopo(m)*real(kdtopo2(m)-1,kind=8) ! >= t
-         taudtopo(m) = 1.d0-max(0.d0,((t-tdtopo1(m))/dtdtopo(m)))
-         taudtopo(m) = max(taudtopo(m),0.d0)
-      endif
+          ! Special case: instantaneous displacement at one instant in time
+          kdtopo1(m) = 1
+          kdtopo2(m) = 1
+          tdtopo1(m) = t
+          tdtopo2(m) = t
+          taudtopo(m) = 0.d0
+        else
+          kdtopo1(m) = int(floor((t-t0dtopo(m))/dtdtopo(m)))+1
+          kdtopo2(m) = int(ceiling((t-t0dtopo(m))/dtdtopo(m)))+1
+          kdtopo1(m) = min(kdtopo1(m),mtdtopo(m))
+          kdtopo2(m) = min(kdtopo2(m),mtdtopo(m))
+          kdtopo1(m) = max(kdtopo1(m),1)
+          kdtopo2(m) = max(kdtopo2(m),1)
+          tdtopo1(m) = t0dtopo(m)+ dtdtopo(m)*real(kdtopo1(m)-1,kind=8) ! <= t
+          tdtopo2(m) = t0dtopo(m)+ dtdtopo(m)*real(kdtopo2(m)-1,kind=8) ! >= t
+          taudtopo(m) = 1.d0-max(0.d0,((t-tdtopo1(m))/dtdtopo(m)))
+          taudtopo(m) = max(taudtopo(m),0.d0)
+        endif
       index0_dtopowork1(m) = i0dtopo(m) + (int(kdtopo1(m), 8)-1)*int(mxdtopo(m), 8)*int(mydtopo(m), 8)
       index0_dtopowork2(m) = i0dtopo(m) + (int(kdtopo2(m), 8)-1)*int(mxdtopo(m), 8)*int(mydtopo(m), 8)
    enddo
@@ -68,16 +68,16 @@ subroutine topo_update(t)
    !first set topofiles aligned exactly with corresponding dtopo
    !do i= mtopofiles - num_dtopo + 1, mtopofiles !topofile
    !   m = i - mtopofiles + num_dtopo !corresponding dtopofile
-   !interpolate in time directly for matching nodes
+      !interpolate in time directly for matching nodes
    !   if (t<t0dtopo(m).or.topotime(i)>tfdtopo(m)) then
-   !dtopo has not started or topo has already been set from final dz
+         !dtopo has not started or topo has already been set from final dz
    !      cycle
    !   endif
    !   topowork(i0topo(i):i0topo(i) + mtopo(i)-1) = &
    !            topo0work(i0topo0(i):i0topo0(i) + mtopo(i)-1) &!initial topo
    !            + taudtopo(m)*dtopowork(index0_dtopowork1(m):index0_dtopowork1(m) + mtopo(i)-1) &
    !            + (1.0-taudtopo(m))*dtopowork(index0_dtopowork2(m):index0_dtopowork2(m) + mtopo(i)-1)
-   !set time-stamp
+      !set time-stamp
    !   topotime(i) = t
    !enddo
 
@@ -107,9 +107,9 @@ subroutine topo_update(t)
             do irank = 1,num_dtopo
                m = mdtopoorder(irank)
                if ( (x>xhidtopo(m)).or.(x<xlowdtopo(m)).or. &
-                  (y>yhidtopo(m)).or.(y<ylowdtopo(m))) then
-                  !no intersection of point with this dtopo
-                  cycle
+                          (y>yhidtopo(m)).or.(y<ylowdtopo(m))) then
+                     !no intersection of point with this dtopo
+                     cycle
                endif
 
                !if (t<t0dtopo(m).or.topotime(mt)>tfdtopo(m)) then
@@ -180,4 +180,3 @@ subroutine topo_update(t)
 
 
 end subroutine topo_update
-
