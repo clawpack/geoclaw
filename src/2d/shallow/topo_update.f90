@@ -20,9 +20,9 @@ subroutine topo_update(t)
    real(kind=8), intent(in) ::t
 
    !locals
-   integer :: i,j,m,mt
-   integer :: ij,ij0,irank,idtopo1,idtopo2,jdtopo1,jdtopo2
-   integer :: ijll,ijlr,ijul,ijur
+   integer :: m,mt
+   integer :: irank,idtopo1,idtopo2,jdtopo1,jdtopo2
+   integer(kind=8) :: ij,ij0,i,j,ijll,ijlr,ijul,ijur
    real(kind=8) :: x,y,xl,xr,yu,yl,zll,zlr,zul,zur,dz12,dz1,dz2,dztotal
 
    if (t<minval(t0dtopo).or.topo_finalized.eqv..true.) then
@@ -60,8 +60,8 @@ subroutine topo_update(t)
           taudtopo(m) = 1.d0-max(0.d0,((t-tdtopo1(m))/dtdtopo(m)))
           taudtopo(m) = max(taudtopo(m),0.d0)
         endif
-      index0_dtopowork1(m) = i0dtopo(m) + (kdtopo1(m)-1)*mxdtopo(m)*mydtopo(m)
-      index0_dtopowork2(m) = i0dtopo(m) + (kdtopo2(m)-1)*mxdtopo(m)*mydtopo(m)
+      index0_dtopowork1(m) = i0dtopo(m) + (int(kdtopo1(m), 8)-1)*int(mxdtopo(m), 8)*int(mydtopo(m), 8)
+      index0_dtopowork2(m) = i0dtopo(m) + (int(kdtopo2(m), 8)-1)*int(mxdtopo(m), 8)*int(mydtopo(m), 8)
    enddo
 
 
@@ -97,11 +97,11 @@ subroutine topo_update(t)
          cycle
       endif
 
-      do j=1,mytopo(mt)
+      do j=1,int(mytopo(mt), 8)
          y = yhitopo(mt) - real(j-1,kind=8)*dytopo(mt)
-         do i=1,mxtopo(mt)
-            ij = i0topo(mt) + (j-1)*mxtopo(mt) + i -1
-            ij0 = i0topo0(mt) + (j-1)*mxtopo(mt) + i -1
+         do i=1,int(mxtopo(mt), 8)
+            ij = i0topo(mt) + (j-1)*int(mxtopo(mt), 8) + i -1
+            ij0 = i0topo0(mt) + (j-1)*int(mxtopo(mt), 8) + i -1
             x = xlowtopo(mt) +  real(i-1,kind=8)*dxtopo(mt)
             dztotal = 0.0
             do irank = 1,num_dtopo
@@ -133,10 +133,10 @@ subroutine topo_update(t)
                jdtopo2 = jdtopo1+1
 
                !indices for dtopo work array
-               ijll = index0_dtopowork1(m) + (jdtopo2-1)*mxdtopo(m) + idtopo1 -1
-               ijlr = index0_dtopowork1(m) + (jdtopo2-1)*mxdtopo(m) + idtopo2 -1
-               ijul = index0_dtopowork1(m) + (jdtopo1-1)*mxdtopo(m) + idtopo1 -1
-               ijur = index0_dtopowork1(m) + (jdtopo1-1)*mxdtopo(m) + idtopo2 -1
+               ijll = index0_dtopowork1(m) + int(jdtopo2-1, 8)*int(mxdtopo(m), 8) + int(idtopo1, 8) -1
+               ijlr = index0_dtopowork1(m) + int(jdtopo2-1, 8)*int(mxdtopo(m), 8) + int(idtopo2, 8) -1
+               ijul = index0_dtopowork1(m) + int(jdtopo1-1, 8)*int(mxdtopo(m), 8) + int(idtopo1, 8) -1
+               ijur = index0_dtopowork1(m) + int(jdtopo1-1, 8)*int(mxdtopo(m), 8) + int(idtopo2, 8) -1
 
                !find x,y,z values for bilinear
                !z may be from only 1 or 2 nodes for coincidently aligned grids
@@ -154,10 +154,10 @@ subroutine topo_update(t)
                dz1 = zll*(xr-x)*(yu-y) + zlr*(x-xl)*(yu-y) + zul*(xr-x)*(y-yl) + zur*(x-xl)*(y-yl)
 
                !indices for work array at later time
-               ijll = index0_dtopowork2(m) + (jdtopo2-1)*mxdtopo(m) + idtopo1 -1
-               ijlr = index0_dtopowork2(m) + (jdtopo2-1)*mxdtopo(m) + idtopo2 -1
-               ijul = index0_dtopowork2(m) + (jdtopo1-1)*mxdtopo(m) + idtopo1 -1
-               ijur = index0_dtopowork2(m) + (jdtopo1-1)*mxdtopo(m) + idtopo2 -1
+               ijll = index0_dtopowork2(m) + int(jdtopo2-1, 8)*int(mxdtopo(m), 8) + int(idtopo1, 8) -1
+               ijlr = index0_dtopowork2(m) + int(jdtopo2-1, 8)*int(mxdtopo(m), 8) + int(idtopo2, 8) -1
+               ijul = index0_dtopowork2(m) + int(jdtopo1-1, 8)*int(mxdtopo(m), 8) + int(idtopo1, 8) -1
+               ijur = index0_dtopowork2(m) + int(jdtopo1-1, 8)*int(mxdtopo(m), 8) + int(idtopo2, 8) -1
                zll = dtopowork(ijll)
                zlr = dtopowork(ijlr)
                zul = dtopowork(ijul)

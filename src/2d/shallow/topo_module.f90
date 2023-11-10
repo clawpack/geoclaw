@@ -3,7 +3,7 @@
 ! ============================================================================
 module topo_module
 
-    use amr_module, only: xlower,xupper,ylower,yupper
+    use amr_module, only: xlower,xupper,ylower,yupper,hxposs,hyposs,nghost
     implicit none
 
     logical, private :: module_setup = .false.
@@ -14,14 +14,15 @@ module topo_module
     ! Topography file data
     integer :: test_topography
     character(len=150), allocatable :: topofname(:)
-    integer :: mtopofiles,mtoposize
+    integer :: mtopofiles
+    integer(kind=8) :: mtoposize
     real(kind=8), allocatable :: xlowtopo(:), ylowtopo(:), tlowtopo(:)
     real(kind=8), allocatable :: xhitopo(:), yhitopo(:), thitopo(:)
     real(kind=8), allocatable :: dxtopo(:), dytopo(:)
     real(kind=8), allocatable :: topotime(:)
-    integer, allocatable ::  mxtopo(:), mytopo(:)
+    integer(kind=8), allocatable :: mtopo(:), i0topo(:)
 
-    integer, allocatable :: i0topo(:), mtopo(:), mtopoorder(:)
+    integer, allocatable :: mxtopo(:), mytopo(:), mtopoorder(:)
     integer, allocatable :: itopotype(:)
     integer, allocatable :: topoID(:),topo0save(:)
     logical :: topo_finalized
@@ -49,10 +50,10 @@ module topo_module
     real(kind=8), allocatable :: dxdtopo(:),dydtopo(:),dtdtopo(:)
     real(kind=8), allocatable :: tdtopo1(:),tdtopo2(:),taudtopo(:)
 
-    integer, allocatable :: mxdtopo(:),mydtopo(:),mtdtopo(:),mdtopo(:)
-    integer, allocatable :: dtopotype(:)
-    integer, allocatable :: i0dtopo(:),mdtopoorder(:),kdtopo1(:),kdtopo2(:)
-    integer, allocatable :: index0_dtopowork1(:),index0_dtopowork2(:)
+    integer, allocatable :: mxdtopo(:), mydtopo(:), mtdtopo(:)
+    integer(kind=8), allocatable :: mdtopo(:), i0dtopo(:)
+    integer, allocatable :: dtopotype(:), mdtopoorder(:),kdtopo1(:),kdtopo2(:)
+    integer(kind=8), allocatable :: index0_dtopowork1(:),index0_dtopowork2(:)
 
     integer :: num_dtopo
     real(kind=8) dz
@@ -61,8 +62,10 @@ module topo_module
     ! Initial topography
     ! Work array for initial topography (only arrays where topo evolves)
     real(kind=8), allocatable :: topo0work(:)
-    integer, allocatable :: i0topo0(:),topo0ID(:)
-    integer :: mtopo0size,mtopo0files
+    integer, allocatable :: topo0ID(:)
+    integer(kind=8), allocatable :: i0topo0(:)
+    integer(kind=8) :: mtopo0size
+    integer :: mtopo0files
 
     real(kind=8) topo_missing
 
@@ -158,7 +161,7 @@ contains
                         mytopo(i),xlowtopo(i),ylowtopo(i),xhitopo(i),yhitopo(i), &
                         dxtopo(i),dytopo(i))
                     topoID(i) = i
-                    mtopo(i) = mxtopo(i)*mytopo(i)
+                    mtopo(i) = int(mxtopo(i), 8) * int(mytopo(i), 8)
                 enddo
 
                 ! adding extra topo arrays corresponding spatially to dtopo
@@ -176,7 +179,7 @@ contains
                    yhitopo(i) = yhidtopo(j)
                    dxtopo(i) = dxdtopo(j)
                    dytopo(i) = dydtopo(j)
-                   mtopo(i) = mxtopo(i)*mytopo(i)
+                   mtopo(i) = int(mxtopo(i), 8) * int(mytopo(i), 8)
                    topoID(i) = i
                    topotime(i) = -huge(1.0)
                    topo0save(i) = 1
@@ -335,18 +338,18 @@ contains
         !arguments
         integer, intent(in) :: mx,my
         real(kind=8), intent(in) :: dx,dy,xlow,yhi
-        real(kind=8), intent(inout) :: newtopo(1:mx*my)
+        real(kind=8), intent(inout) :: newtopo(1:int(mx, 8) * int(my, 8))
 
         !locals
-        integer :: i,j,ij,id,irank,itopo1,itopo2,jtopo1,jtopo2
-        integer :: ijll,ijlr,ijul,ijur
+        integer :: id,irank,itopo1,itopo2,jtopo1,jtopo2
+        integer(kind=8) :: i,j,ij,ijll,ijlr,ijul,ijur
         real(kind=8) :: x,y,xl,xr,yu,yl,zll,zlr,zul,zur,z,dxdy
 
-        do j=1,my
+        do j=1,int(my, 8)
                y = yhi - (j-1)*dy
-            do i=1,mx
+            do i=1,int(mx, 8)
                x = xlow + (i-1)*dx
-               ij = (j-1)*mx + i
+               ij = (j-1)*int(mx, 8) + i
                !find intersection starting from finest topo
                !all points must lie in some topo file therefore the
                !finest topo file for all dtopo points will be saved in topo0
@@ -424,16 +427,17 @@ contains
         ! Arguments
         integer, intent(in) :: mx,my,topo_type
         character(len=150), intent(in) :: fname
-        real(kind=8), intent(inout) :: topo(1:mx*my)
+        real(kind=8), intent(inout) :: topo(1:int(mx, 8)*int(my, 8))
         real(kind=8), intent(in) :: xll,yll
 
         ! Locals
         integer, parameter :: iunit = 19, miss_unit = 17
         logical, parameter :: maketype2 = .false.
-        integer :: i,j,missing,status,n
+        integer :: missing,status,n
         real(kind=8) :: no_data_value,x,y,topo_temp
         real(kind=8) :: values(10)
         character(len=80) :: str
+        integer(kind=8) :: i, j, mtot
 
         ! NetCDF Support
         character(len=10) :: direction, x_dim_name, x_var_name, y_dim_name, &
@@ -444,6 +448,8 @@ contains
         integer(kind=4) :: xstart(1), ystart(1), mx_tot, my_tot
         integer(kind=4) :: ios, nc_file, dim_ids(2), num_dims, &
             var_type, num_vars, num_dims_tot, z_dim_ids(2)
+
+        mtot = int(mx, 8) * int(my, 8)
 
         print *, ' '
         print *, 'Reading topography file  ', fname
@@ -456,10 +462,10 @@ contains
                 open(unit=iunit, file=fname, status='unknown',form='formatted')
                 i = 0
                 status = 0
-                do i=1,mx*my
+                do i=1,mtot
                     read(iunit,fmt=*,iostat=status) x,y,topo_temp
-                    if ((i > mx * my) .and. (status == 0)) then
-                        print *,'*** Error: i > mx*my = ',mx*my
+                    if ((i > mtot) .and. (status == 0)) then
+                        print *,'*** Error: i > mx*my = ',mtot
                         print *,'*** i, mx, my: ',i,mx,my
                         print *,'*** status = ',status
                         stop
@@ -497,7 +503,7 @@ contains
                 missing = 0
                 select case(abs(topo_type))
                     case(2)
-                        do i=1,mx*my
+                        do i=1,mtot
                             read(iunit,*) topo(i)
                             if (topo(i) == no_data_value) then
                                 missing = missing + 1
@@ -508,12 +514,12 @@ contains
                             endif
                         enddo
                     case(3)
-                        do j=1,my
-                            read(iunit,*) (topo((j-1)*mx + i),i=1,mx)
-                            do i=1,mx
-                                if (topo((j-1)*mx + i) == no_data_value) then
+                        do j=1,int(my, 8)
+                            read(iunit,*) (topo((j-1)*int(mx, 8) + i),i=1,mx)
+                            do i=1,int(mx, 8)
+                                if (topo((j-1)*int(mx, 8) + i) == no_data_value) then
                                     missing = missing + 1
-                                    topo((j-1)*mx + i) = topo_missing
+                                    topo((j-1)*int(mx, 8) + i) = topo_missing
                                     ! uncomment next line to print row j
                                     ! and element i that are missing.
                                     ! write(6,601) i,j
@@ -606,12 +612,12 @@ contains
 
                     ! check for lon/lat ordering of z variable
                     if (z_dim_ids(1) == x_dim_id) then
-                        do j = 0, my - 1
-                            topo(j * mx + 1:(j + 1) * mx) = nc_buffer(:, my - j)
+                        do j = 0, int(my, 8) - 1
+                            topo(j * int(mx, 8) + 1:(j + 1) * int(mx, 8)) = nc_buffer(:, my - j)
                         end do
                     else if (z_dim_ids(1) == y_dim_id) then
-                        do j = 0, my - 1
-                            topo(j * mx + 1:(j + 1) * mx) = nc_buffer(my - j, :)
+                        do j = 0, int(my, 8) - 1
+                            topo(j * int(mx, 8) + 1:(j + 1) * int(mx, 8)) = nc_buffer(my - j, :)
                         end do
                     end if
                     deallocate(nc_buffer)
@@ -657,7 +663,7 @@ contains
 
         ! Handle negative topo types
         if (topo_type < 0) then
-            forall(i=1:mx*my)
+            forall(i=1:mtot)
                 topo(i) = -topo(i)
             end forall
         endif
@@ -944,9 +950,9 @@ contains
                 dx = xlocs(2) - xlocs(1)
                 dy = ylocs(2) - ylocs(1)
                 
-                ! find which locs are within domain (with a dx/dy buffer around domain)
-                x_in_dom = (xlocs.gt.(xlower-dx)) .and. (xlocs.lt.(xupper+dx))
-                y_in_dom = (ylocs.gt.(ylower-dy)) .and. (ylocs.lt.(yupper+dy))
+                ! find which locs are within domain (with a dx/dy buffer around domain + ghost cells)
+                x_in_dom = (xlocs.gt.(xlower-dx-hxposs(1)*nghost)) .and. (xlocs.lt.(xupper+dx+hxposs(1)*nghost))
+                y_in_dom = (ylocs.gt.(ylower-dy-hyposs(1)*nghost)) .and. (ylocs.lt.(yupper+dy+hyposs(1)*nghost))
                 
                 xll = minval(xlocs, mask=x_in_dom)
                 yll = minval(ylocs, mask=y_in_dom)
@@ -1039,7 +1045,7 @@ contains
 
         ! Locals
         integer, parameter :: iunit = 79
-        integer :: itopo,finer_than,rank
+        integer :: finer_than,rank
         real(kind=8) :: area_i,area_j
         integer :: i,j
 
@@ -1143,19 +1149,22 @@ contains
       ! Arguments
       integer, intent(in) :: mx,my,mt,dtopo_type
       character (len=150), intent(in) :: fname
-      real(kind=8), intent(inout) :: dtopo(1:mx*my*mt)
+      real(kind=8), intent(inout) :: dtopo(1:int(mx, 8)*int(my, 8)*int(mt, 8))
 
       ! Local
       integer, parameter :: iunit = 29
-      integer :: i,j,k,status
+      integer :: status
       real(kind=8) :: t,x,y
+      integer(kind=8) :: i, j, k, mtot
+
+      mtot = int(mx, 8) * int(my, 8)
 
       open(unit=iunit, file=fname, status = 'unknown',form='formatted')
 
       select case(abs(dtopo_type))
          case(1)
             ! ASCII file with 4 columns
-            do i = 1,mx*my*mt
+            do i = 1,mtot*mt
                read(iunit,fmt=*,iostat=status) t,x,y, dtopo(i)
             enddo
 
@@ -1165,7 +1174,7 @@ contains
                read(iunit,*)
             enddo
             ! read the data
-            do i = 1,mx*my*mt
+            do i = 1,mtot*mt
                read(iunit,*) dtopo(i)
             enddo
          case(3)
@@ -1173,9 +1182,9 @@ contains
             do i = 1,9
                read(iunit,*)
             enddo
-            do k = 1,mt
-               do j = 1,my
-                  read(iunit,*) (dtopo((k-1)*mx*my + (j-1)*mx + i) , i=1,mx)
+            do k = 1,int(mt, 8)
+               do j = 1,int(my, 8)
+                  read(iunit,*) (dtopo((k-1)*mtot + (j-1)*int(mx, 8) + i) , i=1,int(mx, 8))
                enddo
             enddo
       end select
@@ -1339,7 +1348,8 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
     ! local
     real(kind=8) :: xmlo,xmhi,ymlo,ymhi,x1m,x2m, &
         y1m,y2m, area1,area2,area_m
-    integer :: mfid, indicator, i0
+    integer :: mfid, indicator
+    integer(kind=8) :: i0
     real(kind=8), external :: topointegral  
 
 
@@ -1416,7 +1426,8 @@ recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
     ! local
     real(kind=8) :: xmlo,xmhi,ymlo,ymhi,area,x1m,x2m, &
         y1m,y2m, int1,int2,int3
-    integer :: mfid, indicator, i0
+    integer :: mfid, indicator
+    integer(kind=8) :: i0
     real(kind=8), external :: topointegral  
 
 
