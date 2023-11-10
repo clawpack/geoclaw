@@ -20,6 +20,7 @@ c
       implicit double precision (a-h,o-z)
 
       logical vtime,dumpout/.false./,dumpchk/.false./,rest,dump_final
+      logical stopFound
       dimension dtnew(maxlv), ntogo(maxlv), tlevel(maxlv)
       integer(kind=8) :: clock_start, clock_finish, clock_rate
       integer(kind=8) :: tick_clock_finish, tick_clock_rate
@@ -494,6 +495,17 @@ c             ! use same alg. as when setting refinement when first make new fin
                call print_gauges_and_reset_nextLoc(ii)
             end do
          endif
+       endif
+
+       ! new STOP feature to do immediate checkpt and exit
+       inquire(FILE="STOP.txt",exist=stopFound) 
+          if (stopFound) then
+          write(*,*)"STOP file found. Checkpointing and Stopping"
+          write(*,*)"REMEMBER to remove file before restarting"
+          write(outunit,*)"STOP file found. Checkpointing and Stopping"
+          write(outunit,*)"REMEMBER to remove file before restarting"
+          call check(ncycle,time,nvar,naux)
+          stop
        endif
 
       go to 20
