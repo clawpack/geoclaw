@@ -1,32 +1,19 @@
 c====================================================================
-      subroutine cellgridintegrate(topoint,xim,xcell,xip,yjm,ycell,
-     &           yjp,xlowtopo,ylowtopo,xhitopo,yhitopo,dxtopo,dytopo,
-     &           mxtopo,mytopo,mtopo,i0topo,mtopoorder,
-     &           mtopofiles,mtoposize,topo)
+      subroutine cellgridintegrate(topoint,xim,xcell,xip,yjm,ycell,yjp)
 c=====================================================================
+
+c *** Removed topo_module variables from calling sequence 
 
 c *** Note: xcell and ycell are no longer needed -- should be removed.
 
-      use topo_module, only: rectintegral, intersection
-
+      use topo_module, only: rectintegral,intersection, topowork
+      use topo_module, only: xlowtopo,xhitopo,ylowtopo,yhitopo           
+      use topo_module, only: dxtopo,dytopo
+      use topo_module, only: mxtopo,mytopo,mtopoorder,i0topo,mtopofiles
+      
       implicit double precision (a-h,o-z)
 
-      dimension topo(mtoposize)
-
-      dimension xlowtopo(mtopofiles)
-      dimension ylowtopo(mtopofiles)
-      dimension xhitopo(mtopofiles)
-      dimension yhitopo(mtopofiles)
-      dimension dxtopo(mtopofiles)
-      dimension dytopo(mtopofiles)
-
-      dimension mxtopo(mtopofiles)
-      dimension mytopo(mtopofiles)
-
-      dimension mtopoorder(mtopofiles)
-      dimension i0topo(mtopofiles)
-      dimension mtopo(mtopofiles)
-
+      integer(kind=8) :: i0
 
 c     ##############################################################################
 c     cellgridintegrate integrates a unique surface, over a rectangular cell
@@ -65,7 +52,7 @@ c              !integrate surface and get out of here
                 topoint = topoint + topointegral(xmlo,xmhi,ymlo,
      &              ymhi,xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid),
      &              dytopo(mfid),mxtopo(mfid),mytopo(mfid),
-     &              topo(i0),im)
+     &              topowork(i0),im)
                return
             else
                go to 222
