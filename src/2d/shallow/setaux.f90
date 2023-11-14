@@ -161,11 +161,11 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
                         call wrap_coords(x,y,xperm,xper,xperp,yperm,yper, &
                                          yperp,dx,dy)
                         call cellgridintegrate(topo_integral,  &
-                                         xperm,xper,xperp,yperm,yper,yperp)
+                                               xperm,xperp,yperm,yperp)
                     endif
                 else
                     ! Cell does not extend outside of physical domain
-                    call cellgridintegrate(topo_integral,xm,x,xp,ym,y,yp)
+                    call cellgridintegrate(topo_integral,xm,xp,ym,yp)
                 endif
 
                 ! Correct for geometry
