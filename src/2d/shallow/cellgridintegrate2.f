@@ -1,10 +1,8 @@
 c====================================================================
-      subroutine cellgridintegrate(topoint,xim,xcell,xip,yjm,ycell,yjp)
+      subroutine cellgridintegrate(topoint,xim,xip,yjm,yjp)
 c=====================================================================
 
-c *** Removed topo_module variables from calling sequence 
-
-c *** Note: xcell and ycell are no longer needed -- should be removed.
+c *** Note topo_module variables are no longer in the calling sequence 
 
       use topo_module, only: rectintegral,intersection, topowork
       use topo_module, only: xlowtopo,xhitopo,ylowtopo,yhitopo           
@@ -21,7 +19,7 @@ c     defined from data from multiple regular Cartesian grids
 c     (using the finest data available in any region)
 c
 c     The rectangle has coords:
-c     xim <= x <= xip, yjm <= y <= yjp, with center (x,y) = (xcell, ycell)
+c     xim <= x <= xip, yjm <= y <= yjp
 c
 c     The intersection (with one particular grid has coords:
 c     xintlo <= x <= xinthi, yintlo <= y <= yinthi
