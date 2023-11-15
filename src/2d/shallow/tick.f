@@ -531,7 +531,7 @@ c             ! use same alg. as when setting refinement when first make new fin
        endif
 
        ! new STOP feature to do immediate checkpt and exit
-       inquire(FILE="STOP.txt",exist=stopFound) 
+       inquire(FILE="STOP",exist=stopFound) 
           if (stopFound) then
           write(*,*)"STOP file found. Checkpointing and Stopping"
           write(*,*)"REMEMBER to remove file before restarting"
