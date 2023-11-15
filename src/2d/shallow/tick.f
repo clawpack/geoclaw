@@ -391,15 +391,22 @@ c                same level goes again. check for ok time step
                     print *,"    old ntogo dt",ntogo(level),possk(level)
 
 c                   adjust time steps for this and finer levels
-                    ntogo(level) = ntogo(level) + 1
-                    possk(level) = (tlevel(level-1)-tlevel(level))/
-     .                             ntogo(level)
+
+                    ! try computing ntogo properly (worked better in BoussDev)
+                    ! (old way was to repeatedly increment by 1)
+                    new_ntogo = ceiling(((tlevel(level-1)
+     &                              -tlevel(level)) / dtnew(level)))
+                    new_ntogo = min(new_ntogo, ntogo(level)+10)
+                    ntogo(level) = new_ntogo
+                    possk(level) = (tlevel(level-1)-tlevel(level))
+     &                             / ntogo(level)
+                    write(*,*) "    NEW ntogo dt ",ntogo(level),
+     &                         possk(level)
                     if (varRefTime) then
-                       kratio(level-1) = ceiling(possk(level-1) /
-     .                                           possk(level))
+                      kratio(level-1) = ceiling(possk(level-1)
+     &                                  / possk(level))
                     endif
-                    print *,"    new ntogo dt ",ntogo(level),
-     &                      possk(level)
+
                     go to 106
                  endif
                  if (ntogo(level) .gt. 100) then
