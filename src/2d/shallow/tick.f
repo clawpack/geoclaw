@@ -428,19 +428,29 @@ c                   adjust time steps for this and finer levels
 
                     go to 106
                  endif
+
                  if (ntogo(level) .gt. 100) then
                      write(6,*) "**** Too many dt reductions ****"
                      write(6,*) "**** Stopping calculation   ****"
                      write(6,*) "**** ntogo = ",ntogo(level)
                      write(6,1006) intratx(level-1),intraty(level-1),
      &                             kratio(level-1),level
-                     write(6,*) "Writing checkpoint file at t = ",time
+ 602                 format("**** Writing checkpoint file at t = ",
+     &                      d16.6)
+                     write(6,602) time
+ 603                 format("**** Writing extra output frames for ",
+     &                      "debugging at level-1 =",i3,
+     &                      " and level =",i3)
+                     write(6,603) level-1, level
                      if (num_gauges .gt. 0) then
                         do ii = 1, num_gauges
                            call print_gauges_and_reset_nextLoc(ii)
                         end do
                      endif
-                     call check(ncycle,time,nvar,naux)
+                     call valout(level-1,level-1,tlevel(level-1),
+     &                           nvar,naux)                       
+                     call valout(level,level,tlevel(level),nvar,naux)
+                     !call outtre(lstart(level),.true.,nvar,naux)
                      stop
                  endif
 
