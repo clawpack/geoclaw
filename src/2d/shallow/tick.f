@@ -435,9 +435,6 @@ c                   adjust time steps for this and finer levels
                      write(6,*) "**** ntogo = ",ntogo(level)
                      write(6,1006) intratx(level-1),intraty(level-1),
      &                             kratio(level-1),level
- 602                 format("**** Writing checkpoint file at t = ",
-     &                      d16.6)
-                     write(6,602) time
  603                 format("**** Writing extra output frames for ",
      &                      "debugging at level-1 =",i3,
      &                      " and level =",i3)
