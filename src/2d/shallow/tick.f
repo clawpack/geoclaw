@@ -29,6 +29,7 @@ c
       real(kind=8) cpu_start,cpu_finish
       type(fgrid), pointer :: fg
       type(fgout_grid), pointer :: fgout
+      logical :: debug
 
 c
 c :::::::::::::::::::::::::::: TICK :::::::::::::::::::::::::::::
@@ -225,7 +226,24 @@ c
 
           call system_clock(clock_start,clock_rate)
           call cpu_time(cpu_start)
+          debug = .false.
+          if (debug) then
+              write(*,*)" before regrid lbase ",lbase," time ",
+     &                    tlevel(lbase)
+              !call valout(lbase+1,lfine,time,nvar,naux)
+              call valout(lbase,lfine,time,nvar,naux)
+          endif
           call regrid(nvar,lbase,cut,naux,start_time)
+
+          ! output new grids for debugging:
+          if (debug)
+     .    call valout(lbase+1,lfine,tlevel(lbase+1),nvar,naux)
+
+          if (debug) then
+              write(*,*)" after regrid at time ",tlevel(lbase)
+              !call valout(lbase+1,lfine,time,nvar,naux)
+              call valout(lbase,lfine,time,nvar,naux)
+          endif
           call system_clock(clock_finish,clock_rate)
           call cpu_time(cpu_finish)
           timeRegridding = timeRegridding + clock_finish - clock_start
@@ -240,7 +258,7 @@ c
 c  maybe finest level in existence has changed. reset counters.
 c
           if (rprint .and. lbase .lt. lfine) then
-             call outtre(lstart(lbase+1),.false.,nvar,naux)
+             call outtre(lstart(lbase+1),printout,nvar,naux)
           endif
  70       continue
           do 80  i  = lbase, lfine
@@ -306,6 +324,7 @@ c         ! time after step:
 
 
 c Output time info
+          timenew = tlevel(level)+possk(level)
           time_format = "(' AMRCLAW: level ',i2,'  CFL = ',e8.3," //
      &                  "'  dt = ',e10.4,  '  final t = ',e12.6)"
           if (display_landfall_time) then
@@ -348,7 +367,7 @@ c            #  check if should adjust finer grid time step to start wtih
 
 c         write(6,*) '+++ in tick, done with level',level,
 c    &               ' tlevel = ',tlevel(1:level)
-      
+
 c         When we reach here, we are done with grid patches at 
 c         the finest level with grids present at this time
 
