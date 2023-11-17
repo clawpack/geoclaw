@@ -28,7 +28,7 @@ def setplot(plotdata):
     plotaxes = plotfigure.new_plotaxes()
     plotaxes.axescmd = 'subplot(211)'
     plotaxes.xlimits = xlimits
-    plotaxes.ylimits = [-5,15]
+    #plotaxes.ylimits = [-5,15]
     plotaxes.title = 'Surface displacement'
     plotaxes.grid = True
     

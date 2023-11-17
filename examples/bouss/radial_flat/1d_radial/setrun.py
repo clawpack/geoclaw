@@ -75,7 +75,7 @@ def setrun(claw_pkg='geoclaw'):
     from clawpack.geoclaw.data import BoussData1D
     rundata.add_data(BoussData1D(),'bouss_data')
 
-    rundata.bouss_data.bouss_equations = 1   # 0=SWE, 1=MS, 2=SGN
+    rundata.bouss_data.bouss_equations = 2   # 0=SWE, 1=MS, 2=SGN
     rundata.bouss_data.bouss_min_depth = 1.  # depth to switch to SWE
 
 
@@ -118,7 +118,7 @@ def setrun(claw_pkg='geoclaw'):
     # Specify at what times the results should be written to fort.q files.
     # Note that the time integration stops after the final output time.
 
-    clawdata.output_style = 1
+    clawdata.output_style = 3
 
     if clawdata.output_style==1:
         # Output ntimes frames at equally spaced times up to tfinal:
@@ -134,8 +134,8 @@ def setrun(claw_pkg='geoclaw'):
 
     elif clawdata.output_style == 3:
         # Output every step_interval timesteps over total_steps timesteps:
-        clawdata.output_step_interval = 1
-        clawdata.total_steps = 10
+        clawdata.output_step_interval = 10
+        clawdata.total_steps = 100
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
 
