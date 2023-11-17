@@ -62,7 +62,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.upper[0] = 5e3           # xupper
 
     # Number of grid cells:
-    clawdata.num_cells[0] = 2001
+    clawdata.num_cells[0] = 5000
     
     rundata.grid_data.grid_type = 0    # uniform grid
     rundata.grid_data.monitor_fgmax = False  # record max h,s,etc in each cell?
