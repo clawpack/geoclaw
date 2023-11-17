@@ -2,7 +2,7 @@
 
 import os, sys
 
-from clawpack.geoclaw import geoplot
+from clawpack.visclaw import geoplot
 from clawpack.geoclaw.nonuniform_grid_tools import make_mapc2p
 import numpy
 from scipy import fft
@@ -110,7 +110,7 @@ def setplot(plotdata):
     plotitem.mapc2p = mapc2p1
 
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = geoplot.velocity
+    plotitem.plot_var = geoplot.u_velocity
     plotitem.color = 'b'
     plotitem.MappedGrid = True
     plotitem.mapc2p = mapc2p1
@@ -118,7 +118,7 @@ def setplot(plotdata):
     if outdir2 is not None:
         plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
         plotitem.outdir = outdir2
-        plotitem.plot_var = geoplot.velocity
+        plotitem.plot_var = geoplot.u_velocity
         plotitem.color = 'r'
         plotitem.MappedGrid = True
         plotitem.mapc2p = mapc2p1
