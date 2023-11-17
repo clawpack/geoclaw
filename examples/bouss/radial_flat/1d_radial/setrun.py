@@ -59,7 +59,7 @@ def setrun(claw_pkg='geoclaw'):
     # define the mapping to the physical domain
 
     clawdata.lower[0] = 0.          # xlower
-    clawdata.upper[0] = 40.           # xupper
+    clawdata.upper[0] = 12e3           # xupper
 
     # Number of grid cells:
     clawdata.num_cells[0] = 2001
@@ -118,13 +118,13 @@ def setrun(claw_pkg='geoclaw'):
     # Specify at what times the results should be written to fort.q files.
     # Note that the time integration stops after the final output time.
 
-    clawdata.output_style = 3
+    clawdata.output_style = 1
 
     if clawdata.output_style==1:
         # Output ntimes frames at equally spaced times up to tfinal:
         # Can specify num_output_times = 0 for no output
         clawdata.num_output_times = 20
-        clawdata.tfinal = 4.
+        clawdata.tfinal = 200.
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:
@@ -244,7 +244,8 @@ def setrun(claw_pkg='geoclaw'):
     geo_data.coordinate_system = -1  # radial (meters)
 
     topo_data = rundata.topo_data
-    topo_data.topofiles.append([1, 'flat.tt1'])
+    #topo_data.topofiles.append([1, 'flat3000.tt1'])
+    topo_data.topofiles.append([1, 'flat100.tt1'])
 
 
     # ---------------
