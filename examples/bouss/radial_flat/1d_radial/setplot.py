@@ -8,9 +8,9 @@ from scipy import fft
 from numpy import exp,cos,pi
 from pylab import figure,clf,plot,title
 
-xlimits = [0, 12e3]
+xlimits = [0, 5e3]
 
-#outdir2 = '_output_sgna'  # second outdir for comparison plots, if desired
+#outdir2 = '_output_100m_sgn'  # second outdir for comparison plots, if desired
 outdir2 = None
 
 

@@ -20,7 +20,7 @@ subroutine qinit(meqn,mbc,mx,xlower,dx,q,maux,aux)
 
     real(kind=8) :: eta, width, x0, ampl, wavelength, pi, freq
 
-    width = 1.d3    ! controls width of Gaussian
+    width = 100.    ! controls width of Gaussian
     x0 = 0.d0   ! initial location of Gaussian
     ampl = 5.0d0  ! amplitude
     !wavelength = 10d3
