@@ -17,6 +17,9 @@ except:
 # Scratch directory for storing topo and dtopo files:
 scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
 
+# used to create ruled rectangle:
+from clawpack.amrclaw import region_tools
+
 
 #------------------------------
 def setrun(claw_pkg='geoclaw'):
@@ -73,13 +76,13 @@ def setrun(claw_pkg='geoclaw'):
 
     # Lower and upper edge of computational domain:
     clawdata.lower[0] =   0.         # xlower
-    clawdata.upper[0] =  40.         # xupper
+    clawdata.upper[0] = 5000.        # xupper
     clawdata.lower[1] =   0.         # ylower
-    clawdata.upper[1] =  40.         # yupper
+    clawdata.upper[1] = 5000.        # yupper
     
     # Number of grid cells:
-    clawdata.num_cells[0] = 80      # mx
-    clawdata.num_cells[1] = 80      # my
+    clawdata.num_cells[0] = 100      # mx
+    clawdata.num_cells[1] = 100      # my
     
 
     # ---------------
@@ -87,7 +90,6 @@ def setrun(claw_pkg='geoclaw'):
     # ---------------
 
     # Number of equations in the system:
-    #clawdata.num_eqn = 3
     clawdata.num_eqn = 5
 
     # Number of auxiliary variables in the aux array (initialized in setaux)
@@ -127,7 +129,7 @@ def setrun(claw_pkg='geoclaw'):
         # Output ntimes frames at equally spaced times up to tfinal:
         # Can specify num_output_times = 0 for no output
         clawdata.num_output_times = 20
-        clawdata.tfinal = 4.
+        clawdata.tfinal = 200.
         clawdata.output_t0 = True  # output at initial (or restart) time?
         
     elif clawdata.output_style == 2:
@@ -294,12 +296,12 @@ def setrun(claw_pkg='geoclaw'):
     amrdata.max1d = 60
 
     # max number of refinement levels:
-    amrdata.amr_levels_max = 2
+    amrdata.amr_levels_max = 3
 
     # List of refinement ratios at each level (length at least amr_level_max-1)
-    amrdata.refinement_ratios_x = [4]
-    amrdata.refinement_ratios_y = [4]
-    amrdata.refinement_ratios_t = [4]
+    amrdata.refinement_ratios_x = [4,2]
+    amrdata.refinement_ratios_y = [4,2]
+    amrdata.refinement_ratios_t = [4,2]
 
     # Specify type of each aux variable in amrdata.auxtype.
     # This must be a list of length num_aux, each element of which is one of:
@@ -335,12 +337,84 @@ def setrun(claw_pkg='geoclaw'):
 
 
     # ---------------
-    # Regions:
+    # AMR flagregions:
     # ---------------
-    regions = rundata.regiondata.regions 
-    # to specify regions of refinement append lines of the form
-    #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
 
+    flagregions = rundata.flagregiondata.flagregions  # initialized to []
+
+
+    # now append as many flagregions as desired to this list:
+    from clawpack.amrclaw.data import FlagRegion
+
+    # The entire domain restricted to level 1 for illustration:
+    # Note that this is a rectangle specified in the new way:
+    # (other regions below will force/allow more refinement)
+    flagregion = FlagRegion(num_dim=2)
+    flagregion.name = 'Region_domain'
+    flagregion.minlevel = 1
+    flagregion.maxlevel = 1
+    flagregion.t1 = 0.
+    flagregion.t2 = 1e9
+    flagregion.spatial_region_type = 1  # Rectangle
+    flagregion.spatial_region = [clawdata.lower[0], clawdata.upper[0], \
+                                 clawdata.lower[1], clawdata.upper[1]]
+    flagregions.append(flagregion)
+
+    # A ruled rectangle covering abs(x-y) < 1000:
+    flagregion = FlagRegion(num_dim=2)
+    flagregion.name = 'Region_diagonal'
+    flagregion.minlevel = 1
+    flagregion.maxlevel = 2
+    flagregion.t1 = 0.
+    flagregion.t2 = 1e9
+    flagregion.spatial_region_type = 2  # Ruled Rectangle
+    flagregion.spatial_region_file = \
+            os.path.abspath('RuledRectangle_Diagonal.data')
+    flagregions.append(flagregion)
+
+    # code to make RuledRectangle_Diagonal.data:
+    rr = region_tools.RuledRectangle()
+    rr.method = 1 # piecewiselinear edges between s values
+    rr.ixy = 'x'  # so s refers to x, lower & upper are limits in y
+    rr.s = np.array([0, 5000.])
+    rr.lower = np.array([-1000, 4000.])
+    rr.upper = np.array([1000., 6000.])
+    rr.write('RuledRectangle_Diagonal.data')
+
+    # Region near the origin where level 3 is allowed:
+    flagregion = FlagRegion(num_dim=2)
+    flagregion.name = 'Region_domain'
+    flagregion.minlevel = 1
+    flagregion.maxlevel = 3
+    flagregion.t1 = 0.
+    flagregion.t2 = 1e9
+    flagregion.spatial_region_type = 1  # Rectangle
+    flagregion.spatial_region = [0,1000,0,1000]
+    flagregions.append(flagregion)
+
+
+    # A ruled rectangle covering abs(x-y) < 1000 for x,y < 2000:
+    # Only relevant if amr_levels_max >= 3 to capture trailing waves better
+    flagregion = FlagRegion(num_dim=2)
+    flagregion.name = 'Region_diagonal2'
+    flagregion.minlevel = 1
+    flagregion.maxlevel = 3
+    flagregion.t1 = 0.
+    flagregion.t2 = 1e9
+    flagregion.spatial_region_type = 2  # Ruled Rectangle
+    flagregion.spatial_region_file = \
+            os.path.abspath('RuledRectangle_Diagonal2.data')
+    #flagregions.append(flagregion)
+
+
+    # code to make RuledRectangle_Diagonal2.data:
+    rr = region_tools.RuledRectangle()
+    rr.method = 1 # piecewiselinear edges between s values
+    rr.ixy = 'x'  # so s refers to x, lower & upper are limits in y
+    rr.s = np.array([0, 1000., 2000.])
+    rr.lower = np.array([0, 0, 2000.])
+    rr.upper = np.array([1000., 2000., 2000.])
+    rr.write('RuledRectangle_Diagonal2.data')
 
     #  ----- For developers ----- 
     # Toggle debugging print statements:
@@ -391,7 +465,7 @@ def setgeo(rundata):
     # Refinement settings
     refinement_data = rundata.refinement_data
     refinement_data.variable_dt_refinement_ratios = True
-    refinement_data.wave_tolerance = 0.1
+    refinement_data.wave_tolerance = 0.02
 
     # == settopo.data values ==
 
@@ -400,7 +474,7 @@ def setgeo(rundata):
     # for topography, append lines of the form
     #    [topotype, fname]
 
-    topofiles.append([1, 'flat.tt1'])
+    topofiles.append([1, 'flat100.tt1'])
 
 
     # == setdtopo.data values ==

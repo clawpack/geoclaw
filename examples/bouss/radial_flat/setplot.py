@@ -21,7 +21,7 @@ print('Comparing to 1d solution in ', outdir_1d)
 
 
 xmin = 0.
-xmax = 40.
+xmax = 5000.
 
 
 
@@ -75,12 +75,12 @@ def setplot(plotdata=None):
     #plotitem.show = False
     plotitem.plot_var = geoplot.surface_or_depth
     plotitem.pcolor_cmap = geoplot.tsunami_colormap
-    plotitem.pcolor_cmin = -4.
-    plotitem.pcolor_cmax = 4.
+    plotitem.pcolor_cmin = -0.1
+    plotitem.pcolor_cmax = 0.1
     plotitem.add_colorbar = True
     plotitem.amr_celledges_show = [0,0,0]
     plotitem.amr_patchedges_show = [0,1,1,1]
-    plotitem.amr_patchedges_color = ['r','m','b','k']
+    plotitem.amr_patchedges_color = ['r','yellow','w','k']
     
 
     #-----------------------------------------
@@ -130,7 +130,7 @@ def setplot(plotdata=None):
         xlabel('radial distance')
         #xlim(0,xmax)
         xlim(xmin,xmax)
-        #ylim(-15,15)
+        ylim(-0.5,0.5)
         grid(True)
     plotaxes.afteraxes = plot_xsec
 

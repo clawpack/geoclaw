@@ -59,10 +59,10 @@ def setrun(claw_pkg='geoclaw'):
     # define the mapping to the physical domain
 
     clawdata.lower[0] = 0.          # xlower
-    clawdata.upper[0] = 5e3           # xupper
+    clawdata.upper[0] = 7e3           # xupper
 
     # Number of grid cells:
-    clawdata.num_cells[0] = 5000
+    clawdata.num_cells[0] = 3500
     
     rundata.grid_data.grid_type = 0    # uniform grid
     rundata.grid_data.monitor_fgmax = False  # record max h,s,etc in each cell?
@@ -123,8 +123,8 @@ def setrun(claw_pkg='geoclaw'):
     if clawdata.output_style==1:
         # Output ntimes frames at equally spaced times up to tfinal:
         # Can specify num_output_times = 0 for no output
-        clawdata.num_output_times = 12
-        clawdata.tfinal = 120.
+        clawdata.num_output_times = 24
+        clawdata.tfinal = 240.
         clawdata.output_t0 = True  # output at initial (or restart) time?
 
     elif clawdata.output_style == 2:

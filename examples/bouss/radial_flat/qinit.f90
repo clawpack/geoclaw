@@ -21,8 +21,8 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
 
     real(kind=8) :: eta, width, ampl
 
-    width = 2.d0    ! controls width of Gaussian
-    r0 = 10.d0   ! initial radius of Gaussian
+    width = 100.d0    ! controls width of Gaussian
+    r0 = 0.d0   ! initial radius of Gaussian
     ampl = 5.0d0  ! amplitude
 
     ! Set flat state based on sea_level
