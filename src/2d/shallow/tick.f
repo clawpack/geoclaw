@@ -29,6 +29,7 @@ c
       real(kind=8) cpu_start,cpu_finish
       type(fgrid), pointer :: fg
       type(fgout_grid), pointer :: fgout
+      logical :: debug
 
 c
 c :::::::::::::::::::::::::::: TICK :::::::::::::::::::::::::::::
@@ -225,7 +226,24 @@ c
 
           call system_clock(clock_start,clock_rate)
           call cpu_time(cpu_start)
+          debug = .false.
+          if (debug) then
+              write(*,*)" before regrid lbase ",lbase," time ",
+     &                    tlevel(lbase)
+              !call valout(lbase+1,lfine,time,nvar,naux)
+              call valout(lbase,lfine,time,nvar,naux)
+          endif
           call regrid(nvar,lbase,cut,naux,start_time)
+
+          ! output new grids for debugging:
+          if (debug)
+     .    call valout(lbase+1,lfine,tlevel(lbase+1),nvar,naux)
+
+          if (debug) then
+              write(*,*)" after regrid at time ",tlevel(lbase)
+              !call valout(lbase+1,lfine,time,nvar,naux)
+              call valout(lbase,lfine,time,nvar,naux)
+          endif
           call system_clock(clock_finish,clock_rate)
           call cpu_time(cpu_finish)
           timeRegridding = timeRegridding + clock_finish - clock_start
@@ -240,7 +258,7 @@ c
 c  maybe finest level in existence has changed. reset counters.
 c
           if (rprint .and. lbase .lt. lfine) then
-             call outtre(lstart(lbase+1),.false.,nvar,naux)
+             call outtre(lstart(lbase+1),printout,nvar,naux)
           endif
  70       continue
           do 80  i  = lbase, lfine
@@ -306,6 +324,7 @@ c         ! time after step:
 
 
 c Output time info
+          timenew = tlevel(level)+possk(level)
           time_format = "(' AMRCLAW: level ',i2,'  CFL = ',e8.3," //
      &                  "'  dt = ',e10.4,  '  final t = ',e12.6)"
           if (display_landfall_time) then
@@ -348,7 +367,7 @@ c            #  check if should adjust finer grid time step to start wtih
 
 c         write(6,*) '+++ in tick, done with level',level,
 c    &               ' tlevel = ',tlevel(1:level)
-      
+
 c         When we reach here, we are done with grid patches at 
 c         the finest level with grids present at this time
 
@@ -391,30 +410,44 @@ c                same level goes again. check for ok time step
                     print *,"    old ntogo dt",ntogo(level),possk(level)
 
 c                   adjust time steps for this and finer levels
-                    ntogo(level) = ntogo(level) + 1
-                    possk(level) = (tlevel(level-1)-tlevel(level))/
-     .                             ntogo(level)
+
+                    ! try computing ntogo properly (worked better in BoussDev)
+                    ! (old way was to repeatedly increment by 1)
+                    new_ntogo = ceiling(((tlevel(level-1)
+     &                              -tlevel(level)) / dtnew(level)))
+                    new_ntogo = min(new_ntogo, ntogo(level)+10)
+                    ntogo(level) = new_ntogo
+                    possk(level) = (tlevel(level-1)-tlevel(level))
+     &                             / ntogo(level)
+                    write(*,*) "    NEW ntogo dt ",ntogo(level),
+     &                         possk(level)
                     if (varRefTime) then
-                       kratio(level-1) = ceiling(possk(level-1) /
-     .                                           possk(level))
+                      kratio(level-1) = ceiling(possk(level-1)
+     &                                  / possk(level))
                     endif
-                    print *,"    new ntogo dt ",ntogo(level),
-     &                      possk(level)
+
                     go to 106
                  endif
+
                  if (ntogo(level) .gt. 100) then
                      write(6,*) "**** Too many dt reductions ****"
                      write(6,*) "**** Stopping calculation   ****"
                      write(6,*) "**** ntogo = ",ntogo(level)
                      write(6,1006) intratx(level-1),intraty(level-1),
      &                             kratio(level-1),level
-                     write(6,*) "Writing checkpoint file at t = ",time
+ 603                 format("**** Writing extra output frames for ",
+     &                      "debugging at level-1 =",i3,
+     &                      " and level =",i3)
+                     write(6,603) level-1, level
                      if (num_gauges .gt. 0) then
                         do ii = 1, num_gauges
                            call print_gauges_and_reset_nextLoc(ii)
                         end do
                      endif
-                     call check(ncycle,time,nvar,naux)
+                     call valout(level-1,level-1,tlevel(level-1),
+     &                           nvar,naux)                       
+                     call valout(level,level,tlevel(level),nvar,naux)
+                     !call outtre(lstart(level),.true.,nvar,naux)
                      stop
                  endif
 
@@ -498,7 +531,7 @@ c             ! use same alg. as when setting refinement when first make new fin
        endif
 
        ! new STOP feature to do immediate checkpt and exit
-       inquire(FILE="STOP.txt",exist=stopFound) 
+       inquire(FILE="STOP",exist=stopFound) 
           if (stopFound) then
           write(*,*)"STOP file found. Checkpointing and Stopping"
           write(*,*)"REMEMBER to remove file before restarting"
