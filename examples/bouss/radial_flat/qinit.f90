@@ -1,9 +1,7 @@
 
 subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     
-    use qinit_module, only: qinit_type,add_perturbation
-    use geoclaw_module, only: sea_level, grav
-    use geoclaw_module, only: coordinate_system, earth_radius
+    use geoclaw_module, only: sea_level
     
     implicit none
     
@@ -14,10 +12,8 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
     
     ! Locals
-    integer :: i,j,m
-    real(kind=8) :: r0,x,y,r,hU
-    real(kind=8) :: cos_theta,sin_theta,a1,a2,u,theta,xx,yy
-    integer :: k
+    integer :: i,j
+    real(kind=8) :: r0,x,y,r
 
     real(kind=8) :: eta, width, ampl
 
