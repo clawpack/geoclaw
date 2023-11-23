@@ -1,0 +1,28 @@
+# options for PETSC using MPI
+# To use his file, set environment variable PETSC_OPTIONS to
+#       '-options_file  /path/to/this/file'
+
+# set numbers rows per rank  (default is 10000)
+#-pc_mpi_minimum_count_per_rank 10000
+
+# convergence criterion for linear solver:
+-mpi_ksp_rtol 1.e-9
+
+#-mpi_ksp_view_mat binary
+#-mpi_ksp_view_rhs binary
+#-start_in_debugger -debugger_rank 0
+-mpi_linear_solver_server
+#-mpi_ksp_monitor
+#-info
+-pc_type mpi
+-ksp_type preonly
+-mpi_pc_type gamg
+-mpi_ksp_type gmres
+-mpi_pc_gamg_symmetrize_graph true
+-mpi_pc_gamg_sym_graph true
+#-fp_trap off
+-mpi_linear_solver_server_view
+-mpi_ksp_max_it 200
+#-log_view
+-mpi_ksp_reuse_preconditioner
+#-mpi_ksp_monitor_true_residual

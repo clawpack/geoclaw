@@ -16,7 +16,9 @@ CLAW_PKG = geoclaw                  # Clawpack package to use
 # These environment variables need to be set properly, usually in your shell:
 #PETSC_DIR=/Users/rjl/git/Clones/petsc
 #PETSC_ARCH=arch-darwin-c-opt
-#PETSC_OPTIONS=-options_file $(PETSC_DIR)/petscMPIoptions
+
+# The file petscMPIoptions sets parameters for MPI and the iterative solver:
+PETSC_OPTIONS=-options_file $(CLAW)/geoclaw/examples/bouss/petscMPIoptions
 
 EXE = $(PWD)/xgeoclaw
 RUNEXE="${PETSC_ARCH}/bin/mpiexec -n 6 ${EXE}"
