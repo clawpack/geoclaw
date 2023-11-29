@@ -13,6 +13,7 @@ python_sources = {
     'kmltools.py',
     'marching_front.py',
     'most2geoclaw.py',
+    'nonuniform_grid_tools.py',
     'okada.py',
     'plotfg.py',
     'resolution.py',
