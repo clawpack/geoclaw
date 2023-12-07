@@ -33,7 +33,7 @@ the full 8 digits if you want it transparent).
  - kml_region - used internally
  - kml_gauge - used internally
  - kml_png - used internally
- - strip_archive_extensions - strip off things like .tar or .gz
+ - kml_cb - used internally
 """
 
 try:
