@@ -13,6 +13,8 @@ Module provides provides utility functions.
  - dist_latlong2meters - Convert dx, dy distance in degrees to meters
  - haversine - Calculate the haversine based great circle distance
  - inv_haversine - Inverts the haversine distance
+ - bearing - Compute the bearing from on location to another
+ - gctransect - Compute a set of points on the great circle between two points
  - fetch_noaa_tide_data - Fetches water levels and tide predictions
 """
 
@@ -194,6 +196,76 @@ def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
 
     return beta
     
+def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
+    """
+    Given (longitude,latitude) pairs (x1,y1), (x2,y2) and npts
+    Compute (x,y) for npts equally spaced points on the great circle connecting
+    them.
+    
+    If coords='W' the points will all have -2*pi < x <= 0.
+    If coords='E' the points will all have -0 <= x < 2*pi.
+    With continuity at the date line x = \pm pi.
+
+    Based on https://math.stackexchange.com/questions/1783746/equation-of-a-great-circle-passing-through-two-points
+    """
+    from numpy import pi,sin,cos,arcsin,sqrt,arctan2,array,dot,zeros,linspace
+    
+    assert coords in ['E','W'], '*** coords must be E or W'
+    assert units in ['radians','degrees'], '*** units must be degrees or radians'
+    
+    d2r = pi/180
+    if units=='degrees':
+        # convert to radians:
+        x1 = x1 * d2r
+        y1 = y1 * d2r
+        x2 = x2 * d2r
+        y2 = y2 * d2r    
+
+    # compute Cartesian coordinates in 3D:
+    V1 = array([cos(x1)*cos(y1), sin(x1)*cos(y1), sin(y1)])
+    V2 = array([cos(x2)*cos(y2), sin(x2)*cos(y2), sin(y2)])
+    d = dot(V1,V2)
+    beta = sqrt(1/(1-d**2))
+    alpha = -beta*d
+    #print('d = %.6f, alpha = %.6f, beta = %.6f' % (d,alpha,beta))
+    W1 = alpha*V1 + beta*V2
+    yW1 = arcsin(W1[2])
+    xW1 = arcsin(W1[1]/cos(yW1))
+    #print('W = ',xW1/d2r, yW1/d2r)
+    t2 = arcsin(1/beta)
+    if d<0: t2 = pi - t2
+    #print('t2 = %.6f' % t2)
+    t = linspace(0, t2, npts)
+    xtrans = zeros(npts)
+    ytrans = zeros(npts)
+    for j,tj in enumerate(t):
+        V = cos(tj)*V1 + sin(tj)*W1
+        yV = arcsin(V[2])        # latitude between -pi/2 and pi/2
+        xV = arctan2(V[1],V[0])  # longitude between -pi and pi
+
+        if coords == 'W' and V[1]>0:
+            # want -2*pi < xV <= 0, continuous at -pi
+            xV = xV - 2*pi
+        if coords == 'E' and V[1]<0:
+            # want 0 <= xV < 2*pi, continuous at pi
+            xV = xV + 2*pi    
+                    
+        if units=='degrees':
+            xV = xV/d2r
+            yV = yV/d2r
+        xtrans[j] = xV
+        ytrans[j] = yV
+        
+    if 0:
+        # debug:
+        print('     V1 = ',V1)
+        print('     V2 = ',V2)
+        print('Final V = ',V)
+        print('xtrans = ',xtrans)
+        print('ytrans = ',ytrans)
+    return xtrans, ytrans
+    
+
 
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
                          datum='STND', units='metric', cache_dir=None,
