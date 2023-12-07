@@ -167,7 +167,7 @@ def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
         u = U(r) * sin(beta)  # beta measured from North!
         v = U(r) * cos(beta)
     """
-    from math import atan2, degrees
+    from math import atan2, degrees, radians
 
     if units == 'degrees':
         # convert to radians:
@@ -192,7 +192,7 @@ def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
     elif bearing_units != 'degrees':
         raise Exception("unrecognized bearing_units")
 
-    return b
+    return beta
     
 
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
