@@ -206,7 +206,16 @@ def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
     If coords='E' the points will all have -0 <= x < 2*pi.
     With continuity at the date line x = \pm pi.
 
-    Based on https://math.stackexchange.com/questions/1783746/equation-of-a-great-circle-passing-through-two-points
+    Sample usage for 50 points on great circle from Tohoku to Crescent City:
+
+        from clawpack.geoclaw import util,kmltools
+        xtrans,ytrans = util.gctransect(142,37,-124.2,41.74,50,'W')
+        kmltools.transect2kml(xtrans,ytrans)
+        # then open transect.kml to view on Google Earth
+
+    Based in part on formulas in
+         https://math.stackexchange.com/questions/1783746
+
     """
     from numpy import pi,sin,cos,arcsin,sqrt,arctan2,array,dot,zeros,linspace
     
@@ -227,19 +236,20 @@ def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
     d = dot(V1,V2)
     beta = sqrt(1/(1-d**2))
     alpha = -beta*d
-    #print('d = %.6f, alpha = %.6f, beta = %.6f' % (d,alpha,beta))
-    W1 = alpha*V1 + beta*V2
-    yW1 = arcsin(W1[2])
-    xW1 = arcsin(W1[1]/cos(yW1))
-    #print('W = ',xW1/d2r, yW1/d2r)
+    W = alpha*V1 + beta*V2
+    yW = arcsin(W[2])
+    xW = arcsin(W[1]/cos(yW))
+
+    # compute transect points:
     t2 = arcsin(1/beta)
     if d<0: t2 = pi - t2
-    #print('t2 = %.6f' % t2)
     t = linspace(0, t2, npts)
+
     xtrans = zeros(npts)
     ytrans = zeros(npts)
+
     for j,tj in enumerate(t):
-        V = cos(tj)*V1 + sin(tj)*W1
+        V = cos(tj)*V1 + sin(tj)*W
         yV = arcsin(V[2])        # latitude between -pi/2 and pi/2
         xV = arctan2(V[1],V[0])  # longitude between -pi and pi
 
@@ -256,13 +266,6 @@ def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
         xtrans[j] = xV
         ytrans[j] = yV
         
-    if 0:
-        # debug:
-        print('     V1 = ',V1)
-        print('     V2 = ',V2)
-        print('Final V = ',V)
-        print('xtrans = ',xtrans)
-        print('ytrans = ',ytrans)
     return xtrans, ytrans
     
 
