@@ -95,7 +95,6 @@ subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
           endif
 
         index0_dtopowork = i0dtopo(m) + int(kdtopo-1, 8)*int(mxdtopo(m), 8)*int(mydtopo(m), 8)
-        !write(6,*) '+++ index0_dtopowork = ',index0_dtopowork
 
         ! Adjust eta_init by dtopo on part of patch that overlaps dtopo.
         ! Code below assumes dtopo is smooth enough that we can just 
@@ -111,7 +110,8 @@ subroutine set_eta_init(mbc,mx,my,xlow,ylow,dx,dy,t,veta)
                 idtopo = max(1, min(mxdtopo(m)-1, idtopo))
                 jdtopo = int(floor((yhidtopo(m)-y)/dydtopo(m))) + 1
                 jdtopo = max(1, min(mydtopo(m)-1, jdtopo))
-                ij = index0_dtopowork + int(jdtopo-1, 8)*int(mxdtopo(m) + idtopo-1, 8)
+                ij = index0_dtopowork + int(jdtopo-1, 8)*int(mxdtopo(m),8) &
+                                      + int(idtopo-1, 8)
 
                 veta(i,j) = veta(i,j) + dtopowork(ij)
 
