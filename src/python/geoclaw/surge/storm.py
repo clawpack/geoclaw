@@ -29,6 +29,7 @@ workflow in a `setrun.py` file would do the following:
     - JMA (reading only)
     - IMD (planned)
     - tcvitals (reading only)
+    - OWI (data-derived)
 """
 
 import warnings
@@ -1403,6 +1404,152 @@ def make_multi_structure(path):
                 fileWrite = open("Clipped_ATCFs/" + curTime + "/" + curTrack, 'w')
                 fileWrite.writelines(line)
     return stormDict
+
+
+class DataDerivedStorms(object):
+    """
+    Storm object to accommodate storms in the Oceanweather Inc. format.
+    The data is structured as wind and pressure files that contain the wind
+    and pressure fields for time steps every 15 minutes.
+
+    This storm object is initialized to read in both files and parse the data
+    into a netcdf file for reading with the data_storm_module.f90
+
+      :Attributes:
+     - *t* (list(datetime.datetiem)) Contains the time at which each entry of
+       the other arrays are at.  These are expected to be *datetime* objects.
+       Note that when written some formats require a *time_offset* to be set.
+     - *eye_location* (ndarray(:, :)) location of the eye of the storm.
+       Default units are in signed decimcal longitude and latitude.
+     - *max_wind_radius* (ndarray(:)) Radius at which the maximum wind speed
+       occurs. Calculated from wind speed arrays. Default units are meters.
+     - *storm_radius* (ndarray(:)) Radius of storm, often defined as the last
+       closed iso-bar of pressure. Calculated from pressure arrays.
+       Default units are meters.
+     - *wind_speed* (ndarray(:, :)) Wind speeds defined in every record, such
+       as 34kt, 50kt, 64kt, etc and their radii. Default units are meters/second
+       and meters.
+     - *pressure* (ndarray(:,,:)) Pressure arrays every 15 minutes for the region
+        of interest, Default units are bars
+     - *u* (ndarray(:,:)) Wind velocity in the x direction in arrays for every 15 minutes
+        Default units are m/s
+     - *v* (ndarray(:,:)) Wind velocity in the y direction in arrays for every 15 minutes
+        Default units are m/s
+    - *latitude* (ndarray(:,:)) Array of latitudes for the wind and pressure arrays
+    - *longitude* (ndarray(:,:)) Array of longitudes for the wind and pressure arrays
+
+
+    :Initialization:
+     1. Read in existing wind and pressure files at *path*.
+     2. Construct a data derived storm object and parse data into attributes using
+        data_storms.py for the parsing functions
+
+    :Input:
+     - *path* (string) Path to file to be read in if requested.
+     - *kwargs* (dict) Other key-word arguments are passed to the appropriate
+       read routine.
+    """
+
+    def __init__(self, path, wind_file_ext='WND', pressure_file_ext='PRE'):
+        """
+        This routine creates the DataStorm object, and loads the data from
+        file using data_storms.py
+
+        :param path: location and name of wind and pressure files
+        :param wind_file_ext: Extension for the wind file, either 'WND' or 'WIN'
+        :param wind_file_ext: Extension for the wind file, either 'WND' or 'WIN'
+        :param pressure_file_ext: Extension for the pressure file "PRE"
+        """
+        import data_storms
+        self.wind_ext = wind_file_ext
+        self.pres_ext = pressure_file_ext
+        self.wind_data = data_storms.read_oceanweather(path, self.wind_ext)
+        self.pressure_data = data_storms.read_oceanweather(path, self.pres_ext)
+        self.t = None
+        self.lat = None
+        self.lon = None
+        self.u = []
+        self.v = []
+        self.wind_speed = []
+        self.pressure = []
+        self.eye_inds = None
+        self.mwr = None
+        self.radius = None
+
+    def parse_data(self):
+        import data_storms
+        import numpy as np
+        import math
+        self.t = data_storms.time_steps(self.wind_data)
+        self.lat, self.lon = data_storms.get_coordinate_arrays(self.wind_data[0])
+
+        # Iterate over all data, each index = an individual time step
+        for winds, pressures in zip(self.wind_data, self.pressure_data):
+            # Process the wind and pressure matrix per time index into 2d arrays
+            u = data_storms.process_data(winds, start_idx=0)
+            v = data_storms.process_data(winds, start_idx=(winds.iLat*winds.iLong))
+            p = data_storms.process_data(pressures, start_idx=0)
+            # Put into lists for easy writing to dataarray
+            self.u.append(u)
+            self.pressure.append(p)
+            self.v.append(v)
+            self.wind_speed.append(np.sqrt(u**2 + v**2))
+            # Calculate the eye location for each time step
+        self.eye_inds = data_storms.find_eye(self.pressure)
+        self.radius = [data_storms.pressure_radius(self.lat, self.lon, p, eye)
+                       for p, eye in zip(self.pressure, self.eye_inds)]
+        self.radius = [self.radius[i] if not self.radius[i] == self.radius[i] else self.radius[i-1] for i
+                       in range(len(self.radius))]
+        self.mwr = [data_storms.calc_rmw(self.lat, self.lon, speed, eye)
+                    for speed, eye in zip(self.wind_speed, self.eye_inds)]
+
+    def write_data_derived(self, filename):
+        import xarray as xr
+        filtered_lists = [t for t in zip(self.eye_inds, self.u, self.v, self.pressure, self.wind_speed,
+                                                      self.radius, self.mwr, self.t) if t[0] is not None]
+        eyes, windx, windy, pressure, speed, radius, mwr, time = zip(*filtered_lists)
+        eyes = numpy.array(eyes)
+        eye_locs = [(self.lon[x], self.lat[y]) for y, x in eyes]
+        windx = numpy.array(windx)
+        windy = numpy.array(windy)
+        pressure = numpy.array(pressure)*100 # Convert to mbars
+        speed = numpy.array(speed)
+        radius = numpy.array(radius)
+        mwr = numpy.array(mwr)
+        time = numpy.array(time)
+
+        # indices = numpy.logical_not(numpy.isnan(self.eye_loc))
+        # windx = numpy.array(self.u[indices])
+        # windy = numpy.array(self.u[indices])
+        # pressure = numpy.array(self.pressure[indices])
+        # speed = numpy.array(self.wind_speed[indices])
+        # eyes = numpy.array(self.eye_loc[indices])
+        # radius = numpy.array(self.radius[indices])
+        # mwr = numpy.array(self.mwr[indices])
+        # time = numpy.array(self.t[indices])
+
+        ds = xr.Dataset(data_vars={'u': (('time', 'lat', 'lon'), windx),
+                                   'v': (('time', 'lat', 'lon'), windy),
+                                   'speed': (('time', 'lat', 'lon'), speed),
+                                   'pressure': (('time', 'lat', 'lon'), pressure),
+                                   'eye_loc': (('time', 'loc'), eye_locs),
+                                   'mwr': ('time', mwr),
+                                   'storm_radius': ('time', radius)}, # last closed isobar
+                        coords={'lat': self.lat,
+                                'lon': self.lon,
+                                'time': time})
+
+
+        ds.to_netcdf(filename + '.nc')
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
