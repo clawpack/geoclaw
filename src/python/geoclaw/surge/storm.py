@@ -1498,8 +1498,8 @@ class DataDerivedStorms(object):
         self.eye_inds = data_storms.find_eye(self.pressure)
         self.radius = [data_storms.pressure_radius(self.lat, self.lon, p, eye)
                        for p, eye in zip(self.pressure, self.eye_inds)]
-        self.radius = [self.radius[i] if not self.radius[i] == self.radius[i] else self.radius[i-1] for i
-                       in range(len(self.radius))]
+        # self.radius = [self.radius[i] if not self.radius[i] == self.radius[i] else self.radius[i-1] for i
+        #                in range(len(self.radius))]
         self.mwr = [data_storms.calc_rmw(self.lat, self.lon, speed, eye)
                     for speed, eye in zip(self.wind_speed, self.eye_inds)]
 

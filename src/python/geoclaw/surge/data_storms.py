@@ -222,8 +222,10 @@ def pressure_radius(lat, lon, pressure, eye):
             lat2 = pair[1]
             lon2 = pair[0]
             dist.append(haversine(lat1, lon1, lat2, lon2))
+        print('Eye inds: ', eye, 'Dist', np.average(dist))
         return np.average(dist)
     else:
+        print('Returning none, ', eye)
         return None
 
 
