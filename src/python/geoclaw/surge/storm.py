@@ -1493,7 +1493,7 @@ class DataDerivedStorms(object):
         for winds, pressures in zip(self.wind_data, self.pressure_data):
             # Process the wind and pressure matrix per time index into 2d arrays
             u = data_storms.process_data(winds, start_idx=0)
-            v = data_storms.process_data(winds, start_idx=(winds.iLat*winds.iLong))
+            v = data_storms.process_data(winds, start_idx=(winds.i_lat * winds.i_long))
             p = data_storms.process_data(pressures, start_idx=0)
             # Put into lists for easy writing to a xarray dataarray
             self.u.append(u)
