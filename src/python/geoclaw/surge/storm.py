@@ -1495,28 +1495,28 @@ class DataDerivedStorms(object):
             self.v.append(v)
             self.wind_speed.append(np.sqrt(u**2 + v**2))
             # Calculate the eye location for each time step
-        self.eye_inds = data_storms.find_eye(self.pressure)
-        self.radius = [data_storms.pressure_radius(self.lat, self.lon, p, eye)
-                       for p, eye in zip(self.pressure, self.eye_inds)]
+        # self.eye_inds = data_storms.find_eye(self.pressure)
+        # self.radius = [data_storms.pressure_radius(self.lat, self.lon, p, eye)
+        #                for p, eye in zip(self.pressure, self.eye_inds)]
         # self.radius = [self.radius[i] if not self.radius[i] == self.radius[i] else self.radius[i-1] for i
         #                in range(len(self.radius))]
-        self.mwr = [data_storms.calc_rmw(self.lat, self.lon, speed, eye)
-                    for speed, eye in zip(self.wind_speed, self.eye_inds)]
+        # self.mwr = [data_storms.calc_rmw(self.lat, self.lon, speed, eye)
+        #             for speed, eye in zip(self.wind_speed, self.eye_inds)]
 
     def write_data_derived(self, filename):
         import xarray as xr
-        filtered_lists = [t for t in zip(self.eye_inds, self.u, self.v, self.pressure, self.wind_speed,
-                                                      self.radius, self.mwr, self.t) if t[0] is not None]
-        eyes, windx, windy, pressure, speed, radius, mwr, time = zip(*filtered_lists)
-        eyes = numpy.array(eyes)
-        eye_locs = [(self.lon[x], self.lat[y]) for y, x in eyes]
-        windx = numpy.array(windx)
-        windy = numpy.array(windy)
-        pressure = numpy.array(pressure)*100 # Convert to mbars
-        speed = numpy.array(speed)
-        radius = numpy.array(radius)
-        mwr = numpy.array(mwr)
-        time = numpy.array(time)
+        # filtered_lists = [t for t in zip(self.eye_inds, self.u, self.v, self.pressure, self.wind_speed,
+        #                                               self.radius, self.mwr, self.t) if t[0] is not None]
+        # eyes, windx, windy, pressure, speed, radius, mwr, time = zip(*filtered_lists)
+        # eyes = numpy.array(eyes)
+        # eye_locs = [(self.lon[x], self.lat[y]) for y, x in eyes]
+        windx = numpy.array(self.u)
+        windy = numpy.array(self.v)
+        pressure = numpy.array(self.pressure)*100 # Convert to mbars
+        speed = numpy.array(self.wind_speed)
+        # radius = numpy.array(radius)
+        # mwr = numpy.array(mwr)
+        time = numpy.array(self.t)
 
         # indices = numpy.logical_not(numpy.isnan(self.eye_loc))
         # windx = numpy.array(self.u[indices])
@@ -1532,9 +1532,10 @@ class DataDerivedStorms(object):
                                    'v': (('time', 'lat', 'lon'), windy),
                                    'speed': (('time', 'lat', 'lon'), speed),
                                    'pressure': (('time', 'lat', 'lon'), pressure),
-                                   'eye_loc': (('time', 'loc'), eye_locs),
-                                   'mwr': ('time', mwr),
-                                   'storm_radius': ('time', radius)}, # last closed isobar
+                                   # 'eye_loc': (('time', 'loc'), eye_locs),
+                                   # 'mwr': ('time', mwr),
+                                   # 'storm_radius': ('time', radius)
+                                   }, # last closed isobar
                         coords={'lat': self.lat,
                                 'lon': self.lon,
                                 'time': time})
