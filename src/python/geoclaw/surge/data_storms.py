@@ -131,7 +131,7 @@ def find_last_closed_isobar(lat, lon, pressure_array, eye):
     lev = [950, 960, 970, 980, 990, 1000, 1005, 1010]
     contour = plt.contour(lon, lat, pressure_array, levels=lev)
 
-    target_value = 1000
+    target_value = 1005
     tolerance = 1.0
 
     #Extract contour indices
