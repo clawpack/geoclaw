@@ -1,46 +1,54 @@
 import numpy as np
 from datetime import datetime
-import os
 from dataclasses import dataclass
 
-
+"""
+A suite of helper functions for parsing data derived storms in the Oceanweather fixed width format
+and converting to a DataDerivedStorm class for GeoClaw
+"""
 @dataclass
 # Creates a dataclass for holding the OWI data
 class StormData:
-    iLat: int  # number of latitude points
-    iLong: int  # number of longitude points
-    DX: float  # resolution in x direction
-    DY: float  # resolution in y direction
-    SWLat: float  # Initial Latitude point in SW corner
-    SWLon: float  # Initial Longitude point in SW corner
-    DT: datetime  # datestamp of current wind/pressure array
+    i_lat: int  # number of latitude points
+    i_long: int  # number of longitude points
+    dx: float  # resolution in x direction
+    dy: float  # resolution in y direction
+    sw_lat: float  # Initial Latitude point in SW corner
+    sw_lon: float  # Initial Longitude point in SW corner
+    dt: datetime  # datestamp of current wind/pressure array
     matrix: list  # placeholder for wind or pressure array
 
     def __post_init__(self):
         # Put everything in correct format
-        self.iLat = int(self.iLat)
-        self.iLong = int(self.iLong)
-        self.DX = float(self.DX)
-        self.DY = float(self.DY)
-        self.SWLat = float(self.SWLat)
-        self.SWLon = float(self.SWLon)
-        self.DT = datetime.strptime(self.DT, '%Y%m%d%H%M')
+        self.i_lat = int(self.i_lat) # Number of latitude points
+        self.i_long = int(self.i_long) # Number of longitude points
+        self.dx = float(self.dx) # resolution in x direction
+        self.dy = float(self.dy) # resolution in y direction
+        self.sw_lat = float(self.sw_lat) # Initial latitude point in sw corner
+        self.sw_lon = float(self.sw_lon) # Initial longitude point in sw corner
+
+        # Check if DT is not already a datetime object before conversion
+        if not isinstance(self.dt, datetime):
+            self.dt = datetime.strptime(self.dt, '%Y%m%d%H%M')
 
 def read_oceanweather(path, file_ext):
-    import data_storms
     import re
     """
         Reads in Oceanweather files and puts them into a dataclass for ease of data cleanup
+        
+        :param path: The path to the file.
+        :param file_ext: The file extension.
+        :return: A list of StormData objects.
         """
     subset = None
     all_data = []
-    fh = path + f'.{file_ext}'
+
     # Open file and use regex matching for parsing data
-    with open(fh, 'rt') as f:
+    with open("{path}.{file_ext}", 'rt') as f:
         input = f.readlines()
         print(type(input), len(input))
         for line in input:
-            if not line.startswith('Oceanweather'):  # Skip the file header
+            if not line.startswith('Oceanweather'):  # Skip the Oceanweather file header
                 # Find the header lines containing this pattern of characters
                 # Example from file: iLat= 105iLong=  97DX=0.2500DY=0.2500SWLat=22.00000SWLon=-82.0000DT=200007121200
                 # \w+: any unicode string
@@ -54,6 +62,7 @@ def read_oceanweather(path, file_ext):
                         # put data into dataclass
                         storm_data = StormData(**subset)
                         all_data.append(storm_data)
+
                     # Split apart the header data into separate values rather than the string
                     subset = {
                         x.replace(' ', '').split('=')[0]: x.replace(' ', '').split('=')[1]
@@ -76,170 +85,57 @@ def time_steps(data):
     :param data: wind or pressure data read from read_oceanweather
     :return: array of time steps with total length = length of data
     """
-    t0 = None
+    start_time = None
     time_array = []
-    total_time = data[-1].DT - data[0].DT
-    num_steps = int(round((total_time / len(data)).total_seconds() / 60))
     for idx, d in enumerate(data):
-        if not t0:
-            t0 = d.DT
-        t = d.DT
-        seconds_from_start = (t - t0).total_seconds()
+        if not start_time:
+            start_time = d.dt
+        t = d.dt
+        seconds_from_start = (t - start_time).total_seconds()
         time_array.append(seconds_from_start)
     return time_array
 
 
 def get_coordinate_arrays(data):
-    lat = [data.SWLat + i * data.DY for i in range(data.iLat)]
-    lon = [data.SWLon + i * data.DX for i in range(data.iLong)]
+    """
+    Creates a list of latitude and longitude points given the starting location in the sw corner
+    and uses the resolution and number of points per array
+    :param data: StormData
+    :return: list
+    """
+    lat = [data.sw_lat + i * data.dy for i in range(data.i_lat)]
+    lon = [data.sw_lon + i * data.dx for i in range(data.i_long)]
     return lat, lon
 
 def arrange_data(data):
+    """
+    Iterates over the entire matrix for a single timestep and formats the data
+    into a single array rather than a list of lists
+    :param data: StormData
+    :return: list
+    """
     data_list = [item for sublist in data.matrix for item in sublist]
     return data_list
 
 
 def process_data(data, start_idx=0):
+    """
+    Process wind and pressure data into a 2d array
+
+    :param data: StormData
+    :param start_idx: starting point depending on u or v direction
+    :return: Array
+    """
+    # Flatten list of lists into a single list
     values = arrange_data(data)
-    d = np.empty(shape=(data.iLong, data.iLat))
-    for j in range(data.iLat):
-        for i in range(data.iLong):
-            d[i,j] = values[start_idx + j * data.iLong + i]
+
+    #Fill 2d array with values
+    d = np.empty(shape=(data.i_long, data.i_lat))
+    for j in range(data.i_lat):
+        for i in range(data.i_long):
+            d[i,j] = values[start_idx + j * data.i_long + i]
     return d.T # Transpose to fit into the correct format for geoclaw
 
-def find_eye(pressure_data):
-    # Calculate the location of the eye for all pressure arrays
-    # Return None if the min pressure > 10000 because that
-    # means the storm's eye is outside the domain
-
-    # if pressure_data is in mbars or Pa
-    if len(str(int(pressure_data[0].max()))) == 4:
-        min_p = 990.00
-    else:
-        min_p = 99000.00
-    eye_locs = [np.unravel_index(np.argmin(pressure), pressure.shape)
-                if np.min(pressure) < min_p else None for pressure in pressure_data]
-
-
-    return eye_locs
-
-
-def find_last_closed_isobar(lat, lon, pressure_array, eye):
-    import matplotlib.pyplot as plt
-
-    # Use matplotlib contour function to find the closed contours of the pressure array
-    lev = [950, 960, 970, 980, 990, 1000, 1005, 1010]
-    contour = plt.contour(lon, lat, pressure_array, levels=lev)
-
-    target_value = 1005
-    tolerance = 1.0
-
-    #Extract contour indices
-    contour_inds = contour.collections
-    target_contour_index = -1
-    target_contour_indices = []
-
-    for idx, contour_set in enumerate(contour_inds):
-        for contour_line in contour_set.get_paths():
-            x_values = contour_line.vertices[:,0]
-            y_values = contour_line.vertices[:,1]
-            if abs(contour.levels[idx] - target_value) < tolerance:
-                target_contour_index = idx
-                target_contour_indices = list(zip(x_values, y_values))
-    # # Variables to store information about the largest closed contour
-    # max_closed_contour_index = -1
-    # max_closed_contour_area = 0
-    # max_closed_inds = []
-    # max_distance = 350000 # KM
-    #
-    # for idx, contour_set in enumerate(contour_inds):
-    #     for contour_line in contour_set.get_paths():
-    #         x_values = contour_line.vertices[:,0]
-    #         y_values = contour_line.vertices[:,1]
-    #
-    #         # Check if the contour is closed (first_point == last_point)
-    #         if x_values[0] == x_values[-1] and y_values[0] == y_values[-1]:
-    #             # Calcualte teh area of the closed contour
-    #             contour_area = np.abs(np.trapz(y_values, x_values))
-    #
-    #             # Check if the current closed contour is larger than the last
-    #             if contour_area > max_closed_contour_area:
-    #                 max_closed_contour_area = contour_area
-    #                 max_closed_contour_index = idx
-    #                 max_closed_inds = list(zip(x_values, y_values))
-    #
-    #
-    # if max_closed_contour_index == -1:
-    #     for idx, contour_set in enumerate(contour_inds):
-    #         for contour_line in contour_set.get_paths():
-    #             x_values = contour_line.vertices[:,0]
-    #             y_values = contour_line.vertices[:,1]
-    #
-    #             distance_to_point = [haversine(lat, lon, eye[0], eye[1])
-    #                                  for lat, lon in zip(y_values, x_values)]
-    #             print(distance_to_point)
-    #             if np.min(distance_to_point) < max_distance:
-    #                 contour_area = np.abs(np.trapz(y_values, x_values))
-    #
-    #                 if contour_area > max_closed_contour_area:
-    #                     max_closed_contour_area = contour_area
-    #                     max_closed_contour_index = idx
-    #                     max_closed_inds = list(zip(x_values, y_values))
-
-    return np.array(target_contour_indices)
-
-
-
-def haversine(lat1, lon1, lat2, lon2):
-    import math
-    # Radius of the Earth in kilometers
-    R = 6371000.0
-
-    # Convert latitude and longitude from degrees to radians
-    lat1 = math.radians(lat1)
-    lon1 = math.radians(abs(lon1))
-    lat2 = math.radians(lat2)
-    lon2 = math.radians(abs(lon2))
-
-    # Haversine formula
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    distance = R * c
-
-    return distance
-
-def pressure_radius(lat, lon, pressure, eye):
-    # Find the indices in all directions of the first time the pressure
-    # changes to atmospheric, calculate the average to return the storm radius
-    dist = []
-    if eye:
-        lat1 = lat[eye[0]]
-        lon1 = lon[eye[1]]
-        indices = find_last_closed_isobar(lat, lon, pressure, (lat1, lon1))
-        for pair in indices:
-            lat2 = pair[1]
-            lon2 = pair[0]
-            dist.append(haversine(lat1, lon1, lat2, lon2))
-        print('Eye inds: ', eye, 'Dist', np.average(dist))
-        return np.average(dist)
-    else:
-        print('Returning none, ', eye)
-        return None
-
-
-def calc_rmw(lat, lon, data, eye_loc):
-    if eye_loc:
-        y, x = np.unravel_index(data.argmax(), data.shape)
-        lat1 = lat[eye_loc[0]]
-        lon1 = lon[eye_loc[1]]
-        lat2 = lat[y]
-        lon2 = lon[x]
-        dist = haversine(lat1, lon1, lat2, lon2)
-        return dist
-    else:
-        return None
 
 
 
