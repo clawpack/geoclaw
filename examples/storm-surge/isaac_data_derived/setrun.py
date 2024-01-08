@@ -31,6 +31,35 @@ def seconds2days(seconds):
 scratch_dir = os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
 
 
+# Routines to get storm start and stop times from data_derived storms to
+# ensure that the eye is inside the basin of interest
+
+def get_storm_time(storm_file, lat, lon):
+    import xarray as xr
+    """
+    
+    :param storm_file: The storm input file in netcdf xarray format
+    :return: the first time step that the eye is inside the basin
+    """
+    ds = xr.open_dataset(storm_file)
+    #eye = ds.eye_loc.data
+    #lat_row = np.where(eye[:, 1] > lat)
+    #lon_row = np.where(eye[:, 0] < lon)
+    #idx = max(min(lat_row[0]), min(lon_row[0]))
+    #return int(ds.time.isel(time=idx).values)
+    return int(ds.time.isel(time=10).values)
+
+def get_storm_stop(storm_file):
+    import xarray as xr
+    """
+    Find last timestep of the dataset
+    :param storm_file: Storm data file in nc format
+    :return: Final Time step
+    """
+    ds = xr.open_dataset(storm_file)
+    return int(ds.time[-1].values)
+
+
 # ------------------------------
 def setrun(claw_pkg='geoclaw'):
 
@@ -98,7 +127,10 @@ def setrun(claw_pkg='geoclaw'):
     # -------------
     # Initial time:
     # -------------
-    clawdata.t0 = -days2seconds(2)
+    storm_file = os.path.join(scratch_dir, 'isaac_data_derived_v2.nc')
+    clawdata.t0 = get_storm_time(storm_file,
+                                 clawdata.lower[1], clawdata.upper[0])
+    time_start = clawdata.t0
 
     # Restart from checkpoint file of a previous run?
     # If restarting, t0 above should be from original run, and the
@@ -121,8 +153,9 @@ def setrun(claw_pkg='geoclaw'):
     if clawdata.output_style == 1:
         # Output nout frames at equally spaced times up to tfinal:
         # clawdata.tfinal = days2seconds(date2days('2008091400'))
-        clawdata.tfinal = days2seconds(1.5)
+        clawdata.tfinal = get_storm_stop(storm_file)
         recurrence = 4
+        time_final = clawdata.tfinal
         clawdata.num_output_times = int((clawdata.tfinal - clawdata.t0) *
                                         recurrence / (60**2 * 24))
 
@@ -173,7 +206,7 @@ def setrun(claw_pkg='geoclaw'):
     clawdata.cfl_max = 1.0
 
     # Maximum number of time steps to allow between output times:
-    clawdata.steps_max = 5000
+    clawdata.steps_max = 50000
 
     # ------------------
     # Method to be used:
@@ -313,6 +346,7 @@ def setrun(claw_pkg='geoclaw'):
     regions = rundata.regiondata.regions
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
+    rundata.regiondata.regions.append([1,2, 0, 864000, -99, -70, 8, 32])
     # Gauges from Ike AWR paper (2011 Dawson et al)
     rundata.gaugedata.gauges.append([1, -95.04, 29.07,
                                      rundata.clawdata.t0,
@@ -408,28 +442,28 @@ def setgeo(rundata):
     data.R_refine = [60.0e3, 40e3, 20e3]
 
     # Storm parameters - Parameterized storm (Holland 1980)
-    data.storm_specification_type = 'holland80'  # (type 1)
-    data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
-                                         'isaac.storm'))
+    data.storm_specification_type = -2  # (type 1)
+    data.storm_file = os.path.expandvars(os.path.join(scratch_dir,
+                                         'isaac_data_derived_v2.nc'))
 
-    # Convert ATCF data to GeoClaw format
-    clawutil.data.get_remote_file(
-                   "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-    atcf_path = os.path.join(scratch_dir, "bal092012.dat")
-    # Note that the get_remote_file function does not support gzip files which
-    # are not also tar files.  The following code handles this
-    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
-            open(atcf_path, 'w') as atcf_unzipped_file:
-        atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
-
-    # Uncomment/comment out to use the old version of the Ike storm file
-    isaac = Storm(path=atcf_path, file_format="ATCF")
-
-    # Calculate landfall time - Need to specify as the file above does not
-    # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
-    isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
-
-    isaac.write(data.storm_file, file_format='geoclaw')
+    # # Convert ATCF data to GeoClaw format
+    # clawutil.data.get_remote_file(
+    #                "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
+    # atcf_path = os.path.join(scratch_dir, "bal092012.dat")
+    # # Note that the get_remote_file function does not support gzip files which
+    # # are not also tar files.  The following code handles this
+    # with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+    #         open(atcf_path, 'w') as atcf_unzipped_file:
+    #     atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
+    #
+    # # Uncomment/comment out to use the old version of the Ike storm file
+    # isaac = Storm(path=atcf_path, file_format="ATCF")
+    #
+    # # Calculate landfall time - Need to specify as the file above does not
+    # # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
+    # isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+    #
+    # isaac.write(data.storm_file, file_format='geoclaw')
 
     # =======================
     #  Set Variable Friction
