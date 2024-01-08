@@ -137,6 +137,75 @@ def process_data(data, start_idx=0):
     return d.T # Transpose to fit into the correct format for geoclaw
 
 
+def write_OWI_output(data, filename, data_type='pressure'):
+    """
+    Writes wind and pressure field data to the specified file
+    :param data: array of wind or pressure data
+    :param filename: name of output file
+    :param data_type: type of data ('pressure' or 'wind')
+    :return: does not return anything
+
+    Data for this is a list of lists of all of the data sets
+    uu, vv = wind arrays in x and y directions, a list of 2d arrays at the resolution
+    provided by the data below shape = i_lat * i_long
+    pressure = pressure array, 2d list of arrays at the same resolution as the wind data
+    i_lat = number of latitude points in array
+    i_lon = number of longitude points in array
+    dx = resolution of longitude array
+    dy = resolution of latitude array
+    xlower = longitude of sw corner location of arrays
+    ylower = latitude of sw corner location of arrays
+    dt = list of time steps of the data
+
+
+    """
+    # Open file to write output
+    mode = 'w'
+    with open(filename, mode) as f:
+        if data_type == 'wind':
+            # Assuming data is a tuple (uu, vv)
+            uu, vv = data
+            for idx in range(len(uu)):
+                # Write uu data
+                write_wind(uu[idx],vv[idx], f, idx)
+
+                # Insert a new header
+                f.write(file_header + '\n')
+        else:  # 'pressure'
+            for idx, d in enumerate(data):
+                write_pressure(d, f, idx)
+
+def write_pressure(d, f, idx):
+    file_line2 = (f'iLat={i_lat}iLong={i_long}DX={dx:6.4f}DY={dy:6.4f}'
+                  f'SWLat={ylower:8.4f}SWLon={xlower:8.4f}DT={dt[idx]}')
+    f.write(file_line2 + '\n')
+    # flatten array in column first order to be read into fortran
+    flattened_array = d.T.flatten()
+    # iterate over each element to add to each line of the file
+    for i, value in enumerate(flattened_array):
+        f.write(f'{value:10.4f}')
+        # if index is 8 add a new line, or if its the last line of data add a new line
+        if (i+1) %8 == 0 or i==len(flattened_array) -1:
+            f.write('\n')
+
+def write_wind(uu, vv,f, idx):
+    file_line2 = (f'iLat={i_lat}iLong={i_long}DX={dx:6.4f}DY={dy:6.4f}'
+                  f'SWLat={ylower:8.4f}SWLon={xlower:8.4f}DT={dt[idx]}')
+    f.write(file_line2 + '\n')
+    # flatten array in column first order to be read into fortran
+    flat_u = uu.T.flatten()
+    flat_v = vv.T.flatten()
+    # iterate over each element to add to each line of the file
+    for i, value in enumerate(flat_u):
+        f.write(f'{value:10.4f}')
+        # if index is 8 add a new line, or if its the last line of data add a new line
+        if (i+1) %8 == 0 or i==len(flat_u) -1:
+            f.write('\n')
+    for i, value in enumerate(flat_v):
+        f.write(f'{value:10.4f}')
+        # if index is 8 add a new line, or if its the last line of data add a new line
+        if (i + 1) % 8 == 0 or i == len(flat_v) - 1:
+            f.write('\n')
 
 
 
