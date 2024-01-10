@@ -9,27 +9,24 @@ and converting to a DataDerivedStorm class for GeoClaw
 @dataclass
 # Creates a dataclass for holding the OWI data
 class StormData:
-    i_lat: int  # number of latitude points
-    i_long: int  # number of longitude points
-    dx: float  # resolution in x direction
-    dy: float  # resolution in y direction
-    sw_lat: float  # Initial Latitude point in SW corner
-    sw_lon: float  # Initial Longitude point in SW corner
-    dt: datetime  # datestamp of current wind/pressure array
+    iLat: int  # number of latitude points
+    iLong: int  # number of longitude points
+    DX: float  # resolution in x direction
+    DY: float  # resolution in y direction
+    SWLat: float  # Initial Latitude point in SW corner
+    SWLon: float  # Initial Longitude point in SW corner
+    DT: datetime  # datestamp of current wind/pressure array
     matrix: list  # placeholder for wind or pressure array
 
     def __post_init__(self):
         # Put everything in correct format
-        self.i_lat = int(self.i_lat) # Number of latitude points
-        self.i_long = int(self.i_long) # Number of longitude points
-        self.dx = float(self.dx) # resolution in x direction
-        self.dy = float(self.dy) # resolution in y direction
-        self.sw_lat = float(self.sw_lat) # Initial latitude point in sw corner
-        self.sw_lon = float(self.sw_lon) # Initial longitude point in sw corner
-
-        # Check if DT is not already a datetime object before conversion
-        if not isinstance(self.dt, datetime):
-            self.dt = datetime.strptime(self.dt, '%Y%m%d%H%M')
+        self.iLat = int(self.iLat)
+        self.iLong = int(self.iLong)
+        self.DX = float(self.DX)
+        self.DY = float(self.DY)
+        self.SWLat = float(self.SWLat)
+        self.SWLon = float(self.SWLon)
+        self.DT = datetime.strptime(self.DT, '%Y%m%d%H%M')
 
 def read_oceanweather(path, file_ext):
     import re
@@ -42,13 +39,13 @@ def read_oceanweather(path, file_ext):
         """
     subset = None
     all_data = []
-
+    fh = path + f'.{file_ext}'
     # Open file and use regex matching for parsing data
-    with open("{path}.{file_ext}", 'rt') as f:
+    with open(fh, 'rt') as f:
         input = f.readlines()
         print(type(input), len(input))
         for line in input:
-            if not line.startswith('Oceanweather'):  # Skip the Oceanweather file header
+            if not line.startswith('Oceanweather'):  # Skip the file header
                 # Find the header lines containing this pattern of characters
                 # Example from file: iLat= 105iLong=  97DX=0.2500DY=0.2500SWLat=22.00000SWLon=-82.0000DT=200007121200
                 # \w+: any unicode string
@@ -62,7 +59,6 @@ def read_oceanweather(path, file_ext):
                         # put data into dataclass
                         storm_data = StormData(**subset)
                         all_data.append(storm_data)
-
                     # Split apart the header data into separate values rather than the string
                     subset = {
                         x.replace(' ', '').split('=')[0]: x.replace(' ', '').split('=')[1]
@@ -85,13 +81,15 @@ def time_steps(data):
     :param data: wind or pressure data read from read_oceanweather
     :return: array of time steps with total length = length of data
     """
-    start_time = None
+    t0 = None
     time_array = []
+    total_time = data[-1].DT - data[0].DT
+    num_steps = int(round((total_time / len(data)).total_seconds() / 60))
     for idx, d in enumerate(data):
-        if not start_time:
-            start_time = d.dt
-        t = d.dt
-        seconds_from_start = (t - start_time).total_seconds()
+        if not t0:
+            t0 = d.DT
+        t = d.DT
+        seconds_from_start = (t - t0).total_seconds()
         time_array.append(seconds_from_start)
     return time_array
 
@@ -128,12 +126,10 @@ def process_data(data, start_idx=0):
     """
     # Flatten list of lists into a single list
     values = arrange_data(data)
-
-    #Fill 2d array with values
-    d = np.empty(shape=(data.i_long, data.i_lat))
-    for j in range(data.i_lat):
-        for i in range(data.i_long):
-            d[i,j] = values[start_idx + j * data.i_long + i]
+    d = np.empty(shape=(data.iLong, data.iLat))
+    for j in range(data.iLat):
+        for i in range(data.iLong):
+            d[i,j] = values[start_idx + j * data.iLong + i]
     return d.T # Transpose to fit into the correct format for geoclaw
 
 
