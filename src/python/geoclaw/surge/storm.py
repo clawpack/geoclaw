@@ -42,6 +42,7 @@ import numpy
 
 import clawpack.geoclaw.units as units
 import clawpack.clawutil.data
+from clawpack.geoclaw.surge import data_storms
 
 # =============================================================================
 #  Common acronyms across formats
@@ -1451,9 +1452,6 @@ class DataDerivedStorms(object):
         :param wind_file_ext: Extension for the wind file, either 'WND' or 'WIN'
         :param pressure_file_ext: Extension for the pressure file "PRE" or 'pre'
         """
-        # Import the helper/processing functions for data_storms
-        import data_storms
-
         # Set wind and pressure file extensions
         self.wind_ext = wind_file_ext
         self.pres_ext = pressure_file_ext
@@ -1472,7 +1470,7 @@ class DataDerivedStorms(object):
         self.wind_speed = [] # Placeholder for wind speed
 
     def parse_data(self):
-        import data_storms
+        
         import numpy as np
         """
         This method processes the wind and pressure data matrices, extracts the data for each time step,
@@ -1493,7 +1491,7 @@ class DataDerivedStorms(object):
         for winds, pressures in zip(self.wind_data, self.pressure_data):
             # Process the wind and pressure matrix per time index into 2d arrays
             u = data_storms.process_data(winds, start_idx=0)
-            v = data_storms.process_data(winds, start_idx=(winds.i_lat * winds.i_long))
+            v = data_storms.process_data(winds, start_idx=(winds.iLat * winds.iLong))
             p = data_storms.process_data(pressures, start_idx=0)
             # Put into lists for easy writing to a xarray dataarray
             self.u.append(u)

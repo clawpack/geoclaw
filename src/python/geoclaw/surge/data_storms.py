@@ -101,8 +101,8 @@ def get_coordinate_arrays(data):
     :param data: StormData
     :return: list
     """
-    lat = [data.sw_lat + i * data.dy for i in range(data.i_lat)]
-    lon = [data.sw_lon + i * data.dx for i in range(data.i_long)]
+    lat = [data.SWLat + i * data.DY for i in range(data.iLat)]
+    lon = [data.SWLon + i * data.DX for i in range(data.iLong)]
     return lat, lon
 
 def arrange_data(data):
