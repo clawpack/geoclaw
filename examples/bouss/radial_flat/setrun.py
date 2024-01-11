@@ -307,7 +307,6 @@ def setrun(claw_pkg='geoclaw'):
     # This must be a list of length num_aux, each element of which is one of:
     #   'center',  'capacity', 'xleft', or 'yleft'  (see documentation).
 
-    #amrdata.aux_type = ['center','capacity','yleft']
     amrdata.aux_type = ['center']
 
 
@@ -493,11 +492,11 @@ def setgeo(rundata):
 
     # To use Boussinesq solver, add bouss_data parameters here
     # Also make sure to use the correct Makefile pointing to bouss version
+    # and set clawdata.num_eqn = 5
+
     from clawpack.geoclaw.data import BoussData
     rundata.add_data(BoussData(),'bouss_data')
     
-    # CHECK ORDER!
-
     rundata.bouss_data.bouss_equations = 2    # 0=SWE, 1=MS, 2=SGN
     rundata.bouss_data.bouss_min_level = 1    # coarsest level to apply bouss
     rundata.bouss_data.bouss_max_level = 10   # finest level to apply bouss

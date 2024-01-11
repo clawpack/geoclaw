@@ -21,7 +21,7 @@ CLAW_PKG = geoclaw                  # Clawpack package to use
 PETSC_OPTIONS=-options_file $(CLAW)/geoclaw/examples/bouss/petscMPIoptions
 
 EXE = $(PWD)/xgeoclaw
-RUNEXE="${PETSC_ARCH}/bin/mpiexec -n 6 ${EXE}"
+RUNEXE="${PETSC_DIR}/${PETSC_ARCH}/bin/mpiexec -n 6"
 SETRUN_FILE = setrun.py           # File containing function to make data
 OUTDIR = _output                  # Directory for output
 SETPLOT_FILE = setplot.py         # File containing function to set plots
