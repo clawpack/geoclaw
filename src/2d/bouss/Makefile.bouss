@@ -24,7 +24,7 @@ COMMON_MODULES += \
  $(GEOLIB)/multilayer/multilayer_module.f90 \
  $(GEOLIB)/friction_module.f90 \
  $(GEOLIB)/adjointsup_module.f90 \
- $(BOUSSLIB)/fgout_module.f90 \
+ $(GEOLIB)/fgout_module.f90 \
  $(BOUSSLIB)/bouss_module.f90  \
 
 COMMON_SOURCES += \
