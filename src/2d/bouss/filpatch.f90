@@ -366,9 +366,9 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
 
         ! Momentum Interpolation (+ correction terms if 5 eqn model)
         do n = 2, nvar
-          slope = 0.d0  ! reinitialize for each var
-          do j_coarse = 2, my_coarse - 1
-            do i_coarse = 2, mx_coarse - 1
+            slope = 0.d0  ! reinitialize for each var
+            do j_coarse = 2, my_coarse - 1
+                do i_coarse = 2, mx_coarse - 1
 
                     ! Determine slopes for interpolation
                     down_slope = (valcrse(ivalc(n,i_coarse,j_coarse)) - valcrse(ivalc(n,i_coarse-1,j_coarse)))
