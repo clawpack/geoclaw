@@ -134,7 +134,7 @@ COMMON_SOURCES += \
   $(BOUSSLIB)/setgrd.f \
   $(BOUSSLIB)/gfixup.f \
   $(GEOLIB)/ginit.f \
-  $(BOUSSLIB)/getmaxspeed.f90 \
+  $(GEOLIB)/getmaxspeed.f90 \
   $(BOUSSLIB)/advanc_splitRev2Calls.f \
   $(BOUSSLIB)/amr2.f90 \
   $(GEOLIB)/fgmax_read.f90 \
