@@ -130,9 +130,9 @@ COMMON_SOURCES += \
   $(GEOLIB)/flag2refine2.f90  \
   $(GEOLIB)/b4step2.f90 \
   $(GEOLIB)/upbnd.f  \
-  $(BOUSSLIB)/tick.f \
+  $(GEOLIB)/tick.f \
   $(BOUSSLIB)/setgrd.f \
-  $(BOUSSLIB)/gfixup.f \
+  $(GEOLIB)/gfixup.f \
   $(GEOLIB)/ginit.f \
   $(GEOLIB)/getmaxspeed.f90 \
   $(BOUSSLIB)/advanc_splitRev2Calls.f \
