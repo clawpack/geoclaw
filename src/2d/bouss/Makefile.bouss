@@ -109,7 +109,7 @@ COMMON_SOURCES += \
   $(AMRLIB)/restrt_alloc.f90 \
   $(AMRLIB)/resize_alloc.f90 \
   $(GEOLIB)/setprob.f90 \
-  $(BOUSSLIB)/qinit.f90 \
+  $(GEOLIB)/qinit.f90 \
   $(GEOLIB)/topo_update.f90 \
   $(GEOLIB)/cellgridintegrate2.f \
   $(GEOLIB)/topointegral.f \
@@ -147,7 +147,7 @@ COMMON_SOURCES += \
   $(BOUSSLIB)/check.f \
   $(BOUSSLIB)/restrt.f \
   $(GEOLIB)/errest.f \
-  $(BOUSSLIB)/errf1.f \
+  $(GEOLIB)/errf1.f \
   $(GEOLIB)/coarsen.f \
   $(GEOLIB)/auxcoarsen.f \
   $(GEOLIB)/prepbigstep.f \
