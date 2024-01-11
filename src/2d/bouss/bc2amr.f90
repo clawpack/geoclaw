@@ -132,10 +132,6 @@ subroutine bc2amr(val,aux,nrow,ncol,meqn,naux, hx, hy, level, time,   &
                     do i=1, nxl
                         aux(:, i, j) = aux(:, nxl + 1, j)
                         val(:, i, j) = val(:, nxl + 1, j)
-                        if (meqn == 5) then
-                            ! set hu and hv corrections to 0 in ghost cells
-                            !val(4:5,i,j) = 0.d0
-                        endif
                     end do
                 end do
 
@@ -186,10 +182,6 @@ subroutine bc2amr(val,aux,nrow,ncol,meqn,naux, hx, hy, level, time,   &
                     do j = 1, ncol
                         aux(:, i, j) = aux(:, ibeg - 1, j)
                         val(:, i, j) = val(:, ibeg - 1, j)
-                        if (meqn == 5) then
-                            ! set hu and hv corrections to 0 in ghost cells
-                            !val(4:5,i,j) = 0.d0
-                        endif
                     end do
                 end do
 
@@ -241,12 +233,6 @@ subroutine bc2amr(val,aux,nrow,ncol,meqn,naux, hx, hy, level, time,   &
                     do i = 1, nrow
                         aux(:,i,j) = aux(:, i, nyb + 1)
                         val(:,i,j) = val(:, i, nyb + 1)
-                        !val(:,i,nyb+1-j) = 2.d0*val(:,i,nyb+2-j) - val(:,i,nyb+3-j)
-                        if (meqn == 5) then
-                            ! set hu and hv corrections to 0 in ghost cells
-                            !val(4:5,i,j) = 0.d0
-                            ! for linear test do second order extrap
-                        endif
                     end do
                 end do
 
@@ -299,12 +285,6 @@ subroutine bc2amr(val,aux,nrow,ncol,meqn,naux, hx, hy, level, time,   &
                     do i = 1, nrow
                         aux(:, i, j) = aux(:, i, jbeg - 1)
                         val(:, i, j) = val(:, i, jbeg - 1)
-                        !val(:,i,j) = 2.d0*val(:,i,j-1) - val(:,i,j-2)
-                        if (meqn == 5) then
-                            ! set hu and hv corrections to 0 in ghost cells
-                            !val(4:5,i,j) = 0.d0
-                            ! for linear test, do linear extrapolation for huc,hvc
-                        endif
                     end do
                 end do
 
