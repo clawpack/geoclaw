@@ -162,15 +162,15 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
 
             ! Output grids
             
-                    ! Round off if nearly zero
+            ! Round off if nearly zero 
             ! (Do this for all output_format's)
-                    forall (m = 1:num_eqn,                              &
-                            i=num_ghost + 1:num_cells(1) + num_ghost,   &
-                            j=num_ghost + 1:num_cells(2) + num_ghost,   &
-                            abs(alloc(iadd(m, i, j))) < 1d-90)
+            forall (m = 1:num_eqn,                              &
+                    i=num_ghost + 1:num_cells(1) + num_ghost,   &
+                    j=num_ghost + 1:num_cells(2) + num_ghost,   &
+                    abs(alloc(iadd(m, i, j))) < 1d-90)
 
-                        alloc(iadd(m, i, j)) = 0.d0
-                    end forall
+                alloc(iadd(m, i, j)) = 0.d0
+            end forall
 
             if (output_format == 1) then
                     ! ascii output
@@ -207,26 +207,26 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
 
                 ! Note: We are writing out ghost cell data also,
                 ! so need to update this
-                    call bound(time,num_eqn,num_ghost,alloc(q_loc),     &
-                                 num_cells(1) + 2*num_ghost,            &
-                                 num_cells(2) + 2*num_ghost,            &
-                                 grid_ptr,alloc(aux_loc),num_aux)
-
+                call bound(time,num_eqn,num_ghost,alloc(q_loc),     &
+                             num_cells(1) + 2*num_ghost,            &
+                             num_cells(2) + 2*num_ghost,            &
+                             grid_ptr,alloc(aux_loc),num_aux)
+                
                     
-                    ! Need to add eta to the output data
-                    allocate(qeta((num_eqn + 1)                         &
-                             * (num_cells(1) + 2 * num_ghost)           &
-                             * (num_cells(2) + 2 * num_ghost)))
-                    do j = 1, num_cells(2) + 2 * num_ghost
-                        do i = 1, num_cells(1) + 2 * num_ghost
-                            do m = 1, num_eqn
-                                qeta(iaddqeta(m, i, j)) = alloc(iadd(m, i, j))
-                            end do
-                            eta = alloc(iadd(1, i, j)) + alloc(iaddaux(1, i ,j))
-                            qeta(iaddqeta(num_eqn + 1, i, j)) = eta
+                ! Need to add eta to the output data
+                allocate(qeta((num_eqn + 1)                         &
+                         * (num_cells(1) + 2 * num_ghost)           &
+                         * (num_cells(2) + 2 * num_ghost)))
+                do j = 1, num_cells(2) + 2 * num_ghost
+                    do i = 1, num_cells(1) + 2 * num_ghost
+                        do m = 1, num_eqn
+                            qeta(iaddqeta(m, i, j)) = alloc(iadd(m, i, j))
                         end do
+                        eta = alloc(iadd(1, i, j)) + alloc(iaddaux(1, i ,j))
+                        qeta(iaddqeta(num_eqn + 1, i, j)) = eta
                     end do
-
+                end do
+                        
                 if (output_format==2) then
                     ! binary32 (shorten to 4-byte)
                     allocate(qeta4((num_eqn + 1)                         &
@@ -240,8 +240,8 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                     ! binary64 (full 8-byte)
                     write(binary_unit) qeta
                 endif
-
-                    deallocate(qeta)
+                
+                deallocate(qeta)
 
             else if (output_format == 4) then
                 ! HDF5 output
@@ -266,8 +266,8 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
                 call h5sclose_f(data_space, hdf_error)
 #endif
             else
-                    print *, "Unsupported output format", output_format,"."
-                    stop 
+                print *, "Unsupported output format", output_format,"."
+                stop 
 
             endif
             grid_ptr = node(levelptr, grid_ptr)
