@@ -127,7 +127,7 @@ COMMON_SOURCES += \
   $(BOUSSLIB)/bc2amr.f90 \
   $(BOUSSLIB)/update.f90 \
   $(GEOLIB)/setaux.f90 \
-  $(BOUSSLIB)/flag2refine2.f90  \
+  $(GEOLIB)/flag2refine2.f90  \
   $(GEOLIB)/b4step2.f90 \
   $(GEOLIB)/upbnd.f  \
   $(BOUSSLIB)/tick.f \
