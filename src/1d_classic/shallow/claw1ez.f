@@ -340,7 +340,7 @@ c
           open(unit=iunit_fgmax, file='fgmax.txt', status='unknown',
      &         form='formatted')
           write(iunit_fgmax,*) 
-     &          '# xcell, topo, hmax, smax, hssmax, arrival_time'
+     &          '# xcell, topo, hmax, smax, hssmax, etamax, arrival_time'
           do i=1,mx
              etamax = hmax(i) + aux(1,i)
              write(iunit_fgmax,451) xcell(i),aux(1,i),hmax(i),smax(i),
