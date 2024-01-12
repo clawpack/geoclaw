@@ -25,7 +25,7 @@ subroutine setaux(mbc,mx,xlower,dx,maux,aux)
     real(kind=8) :: xcell,a
 
     if (mx+1 .ne. mx_edge) then
-        write(6,*) 'mx_edge from grid.data must agree with mx+1'
+        write(6,*) 'mx_edge from celledges.data must agree with mx+1'
         write(6,*) 'mx_edge = ',mx_edge
         write(6,*) 'mx = ',mx
         stop
