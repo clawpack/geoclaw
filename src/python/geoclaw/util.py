@@ -13,6 +13,8 @@ Module provides provides utility functions.
  - dist_latlong2meters - Convert dx, dy distance in degrees to meters
  - haversine - Calculate the haversine based great circle distance
  - inv_haversine - Inverts the haversine distance
+ - bearing - Compute the bearing from on location to another
+ - gctransect - Compute a set of points on the great circle between two points
  - fetch_noaa_tide_data - Fetches water levels and tide predictions
 """
 
@@ -167,7 +169,7 @@ def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
         u = U(r) * sin(beta)  # beta measured from North!
         v = U(r) * cos(beta)
     """
-    from math import atan2, degrees
+    from math import atan2, degrees, radians
 
     if units == 'degrees':
         # convert to radians:
@@ -192,8 +194,81 @@ def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
     elif bearing_units != 'degrees':
         raise Exception("unrecognized bearing_units")
 
-    return b
+    return beta
     
+def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
+    """
+    Given (longitude,latitude) pairs (x1,y1), (x2,y2) and npts
+    Compute (x,y) for npts equally spaced points on the great circle connecting
+    them.
+    
+    If coords='W' the points will all have -2*pi < x <= 0.
+    If coords='E' the points will all have -0 <= x < 2*pi.
+    With continuity at the date line x = \pm pi.
+
+    Sample usage for 50 points on great circle from Tohoku to Crescent City:
+
+        from clawpack.geoclaw import util,kmltools
+        xtrans,ytrans = util.gctransect(142,37,-124.2,41.74,50,'W')
+        kmltools.transect2kml(xtrans,ytrans)
+        # then open transect.kml to view on Google Earth
+
+    Based in part on formulas in
+         https://math.stackexchange.com/questions/1783746
+
+    """
+    from numpy import pi,sin,cos,arcsin,sqrt,arctan2,array,dot,zeros,linspace
+    
+    assert coords in ['E','W'], '*** coords must be E or W'
+    assert units in ['radians','degrees'], '*** units must be degrees or radians'
+    
+    d2r = pi/180
+    if units=='degrees':
+        # convert to radians:
+        x1 = x1 * d2r
+        y1 = y1 * d2r
+        x2 = x2 * d2r
+        y2 = y2 * d2r    
+
+    # compute Cartesian coordinates in 3D:
+    V1 = array([cos(x1)*cos(y1), sin(x1)*cos(y1), sin(y1)])
+    V2 = array([cos(x2)*cos(y2), sin(x2)*cos(y2), sin(y2)])
+    d = dot(V1,V2)
+    beta = sqrt(1/(1-d**2))
+    alpha = -beta*d
+    W = alpha*V1 + beta*V2
+    yW = arcsin(W[2])
+    xW = arcsin(W[1]/cos(yW))
+
+    # compute transect points:
+    t2 = arcsin(1/beta)
+    if d<0: t2 = pi - t2
+    t = linspace(0, t2, npts)
+
+    xtrans = zeros(npts)
+    ytrans = zeros(npts)
+
+    for j,tj in enumerate(t):
+        V = cos(tj)*V1 + sin(tj)*W
+        yV = arcsin(V[2])        # latitude between -pi/2 and pi/2
+        xV = arctan2(V[1],V[0])  # longitude between -pi and pi
+
+        if coords == 'W' and V[1]>0:
+            # want -2*pi < xV <= 0, continuous at -pi
+            xV = xV - 2*pi
+        if coords == 'E' and V[1]<0:
+            # want 0 <= xV < 2*pi, continuous at pi
+            xV = xV + 2*pi    
+                    
+        if units=='degrees':
+            xV = xV/d2r
+            yV = yV/d2r
+        xtrans[j] = xV
+        ytrans[j] = yV
+        
+    return xtrans, ytrans
+    
+
 
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
                          datum='STND', units='metric', cache_dir=None,

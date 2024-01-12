@@ -27,13 +27,13 @@ the full 8 digits if you want it transparent).
  - png2kml - create kml file wrapping a png figure to be viewed on GE
  - kml_build_colorbar - create a colorbar to display on GE
  - topo2kmz - create kmz file showing onshore and offshore topography
+ - transect2kml - create kml file showing a set of points on a transect
  - kml_header - used internally
  - kml_footer - used internally
  - kml_region - used internally
  - kml_gauge - used internally
  - kml_png - used internally
-
- - strip_archive_extensions - strip off things like .tar or .gz
+ - kml_cb - used internally
 """
 
 try:
@@ -1498,3 +1498,55 @@ def topo2kmz(topo, zlim=(-20,20), mask_outside_zlim=True, sea_level=0.,
             zip.write(file) 
         print('Created %s' % os.path.abspath(fname_kmz))
     os.chdir(savedir)
+
+def transect2kml(xtrans, ytrans, fname='transect.kml'):
+    """
+    Create a kml file for points with long,lat specified by xtrans,ytrans.
+    Label each point with number and coordinates.
+    Adjust longitudes in coordinates so they are all between -180 and 180
+    to display properly in Google Earth (but labels are original values).
+    """
+
+    with open(fname,'w') as kml_file:
+           
+        kml_file.write("""<?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2"
+        xmlns:gx="http://www.google.com/kml/ext/2.2">
+        <Document><name>transect_points</name>
+        
+        <Style id="Red">
+        <IconStyle><color>FF0000FF</color></IconStyle>
+        </Style>
+        
+        <Style id="Yellow">
+        <IconStyle><color>FF00FFFF</color></IconStyle>
+        </Style>
+        """)
+            
+        for k in range(len(xtrans)):
+            x = xtrans[k]
+            y = ytrans[k]
+            if x < -180:
+                xge = x+360
+            elif x > 180:
+                xge = x-360
+            else:
+                xge = x
+            style_id = 'Red'
+            name = 'Transect point %i' % k
+            kml_file.write("""
+            <Placemark><name>%s</name>
+            <description>%.5f, %.5f</description>
+            <styleUrl>#%s</styleUrl>
+            <Point>
+            <coordinates>
+            %.9f, %.9f, 0.0
+            </coordinates>
+            </Point>
+            </Placemark>
+            """ % (name,x,y,style_id,xge,y))
+        
+        kml_file.write("\n</Document>\n</kml>")
+            
+    print('Created ', fname)
+    
