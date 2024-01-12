@@ -755,10 +755,10 @@ class BoussData(clawpack.clawutil.data.ClawData):
     def __init__(self):
         super(BoussData,self).__init__()
 
-        self.add_attribute('bouss_equations',True)
+        self.add_attribute('bouss_equations',2)
         self.add_attribute('bouss_min_level', 1)
         self.add_attribute('bouss_max_level', 10)
-        self.add_attribute('bouss_min_depth', 10)
+        self.add_attribute('bouss_min_depth', 10.)
         self.add_attribute('bouss_solver', 3)
         self.add_attribute('bouss_tstart', 0.)
 
