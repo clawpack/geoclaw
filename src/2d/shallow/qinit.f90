@@ -24,6 +24,7 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     real(kind=8) :: veta(1-mbc:mx+mbc,1-mbc:my+mbc)
     real(kind=8) :: ddxy
     
+    q = 0.d0   ! initialize all elements to 0
     
     if (variable_eta_init) then
         ! Set initial surface eta based on eta_init
@@ -31,8 +32,6 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
       else
         veta = sea_level  ! same value everywhere
       endif
-
-    q(2:3,:,:) = 0.d0   ! set momenta to zero
 
     forall(i=1:mx, j=1:my)
         q(1,i,j) = max(0.d0, veta(i,j) - aux(1,i,j))
@@ -68,18 +67,6 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
     ! Add perturbation to initial conditions
     if (qinit_type > 0) then
         call add_perturbation(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
-    endif
-
-    if (.false.) then
-        open(23, file='fort.aux',status='unknown',form='formatted')
-        print *,'Writing out aux arrays'
-        print *,' '
-        do j=1,my
-            do i=1,mx
-                write(23,*) i,j,(q(m,i,j),m=1,meqn)
-            enddo
-        enddo
-        close(23)
     endif
     
 end subroutine qinit
