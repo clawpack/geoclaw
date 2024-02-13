@@ -19,8 +19,8 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     logical, intent(in) :: doUpdate
     
     !! pass in numBoussCells for this level so can dimension this array
-    real(kind=8) :: soln(2*numBoussCells)
-    real(kind=8) :: rhs(2*numBoussCells)  ! for debugging
+    real(kind=8) :: soln(0:2*numBoussCells)
+    real(kind=8) :: rhs(0:2*numBoussCells)
     
     type(matrix_patchIndex), pointer :: mi
     type(matrix_levInfo),  pointer :: minfo
@@ -29,9 +29,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     integer :: locnew, locold, locOther
     real(kind=8) :: dt
     
-    real(kind=8), allocatable, dimension(:,:) :: s1, s2, h0etax, h0etay
-    
-    integer :: nD, nst, ncc
+    integer :: nD, nst, ncc, k
     integer(kind=8) :: clock_startBound,clock_finishBound,clock_rate
     integer(kind=8) :: clock_startLinSolve,clock_finishLinSolve
     real(kind=8) cpu_startBound,cpu_finishBound, time 
@@ -98,7 +96,13 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     if (ibouss .eq. 1) then
       call buildSparseMatrix(rhs,nvar,naux,levelBouss,numBoussCells)
     else ! ibouss 2 means SGN
-      call prepBuildSparseMatrixSGN(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+      if (triplet) then ! coo format
+        call prepBuildSparseMatrixSGN_coo(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+      else ! csr format
+         minfo%vals = 0
+         minfo%cols = -1  ! to recognize if not overwritten with real col indices
+        call prepBuildSparseMatrixSGN_csr(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+      endif
     endif
     
     !================   Step 4 Solve matrix system =======================
@@ -111,30 +115,39 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     else if (isolver .eq.2) then  ! use pardiso
     
 #ifdef HAVE_PARDISO
-       if (minfo%matrix_nelt .gt. 0) then
-         call system_clock(clock_startLinSolve,clock_rate)
-         call cpu_time(cpu_startLinSolve)
-         ! convert to compressed row format
-         nst = minfo%matrix_nelt
-         call st_to_cc_size(nst,minfo%matrix_ia,minfo%matrix_ja,ncc)
-         call pardiso_driver(soln,rhs,levelBouss,numBoussCells,nst,ncc,topo_finalized)
-         call system_clock(clock_finishLinSolve,clock_rate)
-         call cpu_time(cpu_finishLinSolve)
-         timeLinSolve = timeLinSolve + clock_finishLinSolve - clock_startLinSolve
-       else
-         go to 99
-       endif
+       write(*,*)" No longer supporting pardiso option"
+       write(outunit,*)" No longer supporting pardiso option"
+       stop
+       !if (minfo%matrix_nelt .gt. 0) then
+       !  call system_clock(clock_startLinSolve,clock_rate)
+       !  call cpu_time(cpu_startLinSolve)
+       !  ! convert to compressed row format
+       !  nst = minfo%matrix_nelt
+       !  call st_to_cc_size(nst,minfo%matrix_ia,minfo%matrix_ja,ncc)
+       !  call pardiso_driver(soln,rhs,levelBouss,numBoussCells,nst,ncc,topo_finalized)
+       !  call system_clock(clock_finishLinSolve,clock_rate)
+       !  call cpu_time(cpu_finishLinSolve)
+       !  timeLinSolve = timeLinSolve + clock_finishLinSolve - clock_startLinSolve
+       !else
+       !  go to 99
+       !endif
 #endif
 
     else if (isolver .eq.3) then  ! use petsc
 #ifdef HAVE_PETSC
        ! now add Petsc. Not all levels are bouss grids so test first
-       if (minfo%matrix_nelt .gt. 0) then
+       ! for now test for either csr or coo option for now
+       if (minfo%numColsTot .gt. 0 .or. minfo%matrix_nelt .gt. 0) then
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
           call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,topo_finalized)
           call system_clock(clock_finishLinSolve,clock_rate)
           call cpu_time(cpu_finishLinSolve)
+          !write(89,*)" level ",levelBouss,"  rhs   soln"
+          !do k = 1, 2*numBoussCells
+          !   write(89,899) k,rhs(k), soln(k)
+  899         format(i5,2e15.7)
+          !end do
           timeLinSolve = timeLinSolve + clock_finishLinSolve - clock_startLinSolve
           timeLinSolveCPU = timeLinSolveCPU+cpu_finishLinSolve - cpu_startLinSolve
        else
@@ -154,9 +167,9 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     ! so update P to P - dt*S
 
 !$OMP  PARALLEL DO PRIVATE(mptr,locnew,locOther,locaux,nx,ny,mitot,mjtot,nb,i,j,levSt),     &
-!$OMP  SHARED(listOfGrids,listStart,alloc,soln,levelBouss,ibouss, &
+!$OMP  SHARED(listOfGrids,listStart,alloc,soln,levelBouss,ibouss,triplet,         &
 !$OMP         doUpdate,nvar,naux,numgrids,node,dt,possk,nghost,nD,rhs,mxnest),    &  
-!$OMP              SCHEDULE (dynamic,1),                                               &  
+!$OMP              SCHEDULE (dynamic,1),                                          &  
 !$OMP              DEFAULT(none)
     do  nn = 1, numgrids(levelBouss)
         levSt  = listStart(levelBouss)
@@ -181,7 +194,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
               call solnUpdate(alloc(locnew),alloc(locOther),nb,mitot,mjtot,nghost,nvar, &
                            dt,soln,nD,mptr,levelBouss,rhs,doUpdate)
            else ! ibouss 2 SGN, saving different stuff, different update
-              call solnUpdateSGN(alloc(locnew),alloc(locOther),nb,mitot,mjtot,nghost,nvar, &
+                call solnUpdateSGN(alloc(locnew),alloc(locOther),nb,mitot,mjtot,nghost,nvar, &
                      dt,soln,nD,mptr,levelBouss,rhs,doUpdate,alloc(locaux),naux)
            endif
         !endif
@@ -265,7 +278,7 @@ subroutine solnUpdate(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
 
     integer, intent(in) :: nvar,nghost,mitot,mjtot,nD,mptr,nb,levelBouss
     logical, intent(in) :: doUpdate
-    real(kind=8), intent(in) :: soln(2*nD), dt, rhs(2*nD)
+    real(kind=8), intent(in) :: soln(0:2*nD), dt, rhs(0:2*nD)
 
     real(kind=8), intent(inout) :: valnew(nvar,mitot,mjtot)
     real(kind=8), intent(inout) :: valOther(nvar,mitot,mjtot)
@@ -391,7 +404,7 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
     ! Currently only doing first-order forward Euler update.
     
     use amr_module, only: outunit,mxnest
-    use bouss_module, only: matrix_info_allLevs,boussMindepth
+    use bouss_module, only: matrix_info_allLevs,boussMindepth,triplet
     use bouss_module, only: matrix_levInfo, matrix_patchIndex
     use amr_module, only: rnode,cornxlo,cornylo,hxposs,hyposs
     use geoclaw_module, only: earth_radius, deg2rad, coordinate_system, grav
@@ -401,7 +414,7 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
 
     integer, intent(in) :: nvar,naux,nghost,mitot,mjtot,nD,mptr,nb,levelBouss
     logical, intent(in) :: doUpdate
-    real(kind=8), intent(in) :: soln(2*nD), dt, rhs(2*nD)
+    real(kind=8), intent(in) :: soln(0:2*nD), dt, rhs(0:2*nD)
 
     real(kind=8), intent(inout) :: valnew(nvar,mitot,mjtot)
     real(kind=8), intent(inout) :: valOther(nvar,mitot,mjtot)
@@ -483,18 +496,32 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
             if (mi%isBouss(i-nghost,j-nghost)) then
               ! check if soln == 0 as proxy if cell is more shallow than deep bouss
               ! and no update
-                 valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
-                        (grav/alpha * etax(i,j) - soln(k_ij))
-                 valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
-                        (grav/alpha * etay(i,j) - soln(k_ij + nD))
+                 if (triplet) then
+                  valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
+                         (grav/alpha * etax(i,j) - soln(k_ij))
+                  valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
+                         (grav/alpha * etay(i,j) - soln(k_ij+nD))
+                 else  ! csr, different mapping
+                  valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
+                         (grav/alpha * etax(i,j) - soln(2*(k_ij-1)))
+                  valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
+                         (grav/alpha * etay(i,j) - soln(2*k_ij-1))
+                 endif
 
                 ! save update in components 4,5 for Dirichlet BC next iteration
                 ! for coarser levels, valOther is valOld
                 ! on the finest grid we only have one storage loc
                 ! and valOther is valNew, since dont need to save old
                 ! and new for interpolation
+                if (triplet) then
                     valOther(4,i,j) = soln(k_ij)
                     valOther(5,i,j) = soln(k_ij+nD)
+                else
+                    !valOther(4,i,j) = soln(2*k_ij-1)
+                    !valOther(5,i,j) = soln(2*k_ij)
+                    valOther(4,i,j) = soln(2*(k_ij-1))
+                    valOther(5,i,j) = soln(2*k_ij-1)
+                 endif
             else  ! not a bouss cell. set to zero
                valOther(4,i,j) = 0.d0
                valOther(5,i,j) = 0.d0
@@ -577,8 +604,13 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
        do i=nghost+1, mitot-nghost
             k_ij = mi%mindex(i-nghost,j-nghost)  ! hu element index for (i,j)
             if (mi%isBouss(i-nghost,j-nghost)) then
-              valnew(4,i,j) = soln(k_ij)
-              valnew(5,i,j) = soln(k_ij+nD)
+              if (triplet) then
+                valnew(4,i,j) = soln(k_ij)
+                valnew(5,i,j) = soln(k_ij+nD)
+              else
+                valnew(4,i,j) = soln(2*(k_ij-1))
+                valnew(5,i,j) = soln(2*k_ij-1)
+              endif
             else
               valnew(4,i,j) = 0.d0
               valnew(5,i,j) = 0.d0

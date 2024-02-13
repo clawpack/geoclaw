@@ -18,6 +18,8 @@ module bouss_module
     real(kind=8) :: alpha
 
     logical :: startWithBouss
+    ! triplet true means use coo format with SGN instead of csr
+    logical :: triplet  
     real(kind=8) :: startBoussTime
 
     !
@@ -43,6 +45,12 @@ module bouss_module
        integer, allocatable, dimension(:) :: matrix_ia, matrix_ja
        real(kind=8), allocatable, dimension(:) :: matrix_sa
        integer :: numBoussGrids, numBoussCells, numBoussCellsSolo, numGhostCount, numUnset
+       integer :: numColsTot
+
+       ! for csr format
+       integer, allocatable, dimension(:) :: rowPtr, cols
+       real(kind=8), allocatable, dimension(:) :: vals 
+
        ! intfCountc are the # equations (cells)  added for you as a coarse grid
        ! these are the equations under a fine grid on the first interior cells
        ! that say the coarse cell is the conservative average of the refined cells
@@ -146,6 +154,8 @@ contains
     read(7,*) boussMinDepth
     read(7,*) isolver
     read(7,*) startBoussTime
+
+    triplet = .true.
 
     !------------------------------------------
     if (rest) then

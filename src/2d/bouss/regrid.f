@@ -36,9 +36,10 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 c
       lcheck    = min0(lfine,mxnest-1)
       lfnew     = lbase
-      do 10 i   = 1, mxnest
+      do  i   = 1, mxnest
         newnumgrids(i) = 0
- 10     newstl(i) = 0
+        newstl(i) = 0
+      end do
       time      = rnode(timemult, lstart(lbase))
 c
  20   if (lcheck .lt. lbase) go to 50
@@ -94,7 +95,11 @@ c     get rid of old bouss storage
             end do
             deallocate(minfo%matrix_indices) ! get rid of old one 
             ! also deallocate matrix since new one will have diff size
-            deallocate(minfo%matrix_ia, minfo%matrix_ja,minfo%matrix_sa)
+            if (ibouss .eq. 1 .or. triplet) then
+             deallocate(minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa)
+            else
+             deallocate(minfo%rowPtr, minfo%cols, minfo%vals)
+            endif
             minfo%numBoussGrids = 0  ! reset for new counting
             minfo%numBoussCells = 0  ! reset for new counting
           endif
