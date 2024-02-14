@@ -143,9 +143,12 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       ! put old soln in soln vec here if have one
 
       ! call these every time since new rhs and soln storage vec
-      do i = 1, 2*numBousscells
-         rhs_geo(i-1) = rhs_geo(i) 
-      end do
+      ! is using 1 based or coo format, if csr already - based
+      if (.not. crs) then
+        do i = 1, 2*numBousscells
+           rhs_geo(i-1) = rhs_geo(i) 
+        end do
+      endif 
       call VecCreateSeqWithArray(PETSC_COMM_SELF,1,n,rhs_geo,rhs,ierr)
       CHKERRA(ierr)
       call VecCreateSeqWithArray(PETSC_COMM_SELF,1,n,soln,solution,ierr)

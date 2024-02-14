@@ -155,7 +155,8 @@ contains
     read(7,*) isolver
     read(7,*) startBoussTime
 
-    triplet = .true.
+    triplet = .false.
+    !triplet = .true.
 
     !------------------------------------------
     if (rest) then
