@@ -93,11 +93,16 @@ subroutine b4step1(mbc,mx,meqn,q,xlower,dx,t,dt,maux,aux)
 
             cell_zeta_mass = zeta * (xp_edge(i+1) - xp_edge(i))
 
-            if (coordinate_system == 2) then
+            if (coordinate_system == -1) then
+                ! for total_mass on circle when using radial symmetry:
+                cell_zeta_mass = cell_zeta_mass * pi * &
+                         (xp_edge(i+1) + xp_edge(i))
+            else if (coordinate_system == 2) then
                 ! for total mass on full sphere:
                 cell_zeta_mass = cell_zeta_mass * (sin(xp_edge(i+1)*DEG2RAD) - &
                          sin(xp_edge(i)*DEG2RAD))/dx * capa_latitude
             endif
+
             total_zeta_mass = total_zeta_mass + cell_zeta_mass
         enddo
     
