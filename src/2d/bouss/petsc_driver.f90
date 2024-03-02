@@ -165,7 +165,8 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       numTimes(levelBouss) = numTimes(levelBouss) + 1
 
       ! check if need to adjust soln back to 1 indexing
-      if (triplet) then ! bump both  back up
+      !if (triplet) then ! bump both  back up THIS DIDNT WORK
+      if (.not. crs) then ! bump both  back up
         do i = 1, 2*numBoussCells
           soln(2*numBoussCells-i+1) = soln(2*numBoussCells-i)
           rhs_geo(2*numBoussCells-i+1) = rhs_geo(2*numBoussCells-i) 
