@@ -215,8 +215,6 @@ c
       call cpu_time(cpu_finish)
       tvoll(level) = tvoll(level) + clock_finish - clock_start
       tvollCPU(level) = tvollCPU(level) + cpu_finish - cpu_start
-      timeStepgrid = timeStepgrid +clock_finish-clock_startStepgrid
-      timeStepgridCPU=timeStepgridCPU+cpu_finish-cpu_startStepgrid
 
       if (debug) then
          write(*,*)"in advanc level ",level," after 2nd implicit call"
