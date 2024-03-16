@@ -2,8 +2,8 @@
 # To use his file, set environment variable PETSC_OPTIONS to
 #       '-options_file  /path/to/this/file'
 
-# Currently using KSP (a Krylov space method) as the main solver
-# and GMRES as the preconditioner (pc)
+# Currently using GMRES Krylov space method as the main solver
+# and algebraic multigrid as the preconditioner
 
 # For more about the options, see
 #    https://petsc.org/release/manualpages/KSP/KSPSetFromOptions
