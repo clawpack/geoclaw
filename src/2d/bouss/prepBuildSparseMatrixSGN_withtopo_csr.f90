@@ -99,7 +99,7 @@ subroutine prepBuildSparseMatrixSGN_csr(soln,rhs,nvar,naux,levelBouss,numBoussCe
     
     enddo  nng_loop
 
-    ! put last line in csr row pointers to signify end
+    ! put last line in CRS row pointers to signify end
     minfo%rowPtr(2*numBoussCells) = minfo%rowPtr(2*numBoussCells-1)+12
 
     call compressOut(minfo%vals,minfo%rowPtr,minfo%cols,numBoussCells,numColsTot)

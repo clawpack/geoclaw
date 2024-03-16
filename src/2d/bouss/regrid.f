@@ -95,9 +95,9 @@ c     get rid of old bouss storage
             end do
             deallocate(minfo%matrix_indices) ! get rid of old one 
             ! also deallocate matrix since new one will have diff size
-            if (ibouss .eq. 1 .or. triplet) then
+            if (.not. crs) then ! COO triplet format
              deallocate(minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa)
-            else
+            else  ! CRS format
              deallocate(minfo%rowPtr, minfo%cols, minfo%vals)
             endif
             minfo%numBoussGrids = 0  ! reset for new counting

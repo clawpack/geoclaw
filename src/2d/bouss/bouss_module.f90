@@ -18,8 +18,9 @@ module bouss_module
     real(kind=8) :: alpha
 
     logical :: startWithBouss
-    ! triplet true means use coo format with SGN instead of csr
-    logical :: triplet  
+
+    logical :: crs  
+
     real(kind=8) :: startBoussTime
 
     !
@@ -47,7 +48,7 @@ module bouss_module
        integer :: numBoussGrids, numBoussCells, numBoussCellsSolo, numGhostCount, numUnset
        integer :: numColsTot
 
-       ! for csr format
+       ! for CRS format
        integer, allocatable, dimension(:) :: rowPtr, cols
        real(kind=8), allocatable, dimension(:) :: vals 
 
@@ -155,8 +156,17 @@ contains
     read(7,*) isolver
     read(7,*) startBoussTime
 
-    triplet = .false.
-    !triplet = .true.
+    if (ibouss == 1) then
+        ! Madsen-Sorensen equations only implemented with COO triplet storage
+        ! format (i,j,value) for sparse matrix:
+        crs = .false.
+    else
+        ! SGN implemented for both sparse storage formats, but runs faster
+        ! using compressed row storage (CRS, also known as CSR or Yale) format:
+        crs = .true.
+    endif
+
+    ! crs = .false.  ! uncomment this line to force CRS with SGN for testing
 
     !------------------------------------------
     if (rest) then

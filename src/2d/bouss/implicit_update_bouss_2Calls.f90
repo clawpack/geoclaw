@@ -96,9 +96,9 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     if (ibouss .eq. 1) then
       call buildSparseMatrix(rhs,nvar,naux,levelBouss,numBoussCells)
     else ! ibouss 2 means SGN
-      if (triplet) then ! coo format
+      if (.not. crs) then ! COO triplet format
         call prepBuildSparseMatrixSGN_coo(soln,rhs,nvar,naux,levelBouss,numBoussCells)
-      else ! csr format
+      else ! CRS format
          minfo%vals = 0
          minfo%cols = -1  ! to recognize if not overwritten with real col indices
         call prepBuildSparseMatrixSGN_csr(soln,rhs,nvar,naux,levelBouss,numBoussCells)
@@ -136,7 +136,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     else if (isolver .eq.3) then  ! use petsc
 #ifdef HAVE_PETSC
        ! now add Petsc. Not all levels are bouss grids so test first
-       ! for now test for either csr or coo option for now
+       ! for now test for either CRS or COO option for now
        if (minfo%numColsTot .gt. 0 .or. minfo%matrix_nelt .gt. 0) then
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
@@ -167,7 +167,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     ! so update P to P - dt*S
 
 !$OMP  PARALLEL DO PRIVATE(mptr,locnew,locOther,locaux,nx,ny,mitot,mjtot,nb,i,j,levSt),     &
-!$OMP  SHARED(listOfGrids,listStart,alloc,soln,levelBouss,ibouss,triplet,         &
+!$OMP  SHARED(listOfGrids,listStart,alloc,soln,levelBouss,ibouss,crs,         &
 !$OMP         doUpdate,nvar,naux,numgrids,node,dt,possk,nghost,nD,rhs,mxnest),    &  
 !$OMP              SCHEDULE (dynamic,1),                                          &  
 !$OMP              DEFAULT(none)
@@ -404,7 +404,7 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
     ! Currently only doing first-order forward Euler update.
     
     use amr_module, only: outunit,mxnest
-    use bouss_module, only: matrix_info_allLevs,boussMindepth,triplet
+    use bouss_module, only: matrix_info_allLevs,boussMindepth,crs
     use bouss_module, only: matrix_levInfo, matrix_patchIndex
     use amr_module, only: rnode,cornxlo,cornylo,hxposs,hyposs
     use geoclaw_module, only: earth_radius, deg2rad, coordinate_system, grav
@@ -496,12 +496,13 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
             if (mi%isBouss(i-nghost,j-nghost)) then
               ! check if soln == 0 as proxy if cell is more shallow than deep bouss
               ! and no update
-                 if (triplet) then
+                 if (.not. crs) then
+                  ! COO triplet format
                   valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
                          (grav/alpha * etax(i,j) - soln(k_ij))
                   valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
                          (grav/alpha * etay(i,j) - soln(k_ij+nD))
-                 else  ! csr, different mapping
+                 else  ! CRS format,  different mapping
                   valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
                          (grav/alpha * etax(i,j) - soln(2*(k_ij-1)))
                   valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
@@ -513,7 +514,7 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
                 ! on the finest grid we only have one storage loc
                 ! and valOther is valNew, since dont need to save old
                 ! and new for interpolation
-                if (triplet) then
+                if (.not. crs) then
                     valOther(4,i,j) = soln(k_ij)
                     valOther(5,i,j) = soln(k_ij+nD)
                 else
@@ -604,7 +605,7 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
        do i=nghost+1, mitot-nghost
             k_ij = mi%mindex(i-nghost,j-nghost)  ! hu element index for (i,j)
             if (mi%isBouss(i-nghost,j-nghost)) then
-              if (triplet) then
+              if (.not. crs) then
                 valnew(4,i,j) = soln(k_ij)
                 valnew(5,i,j) = soln(k_ij+nD)
               else

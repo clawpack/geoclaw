@@ -24,7 +24,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
     
     integer :: numCores, omp_get_max_threads,i,nelt
     integer :: j
-    logical :: idx, crs
+    logical :: idx
 
     ! petsc declaration
     integer :: n, nn, ierr
@@ -42,11 +42,6 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
 
 
     minfo => matrix_info_allLevs(levelBouss)
-    if (ibouss .eq. 2 .and. .not. triplet) then ! SGN 
-       crs = .true.
-    else ! Madsen, not transformed to CRS format or still want legacy COO for SGN
-       crs = .false.
-    endif
 
     !================   Step 4 Solve matrix system =======================
             
@@ -77,30 +72,29 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
 
           ! these lines are if reusing matrix with different entries but same structure
           if (.not. crs) then
-          ! commeneted out stuff in triplet format
-          call MatCreate(PETSC_COMM_SELF,Jr(levelBouss),ierr)
-          CHKERRA(ierr)
-          call MatSetSizes(Jr(levelBouss),n,n,n,n,ierr)
-          CHKERRA(ierr)
-          call MatSetType(Jr(levelBouss),MATSEQAIJ,ierr)
-          CHKERRA(ierr)
+            ! Using COO triplet sparse matrix storage: call MatCreate(PETSC_COMM_SELF,Jr(levelBouss),ierr)
+            CHKERRA(ierr)
+            call MatSetSizes(Jr(levelBouss),n,n,n,n,ierr)
+            CHKERRA(ierr)
+            call MatSetType(Jr(levelBouss),MATSEQAIJ,ierr)
+            CHKERRA(ierr)
 
-          ! commented out since changing to zero based indexing
-          ! decrement indices since Petsc zero-based indexing
-          do i = 1, nz
-             minfo%matrix_ia(i) = minfo%matrix_ia(i) - 1
-             minfo%matrix_ja(i) = minfo%matrix_ja(i) - 1
-          end do
+            ! decrement indices since Petsc zero-based indexing
+            do i = 1, nz
+               minfo%matrix_ia(i) = minfo%matrix_ia(i) - 1
+               minfo%matrix_ja(i) = minfo%matrix_ja(i) - 1
+            end do
 
-          call MatSetPreallocationCOO(Jr(levelBouss),nz,minfo%matrix_ia,minfo%matrix_ja,ierr)
-          CHKERRA(ierr)
-          ! put 1 indexing back in  
-          do i = 1, nz
-             minfo%matrix_ia(i) = minfo%matrix_ia(i) + 1
-             minfo%matrix_ja(i) = minfo%matrix_ja(i) + 1
-          end do
+            call MatSetPreallocationCOO(Jr(levelBouss), nz, &
+                                minfo%matrix_ia, minfo%matrix_ja,ierr)
+            CHKERRA(ierr)
+            ! put 1 indexing back in  
+            do i = 1, nz
+               minfo%matrix_ia(i) = minfo%matrix_ia(i) + 1
+               minfo%matrix_ja(i) = minfo%matrix_ja(i) + 1
+            end do
           else 
-          ! this next call is for CRS
+            ! using CRS sparse matrix format
             call MatCreateSeqAijWithArrays(PETSC_COMM_SELF,2*numBoussCells,  & 
                        2*numBoussCells,minfo%rowPtr,minfo%cols,  &
                        minfo%vals,Jr(levelBouss),ierr)
@@ -110,7 +104,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
             CHKERRA(ierr)
           endif
 
-          ! both formats do this 
+          ! both sparse matrix formats do this 
           call KSPCreate(PETSC_COMM_SELF,ksp(levelBouss),ierr)
           CHKERRA(ierr)
           call KSPSetErrorIfNotConverged(ksp(levelBouss),PETSC_TRUE,ierr)
@@ -126,29 +120,30 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
           !call KSPSetInitialGuessNonzero(ksp(levelBouss),PETSC_TRUE,ierr)
           call KSPSetOperators(ksp(levelBouss),Jr(levelBouss),Jr(levelBouss),ierr)
           CHKERRA(ierr)
-      else ! crs format, just put in new values, same matrix
-         ! reuse sparse matrix, next line notifies matrix has new vals
+      else ! when (.not. newGrids(levelBouss)) .and. topo_finalized
+         ! just put in new values, reuse same sparse matrix structure
+         ! next line notifies matrix has new vals
          ! and has saved pointer to vals in between calls
          call PetscObjectStateIncrease(Jr(levelBouss),ierr)
       endif
 
-      ! this call reuse the matrix values instead of creating news
+      ! this call reuse the matrix values instead of creating new ones
       if (.not. crs) then
-      ! next line fo triplet form
+         ! next line for COO triplet format
          call MatSetValuesCOO(Jr(levelBouss),minfo%matrix_sa,INSERT_VALUES,ierr)
          CHKERRA(ierr)
       endif
 
+      ! put old soln in soln vec here if have one (WHAT DOES THIS MEAN?)
 
-      ! put old soln in soln vec here if have one
-
-      ! call these every time since new rhs and soln storage vec
-      ! is using 1 based or coo format, if csr already - based
       if (.not. crs) then
+        ! switch to 0-based indexing for COO triplet format
+        ! (already 0-based for CRS)
         do i = 1, 2*numBousscells
            rhs_geo(i-1) = rhs_geo(i) 
         end do
       endif 
+      
       call VecCreateSeqWithArray(PETSC_COMM_SELF,1,n,rhs_geo,rhs,ierr)
       CHKERRA(ierr)
       call VecCreateSeqWithArray(PETSC_COMM_SELF,1,n,soln,solution,ierr)
@@ -165,13 +160,13 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       numTimes(levelBouss) = numTimes(levelBouss) + 1
 
       ! check if need to adjust soln back to 1 indexing
-      !if (triplet) then ! bump both  back up THIS DIDNT WORK
       if (.not. crs) then ! bump both  back up
         do i = 1, 2*numBoussCells
           soln(2*numBoussCells-i+1) = soln(2*numBoussCells-i)
           rhs_geo(2*numBoussCells-i+1) = rhs_geo(2*numBoussCells-i) 
         end do
       endif
+      
       !! if itnum > itmax then
       !! call KSPGetResidualNorm(ksp(levelBouss),resmax,ierr)
       CHKERRA(ierr)
@@ -185,4 +180,3 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
 #endif
 
 end subroutine petsc_driver
-

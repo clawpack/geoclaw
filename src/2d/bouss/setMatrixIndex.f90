@@ -75,14 +75,12 @@
         max_matrix_nelt = 24 * minfo%numBoussCells 
       endif
 
-      ! True means use coo for sgn, False means use csr
       if (minfo%numBoussCells > 0) then
-          if (ibouss .eq. 1 .or. triplet) then ! Madsen or SGN coo
+          if (.not. crs) then ! COO triplet format
             allocate(minfo%matrix_ia(max_matrix_nelt),     &
                      minfo%matrix_ja(max_matrix_nelt),     &
                      minfo%matrix_sa(max_matrix_nelt))
-          else  ! ibouss 2 is SGN, transformed to CSR
-          ! next lines are for csr format
+          else  ! CRS format
             allocate(minfo%cols(0:max_matrix_nelt),        &
                      minfo%vals(0:max_matrix_nelt),        &
                      minfo%rowPtr(0:2*minfo%numBoussCells))

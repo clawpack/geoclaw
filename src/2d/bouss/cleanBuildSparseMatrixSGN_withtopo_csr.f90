@@ -63,7 +63,7 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_csr(q,qold,aux,soln,rhs,rowPtr,col
     !             Multiply by matrix element and move to RHS
     !             Requires nvar==5.
 
-    ! for crs format, order of unknowns for each row is 
+    ! for CRS format, order of unknowns for each row is 
     ! 12 for u equations, 12 for v equation
     ! the unknown are still order in 0 based order: cell k_ij is u eq<> 2*(kij-1) v<>2*k_ij-1
     ! to get columns to be sorted, indices assigned as follows interior
@@ -250,7 +250,7 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_csr(q,qold,aux,soln,rhs,rowPtr,col
                 if (k_ij == -1) then
                     write(6,*) '+++ unexpected k_ij=-1 at i,j: ',i,j
                 endif
-                ! for csr set row using 24 entries per cell i,j: 12 for u and 12 for v.
+                ! for CRS set row using 24 entries per cell i,j: 12 for u and 12 for v.
                 rowPtr(2*(k_ij-1)) = 12*2*(k_ij-1)        ! start of u_ij eq
                 rowPtr(2*k_ij-1) = rowPtr(2*(k_ij-1))+12  ! start of v_ij eq
                 colPtr = rowPtr(2*(k_ij-1))
