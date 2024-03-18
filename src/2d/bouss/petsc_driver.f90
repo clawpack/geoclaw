@@ -17,14 +17,11 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
     
     !! pass in numBoussCells for this level so can dimension this array
     real(kind=8), intent(out) :: soln(0:2*numBoussCells)
-    !integer :: rowPtr(0:2*numBoussCells), cols(0:24*numBoussCells)
-    !real(kind=8)  :: vals(0:24*numBoussCells)
     
     type(matrix_levInfo),  pointer :: minfo
     
     integer :: numCores, omp_get_max_threads,i,nelt
     integer :: j
-    logical :: idx
 
     ! petsc declaration
     integer :: n, nn, ierr
@@ -32,13 +29,13 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
     integer*8 :: nz
 
 
-    !! These PETSC declarations are needed  (moved to amr_module)
-    !Mat J
+    !! These PETSC declarations are needed  
     Vec rhs,solution
-    !KSP ksp  ! linear solver ojbect
     PetscInt itnum
-
-!   call PetscOptionsGetInt(PETSC_NULL_OPTIONS,PETSC_NULL_CHARACTER,'-n',n,flg,ierr);CHKERRA(ierr)
+    KSPConvergedReason reason
+    !! (moved the following to amr_module)
+    !Mat J
+    !KSP ksp  ! linear solver ojbect
 
 
     minfo => matrix_info_allLevs(levelBouss)
@@ -54,21 +51,14 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
  777   format(3i8,e15.6)
 
        if (newGrids(levelBouss) .or. .not. topo_finalized) then
-          ! if first time through nothing to destroy yet.
-          ! otherwise destroy old stuff to recreate for new grid setup 
-          ! turns out no need to call because petsc initializes and checks
-          !if (time .gt. tstart_thisrun) then this was needed since if
-          ! time == tstart_thisrun it could be a restart run and nothing to destroy
+          ! destroy old solver objects to recreate for new grid setup. No need 
+          ! to check if init or restart because petsc checks if null
             call KSPDestroy(ksp(levelBouss),ierr)
             CHKERRA(ierr)
             call MatDestroy(Jr(levelBouss),ierr)
             CHKERRA(ierr)
-          !endif
 
           newGrids(levelBouss) = .false.
-
-          !petsc call to put in compressed row format
-          idx = .true.   ! 1 based indexing, so not already decremented
 
           ! these lines are if reusing matrix with different entries but same structure
           if (.not. crs) then
@@ -81,6 +71,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
             CHKERRA(ierr)
 
             ! decrement indices since Petsc zero-based indexing
+            ! and COO format is 1-based
             do i = 1, nz
                minfo%matrix_ia(i) = minfo%matrix_ia(i) - 1
                minfo%matrix_ja(i) = minfo%matrix_ja(i) - 1
@@ -105,37 +96,45 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
             CHKERRA(ierr)
           endif
 
-          ! both sparse matrix formats do this 
+          ! both sparse matrix formats create solver object
           call KSPCreate(PETSC_COMM_SELF,ksp(levelBouss),ierr)
           CHKERRA(ierr)
           call KSPSetErrorIfNotConverged(ksp(levelBouss),PETSC_TRUE,ierr)
           CHKERRA(ierr)
+          ! Next call sets options from environment vars
           call KSPSetFromOptions(ksp(levelBouss),ierr)
           CHKERRA(ierr)
 
-          ! ABOVE CALLS SET OPTIONS FROM ENVIRONMENT VARS
-          ! now TURN off any for level 1 you dont want
+          ! now TURN off any for level 1 you dont want, such as level 1 saving
+          ! preconditioner: since it never regrids would never change
           call KSPSetReusePreconditioner(ksp(1),PETSC_FALSE,ierr)
           CHKERRA(ierr)
+
+          ! if want to try initiializing with previous solution this sets it up
           ! if have previous solution tell PETSC about it
           !call KSPSetInitialGuessNonzero(ksp(levelBouss),PETSC_TRUE,ierr)
+
           call KSPSetOperators(ksp(levelBouss),Jr(levelBouss),Jr(levelBouss),ierr)
           CHKERRA(ierr)
       else ! when (.not. newGrids(levelBouss)) .and. topo_finalized
          ! just put in new values, reuse same sparse matrix structure
          ! next line notifies matrix has new vals
          ! and has saved pointer to vals in between calls
-         call PetscObjectStateIncrease(Jr(levelBouss),ierr)
+         ! not needed for COO format
+         if (crs) then
+             call PetscObjectStateIncrease(Jr(levelBouss),ierr)
+         endif
       endif
 
-      ! this call reuse the matrix values instead of creating new ones
-      if (.not. crs) then
-         ! next line for COO triplet format
+      if (.not. crs) then ! only for COO triplet format
+         ! this call reuses the matrix values instead of creating new ones
+         ! (for CRS, PetscObjectStsateIncrease is called instead above)
          call MatSetValuesCOO(Jr(levelBouss),minfo%matrix_sa,INSERT_VALUES,ierr)
          CHKERRA(ierr)
       endif
 
-      ! put old soln in soln vec here if have one (WHAT DOES THIS MEAN?)
+      ! if you want to use previous soln as initial guess,
+      ! set soln to old soln here
 
       if (.not. crs) then
         ! switch to 0-based indexing for COO triplet format
@@ -159,6 +158,13 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       CHKERRA(ierr)
       itcount(levelBouss) = itcount(levelBouss)+ itnum
       numTimes(levelBouss) = numTimes(levelBouss) + 1
+
+      ! still working on this aspect. 
+      !call KSPGetConvergedReason(ksp(levelBouss),reason,ierr)
+      ! negative reason is bad, leave 
+      !if (reason < 0) then
+      !write(*,*) 'level ',levelBouss,' reason ',reason
+      !endif
 
       ! check if need to adjust soln back to 1 indexing
       if (.not. crs) then ! bump both  back up
