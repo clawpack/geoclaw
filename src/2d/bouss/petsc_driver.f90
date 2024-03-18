@@ -72,7 +72,8 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
 
           ! these lines are if reusing matrix with different entries but same structure
           if (.not. crs) then
-            ! Using COO triplet sparse matrix storage: call MatCreate(PETSC_COMM_SELF,Jr(levelBouss),ierr)
+            ! Using COO triplet sparse matrix storage: 
+            call MatCreate(PETSC_COMM_SELF,Jr(levelBouss),ierr)
             CHKERRA(ierr)
             call MatSetSizes(Jr(levelBouss),n,n,n,n,ierr)
             CHKERRA(ierr)
