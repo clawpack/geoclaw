@@ -16,7 +16,7 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
     integer, intent(in) :: nvar, naux, levelBouss, numBoussCells
     
     !! pass in numBoussCells for this level so can dimension these arrays
-    real(kind=8) :: soln(0:2*numBoussCells), rhs(0:2*numBoussCells) 
+    real(kind=8) :: soln(2*numBoussCells), rhs(2*numBoussCells) 
     
     type(matrix_patchIndex), pointer :: mi
     type(matrix_levInfo),  pointer :: minfo

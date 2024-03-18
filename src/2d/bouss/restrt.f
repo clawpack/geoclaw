@@ -77,12 +77,22 @@ c     # need to allocate for dynamic memory:
      5              timeRegridding,timeRegriddingCPU,
      6              timeValout,timeValoutCPU
 
-!     WRITE(*,*)"REMEMBER:  RESETTING Solver TIMERS For special tests"
-!     timeLinSolve = 0
-!     timeLinSolveCPU = 0.d0
-!     timePrepBuild = 0
-!     timePrepBuildCPU = 0.d0
-
+      WRITE(*,*)"REMEMBER:  RESETTING Solver TIMERS For special tests"
+      timeLinSolve = 0
+      timeLinSolveCPU = 0.d0
+      timePrepBuild = 0
+      timePrepBuildCPU = 0.d0
+      timeTick = 0
+      timeTickCPU = 0.0d0
+      timeStepgrid = 0
+      timeStepgridCPU = 0.0d0
+      timeBound = 0
+      timeBoundCPU = 0.d0
+      timeRegridding = 0
+      timeRegriddingCPU = 0.d0
+      timeValout = 0
+      timeValoutCPU = 0.d0
+      
       if (mxnest .gt. mxnold) then
         do ifg = 1, FG_num_fgrids
           fg => FG_fgrids(ifg)
