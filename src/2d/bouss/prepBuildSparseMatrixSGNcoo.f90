@@ -1,4 +1,4 @@
-subroutine prepBuildSparseMatrixSGN_coo(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+subroutine prepBuildSparseMatrixSGNcoo(soln,rhs,nvar,naux,levelBouss,numBoussCells)
 
     
     use amr_module
@@ -46,7 +46,7 @@ subroutine prepBuildSparseMatrixSGN_coo(soln,rhs,nvar,naux,levelBouss,numBoussCe
     !             Requires nvar==5.
     
 #ifdef WHERE_AM_I
-  write(*,*) "starting buildSparseMatrixSGN_withtopo"
+  write(*,*) "starting prepBuildSparseMatrixSGNcoo"
 #endif
 
     call system_clock(clock_start,clock_rate)
@@ -101,10 +101,10 @@ subroutine prepBuildSparseMatrixSGN_coo(soln,rhs,nvar,naux,levelBouss,numBoussCe
         if (locold .eq. 0) locold = loc  ! finest level has no old time soln
         locaux = node(storeaux,mptr)  ! needed for iaddaux
 
-        call cleanBuildSparseMatrixSGN_withtopo_coo(alloc(loc),alloc(locold),       &
-                        alloc(locaux), soln,rhs,                                &
-                        minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa,        &
-                        numBoussCells,levelBouss,mptr,nx,ny,nvar,naux,  &
+        call buildSparseMatrixSGNcoo(alloc(loc),alloc(locold),             &
+                        alloc(locaux), soln,rhs,                           &
+                        minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa,   &
+                        numBoussCells,levelBouss,mptr,nx,ny,nvar,naux,     &
                         matrix_rhs1_max,matrix_rhs2_max)
             
     
@@ -215,9 +215,9 @@ subroutine prepBuildSparseMatrixSGN_coo(soln,rhs,nvar,naux,levelBouss,numBoussCe
     endif
         
 #ifdef WHERE_AM_I
-  write(*,*) "ending   prepBuildSparseMatrixSGN_withtopo"
+  write(*,*) "ending   prepBuildSparseMatrixSGNcoo"
 #endif
 
-end subroutine prepBuildSparseMatrixSGN_coo
+end subroutine prepBuildSparseMatrixSGNcoo
 
 

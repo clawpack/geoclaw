@@ -94,14 +94,15 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     ! ================  Step 2: build matrix and rhs  ======================
 
     if (ibouss .eq. 1) then
-      call buildSparseMatrix(rhs,nvar,naux,levelBouss,numBoussCells)
+      ! Madsen-Sorensen, always uses COO format:
+      call buildSparseMatrixMScoo(rhs,nvar,naux,levelBouss,numBoussCells)
     else ! ibouss 2 means SGN
       if (.not. crs) then ! COO triplet format
-        call prepBuildSparseMatrixSGN_coo(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+        call prepBuildSparseMatrixSGNcoo(soln,rhs,nvar,naux,levelBouss,numBoussCells)
       else ! CRS format
          minfo%vals = 0
          minfo%cols = -1  ! to recognize if not overwritten with real col indices
-        call prepBuildSparseMatrixSGN_csr(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+        call prepBuildSparseMatrixSGNcrs(soln,rhs,nvar,naux,levelBouss,numBoussCells)
       endif
     endif
     
@@ -753,4 +754,3 @@ end subroutine symcheck
   
       return
       end subroutine symcheck2
-

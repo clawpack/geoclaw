@@ -1,4 +1,4 @@
-subroutine buildSparseMatrix(rhs,nvar,naux,levelBouss,numBoussCells)
+subroutine buildSparseMatrixMScoo(rhs,nvar,naux,levelBouss,numBoussCells)
 
     
     use amr_module
@@ -61,7 +61,7 @@ subroutine buildSparseMatrix(rhs,nvar,naux,levelBouss,numBoussCells)
     !             Requires nvar==5.
 
 #ifdef WHERE_AM_I
-  write(*,*) "starting buildSparseMatrix"
+  write(*,*) "starting buildSparseMatrixMScoo"
 #endif
     
     call system_clock(clock_start,clock_rate)
@@ -1147,7 +1147,7 @@ subroutine buildSparseMatrix(rhs,nvar,naux,levelBouss,numBoussCells)
     timePrepBuildCPU = timePrepBuildCPU + cpu_finish-cpu_start
 
 #ifdef WHERE_AM_I
-  write(*,*) "ending   buildSparseMatrix"
+  write(*,*) "ending   buildSparseMatrixMScoo"
 #endif
         
 
@@ -1167,6 +1167,6 @@ contains
         iaddaux = locaux + iaux-1 + naux*((j-1+nghost)*mitot+i+nghost-1)
     end function iaddaux
 
-end subroutine buildSparseMatrix
+end subroutine buildSparseMatrixMScoo
 
 

@@ -1,5 +1,5 @@
 
-subroutine cleanBuildSparseMatrixSGN_withtopo_csr(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
+subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                                      numBoussCells,levelBouss,                        &
                                      mptr,nx,ny,nvar,naux)
 
@@ -84,7 +84,7 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_csr(q,qold,aux,soln,rhs,rowPtr,col
    IS_GHOST(i,j) = (i.eq.1 .or. i.eq.nx .or. j.eq.1 .or. j.eq.ny) 
 
 #ifdef WHERE_AM_I
-  write(*,*) "starting cleanBuildSparseMatrixSGN_withtopo"
+  write(*,*) "starting buildSparseMatrixSGNcrs"
 #endif
     
     debug = .false.
@@ -1014,12 +1014,12 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_csr(q,qold,aux,soln,rhs,rowPtr,col
         
     
 #ifdef WHERE_AM_I
-  write(*,*) "ending   cleanBuildSparseMatrixSGN_withtopo"
+  write(*,*) "ending   buildSparseMatrixSGNcrs"
 #endif
 
 
     return
-end subroutine cleanBuildSparseMatrixSGN_withtopo_csr
+end subroutine buildSparseMatrixSGNcrs
 
 subroutine insertionSort(cols,vals)
 

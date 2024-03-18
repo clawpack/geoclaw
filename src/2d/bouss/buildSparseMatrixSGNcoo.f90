@@ -1,5 +1,5 @@
 
-subroutine cleanBuildSparseMatrixSGN_withtopo_coo(q,qold,aux,soln,rhs,                    &
+subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                                      minfo_matrix_ia,minfo_matrix_ja,minfo_matrix_sa, &
                                      numBoussCells,levelBouss,                        &
                                      mptr,nx,ny,nvar,naux,                    &
@@ -67,7 +67,7 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_coo(q,qold,aux,soln,rhs,          
     
 
 #ifdef WHERE_AM_I
-  write(*,*) "starting cleanBuildSparseMatrixSGN_withtopo"
+  write(*,*) "starting buildSparseMatrixSGNcoo"
 #endif
     
     debug = .false.
@@ -75,8 +75,8 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_coo(q,qold,aux,soln,rhs,          
     
     minfo => matrix_info_allLevs(levelBouss)
 
-    !write(31,*)"Start of cleanBuild for grid ",mptr
-    !write(*,*)"Start of cleanBuild for grid ",mptr
+    !write(31,*)"Start of buildSparseMatrixSGNcoo for grid ",mptr
+    !write(*,*)"Start of buildSparseMatrixSGNcoo for grid ",mptr
     mitot = nx + 2*nghost
     mjtot = ny + 2*nghost
     !call symcheck2(q,mitot,mjtot)
@@ -88,7 +88,7 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_coo(q,qold,aux,soln,rhs,          
     ! Set up matrix A and RHS by looping over all Bouss patches:
 
        if (debug) then
-         write(19,*)"Level ",levelBouss," grid ",mptr," at start of cleanBuild"
+         write(19,*)"Level ",levelBouss," grid ",mptr," at start of buildSparseMatrixSGNcoo"
          do j = 1-nghost, ny+nghost
          do i = 1-nghost, nx+nghost
            write(19,900)i,j,(q(m,i,j),m=1,nvar)
@@ -999,9 +999,9 @@ subroutine cleanBuildSparseMatrixSGN_withtopo_coo(q,qold,aux,soln,rhs,          
     minfo%matrix_nelt = nelt
     
 #ifdef WHERE_AM_I
-  write(*,*) "ending   cleanBuildSparseMatrixSGN_withtopo"
+  write(*,*) "ending   buildSparseMatrixSGNcoo"
 #endif
 
 
     return
-end subroutine cleanBuildSparseMatrixSGN_withtopo_coo
+end subroutine buildSparseMatrixSGNcoo
