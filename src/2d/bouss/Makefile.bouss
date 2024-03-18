@@ -155,11 +155,11 @@ COMMON_SOURCES += \
   $(BOUSSLIB)/setMatrixIndex.f90 \
   $(BOUSSLIB)/setBoussFlag.f90 \
   $(BOUSSLIB)/implicit_update_bouss_2Calls.f90 \
-  $(BOUSSLIB)/prepBuildSparseMatrixSGN_withtopo_csr.f90 \
-  $(BOUSSLIB)/cleanBuildSparseMatrixSGN_withtopo_csr.f90 \
-  $(BOUSSLIB)/prepBuildSparseMatrixSGN_withtopo_coo.f90 \
-  $(BOUSSLIB)/cleanBuildSparseMatrixSGN_withtopo_coo.f90 \
-  $(BOUSSLIB)/buildSparseMatrix.f90 \
+  $(BOUSSLIB)/prepBuildSparseMatrixSGNcrs.f90 \
+  $(BOUSSLIB)/buildSparseMatrixSGNcrs.f90 \
+  $(BOUSSLIB)/prepBuildSparseMatrixSGNcoo.f90 \
+  $(BOUSSLIB)/buildSparseMatrixSGNcoo.f90 \
+  $(BOUSSLIB)/buildSparseMatrixMScoo.f90 \
   $(BOUSSLIB)/compressOut.f \
   $(BOUSSLIB)/matvec.f90 \
   $(BOUSSLIB)/petsc_driver.f90 \
