@@ -254,8 +254,8 @@ contains
         yhic = ylowc + dyc*myc    
         
         ! Find indices of various quantities in the fgrid arrays
-        bathy_index = meqn + 1
-        eta_index = meqn + 2
+        bathy_index = 4   ! works for both shallow and bouss 
+        eta_index = 5     ! works for both shallow and bouss
     
         !write(59,*) '+++ ifg,jfg,eta,geometry at t = ',t
     
