@@ -137,7 +137,7 @@ def select_by_flooding(Ztopo, mask=None, prev_pts_chosen=None,
     maxj = Ztopo.shape[1] - 1
 
     for k in range(max_iters):
-        if set_next_i == []:
+        if len(set_next_i) == 0:
             # done
             break
         iter_count += 1
