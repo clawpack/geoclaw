@@ -155,7 +155,7 @@ contains
             ! note: *not* including 1/r term in this derivative
         else if (coordinate_system == 2) then
             write(6,*) '*** latitude coordinates correctly implemented in Bouss??'
-            stop
+            !stop
             
             ! PROBABLY NOT CORRECT -- r derivative??
             ! x = latitude coordinate -90 < x < 90 degrees

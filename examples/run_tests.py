@@ -10,7 +10,7 @@ import os
 env = os.environ
 env['GIT_STATUS'] = 'True'
 env['FFLAGS'] = '-O2 -fopenmp'
-env['OMP_NUM_THREADS'] = '3'
+env['OMP_NUM_THREADS'] = '6'
 
 make_all.make_all(make_clean_first=True, env=env)
 
