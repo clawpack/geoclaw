@@ -9,15 +9,16 @@ This illustrates two features of GeoClaw available starting in Version 5.7.0:
 - The ability to use a `set_eta_init` subroutine to set a spacially varying
   initial surface elevation (rather than constant `sea_level` everywhere).
   For documentation, see `Set eta init 
-  <http://depts.washington.edu/clawpack/sampledocs/dev_v5.7.0/set_eta_init.html>`__
+  <https://www.clawpack.org/set_eta_init.html>`__
 
 - The ability to identify some regions as initially dry even though the
   topography value is below the initial eta elevation specified.
   This can be used to initialize dry land behind dikes, for example.
   For documentation, see `Force dry
-  <http://depts.washington.edu/clawpack/sampledocs/dev_v5.7.0/force_dry.html>`__
+  <https://www.clawpack.org/force_dry.html>`__
 
-See the Jupyter notebooks (or rendered html versions) for more discussion of
+See the Jupyter notebooks (or rendered html versions linked below)
+for more discussion of
 these features and how they are used in this example.
 
 To run this example

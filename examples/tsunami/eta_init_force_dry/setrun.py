@@ -6,8 +6,6 @@ that will be read in by the Fortran code.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os, sys
 import numpy as np
 
@@ -460,11 +458,13 @@ def setrun(claw_pkg='geoclaw'):
     # NEW feature to adjust sea level by dtopo:
     rundata.qinit_data.variable_eta_init = True
     
-    # NEW feature to force dry land some locations below sea level:
-    force_dry = ForceDry()
-    force_dry.tend = 7*60.
-    force_dry.fname = 'input_files/force_dry_init.tt3'
-    rundata.qinit_data.force_dry_list.append(force_dry)
+    if 1:
+        # NEW feature to force dry land some locations below sea level:
+        # (comment out if you want the onshore depression to be a lake)
+        force_dry = ForceDry()
+        force_dry.tend = 7*60.
+        force_dry.fname = 'input_files/force_dry_init.tt3'
+        rundata.qinit_data.force_dry_list.append(force_dry)
 
     # == fgmax.data values ==
     #fgmax_files = rundata.fgmax_data.fgmax_files
