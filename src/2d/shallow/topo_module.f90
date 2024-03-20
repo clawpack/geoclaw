@@ -153,8 +153,8 @@ contains
                     write(GEO_PARM_UNIT,*) '   ',topofname(i)
                     write(GEO_PARM_UNIT,*) '  itopotype = ', itopotype(i)
                     if (abs(itopotype(i)) == 1) then
-                        print *, 'WARNING: topotype 1 has been deprecated'
-                        print *, 'converting to topotype > 1 is encouraged'
+                        print *, 'converting to topotype > 1 might reduce
+file size'
                         print *, 'python tools for converting files are provided'
                     endif
                     call read_topo_header(topofname(i),itopotype(i),mxtopo(i), &
