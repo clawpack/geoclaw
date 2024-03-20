@@ -59,14 +59,3 @@ SOURCES = \
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
 
-# Construct the topography data
-.PHONY: topo all
-
-topo:
-	python make_celledges.py
-
-all: 
-	$(MAKE) topo
-	$(MAKE) .plots
-	$(MAKE) .htmls
-
