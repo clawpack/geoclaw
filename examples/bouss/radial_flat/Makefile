@@ -1,4 +1,13 @@
 # Makefile for Clawpack code in this directory.
+
+# Version for Boussinesq solvers in GeoClaw, which requires PETSc and MPI
+# See https://www.clawpack.org/bouss2d.html
+#
+# Execute this command to check that enviornment variables set properly:
+#    make check
+# before compiling or executing the code!
+# Then do `make new` if using the Boussinesq version for the first time.
+
 # This version only sets the local files and frequently changed
 # options, and then includes the standard makefile pointed to by CLAWMAKE.
 CLAWMAKE = $(CLAW)/clawutil/src/Makefile.common
@@ -13,15 +22,34 @@ CLAWMAKE = $(CLAW)/clawutil/src/Makefile.common
 
 CLAW_PKG = geoclaw                  # Clawpack package to use
 
-# These environment variables need to be set properly, usually in your shell:
-#PETSC_DIR=/Users/rjl/git/Clones/petsc
+# These environment variables need to be set properly, usually in your
+# shell, but they could be explicitly set here:
+#PETSC_DIR=/full/path/to/petsc
 #PETSC_ARCH=arch-darwin-c-opt
 
 # The file petscMPIoptions sets parameters for MPI and the iterative solver:
-PETSC_OPTIONS=-options_file $(CLAW)/geoclaw/examples/bouss/petscMPIoptions
+# PETSC_OPTIONS must be set as an environment variable!
+# e.g. in bash:
+#   export PETSC_OPTIONS="-options_file $CLAW/geoclaw/examples/bouss/petscMPIoptions"
+
+ifndef PETSC_DIR
+  $(error PETSC_DIR not set)
+endif
+
+ifndef PETSC_ARCH
+  $(error PETSC_ARCH not set)
+endif
+
+ifndef PETSC_OPTIONS
+  PETSC_OPTIONS=MISSING
+  $(error PETSC_OPTIONS must be declared as environment variable)
+endif
+
+# How many MPI processes to use:
+BOUSS_MPI_PROCS ?= 6
 
 EXE = $(PWD)/xgeoclaw
-RUNEXE="${PETSC_DIR}/${PETSC_ARCH}/bin/mpiexec -n 6"
+RUNEXE="${PETSC_DIR}/${PETSC_ARCH}/bin/mpiexec -n ${BOUSS_MPI_PROCS}"
 SETRUN_FILE = setrun.py           # File containing function to make data
 OUTDIR = _output                  # Directory for output
 SETPLOT_FILE = setplot.py         # File containing function to set plots
@@ -83,3 +111,16 @@ SOURCES = \
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
 
+.PHONY: check
+
+check:
+	@echo ===================
+	@echo CLAW = $(CLAW)
+	@echo OMP_NUM_THREADS = $(OMP_NUM_THREADS)
+	@echo BOUSS_MPI_PROCS = $(BOUSS_MPI_PROCS)
+	@env | grep PETSC_OPTIONS
+	@echo PETSC_DIR = $(PETSC_DIR)
+	@echo PETSC_ARCH = $(PETSC_ARCH)
+	@echo RUNEXE = $(RUNEXE)
+	@echo FFLAGS = $(FFLAGS)
+	@echo ===================

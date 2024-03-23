@@ -1,16 +1,17 @@
 
-# This is the bash file used by RJL to set the parameters needed
+# This is a sample bash script to set the parameters needed
 # to run the Bouss version of GeoClaw with MPI and OpenMP.
 # Adjust as needed for your system...
 
-export CLAW=/Users/rjl/clawpack_src/clawpack_bouss
-export PYTHONPATH=$CLAW
-echo CLAW is set to $CLAW
+# You also need to set CLAW, FC, and perhaps PYTHONPATH
 
-export PETSC_DIR=/Users/rjl/git/Clones/petsc
+# For more information, see
+#   https://www.clawpack.org/bouss2d.html
+#   https://www.clawpack.org/setenv.html
+
+export PETSC_DIR=/full/path/to/petsc
 export PETSC_ARCH=arch-darwin-c-opt
 export PETSC_OPTIONS="-options_file $CLAW/geoclaw/examples/bouss/petscMPIoptions"
 export OMP_NUM_THREADS=6
+export BOUSS_MPI_PROCS=6  # only used in Clawpack Boussinesq example
 
-# set prompt to show working directory and reminder bouss parameters are set:
-PS1='[\W] bouss $ '
