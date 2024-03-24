@@ -29,6 +29,7 @@ workflow in a `setrun.py` file would do the following:
     - JMA (reading only)
     - IMD (planned)
     - tcvitals (reading only)
+    - OWI (data-derived)
 """
 
 import warnings
@@ -41,6 +42,7 @@ import numpy
 
 import clawpack.geoclaw.units as units
 import clawpack.clawutil.data
+from clawpack.geoclaw.surge import data_storms
 
 # =============================================================================
 #  Common acronyms across formats
@@ -1403,6 +1405,137 @@ def make_multi_structure(path):
                 fileWrite = open("Clipped_ATCFs/" + curTime + "/" + curTrack, 'w')
                 fileWrite.writelines(line)
     return stormDict
+
+
+class DataDerivedStorms(object):
+    """
+    Storm object to accommodate storms in the Oceanweather Inc. format.
+    The data is structured as wind and pressure files that contain the wind
+    and pressure fields for time steps every XX minutes.
+
+    This storm object is initialized to read in both files and parse the data
+    into a netcdf file for reading with the data_storm_module.f90
+
+      :Attributes:
+     - *t* (list(datetime.datetiem)) Contains the time at which each entry of
+       the other arrays are at.  These are expected to be *datetime* objects.
+       Note that when written some formats require a *time_offset* to be set.
+     - *wind_speed* (ndarray(:, :)) Wind speeds defined in every record, such
+       as 34kt, 50kt, 64kt, etc and their radii. Default units are meters/second
+       and meters.
+     - *pressure* (ndarray(:,,:)) Pressure arrays every 15 minutes for the region
+        of interest, Default units are bars
+     - *u* (ndarray(:,:)) Wind velocity in the x direction in arrays for every 15 minutes
+        Default units are m/s
+     - *v* (ndarray(:,:)) Wind velocity in the y direction in arrays for every 15 minutes
+        Default units are m/s
+    - *latitude* (ndarray(:,:)) Array of latitudes for the wind and pressure arrays
+    - *longitude* (ndarray(:,:)) Array of longitudes for the wind and pressure arrays
+
+    :Initialization:
+     1. Read in existing wind and pressure files at *path*.
+     2. Construct a data derived storm object and parse data into attributes using
+        data_storms.py for the parsing functions
+
+    :Input:
+     - *path* (string) Path to file to be read in if requested.
+     - *kwargs* (dict) Other key-word arguments are passed to the appropriate
+       read routine.
+    """
+
+    def __init__(self, path, wind_file_ext='WND', pressure_file_ext='PRE'):
+        """
+        This routine creates the DataStorm object, and loads the data from
+        file using data_storms.py
+
+        :param path: location and name of wind and pressure files
+        :param wind_file_ext: Extension for the wind file, either 'WND' or 'WIN'
+        :param pressure_file_ext: Extension for the pressure file "PRE" or 'pre'
+        """
+        # Set wind and pressure file extensions
+        self.wind_ext = wind_file_ext
+        self.pres_ext = pressure_file_ext
+
+        # Read in wind and pressure data from original file formats
+        self.wind_data = data_storms.read_oceanweather(path, self.wind_ext)
+        self.pressure_data = data_storms.read_oceanweather(path, self.pres_ext)
+
+        # Initialize instance variables
+        self.t = None # Placeholder for array of time steps included in original data
+        self.lat = None # Placeholder for array of latitudes of the storm domain
+        self.lon = None # Placeholder for array of longitudes of the storm domain
+        self.u = [] # Placeholder for wind data in x direction
+        self.v = [] # Placeholder for wind data in y direction
+        self.pressure = [] # Placeholder for pressure data
+        self.wind_speed = [] # Placeholder for wind speed
+
+    def parse_data(self):
+        
+        import numpy as np
+        """
+        This method processes the wind and pressure data matrices, extracts the data for each time step,
+        and stores the processed data in instance variables.
+
+        It uses functions from the data_storms module to extract time steps, latitude, and longitude arrays,
+        as well as to process wind and pressure matrices into 2D arrays.
+
+        The processed data is then appended to instance variables u, v, pressure, and wind_speed.
+    
+        :return: None
+        """
+        # Extract time and coordinate arrays
+        self.t = data_storms.time_steps(self.wind_data)
+        self.lat, self.lon = data_storms.get_coordinate_arrays(self.wind_data[0])
+
+        # Iterate over all data, each index = an individual time step
+        for winds, pressures in zip(self.wind_data, self.pressure_data):
+            # Process the wind and pressure matrix per time index into 2d arrays
+            u = data_storms.process_data(winds, start_idx=0)
+            v = data_storms.process_data(winds, start_idx=(winds.iLat * winds.iLong))
+            p = data_storms.process_data(pressures, start_idx=0)
+            # Put into lists for easy writing to a xarray dataarray
+            self.u.append(u)
+            self.pressure.append(p)
+            self.v.append(v)
+            # Calculate wind speed from each directional component
+            self.wind_speed.append(np.sqrt(u**2 + v**2))
+
+
+    def write_data_derived(self, filename):
+        """
+        This method writes the derived wind, pressure, and wind speed data to a NetCDF file using xarray.
+
+        :param filename: The name of the output NetCDF file (without the extension).
+        :return: None
+        """
+        import xarray as xr
+
+        windx = numpy.array(self.u)
+        windy = numpy.array(self.v)
+        pressure = numpy.array(self.pressure)*100 # Convert to mbars
+        speed = numpy.array(self.wind_speed)
+        time = numpy.array(self.t)
+
+        # Create a dataset with xarray with derived data
+        ds = xr.Dataset(data_vars={'u': (('time', 'lat', 'lon'), windx),
+                                   'v': (('time', 'lat', 'lon'), windy),
+                                   'speed': (('time', 'lat', 'lon'), speed),
+                                   'pressure': (('time', 'lat', 'lon'), pressure),
+                                   },
+                        coords={'lat': self.lat,
+                                'lon': self.lon,
+                                'time': time})
+        # Save the dataset to netcdf format
+        ds.to_netcdf(filename + '.nc')
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
