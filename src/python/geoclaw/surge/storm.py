@@ -357,7 +357,7 @@ class Storm(object):
         for c in ["LAT", "LON", "VMAX", "MSLP", "ROUTER", "RMW",
                   "RAD", "RAD1", "RAD2", "RAD3", "RAD4"]:
             df[c] = df[c].where(df[c] != 0, numpy.nan)  # value 0 means NaN
-            df[c] = df.groupby("DATE")[c].fillna(method="bfill")
+            df[c] = df.groupby("DATE")[c].bfill()
         df = df.groupby("DATE").first()
 
         # Wind profile (occasionally missing for older ATCF storms)
@@ -901,9 +901,10 @@ class Storm(object):
         num_casts = 0
         data_string = [""]
         if self.time_offset is None:
-            # Use the first time in sequence if not provided
+            data_string.append("None")
             self.time_offset = self.t[0]
-        data_string.append("%s\n\n" % self.time_offset.isoformat())
+        else:
+            data_string.append("%s\n\n" % self.time_offset.isoformat())
         for n in range(len(self.t)):
             # Remove duplicate times
             if n > 0:
@@ -912,7 +913,10 @@ class Storm(object):
 
             format_string = ("{:19,.8e} " * 7)[:-1] + "\n"
             data = []
-            data.append((self.t[n] - self.time_offset).total_seconds())
+            if not isinstance(self.time_offset, float):
+                data.append((self.t[n] - self.time_offset).total_seconds())
+            else:
+                data.append(self.t[n] - self.time_offset)
             data.append(self.eye_location[n, 0])
             data.append(self.eye_location[n, 1])
 
