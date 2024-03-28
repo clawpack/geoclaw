@@ -7,8 +7,10 @@ However, see the individual README files in the directories.
 
 To run all examples in all subdirectories:
     python $CLAW/clawutil/src/python/clawutil/run_examples.py
-You might want to first adjust parameters set in that script.
-In addition to doing `make all`, this also runs any Jupyter notebooks
+You might want to first check your environment variables, or you can set
+them explicitly by modifying the script.
+
+In addition to doing `make all`, this script also runs any Jupyter notebooks
 found in the subdirectories.
 
 It may take some time for these examples to all run. Two files 
