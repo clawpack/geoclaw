@@ -428,7 +428,7 @@ class Topography(object):
         self.topo_type = topo_type
 
         self.unstructured = unstructured
-        self.no_data_value = -9999
+        self.no_data_value = -99999
 
         # Data storage for only calculating array shapes when needed
         self._z = None
@@ -1004,7 +1004,7 @@ class Topography(object):
 
         # Default to this object's no_data_value if the passed is None, 
         # otherwise the argument will override the object's value or it will 
-        # default to -9999 (default for the class)
+        # default to -99999 (default for the class)
         if no_data_value is None:
             no_data_value = self.no_data_value
 
@@ -1304,7 +1304,7 @@ class Topography(object):
 
     def interp_unstructured(self, fill_topo, extent=None, method='nearest',
                                    delta=None, delta_limit=20.0, 
-                                   no_data_value=-9999, buffer_length=100.0,
+                                   no_data_value=-99999, buffer_length=100.0,
                                    proximity_radius=100.0, 
                                    resolution_limit=2000):
         r"""Interpolate unstructured data on to regular grid.
@@ -1340,7 +1340,7 @@ class Topography(object):
          - *delta_limit* (float) - Limit of finest horizontal resolution, 
            default is 20 meters.
          - *no_data_value* (float) - Value to use if no data was found to fill in a 
-           missing value, ignored if `method = 'nearest'`. Default is `-9999`.
+           missing value, ignored if `method = 'nearest'`. Default is `-99999`.
          - *buffer_length* (float) - Buffer around bounding box, only applicable
            when *extent* is None.  Default is `100.0` meters.
          - *proximity_radius* (float) - Radius every unstructured data point
