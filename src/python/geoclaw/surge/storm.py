@@ -61,12 +61,12 @@ ATCF_basins = {"AL": "Atlantic",
 TCVitals_Basins = {"L": "North Atlantic",
                    "E": "North East Pacific",
                    "C": "North Central Pacific",
- 		   "W": "North West Pacific",
-		   "B": "Bay of Bengal (North Indian Ocean)",
-		   "A": "Arabian Sea (North Indian Ocean)",
-		   "Q": "South Atlantic",
-		   "P": "South Pacific",
-		   "S": "South Indian Ocean"}
+           "W": "North West Pacific",
+           "B": "Bay of Bengal (North Indian Ocean)",
+           "A": "Arabian Sea (North Indian Ocean)",
+           "Q": "South Atlantic",
+           "P": "South Pacific",
+           "S": "South Indian Ocean"}
 
 # Tropical Cyclone Designations
 # see https://www.nrlmry.navy.mil/atcf_web/docs/database/new/abrdeck.html
@@ -208,9 +208,13 @@ class Storm(object):
     def __str__(self):
         r""""""
         output = "Name: %s" % self.name
-        output = "\n".join((output, "Dates: %s - %s" % (self.t[0].isoformat(),
-                                                        self.t[-1].isoformat())
-                            ))
+        if isinstance(self.t[0], datetime.datetime):
+            output = "\n".join((output, 
+                                "Dates: %s - %s" % (self.t[0].isoformat(),
+                                                    self.t[-1].isoformat()) ))
+        elif isinstance(self.t[0], float):
+            output = "\n".join((output, 
+                                "Times: %s - %s" % (self.t[0], self.t[-1]) ))
         return output
 
     def __repr__(self):
@@ -357,7 +361,7 @@ class Storm(object):
         for c in ["LAT", "LON", "VMAX", "MSLP", "ROUTER", "RMW",
                   "RAD", "RAD1", "RAD2", "RAD3", "RAD4"]:
             df[c] = df[c].where(df[c] != 0, numpy.nan)  # value 0 means NaN
-            df[c] = df.groupby("DATE")[c].bfill()
+            df[c] = df.groupby("DATE")[c].fillna(method="bfill")
         df = df.groupby("DATE").first()
 
         # Wind profile (occasionally missing for older ATCF storms)
@@ -901,10 +905,14 @@ class Storm(object):
         num_casts = 0
         data_string = [""]
         if self.time_offset is None:
-            data_string.append("None")
+            # Use the first time in sequence if not provided
             self.time_offset = self.t[0]
-        else:
+        if isinstance(self.time_offset, datetime.datetime):
             data_string.append("%s\n\n" % self.time_offset.isoformat())
+        elif isinstance(self.time_offset, float):
+            data_string.append("%s\n\n" % self.time_offset)
+        else:
+            data_string.append("None\n\n")
         for n in range(len(self.t)):
             # Remove duplicate times
             if n > 0:
@@ -913,10 +921,12 @@ class Storm(object):
 
             format_string = ("{:19,.8e} " * 7)[:-1] + "\n"
             data = []
-            if not isinstance(self.time_offset, float):
+            if isinstance(self.t[n], datetime.datetime):
                 data.append((self.t[n] - self.time_offset).total_seconds())
-            else:
+            elif isinstance(self.t[n], float):
                 data.append(self.t[n] - self.time_offset)
+            else:
+                raise ValueError("Invalid time/date specification.")
             data.append(self.eye_location[n, 0])
             data.append(self.eye_location[n, 1])
 
@@ -1120,7 +1130,7 @@ class Storm(object):
 
     # =========================================================================
     # Other Useful Routines
-	
+    
     def category(self, categorization="NHC", cat_names=False):
         r"""Categorizes storm based on relevant storm data
 

@@ -524,7 +524,7 @@ def add_track(Storm, axes, plot_package=None, category_color=None, legend_loc='b
 
     categories_legend = []
 
-    if intensity and categorization is "NHC": 
+    if intensity and categorization == "NHC": 
         categories_legend = []
             # plotitem = plotaxes.new_plotitem(name='category', plot_type='1d_plot')
 
