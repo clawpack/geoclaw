@@ -222,31 +222,25 @@ contains
                     case(10) ! Plane wave
                         set_model_fields => set_plane_wave_fields
                     case default
-                        stop "*** ERROR *** Invalid paramterized storm model."
+                        print *, "Storm specification model type ",        &
+                            storm_specification_type, "not available."
+                        stop
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
-            else if (storm_specification_type > 0) then
-                print *, "Storm specification model type ",                &
-                            storm_specification_type, "not available."
-                stop
-            end if
-
+            
             ! Storm will be set based on a gridded set of data
-            if (-1 <= storm_specification_type .and.                    &
-                      storm_specification_type < 0) then
+            else if (-1 <= storm_specification_type) then
                 select case(storm_specification_type)
                     case(1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
                     case(2) ! OWI Data
-
+                        stop "*** OWI not implemented yet."
                     case default
-                        stop "*** ERROR *** Invalid storm data format."
+                        print *, "Storm specification data type ",         &
+                                 storm_specification_type, "not available."
+                        stop
                 end select
-            else if (storm_specification_type < 0) then
-                print *, "Storm specification data type ",               &
-                            storm_specification_type, "not available."
-                stop
             end if
 
             close(log_unit)

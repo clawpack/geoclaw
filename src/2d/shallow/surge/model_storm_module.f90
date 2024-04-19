@@ -1583,8 +1583,6 @@ contains
             y = ylower + (j-0.5d0) * dy
             do i=1-mbc,mx+mbc
                 x = xlower + (i-0.5d0) * dx
-                
-                ! call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
                 aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / abs(x - sloc(1)))**B)
