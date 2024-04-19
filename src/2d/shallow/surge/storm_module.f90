@@ -230,7 +230,7 @@ contains
                                      storm_specification_type, log_unit)
             
             ! Storm will be set based on a gridded set of data
-            else if (-1 <= storm_specification_type) then
+            else if (storm_specification_type < 0) then
                 select case(storm_specification_type)
                     case(1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
