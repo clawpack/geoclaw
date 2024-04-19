@@ -669,11 +669,7 @@ contains
             gauges(i)%level(n) = level
             gauges(i)%data(1,n) = tgrid
             do j = 1, gauges(i)%num_out_vars
-                if (j .eq. pressure_index) then
-                  gauges(i)%data(1 + j, n) = var(j)/ambient_pressure
-                else
-                  gauges(i)%data(1 + j, n) = var(j)
-                endif
+                gauges(i)%data(1 + j, n) = var(j)
             end do
             
             gauges(i)%buffer_index = n + 1
