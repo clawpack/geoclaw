@@ -1543,4 +1543,55 @@ contains
         enddo
 
     end subroutine set_willoughby_fields
+
+    ! =========================================================================
+    !  Atmospheric plane wave
+    ! =========================================================================
+    subroutine set_plane_wave_fields(maux, mbc, mx, my, xlower, ylower,    &
+                                       dx, dy, t, aux, wind_index,           &
+                                       pressure_index, storm)
+
+        use geoclaw_module, only: rho_air, deg2rad, spherical_distance
+
+        implicit none
+
+        ! Time of the wind field requested
+        integer, intent(in) :: maux, mbc, mx, my
+        real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
+
+        ! Storm description, need in out here since we may update the storm
+        ! if at next time point
+        type(model_storm_type), intent(inout) :: storm
+
+        ! Array storing wind and presure field
+        integer, intent(in) :: wind_index, pressure_index
+        real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
+
+        ! Locals
+        real(kind=8) :: x, y, r, theta, sloc(2), B
+        real(kind=8) :: mwr, mws, Pc, dPc_dt, dp, wind, tv(2), radius, mod_mws
+        integer :: i,j
+
+        ! Get interpolated storm data
+        call get_storm_data(t, storm, sloc, tv, mwr, mws, Pc, radius, dPc_dt)
+
+        dp = get_pressure_diff(Pc)
+        B = get_holland_b(mod_mws, dp)
+
+        ! Set fields
+        do j=1-mbc,my+mbc
+            y = ylower + (j-0.5d0) * dy
+            do i=1-mbc,mx+mbc
+                x = xlower + (i-0.5d0) * dx
+                
+                ! call calculate_polar_coordinate(x, y, sloc, r, theta)
+
+                ! Set pressure field
+                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / abs(x - sloc(1)))**B)
+
+            enddo
+        enddo
+
+    end subroutine set_plane_wave_fields
+
 end module model_storm_module

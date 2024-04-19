@@ -113,6 +113,8 @@ contains
         use model_storm_module, only: set_rankine_fields
         use model_storm_module, only: set_modified_rankine_fields
         use model_storm_module, only: set_deMaria_fields
+        use model_storm_module, only: set_willoughby_fields
+        use model_storm_module, only: set_plane_wave_fields
 
         ! use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
@@ -181,7 +183,7 @@ contains
             read(unit,*)
 
             ! Storm Setup
-            read(unit, "(i1)") storm_specification_type
+            read(unit, "(i2)") storm_specification_type
             read(unit, *) storm_file_path
 
             close(unit)
@@ -197,14 +199,10 @@ contains
             write(log_unit, *) "  file = ", storm_file_path
 
             ! Use parameterized storm model
-            if (0 < storm_specification_type .and.              &
-                    storm_specification_type <= 3               &
-                .or. storm_specification_type == 8) then
+            if (0 < storm_specification_type) then
                 select case(storm_specification_type)
                     case(1) ! Holland 1980 model
                         set_model_fields => set_holland_1980_fields
-                    case(8) ! Holland 2008 model
-                        set_model_fields => set_holland_2008_fields
                     case(2) ! Holland 2010 model
                         set_model_fields => set_holland_2010_fields
                     case(3) ! Chavas, Lin, Emanuel model
@@ -217,6 +215,14 @@ contains
                         set_model_fields => set_modified_rankine_fields
                     case(7) ! deMaria model
                         set_model_fields => set_deMaria_fields
+                    case(8) ! Holland 2008 model
+                        set_model_fields => set_holland_2008_fields
+                    case(9) ! Willoughby Model
+                        set_model_fields => set_willoughby_fields
+                    case(10) ! Plane wave
+                        set_model_fields => set_plane_wave_fields
+                    case default
+                        stop "*** ERROR *** Invalid paramterized storm model."
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
@@ -232,6 +238,10 @@ contains
                 select case(storm_specification_type)
                     case(1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
+                    case(2) ! OWI Data
+
+                    case default
+                        stop "*** ERROR *** Invalid storm data format."
                 end select
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
