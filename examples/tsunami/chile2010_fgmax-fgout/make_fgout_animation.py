@@ -63,21 +63,27 @@ ax.set_xlim(plot_extent[:2])
 ax.set_ylim(plot_extent[2:])
 
 
-# The artists that will be updated for subsequent frames:
-update_artists = (eta_plot, title_text)
+blit = True
+if blit:
+    # The artists that will be updated for subsequent frames:
+    update_artists = (eta_plot, title_text)
+    
+# Note that update_artists is only needed if blit==True in call to
+# animation.FuncAnimation below.
+# Using blit==False does not seem to slow down creation of the animation by much
+# and slightly simplifies modification of this script to situations where more
+# artists are updated.
         
-        
-def update(fgframeno, *update_artists):
+def update(fgframeno):
     """
     Update an exisiting plot with solution from fgout frame fgframeno.
-    The artists in update_artists must have new data assigned.
+    Note: Even if blit==True in call to animation.FuncAnimation,
+    the update_artists do not need to be passed in, unpacked, and repacked
+    as in an earlier version of this example (version <= 5.10.0).
     """
     
     fgout = fgout_grid.read_frame(fgframeno)
     print('Updating plot at time %s' % timedelta(seconds=fgout.t))
-    
-    # unpack update_artists (must agree with definition above):
-    eta_plot, title_text = update_artists
         
     # reset title to current time:
     title_text.set_text('Surface at time %s' % timedelta(seconds=fgout.t))
@@ -86,8 +92,8 @@ def update(fgframeno, *update_artists):
     eta = ma.masked_where(fgout.h<0.001, fgout.eta)
     eta_plot.set_array(eta.T.flatten())
         
-    update_artists = (eta_plot, title_text)
-    return update_artists
+    if blit:
+        return update_artists
 
 def plot_fgframe(fgframeno):
     """
@@ -95,15 +101,13 @@ def plot_fgframe(fgframeno):
     But if you use this function in IPython and then try to make the animation,
     it may get into an infinite loop (not sure why).  Close the figure to abort.
     """
-    update(fgframeno, *update_artists)
+    update(fgframeno)
                 
 
 def make_anim():
     print('Making anim...')
-    anim = animation.FuncAnimation(fig, update,
-                                   frames=fgframes, 
-                                   fargs=update_artists,
-                                   interval=200, blit=True)
+    anim = animation.FuncAnimation(fig, update, frames=fgframes, 
+                                   interval=200, blit=blit)
     return anim
 
 if __name__ == '__main__':
