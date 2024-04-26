@@ -8,6 +8,9 @@ in update.  Modify this as needed.
 
 """
 
+import matplotlib
+matplotlib.use('Agg')  # Use an image backend
+            
 from pylab import *
 import os
 from clawpack.visclaw import plottools, geoplot
@@ -24,7 +27,7 @@ format = 'binary'  # format of fgout grid output
 
 fgframes = range(1,26)  # frames of fgout solution to use in animation
 
-figsize = (10,8)
+figsize = (8,7)
 
 # Instantiate object for reading fgout frames:
 fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, format) 
