@@ -6,13 +6,26 @@ that only changes the parts of the plot that change in each frame.
 The tuple update_artists contains the list of Artists that must be changed
 in update.  Modify this as needed.
 
+Make the animation via:
+    python make_fgout_animation.py
+
+If this script is executed in IPython or a notebook it may go into
+an infinite loop for reasons unknown.  If so, close the figure to halt.
+
+To view individual fgout frames interactively, this should work:
+    import make_fgout_animation
+    fgframeno =  # set to desired fgout frame number 
+    make_fgout_animation.update(fgframeno)
 """
 
-import matplotlib
-matplotlib.use('Agg')  # Use an image backend
-            
+import sys
+if 'matplotlib' not in sys.modules:
+    # Use an image backend to insure animation has size specified by figsize
+    import matplotlib
+    matplotlib.use('Agg')
+
 from pylab import *
-import os
+import os, glob
 from clawpack.visclaw import plottools, geoplot
 from clawpack.visclaw import animation_tools
 from matplotlib import animation, colors
@@ -25,7 +38,15 @@ fgno = 1  # which fgout grid
 outdir = '_output'
 format = 'binary'  # format of fgout grid output
 
-fgframes = range(1,26)  # frames of fgout solution to use in animation
+if 1:
+    # all frames found in outdir:
+    fgout_frames = glob.glob(os.path.join(outdir, \
+                                          'fgout%s.t*' % str(fgno).zfill(4)))
+    nout = len(fgout_frames)
+    fgframes = range(1, nout+1)
+    print('Found %i fgout frames in %s' % (nout,outdir))
+else:
+    fgframes = range(1,26)  # frames of fgout solution to use in animation
 
 figsize = (8,7)
 
@@ -66,7 +87,7 @@ ax.set_xlim(plot_extent[:2])
 ax.set_ylim(plot_extent[2:])
 
 
-blit = True
+blit = False
 if blit:
     # The artists that will be updated for subsequent frames:
     update_artists = (eta_plot, title_text)
@@ -98,14 +119,6 @@ def update(fgframeno):
     if blit:
         return update_artists
 
-def plot_fgframe(fgframeno):
-    """
-    Convenience function for plotting one frame.
-    But if you use this function in IPython and then try to make the animation,
-    it may get into an infinite loop (not sure why).  Close the figure to abort.
-    """
-    update(fgframeno)
-                
 
 def make_anim():
     print('Making anim...')
