@@ -148,6 +148,22 @@ The use of fgout grids provides a way to produce frequent outputs
 on a fixed grid resolution, as often desired for making smooth
 animations of a portion of the computational domain.
 
+**New in v5.10.1:**
+
+As of v5.10.1, the make_fgout_animation.py script has been simplified a bit
+and cleaned up. See the docstring for more information.  In addition, a new
+script has been added to make an animation that also shows a transect of
+the surface elevation and the bottom topography from the fgout frames.
+Note that the topography changes as the tsunami propagates based on
+where the finer AMR grids are located. To make this animation:
+
+    python make_fgout_animation_with_transect.py
+
+or it is also created by `make fgout_plots`, in which case the resulting
+`fgout_animation_with_transect.*` files are moved into `_plots_fgout`
+and linked from `_plots_fgout/_PlotIndex.html`.
+
+
 Saving a sequence of fgout frames to a single netCDF file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
