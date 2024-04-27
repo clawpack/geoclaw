@@ -3,8 +3,6 @@ Make an mp4 animation of fgout grid results.
 This is done in a way that makes the animation quickly and with minimum 
 storage required, by making one plot and then defining an update function
 that only changes the parts of the plot that change in each frame.
-The tuple update_artists contains the list of Artists that must be changed
-in update.  Modify this as needed.
 
 Make the animation via:
     python make_fgout_animation.py
@@ -14,8 +12,8 @@ an infinite loop for reasons unknown.  If so, close the figure to halt.
 
 To view individual fgout frames interactively, this should work:
     import make_fgout_animation
-    fgframeno =  # set to desired fgout frame number 
-    make_fgout_animation.update(fgframeno)
+    make_fgout_animation.update(fgframeno)  # for desired fgout frame no
+
 """
 
 import sys
@@ -39,16 +37,15 @@ outdir = '_output'
 format = 'binary'  # format of fgout grid output
 
 if 1:
-    # all frames found in outdir:
+    # use all fgout frames in outdir:
     fgout_frames = glob.glob(os.path.join(outdir, \
                                           'fgout%s.t*' % str(fgno).zfill(4)))
     nout = len(fgout_frames)
     fgframes = range(1, nout+1)
     print('Found %i fgout frames in %s' % (nout,outdir))
 else:
+    # set explicitly, e.g. to test with only a few frames
     fgframes = range(1,26)  # frames of fgout solution to use in animation
-
-figsize = (8,7)
 
 # Instantiate object for reading fgout frames:
 fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, format) 
@@ -60,10 +57,9 @@ fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, format)
 fgout1 = fgout_grid.read_frame(fgframes[0])
 
 plot_extent = fgout1.extent_edges
-
 ylat = fgout1.Y.mean()  # for aspect ratio of plots
 
-fig,ax = subplots(figsize=figsize)
+fig,ax = subplots(figsize=(8,7))
 
 ax.set_xlim(plot_extent[:2])
 ax.set_ylim(plot_extent[2:])
@@ -103,7 +99,7 @@ def update(fgframeno):
     Update an exisiting plot with solution from fgout frame fgframeno.
     Note: Even if blit==True in call to animation.FuncAnimation,
     the update_artists do not need to be passed in, unpacked, and repacked
-    as in an earlier version of this example (version <= 5.10.0).
+    as in an earlier version of this example (Clawpack version <= 5.10.0).
     """
     
     fgout = fgout_grid.read_frame(fgframeno)
@@ -120,15 +116,11 @@ def update(fgframeno):
         return update_artists
 
 
-def make_anim():
+if __name__ == '__main__':
+
     print('Making anim...')
     anim = animation.FuncAnimation(fig, update, frames=fgframes, 
                                    interval=200, blit=blit)
-    return anim
-
-if __name__ == '__main__':
-
-    anim = make_anim()
     
     # Output files:
     name = 'fgout_animation'
@@ -148,7 +140,4 @@ if __name__ == '__main__':
     if fname_html:
         # html version:
         animation_tools.make_html(anim, file_name=fname_html, title=name)
-    
-    
-    
-    
+
