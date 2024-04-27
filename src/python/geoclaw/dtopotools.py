@@ -408,14 +408,14 @@ class DTopography(object):
                              " given %s." % dtopo_type)
 
 
-    def write(self, path=None, dtopo_type=None):
+    def write(self, path=None, dtopo_type=None, dZ_format="%.3f"):
         r"""Write out subfault resulting dtopo to file at *path*.
 
         :input:
         
          - *path* (path) - Path to the output file to written to.
-         - *dtopo_type* (int) - Type of topography file to write out.  Default
-           is 3.
+         - *dtopo_type* (int) - Type of topography file to write out. Default 3.
+         - *dZ_format* (str) - format for dZ values printed. Default '%.3f'
 
         """
 
@@ -447,9 +447,10 @@ class DTopography(object):
                 Y_flipped = numpy.flipud(self.Y)
                 dZ_flipped = numpy.flipud(self.dZ[-1,:,:]) 
 
+                format_string = "%s %s %s\n" % (dZ_format,dZ_format,dZ_format)
                 for j in range(self.Y.shape[0]):
                     for i in range(self.X.shape[1]):
-                        data_file.write("%s %s %s\n" % self.X[j,i], 
+                        data_file.write(format_string % self.X[j,i], 
                             Y_flipped[j,i], dZ_flipped[j,i])
 
             elif dtopo_type == 1:
@@ -462,9 +463,11 @@ class DTopography(object):
                     #dZ_flipped = numpy.flipud(alpha * self.dZ[:,:])
                     dZ_flipped = numpy.flipud(self.dZ[n,:,:])  
 
+                    format_string = "%s %s %s %s\n" \
+                                    % ('%g',dZ_format,dZ_format,dZ_format)
                     for j in range(self.Y.shape[0]):
                         for i in range(self.X.shape[1]):
-                            data_file.write("%s %s %s %s\n" % (self.times[n],
+                            data_file.write(format_string % (self.times[n],
                                 self.X[j,i], Y_flipped[j,i], dZ_flipped[j,i]))
         
             elif dtopo_type == 2 or dtopo_type == 3:
@@ -489,7 +492,7 @@ class DTopography(object):
                     for (n, time) in enumerate(self.times):
                         #alpha = (time - self.t[0]) / (self.t[-1])
                         for j in range(self.Y.shape[0]-1, -1, -1):
-                            data_file.write(self.X.shape[1] * '%012.6e  ' 
+                            data_file.write(self.X.shape[1] * (dZ_format + ' ') 
                                                   % tuple(self.dZ[n,j,:]))
                             data_file.write("\n")
 
