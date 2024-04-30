@@ -164,6 +164,12 @@ def setplot(plotdata):
     otherfigure = plotdata.new_otherfigure(name='fgout_animation.html', 
                     fname='fgout_animation.html')
 
+    otherfigure = plotdata.new_otherfigure(name='fgout_animation_with_transect.mp4', 
+                    fname='fgout_animation_with_transect.mp4')
+
+    otherfigure = plotdata.new_otherfigure(name='fgout_animation_with_transect.html', 
+                    fname='fgout_animation_with_transect.html')
+
 
 
     #-----------------------------------------
