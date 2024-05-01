@@ -255,7 +255,7 @@ contains
     ! set_pressure
     !   Set pressure at a radius r
     ! ==========================================================================
-    pure real(kind=8) function set_pressure(Pc, r, dp, mwr, r, B) result(pres)
+    real(kind=8) pure function set_pressure(Pc, r, dp, mwr, r, B) result(pres)
         implicit none
 
         real(kind=8), intent(in) :: Pc, r, dp, mwr, r, B
