@@ -28,6 +28,7 @@ the full 8 digits if you want it transparent).
  - kml_build_colorbar - create a colorbar to display on GE
  - topo2kmz - create kmz file showing onshore and offshore topography
  - transect2kml - create kml file showing a set of points on a transect
+ - dtopo_contours2kmz - create a kmz file containing contour plots of dtopo(s)
  - kml_header - used internally
  - kml_footer - used internally
  - kml_region - used internally
@@ -40,6 +41,9 @@ try:
     from importlib import reload
 except:
     pass # assume python2, already has reload
+
+from pylab import *
+import os
 
 def f2s(x, num_digits=6):
     r"""
@@ -1550,3 +1554,98 @@ def transect2kml(xtrans, ytrans, fname='transect.kml'):
             
     print('Created ', fname)
     
+def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
+                       text_label=True, text_x=None, text_y=None):
+
+    """
+    Create dtopo_contours.kmz file containing contour plots of the dtopo
+    deformations with radio buttons to select which one to show.
+    (Or dtopofiles can be a string for a single dtopofile.)
+    
+    :Inputs:
+
+     - *dtopofiles* (str or list of str): single or list of dtopofile paths
+     - *dZ_interval* (float) the interval in meters between contours.
+     - *dZmax* (float) max for contour levels shown (and -dZmax is the min)
+     - *text_label* Text label to add to plots,
+        If text_label is a string this will be added as a text label,
+        If text_label == True a standard label will be added with the dopofile name
+        and the max, min values of dZ.
+     - *text_x, text_y* are the location of the text, 
+        or if None then the mean of dtopofile.X and dtopofile.Y are used.
+    """
+    from clawpack.geoclaw import dtopotools
+    from numpy import ma
+    import os,sys, zipfile
+    
+    kml_dir = 'dtopos_kml'
+    os.system('mkdir -p %s' % kml_dir)
+    events = []
+    png_files = []
+    
+    if type(dtopofiles) == str:
+        dtopofiles = [dtopofiles]  # if only one passed in
+        
+    for dtopofile in dtopofiles:
+        dtopofile = os.path.abspath(dtopofile)
+        event = os.path.splitext(os.path.split(dtopofile)[-1])[0]
+        events.append(event)
+        print('Making contours for event = ',event)
+        print('  contour interval = %gm' % dZ_interval)
+        
+        dtopo = dtopotools.DTopography(dtopofile, dtopo_type=dtopo_type)
+        
+        # first make empty plot of right dimensions:
+        Zm = ma.masked_where(dtopo.Y < 90, dtopo.Y)  # all masked
+        fig,ax,png_extent,kml_dpi = pcolorcells_for_kml(dtopo.X, dtopo.Y, Zm,
+                                                 png_filename=None, dpc=2)
+        # now add contour plot:
+        clines = arange(dZ_interval,dZmax,dZ_interval)
+        lw = 1.
+        ax.contour(dtopo.X, dtopo.Y, dtopo.dZ[-1,:,:], clines, colors='r', 
+                   linestyles='-', linewidths=lw)
+        clines = arange(-dZmax,0,dZ_interval)
+        ax.contour(dtopo.X, dtopo.Y, dtopo.dZ[-1,:,:], clines, colors='c', 
+                   linestyles='-', linewidths=lw)
+
+        if text_label:
+            if text_x is None:
+                text_x = dtopo.x.mean()
+            if text_y is None:
+                text_y = dtopo.y.mean()
+                
+            dz_min = dtopo.dZ[-1,:,:].min()
+            dz_max = dtopo.dZ[-1,:,:].max()
+            if type(text_label) == str:
+                text(text_x, text_y, text_label, fontsize=15,color='yellow')
+            else:
+                text(text_x, text_y,'%s\ndz_min = %.1fm, dz_max = %.1fm' \
+                        % (event,dz_min,dz_max),
+                     fontsize=15,color='yellow')    
+
+        png_filename = '%s_contours.png' % event
+        png_files.append(png_filename)
+        png_filename = os.path.join(kml_dir, png_filename)
+        plt.savefig(png_filename, transparent=True, dpi=kml_dpi)
+        close(fig)
+            
+    savedir = os.getcwd()
+    os.chdir(kml_dir)
+    png_names = events
+    fname = 'dtopo_contours.kml'
+    name = 'dtopo_contours'
+    png2kml(png_extent, png_files=png_files, png_names=png_names, 
+                     radio_style=True, name=name, fname=fname)
+
+    files = [fname] + ['%s_contours.png' % event for event in events]
+    if 0:
+        print('kmz file will include:')
+        for file in files:
+            print('    ', file)
+    
+    fname_kmz = 'dtopo_contours.kmz'
+    with zipfile.ZipFile(fname_kmz, 'w') as zip:
+        for file in files:
+            zip.write(file) 
+        print('Created %s' % os.path.abspath(fname_kmz))
+    os.chdir(savedir)
