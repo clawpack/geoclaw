@@ -255,10 +255,10 @@ contains
     ! set_pressure
     !   Set pressure at a radius r
     ! ==========================================================================
-    real(kind=8) pure function set_pressure(Pc, r, dp, mwr, r, B) result(pres)
+    real(kind=8) pure function set_pressure(Pc, r, dp, mwr, B) result(pres)
         implicit none
 
-        real(kind=8), intent(in) :: Pc, r, dp, mwr, r, B
+        real(kind=8), intent(in) :: Pc, r, dp, mwr, B
         if (r == 0) then
             pres = Pc
         else
@@ -636,7 +636,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
@@ -708,7 +708,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
@@ -796,7 +796,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
@@ -1237,7 +1237,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Speed of wind at this point
                 ! Note that in reality SLOSH does not directly input mws but instead
@@ -1311,7 +1311,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
@@ -1399,7 +1399,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
@@ -1477,7 +1477,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Speed of wind at this point
                 ! Commented out version has 2 more free parameters that we would need
@@ -1560,7 +1560,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, r, B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Speed of wind at this point
                 ! (.9 and 1.1 are chosen as R1 and R2 rather than fit )
