@@ -259,7 +259,7 @@ contains
         implicit none
 
         real(kind=8), intent(in) :: Pc, r, dp, mwr, B
-        if (r == 0) then
+        if (r < 1d-16) then
             pres = Pc
         else
             pres = Pc + dp * exp(-(mwr / r)**B)
