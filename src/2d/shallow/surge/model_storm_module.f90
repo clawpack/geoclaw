@@ -259,7 +259,10 @@ contains
         implicit none
 
         real(kind=8), intent(in) :: Pc, r, dp, mwr, B
-        if (r < 1d-16) then
+
+        ! for any situation that could raise an underflow error, we set the
+        ! second term to 0
+        if ((mwr / r)**B > 100) then
             pres = Pc
         else
             pres = Pc + dp * exp(-(mwr / r)**B)
