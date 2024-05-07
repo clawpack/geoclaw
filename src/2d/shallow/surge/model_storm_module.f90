@@ -643,7 +643,7 @@ contains
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
-                if (r == 0) then
+                if ((mwr / r)**B > 100) then
                     wind = 0
                 else
                     wind = sqrt((mwr / r)**B &
@@ -715,7 +715,7 @@ contains
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
-                if (r == 0) then
+                if ((mwr / r)**B > 100) then
                     wind = 0
                 else
                     wind = sqrt((mwr / r)**B &
@@ -803,7 +803,7 @@ contains
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
-                if (r == 0) then
+                if ((mwr / r)**B > 100) then
                     wind = 0
                 else
                     ! # HOLLAND 2010 WIND SPEED CALCULATION
@@ -1318,7 +1318,7 @@ contains
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
-                if (r == 0) then
+                if ((mwr / r)**B > 100) then
                     wind = 0
                 else
                     ! Speed of wind at this point
@@ -1406,7 +1406,7 @@ contains
 
                 ! Set speed of wind at this point, handling case of grid cell centroid
                 ! at eye of storm
-                if (r == 0) then
+                if ((mwr / r)**B > 100) then
                     wind = 0
                 else
                     ! Speed of wind at this point
