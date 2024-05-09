@@ -30,6 +30,9 @@ for lib_path in [os.path.join(CLAW,"amrclaw","src","2d"),
     for path in glob.glob(os.path.join(lib_path,"*.mod")):
         os.remove(path)
 
+# Scratch directory for GeoClaw
+scratch_path = os.path.abspath(os.path.join(CLAW, 'scratch'))
+
 
 class GeoClawRegressionTest(clawpack.clawutil.test.ClawpackRegressionTest):
 

@@ -11,6 +11,7 @@ import shutil
 import os
 import sys
 import datetime
+import pytest
 
 import numpy
 
@@ -93,22 +94,16 @@ def test_storm_IO(save=False):
         for file_format in file_format_tests:
             if file_format=='ibtracs':
                 file_suffix = 'nc'
-                # Check here to see if we have xarray
-                try:
-                    import xarray
-                except ImportError as e:
-                    print("Skipping IBTrACS IO test, missing xarray.")
-                    continue
+                xarray = pytest.importorskip("xarray", 
+                            reason="Skipping IBTrACS IO test, missing xarray.")
+                pytest.skip("IBTrACS test skipped.")
             elif file_format == 'atcf':
                 file_suffix = 'txt'
-                # Check here to see if we have pandas
-                try:
-                    import pandas
-                except ImportError as e:
-                    print("Skipping ATCF IO test, missing pandas.")
-                    continue
+                pandas = pytest.importorskip("pandas", 
+                            reason="Skipping ATCF IO test, missing pandas.")
             else:
                 file_suffix = 'txt'
+            
             input_path = os.path.join(testdir, "data", "storm", "%s.%s" % (file_format,file_suffix))
             out_path = os.path.join(temp_path, '%s_geoclaw.txt' % file_format)
             check_path = os.path.join(testdir, "data", "storm",

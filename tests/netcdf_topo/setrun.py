@@ -357,15 +357,13 @@ def setgeo(rundata):
     # Refinement data
     refinement_data = rundata.refinement_data
     refinement_data.wave_tolerance = 1.e-2
-    refinement_data.deep_depth = 1e2
-    refinement_data.max_level_deep = 3
     refinement_data.variable_dt_refinement_ratios = True
 
     # == settopo.data values ==
     topo_data = rundata.topo_data
     # for topography, append lines of the form
     #    [topotype, minlevel, maxlevel, t1, t2, fname]
-    topo_data.topofiles.append([4, 1, 10, 0., 1.e10, 'bowl.nc'])
+    topo_data.topofiles.append([4, 'bowl.nc'])
     # topo_data.topofiles.append([2, 1, 10, 0., 1.e10, 'bowl.tt2'])
 
     # == setdtopo.data values ==
@@ -378,12 +376,6 @@ def setgeo(rundata):
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
     #   [minlev, maxlev, fname]
-
-    # == setfixedgrids.data values ==
-    fixedgrids = rundata.fixed_grid_data
-    # for fixed grids append lines of the form
-    # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
-    #  ioutarrivaltimes,ioutsurfacemax]
     
     # == fgmax.data values ==
     fgmax_files = rundata.fgmax_data.fgmax_files

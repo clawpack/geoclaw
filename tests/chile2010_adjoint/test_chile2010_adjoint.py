@@ -16,8 +16,6 @@ import numpy
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
-from clawpack.clawutil.test import wip
-
 
 try:
     CLAW = os.environ['CLAW']
@@ -49,23 +47,16 @@ class Chile2010AdjointTest(test.GeoClawRegressionTest):
 
         # run adjoint code
         os.chdir(temp_adjoint_path)
-        #print('+++ Running adjoint in directory ',os.getcwd())
-        #print('+++   contents: ', os.listdir('.'))
         os.system('make -s topo')
         os.system('make -s data')
         os.system('make -s new')
         os.system('make .output > output.txt')
-        #print('+++   contents of _output: ', os.listdir('_output'))
 
         # set up forward code
         shutil.copy(os.path.join(self.test_path, "maketopo.py"),
                                  self.temp_path)
         os.chdir(self.temp_path)
-        #print('+++ Running forward in directory ',os.getcwd())
-        #print('+++   contents: ', os.listdir())
         os.system('python maketopo.py')
-        #print('+++   scratch directory: ', scratch_dir)
-        #print('+++   contents of scratch: ', os.listdir(scratch_dir))
         os.chdir(start_dir)
 
 

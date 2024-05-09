@@ -2,27 +2,22 @@
 
 """Regression test for GeoClaw's storm surge functionality"""
 
-from __future__ import absolute_import
 import sys
 import os
 import unittest
+import pytest
 import gzip
-import nose
-
-try:
-    # For Python 3.0 and later
-    from urllib.error import URLError
-except ImportError:
-    # Fall back to Python 2's urllib2
-    from urllib2 import URLError
+import urllib.error
+import pytest
 
 import numpy
 
-import clawpack.geoclaw.test as test
+import clawpack.geoclaw.test
 import clawpack.geoclaw.topotools
+import clawpack.clawutil
 from clawpack.geoclaw.surge import storm
 
-class IkeTest(test.GeoClawRegressionTest):
+class IkeTest(clawpack.geoclaw.test.GeoClawRegressionTest):
 
     r"""Hurricane Ike regression test"""
 
@@ -34,8 +29,9 @@ class IkeTest(test.GeoClawRegressionTest):
         remote_url = "http://ftp.nhc.noaa.gov/atcf/archive/2008/bal092008.dat.gz"
         try:
             path = self.get_remote_file(remote_url, unpack=False)
-        except URLError:
-            raise nose.SkipTest("Could not fetch remote file, skipping test.")
+        except urllib.error.URLError as e:
+            pytest.skip("Could not fetch remote file, skipping test.")
+            raise e
         
         storm_path = os.path.join(os.path.dirname(path), 'ike.storm')
 
@@ -51,8 +47,8 @@ class IkeTest(test.GeoClawRegressionTest):
         ike_storm.write(storm_path)
         
         # Download file
-        #self.get_remote_file(
-        #   "http://www.columbia.edu/~ktm2132/bathy/gulf_caribbean.tt3.tar.bz2")
+        # clawpack.clawutil.data.get_remote_file(
+        #    "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2")
 
         # Create synthetic bathymetry - needs more work
         topo = clawpack.geoclaw.topotools.Topography()
@@ -63,7 +59,7 @@ class IkeTest(test.GeoClawRegressionTest):
                 topo_type=2, Z_format="%22.15e")
 
 
-    def runTest(self, save=False, indices=(2, 3)):
+    def runTest(self, save=False, indices=range(4)):
         r"""Storm Surge Regression Test
 
         :Input:
@@ -88,39 +84,6 @@ class IkeTest(test.GeoClawRegressionTest):
         # If we have gotten here then we do not need to copy the run results
         self.success = True
 
-
-    # def check_gauges(self, save=False, indices=(2, 3)):
-    #     r"""Basic test to assert gauge equality
-
-    #     :Input:
-    #      - *save* (bool) - If *True* will save the output from this test to 
-    #        the file *regresion_data.txt*.  Default is *False*.
-    #      - *indices* (tuple) - Contains indices to compare in the gague 
-    #        comparison.  Defaults to *(2, 3)*.
-    #     """
-
-    #     # Get gauge data
-    #     data = numpy.loadtxt(os.path.join(self.temp_path, 'fort.gauge'))
-    #     data_sum = []
-    #     for index in indices:
-    #         data_sum.append(data[:, index].sum())
-
-    #     # Get (and save) regression comparison data
-    #     regression_data_file = os.path.join(self.test_path, "regression_data.txt")
-    #     if save:
-    #         numpy.savetxt(regression_data_file, data)
-    #     regression_data = numpy.loadtxt(regression_data_file)
-    #     regression_sum = []
-    #     for index in indices:
-    #         regression_sum.append(regression_data[:, index].sum())
-    #     # regression_sum = regression_data
-
-    #     # Compare data
-    #     tolerance = 1e-14
-    #     assert numpy.allclose(data_sum, regression_sum, tolerance), \
-    #             "\n data: %s, \n expected: %s" % (data_sum, regression_sum)
-    #     # assert numpy.allclose(data, regression_data, tolerance), \
-    #     #         "Full gauge match failed."
 
 if __name__=="__main__":
     if len(sys.argv) > 1:

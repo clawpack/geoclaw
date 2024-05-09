@@ -197,7 +197,7 @@ def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
     return beta
     
 def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
-    """
+    r"""
     Given (longitude,latitude) pairs (x1,y1), (x2,y2) and npts
     Compute (x,y) for npts equally spaced points on the great circle connecting
     them.

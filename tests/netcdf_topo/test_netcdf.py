@@ -17,7 +17,7 @@ import time
 
 import numpy
 import xarray as xr
-import nose
+import pytest
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
@@ -34,6 +34,8 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
 
     def setUp(self):
+
+        netCDF4 = pytest.importorskip("netCDF4", reason=build_failure_str)
 
         self.temp_path = tempfile.mkdtemp()
 
@@ -74,10 +76,9 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         topo.x = numpy.linspace(-3.1, 3.1, 310)
         topo.y = numpy.linspace(-3.5,2.5, 300)
 
-        try:
-            import netCDF4
-            this_path = os.path.join(self.temp_path, 'bowl.nc')
+        this_path = os.path.join(self.temp_path, 'bowl.nc')
 
+        try:
             # now mess with the order of the dimension IDs (lat, then lon)
             with netCDF4.Dataset(this_path,'w') as out:
                 lat = out.createDimension('lat',len(topo.y))
@@ -91,17 +92,12 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
                 longitudes[:] = topo.x
                 elevations[:] = topo.Z
 
-
-        except ImportError:
-            # Assume that NetCDF is not installed and move on
-            raise nose.SkipTest(build_failure_str)
-
         except RuntimeError as e:
-            print(e.message)
-            raise nose.SkipTest("NetCDF topography test skipped due to " +
-                                "runtime failure.")
+            pytest.skip(("NetCDF topography test skipped due to runtime failure."))
+            raise e
         else:
             self.build_executable()
+
 
     def build_executable(self):
         try:
@@ -111,9 +107,9 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
                                                                 stderr=self.stderr,
                                                                 shell=True)
         except subprocess.CalledProcessError:
-
             self.stdout.write(build_failure_str)
-            raise nose.SkipTest(build_failure_str)
+            pytest.skip(build_failure_str)
+            raise e
 
         else:
             # Force recompilation of topo_module to add NetCDF flags

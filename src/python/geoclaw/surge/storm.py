@@ -101,17 +101,17 @@ hurdat_special_entries = {"L": "landfall",
 
 # Warning for formats that have yet to have a default way to determine crticial
 # radii from the input data
-missing_data_warning_str = """*** Cannot yet automatically determine the
-    maximum wind radius.  Will write out GeoClaw
-    formats but note that these will not work
-    when running GeoClaw currently without a custom
-    `max_wind_radius_fill` function passed as argument
-    to the `write` function."""
+missing_data_warning_str = ("Cannot yet automatically determine the" +
+                            "maximum wind radius.  Will write out GeoClaw" +
+                            "formats but note that these will not work" +
+                            "when running GeoClaw currently without a custom" +
+                            "`max_wind_radius_fill` function passed as " +
+                            "argument to the `write` function.")
 
 # Warning for not having any time points with both a max wind speed and central
 # pressure observation
-missing_necessary_data_warning_str = """No storm points in the input file
-    had both a max wind speed and a central pressure observation."""
+missing_necessary_data_warning_str = ("No storm points in the input file" +
+                "had both a max wind speed and a central pressure observation.")
 
 class NoDataError(ValueError):
     """Exception to raise when no valid data in input file"""
@@ -400,6 +400,9 @@ class Storm(object):
             warnings.warn('Some timesteps have missing central pressure. These will not be written'
                           ' out to geoclaw format.')
 
+        # Set time offset to first time as a default
+        self.time_offset = self.t[0]
+
     def read_hurdat(self, path, verbose=False):
         r"""Read in HURDAT formatted storm file
 
@@ -663,6 +666,7 @@ class Storm(object):
             # convert datetime64 to datetime.datetime
             self.t = []
             for d in ds.time:
+                print(d)
                 t = d.dt
                 self.t.append(datetime.datetime(t.year,t.month,t.day,t.hour,t.minute,t.second))
 
@@ -901,7 +905,7 @@ class Storm(object):
         num_casts = 0
         data_string = [""]
         if self.time_offset is None:
-            data_string.append("None")
+            data_string.append("None\n\n")
             self.time_offset = self.t[0]
         else:
             data_string.append("%s\n\n" % self.time_offset.isoformat())

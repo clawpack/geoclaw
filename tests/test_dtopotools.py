@@ -8,7 +8,7 @@ import inspect
 import time
 
 import numpy
-import nose
+import pytest
 
 import clawpack.geoclaw.dtopotools as dtopotools
 
@@ -220,8 +220,9 @@ def test_dtopo_io():
 
     except AssertionError as e:
         test_dump_path = os.path.join(os.getcwd(), "test_dtopo_io")
-        shutil.mkdir(test_dump_path)
-        shutil.copy(temp_path, test_dump_path)
+        if os.path.exists(test_dump_path):
+            shutil.rmtree(test_dump_path)
+        shutil.copytree(temp_path, test_dump_path)
         raise e
     finally:
         shutil.rmtree(temp_path)
@@ -284,7 +285,7 @@ def test_geometry():
 def test_vs_old_dtopo():
     r"""Test new dtopotools with old version from 5.2"""
 
-    raise nose.SkipTest("Skipping comparison with old tools.")
+    pytest.skip("Skipping comparison with old tools.")
 
     from . import old_dtopotools
 
@@ -469,13 +470,12 @@ if __name__ == "__main__":
             pass
         elif bool(sys.argv[1]):
             save = True
-    try:
-        test_read_csv_make_dtopo(save=save)
-        test_read_ucsb_make_dtopo(save=save)
-        test_read_sift_make_dtopo(save=save)
-        test_SubdividedPlaneFault_make_dtopo(save=save)
-        test_dtopo_io()
-        test_geometry()
-        test_vs_old_dtopo()
-    except nose.SkipTest as e:
-        print(e.message)
+
+    test_read_csv_make_dtopo(save=save)
+    test_read_ucsb_make_dtopo(save=save)
+    test_read_sift_make_dtopo(save=save)
+    test_SubdividedPlaneFault_make_dtopo(save=save)
+    test_dtopo_io()
+    test_geometry()
+    test_vs_old_dtopo()
+    

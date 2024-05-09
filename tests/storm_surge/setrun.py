@@ -384,8 +384,6 @@ def setgeo(rundata):
     refine_data = rundata.refinement_data
     refine_data.wave_tolerance = 1.0
     refine_data.speed_tolerance = [1.0,2.0,3.0,4.0]
-    refine_data.deep_depth = 300.0
-    refine_data.max_level_deep = 4
     refine_data.variable_dt_refinement_ratios = True
 
     # == settopo.data values ==
@@ -395,8 +393,8 @@ def setgeo(rundata):
     #   [topotype, minlevel, maxlevel, t1, t2, fname]
     # See regions for control over these regions, need better bathy data for the
     # smaller domains
-    topo_data.topofiles.append([3, 1, 5, rundata.clawdata.t0, rundata.clawdata.tfinal, 
-                              'gulf_caribbean.tt3'])
+    topo_data.topofiles.append([3, 'gulf_caribbean.tt3'])
+
     # == setdtopo.data values ==
     dtopo_data = rundata.dtopo_data
     dtopo_data.dtopofiles = []
@@ -408,12 +406,6 @@ def setgeo(rundata):
     rundata.qinit_data.qinitfiles = []
     # for qinit perturbations, append lines of the form: (<= 1 allowed for now!)
     #   [minlev, maxlev, fname]
-
-    # == setfixedgrids.data values ==
-    rundata.fixed_grid_data.fixedgrids = []
-    # for fixed grids append lines of the form
-    # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
-    #  ioutarrivaltimes,ioutsurfacemax]
 
     return rundata
     # end of function setgeo
