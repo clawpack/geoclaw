@@ -34,7 +34,7 @@ jobs:
     - name: Setup clawpack repository
       run: |
         export CLAW=${GITHUB_WORKSPACE}/clawpack
-        printenv ${CLAW}
+        printenv $CLAW
         git submodule init
         git submodule update
 
@@ -45,9 +45,9 @@ jobs:
     - name: Install clawpack
       run: |
         git log
-        cd ${CLAW}
-        pip install --user -e ${CLAW}
-        
+        cd $CLAW
+        pip install --user -e $CLAW
+
     - name: Lint with flake8
       run: |
         cd ${CLAW}/geoclaw
