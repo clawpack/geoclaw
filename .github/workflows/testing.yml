@@ -10,8 +10,7 @@ permissions:
   contents: read
 
 env:
-  CLAW: ${{ github.GITHUB_WORKSPACE }}/clawpack
-  TEST: $GITHUB_WORKSPACE/clawpack
+  TEST: ${{ github.workspace }}
 
 jobs:
   build:
@@ -31,6 +30,7 @@ jobs:
     - name: Testing
       run: |
         echo $GITHUB_WORKSPACE
+        export CLAW="$GITHUB_WORKSPACE/clawpack"
         echo $CLAW
         echo $TEST
 
