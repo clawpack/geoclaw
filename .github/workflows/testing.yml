@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  CLAW: ${{ github.workspace }}/clawpack
+  CLAW: ${{ github.workspace }}
 
 jobs:
   build:
@@ -48,7 +48,9 @@ jobs:
     - name: Install clawpack
       run: |
         ls -l
-        
+        cd $CLAW
+        ls -l
+
     # cd $CLAW
     # ls -l
 
