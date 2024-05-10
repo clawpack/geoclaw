@@ -37,7 +37,7 @@ jobs:
     - name: Setup geoclaw
       run: |
         cd geoclaw
-        git checkout ${GITHUB_HEAD_REF}
+        git checkout ${GITHUB_REF}
     - name: Lint with flake8
       run: |
         cd geoclaw
