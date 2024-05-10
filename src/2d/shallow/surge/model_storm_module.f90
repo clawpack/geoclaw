@@ -252,6 +252,25 @@ contains
     end function storm_direction
 
     ! ==========================================================================
+    ! set_pressure
+    !   Set pressure at a radius r
+    ! ==========================================================================
+    real(kind=8) pure function set_pressure(Pc, r, dp, mwr, B) result(pres)
+        implicit none
+
+        real(kind=8), intent(in) :: Pc, r, dp, mwr, B
+
+        ! for any situation that could raise an underflow error, we set the
+        ! second term to 0
+        if ((mwr / r)**B > 100) then
+            pres = Pc
+        else
+            pres = Pc + dp * exp(-(mwr / r)**B)
+        endif
+
+    end function set_pressure
+
+    ! ==========================================================================
     !  storm_index(t,storm)
     !    Finds the index of the next storm data point
     ! ==========================================================================
@@ -620,12 +639,17 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
-                ! Speed of wind at this point
-                wind = sqrt((mwr / r)**B &
+                ! Set speed of wind at this point, handling case of grid cell centroid
+                ! at eye of storm
+                if ((mwr / r)**B > 100) then
+                    wind = 0
+                else
+                    wind = sqrt((mwr / r)**B &
                         * exp(1.d0 - (mwr / r)**B) * mod_mws**2.d0 &
                         + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
+                endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
@@ -687,12 +711,17 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
-                ! Speed of wind at this point
-                wind = sqrt((mwr / r)**B &
+                ! Set speed of wind at this point, handling case of grid cell centroid
+                ! at eye of storm
+                if ((mwr / r)**B > 100) then
+                    wind = 0
+                else
+                    wind = sqrt((mwr / r)**B &
                         * exp(1.d0 - (mwr / r)**B) * mod_mws**2.d0 &
                         + (r * f)**2.d0 / 4.d0) - r * f / 2.d0
+                endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
@@ -770,15 +799,21 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
-                ! # HOLLAND 2010 WIND SPEED CALCULATION
-                if (r <= mwr) then
-                    xx = 0.5
+                ! Set speed of wind at this point, handling case of grid cell centroid
+                ! at eye of storm
+                if ((mwr / r)**B > 100) then
+                    wind = 0
                 else
-                    xx = 0.5 + (r - mwr) * (xn - 0.5) / (rn - mwr)
+                    ! # HOLLAND 2010 WIND SPEED CALCULATION
+                    if (r <= mwr) then
+                        xx = 0.5
+                    else
+                        xx = 0.5 + (r - mwr) * (xn - 0.5) / (rn - mwr)
+                    endif
+                    wind = mod_mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
                 endif
-                wind = mod_mws * ((mwr / r)**B * exp(1.d0 - (mwr / r)**B))**xx
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
@@ -1205,7 +1240,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Speed of wind at this point
                 ! Note that in reality SLOSH does not directly input mws but instead
@@ -1279,13 +1314,19 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
-                ! Speed of wind at this point
-                if (r < mwr) then
-                    wind = mws * (r / mwr)
+                ! Set speed of wind at this point, handling case of grid cell centroid
+                ! at eye of storm
+                if ((mwr / r)**B > 100) then
+                    wind = 0
                 else
-                    wind = mws * (mwr / r)
+                    ! Speed of wind at this point
+                    if (r < mwr) then
+                        wind = mws * (r / mwr)
+                    else
+                        wind = mws * (mwr / r)
+                    endif
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
@@ -1361,13 +1402,19 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
-                ! Speed of wind at this point
-                if (r < mwr) then
-                    wind = mws * (r / mwr)
+                ! Set speed of wind at this point, handling case of grid cell centroid
+                ! at eye of storm
+                if ((mwr / r)**B > 100) then
+                    wind = 0
                 else
-                    wind = mws * (mwr / r)**alpha
+                    ! Speed of wind at this point
+                    if (r < mwr) then
+                        wind = mws * (r / mwr)
+                    else
+                        wind = mws * (mwr / r)**alpha
+                    endif
                 endif
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
@@ -1433,7 +1480,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Speed of wind at this point
                 ! Commented out version has 2 more free parameters that we would need
@@ -1516,7 +1563,7 @@ contains
                 call calculate_polar_coordinate(x, y, sloc, r, theta)
 
                 ! Set pressure field
-                aux(pressure_index,i,j) = Pc + dp * exp(-(mwr / r)**B)
+                aux(pressure_index,i,j) = set_pressure(Pc, r, dp, mwr, B)
 
                 ! Speed of wind at this point
                 ! (.9 and 1.1 are chosen as R1 and R2 rather than fit )
