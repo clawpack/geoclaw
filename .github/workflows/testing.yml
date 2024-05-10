@@ -29,11 +29,11 @@ jobs:
     #     pip install flake8 pytest
 
     - name: Testing
-      run: env |
+      run: |
         echo $GITHUB_WORKSPACE
         echo $CLAW
         echo $TEST
-    
+
     - name: Checkout clawpack
       uses: actions/checkout@v4.1.5
       with:
