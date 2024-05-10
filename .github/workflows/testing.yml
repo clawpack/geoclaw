@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  CLAW: ${GITHUB_WORKSPACE}/clawpack
+  CLAW: ${{ github.GITHUB_WORKSPACE }}/clawpack
 
 jobs:
   build:
@@ -43,7 +43,7 @@ jobs:
         repository: clawpack/geoclaw
     
     - name: Install clawpack
-      run: env
+      run: |
         cd $CLAW
         pip install --user -e $CLAW
 
