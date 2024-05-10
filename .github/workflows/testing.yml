@@ -30,11 +30,14 @@ jobs:
       uses: actions/checkout@v4.1.5
       with:
         repository: clawpack/clawpack
+
     - name: Setup clawpack repository
       run: |
         export CLAW=${GITHUB_WORKSPACE}/clawpack
+        printenv ${CLAW}
         git submodule init
         git submodule update
+
     - name: Checkout geoclaw branch
       uses: actions/checkout@v4.1.5
       with:
@@ -43,7 +46,8 @@ jobs:
       run: |
         git log
         cd ${CLAW}
-        pip install --user -e .
+        pip install --user -e ${CLAW}
+        
     - name: Lint with flake8
       run: |
         cd ${CLAW}/geoclaw
