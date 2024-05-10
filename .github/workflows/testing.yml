@@ -47,7 +47,9 @@ jobs:
     
     - name: Install clawpack
       run: |
+        ls -l
         cd $CLAW
+        ls -l
         pip install --user -e $CLAW
 
     # - name: Lint with flake8
