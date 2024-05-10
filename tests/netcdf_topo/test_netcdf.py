@@ -106,7 +106,7 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
                                                                 stdout=self.stdout,
                                                                 stderr=self.stderr,
                                                                 shell=True)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
             self.stdout.write(build_failure_str)
             pytest.skip(build_failure_str)
             raise e

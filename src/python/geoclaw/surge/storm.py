@@ -981,33 +981,33 @@ class Storm(object):
         """
         raise NotImplementedError(("Writing out ATCF files is not implemented ",
                                    "yet but is planned for a future release."))
-        try:
-            with open(path, 'w') as data_file:
-                for n in range(len(self.t)):
-                    data_file.write("".join((", " * 2,
-                                         "%s" % seconds2date(self.t[n]),
-                                         ", " * 4,
-                                         "%s" % (int(self.eye_location[n, 0] *
-                                                     10.0)),
-                                         ", ",
-                                         "%s" % (int(self.eye_location[n, 1] *
-                                                     10.0)),
-                                         ", ",
-                                         "%s" % self.max_wind_speed[n],
-                                         ", ",
-                                         "%s" % self.central_pressure[n],
-                                         ", ",
-                                         ", " * 8,
-                                         "%s" % self.storm_radius[n],
-                                         ", ",
-                                         "%s" % self.max_wind_radius[n],
-                                         ", " * 10,
-                                         "\n")))
-        except Exception as e:
-            # Remove possiblly partially generated file if not successful
-            if os.path.exists(path):
-                os.remove(path)
-            raise e
+        # try:
+        #     with open(path, 'w') as data_file:
+        #         for n in range(len(self.t)):
+        #             data_file.write("".join((", " * 2,
+        #                                  "%s" % seconds2date(self.t[n]),
+        #                                  ", " * 4,
+        #                                  "%s" % (int(self.eye_location[n, 0] *
+        #                                              10.0)),
+        #                                  ", ",
+        #                                  "%s" % (int(self.eye_location[n, 1] *
+        #                                              10.0)),
+        #                                  ", ",
+        #                                  "%s" % self.max_wind_speed[n],
+        #                                  ", ",
+        #                                  "%s" % self.central_pressure[n],
+        #                                  ", ",
+        #                                  ", " * 8,
+        #                                  "%s" % self.storm_radius[n],
+        #                                  ", ",
+        #                                  "%s" % self.max_wind_radius[n],
+        #                                  ", " * 10,
+        #                                  "\n")))
+        # except Exception as e:
+        #     # Remove possiblly partially generated file if not successful
+        #     if os.path.exists(path):
+        #         os.remove(path)
+        #     raise e
 
     def write_hurdat(self, path, verbose=False):
         r"""Write out a HURDAT formatted storm file
@@ -1019,50 +1019,50 @@ class Storm(object):
         raise NotImplementedError(("Writing out hurdat files is not ",
                                    "implemented yet but is planned for a ",
                                    "future release."))
-        try:
-            with open(path, 'w') as data_file:
-                data_file.write('%s %s %s' % ("Date", "Hurricane Name",
-                                              "Indicator"))
-                for n in range(self.t.shape[0]):
+        # try:
+        #     with open(path, 'w') as data_file:
+        #         data_file.write('%s %s %s' % ("Date", "Hurricane Name",
+        #                                       "Indicator"))
+        #         for n in range(self.t.shape[0]):
 
-                    latitude = float(self.eye_location[n, 0])
-                    longitude = float(self.eye_location[n, 1])
+        #             latitude = float(self.eye_location[n, 0])
+        #             longitude = float(self.eye_location[n, 1])
 
-                    # Convert latitude to proper Hurdat format e.g 12.0N
-                    if latitude > 0:
-                        latitude = str(numpy.abs(latitude)) + 'N'
-                    else:
-                        latitude = str(numpy.abs(latitude)) + 'S'
+        #             # Convert latitude to proper Hurdat format e.g 12.0N
+        #             if latitude > 0:
+        #                 latitude = str(numpy.abs(latitude)) + 'N'
+        #             else:
+        #                 latitude = str(numpy.abs(latitude)) + 'S'
 
-                    # Convert longitude to proper Hurdat format e.g 12.0W
-                    if longitude > 0:
-                        longitude = str(numpy.abs(longitude)) + 'E'
-                    else:
-                        longitude = str(numpy.abs(longitude)) + 'W'
+        #             # Convert longitude to proper Hurdat format e.g 12.0W
+        #             if longitude > 0:
+        #                 longitude = str(numpy.abs(longitude)) + 'E'
+        #             else:
+        #                 longitude = str(numpy.abs(longitude)) + 'W'
 
-                    data_file.write("".join(("%s" % self.seconds2date(
-                                                              self.t[n])[0:-2],
-                                         "%s00" % self.seconds2date(
-                                                              self.t[n])[-2:],
-                                         ", " * 3,
-                                         "%s" % (latitude),
-                                         ", ",
-                                         "%s" % (longitude),
-                                         ", ",
-                                         "%s" % self.max_wind_speed[n],
-                                         ", ",
-                                         "%s" % self.central_pressure[n],
-                                         ", ",
-                                         "%s" % self.storm_radius[n],
-                                         ", ",
-                                         "%s" % self.max_wind_radius[n],
-                                         ", " * 10,
-                                         "\n")))
-        except Exception as e:
-            # Remove possiblly partially generated file if not successful
-            if os.path.exists(path):
-                os.remove(path)
-            raise e
+        #             data_file.write("".join(("%s" % self.seconds2date(
+        #                                                       self.t[n])[0:-2],
+        #                                  "%s00" % self.seconds2date(
+        #                                                       self.t[n])[-2:],
+        #                                  ", " * 3,
+        #                                  "%s" % (latitude),
+        #                                  ", ",
+        #                                  "%s" % (longitude),
+        #                                  ", ",
+        #                                  "%s" % self.max_wind_speed[n],
+        #                                  ", ",
+        #                                  "%s" % self.central_pressure[n],
+        #                                  ", ",
+        #                                  "%s" % self.storm_radius[n],
+        #                                  ", ",
+        #                                  "%s" % self.max_wind_radius[n],
+        #                                  ", " * 10,
+        #                                  "\n")))
+        # except Exception as e:
+        #     # Remove possiblly partially generated file if not successful
+        #     if os.path.exists(path):
+        #         os.remove(path)
+        #     raise e
 
     def write_jma(self, path, verbose=False):
         r"""Write out a JMA formatted storm file
@@ -1073,32 +1073,32 @@ class Storm(object):
         """
         raise NotImplementedError(("Writing out JMA files is not implemented ",
                                    "yet but is planned for a future release."))
-        try:
-            with open(path, 'w') as data_file:
-                for n in range(self.t.shape[0]):
-                    data_file.write("".join(("%s" % self.seconds2date(self.t[n]),
-                                         " " * 4,
-                                         "%s" % (int(self.eye_location[n, 0] *
-                                                     10.0)),
-                                         ", ",
-                                         "%s" % (int(self.eye_location[n, 1] *
-                                                     10.0)),
-                                         ", ",
-                                         "%s" % self.max_wind_speed[n],
-                                         ", ",
-                                         "%s" % self.central_pressure[n],
-                                         ", ",
-                                         ", " * 8,
-                                         "%s" % self.storm_radius[n],
-                                         ", ",
-                                         "%s" % self.max_wind_radius[n],
-                                         ", " * 10,
-                                         "\n")))
-        except Exception as e:
-            # Remove possiblly partially generated file if not successful
-            if os.path.exists(path):
-                os.remove(path)
-            raise e
+        # try:
+        #     with open(path, 'w') as data_file:
+        #         for n in range(self.t.shape[0]):
+        #             data_file.write("".join(("%s" % self.seconds2date(self.t[n]),
+        #                                  " " * 4,
+        #                                  "%s" % (int(self.eye_location[n, 0] *
+        #                                              10.0)),
+        #                                  ", ",
+        #                                  "%s" % (int(self.eye_location[n, 1] *
+        #                                              10.0)),
+        #                                  ", ",
+        #                                  "%s" % self.max_wind_speed[n],
+        #                                  ", ",
+        #                                  "%s" % self.central_pressure[n],
+        #                                  ", ",
+        #                                  ", " * 8,
+        #                                  "%s" % self.storm_radius[n],
+        #                                  ", ",
+        #                                  "%s" % self.max_wind_radius[n],
+        #                                  ", " * 10,
+        #                                  "\n")))
+        # except Exception as e:
+        #     # Remove possiblly partially generated file if not successful
+        #     if os.path.exists(path):
+        #         os.remove(path)
+        #     raise e
 
     def write_imd(self, path, verbose=False):
         r"""Write out an IMD formatted storm file
@@ -1242,7 +1242,7 @@ def construct_fields(storm, r, t, model="holland_1980"):
     if model.lower() not in _supported_models.keys():
         raise ValueError("Model %s not available." % model)
 
-    return getattr(sys.modules[__name__], model.lower())(storm, x, t)
+    return getattr(sys.modules[__name__], model.lower())(storm, r, t)
 
 
 # Specific implementations
@@ -1383,12 +1383,15 @@ def available_models():
 def make_multi_structure(path):
     r"""Create a dictionary of Storm objects for ATCF files with multiple storm tracks in them
     """
+    raise NotImplementedError("Extracing multiple tracks from ATCF files is " + 
+                              "not supported yet.")
     with open(path, 'r') as f:
         lines = f.readlines()
         curTime = "test"
         curTrack = "test"
         os.mkdir("Clipped_ATCFs")
         stormDict = {}
+        fileWrite = None
         for line in lines:
             lineArr = line.split(", ")
             if curTime in lineArr[2]:
