@@ -25,7 +25,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install gfortran liblapack-pic liblapack-dev libnetcdf-dev libnetcdff-dev
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        pip install flake8 pytest numpy pandas
 
     - name: Checkout clawpack
       uses: actions/checkout@v4.1.5
