@@ -19,6 +19,7 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -33,8 +34,6 @@ jobs:
 
     - name: Setup clawpack repository
       run: |
-        export CLAW="${GITHUB_WORKSPACE}/clawpack"
-        printenv $CLAW
         git submodule init
         git submodule update
 
@@ -59,3 +58,6 @@ jobs:
       run: |
         cd ${CLAW}/geoclaw
         pytest
+
+# export CLAW="${GITHUB_WORKSPACE}/clawpack"
+        # printenv $CLAW
