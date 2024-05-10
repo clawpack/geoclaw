@@ -19,25 +19,28 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-    - name: Checkout clawpack
-      uses: actions/checkout@v4.1.5
-      with:
-        repository: clawpack/clawpack
+        cache: 'pip'
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install gfortran liblapack-pic liblapack-dev libnetcdf-dev libnetcdff-dev
         python -m pip install --upgrade pip
         pip install flake8 pytest
-    - name: Setup clawpack super repository
+    - name: Checkout clawpack
+      uses: actions/checkout@v4.1.5
+      with:
+        repository: clawpack/clawpack
+    - name: Setup clawpack repository
       run: |
         git submodule init
         git submodule update
-        pip install --user -e .
-    - name: Setup geoclaw
+    - name: Checkout geoclaw branch
+      uses: actions/checkout@v4.1.5
+      with:
+        repository: clawpack/geoclaw
+    - name: Install clawpack
       run: |
-        cd geoclaw
-        git checkout ${GITHUB_REF}
+        pip install --user -e .
     - name: Lint with flake8
       run: |
         cd geoclaw
@@ -47,5 +50,5 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        cd geoclaw
+        export CLAW=${GITHUB_WORKSPACE}/clawpack
         pytest
