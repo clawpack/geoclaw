@@ -33,7 +33,7 @@ jobs:
 
     - name: Setup clawpack repository
       run: |
-        export CLAW=${GITHUB_WORKSPACE}/clawpack
+        export CLAW="${GITHUB_WORKSPACE}/clawpack"
         printenv $CLAW
         git submodule init
         git submodule update
