@@ -19,7 +19,7 @@ jobs:
 
     steps:
     - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10"
     - name: Checkout clawpack
@@ -32,12 +32,15 @@ jobs:
         sudo apt-get install gfortran liblapack-pic liblapack-dev libnetcdf-dev libnetcdff-dev
         python -m pip install --upgrade pip
         pip install flake8 pytest
-    - name: Setup clawpack
+    - name: Setup clawpack super repository
       run: |
         git submodule init
         git submodule update
+        pip install --user -e .
+    - name: Setup geoclaw
+      run: |
         cd geoclaw
-        echo ${{ github.GITHUB_REF_NAME }}
+        git checkout ${{ github.ref }}
     # - name: Lint with flake8
     #   run: |
     #     # stop the build if there are Python syntax errors or undefined names
