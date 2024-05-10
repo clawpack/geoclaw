@@ -15,10 +15,8 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
-    # steps:
+    steps:
     # - name: Set up Python 3.10
     #   uses: actions/setup-python@v5
     #   with:
@@ -35,6 +33,7 @@ jobs:
         echo $GITHUB_WORKSPACE
         echo $CLAW
         echo $TEST
+    
     - name: Checkout clawpack
       uses: actions/checkout@v4.1.5
       with:
@@ -52,6 +51,8 @@ jobs:
       run: |
         cd $CLAW
     #     pip install --user -e $CLAW
+
+
 
     # - name: Lint with flake8
     #   run: |
