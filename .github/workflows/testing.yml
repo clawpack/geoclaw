@@ -39,7 +39,7 @@ jobs:
         path: geoclaw    
     - name: Install clawpack
       run: |
-        pip install --user -e $CLAW
+        pip install -e $CLAW
 
     - name: Lint with flake8
       run: |
