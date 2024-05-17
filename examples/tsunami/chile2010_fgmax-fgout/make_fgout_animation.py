@@ -3,13 +3,27 @@ Make an mp4 animation of fgout grid results.
 This is done in a way that makes the animation quickly and with minimum 
 storage required, by making one plot and then defining an update function
 that only changes the parts of the plot that change in each frame.
-The tuple update_artists contains the list of Artists that must be changed
-in update.  Modify this as needed.
+
+Make the animation via:
+    python make_fgout_animation.py
+
+If this script is executed in IPython or a notebook it may go into
+an infinite loop for reasons unknown.  If so, close the figure to halt.
+
+To view individual fgout frames interactively, this should work:
+    import make_fgout_animation
+    make_fgout_animation.update(fgframeno)  # for desired fgout frame no
 
 """
 
+import sys
+if 'matplotlib' not in sys.modules:
+    # Use an image backend to insure animation has size specified by figsize
+    import matplotlib
+    matplotlib.use('Agg')
+
 from pylab import *
-import os
+import os, glob
 from clawpack.visclaw import plottools, geoplot
 from clawpack.visclaw import animation_tools
 from matplotlib import animation, colors
@@ -22,9 +36,16 @@ fgno = 1  # which fgout grid
 outdir = '_output'
 format = 'binary'  # format of fgout grid output
 
-fgframes = range(1,26)  # frames of fgout solution to use in animation
-
-figsize = (10,8)
+if 1:
+    # use all fgout frames in outdir:
+    fgout_frames = glob.glob(os.path.join(outdir, \
+                                          'fgout%s.t*' % str(fgno).zfill(4)))
+    nout = len(fgout_frames)
+    fgframes = range(1, nout+1)
+    print('Found %i fgout frames in %s' % (nout,outdir))
+else:
+    # set explicitly, e.g. to test with only a few frames
+    fgframes = range(1,26)  # frames of fgout solution to use in animation
 
 # Instantiate object for reading fgout frames:
 fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, format) 
@@ -36,10 +57,9 @@ fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, format)
 fgout1 = fgout_grid.read_frame(fgframes[0])
 
 plot_extent = fgout1.extent_edges
-
 ylat = fgout1.Y.mean()  # for aspect ratio of plots
 
-fig,ax = subplots(figsize=figsize)
+fig,ax = subplots(figsize=(8,7))
 
 ax.set_xlim(plot_extent[:2])
 ax.set_ylim(plot_extent[2:])
@@ -63,21 +83,27 @@ ax.set_xlim(plot_extent[:2])
 ax.set_ylim(plot_extent[2:])
 
 
-# The artists that will be updated for subsequent frames:
-update_artists = (eta_plot, title_text)
+blit = False
+if blit:
+    # The artists that will be updated for subsequent frames:
+    update_artists = (eta_plot, title_text)
+    
+# Note that update_artists is only needed if blit==True in call to
+# animation.FuncAnimation below.
+# Using blit==False does not seem to slow down creation of the animation by much
+# and slightly simplifies modification of this script to situations where more
+# artists are updated.
         
-        
-def update(fgframeno, *update_artists):
+def update(fgframeno):
     """
     Update an exisiting plot with solution from fgout frame fgframeno.
-    The artists in update_artists must have new data assigned.
+    Note: Even if blit==True in call to animation.FuncAnimation,
+    the update_artists do not need to be passed in, unpacked, and repacked
+    as in an earlier version of this example (Clawpack version <= 5.10.0).
     """
     
     fgout = fgout_grid.read_frame(fgframeno)
     print('Updating plot at time %s' % timedelta(seconds=fgout.t))
-    
-    # unpack update_artists (must agree with definition above):
-    eta_plot, title_text = update_artists
         
     # reset title to current time:
     title_text.set_text('Surface at time %s' % timedelta(seconds=fgout.t))
@@ -86,29 +112,15 @@ def update(fgframeno, *update_artists):
     eta = ma.masked_where(fgout.h<0.001, fgout.eta)
     eta_plot.set_array(eta.T.flatten())
         
-    update_artists = (eta_plot, title_text)
-    return update_artists
+    if blit:
+        return update_artists
 
-def plot_fgframe(fgframeno):
-    """
-    Convenience function for plotting one frame.
-    But if you use this function in IPython and then try to make the animation,
-    it may get into an infinite loop (not sure why).  Close the figure to abort.
-    """
-    update(fgframeno, *update_artists)
-                
-
-def make_anim():
-    print('Making anim...')
-    anim = animation.FuncAnimation(fig, update,
-                                   frames=fgframes, 
-                                   fargs=update_artists,
-                                   interval=200, blit=True)
-    return anim
 
 if __name__ == '__main__':
 
-    anim = make_anim()
+    print('Making anim...')
+    anim = animation.FuncAnimation(fig, update, frames=fgframes, 
+                                   interval=200, blit=blit)
     
     # Output files:
     name = 'fgout_animation'
@@ -128,7 +140,4 @@ if __name__ == '__main__':
     if fname_html:
         # html version:
         animation_tools.make_html(anim, file_name=fname_html, title=name)
-    
-    
-    
-    
+
