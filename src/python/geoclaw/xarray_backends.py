@@ -264,15 +264,18 @@ class FGMaxBackend(BackendEntrypoint):
         if drop_variables is None:
             drop_variables = []
 
-        # expectation is that you are in a run directory with a file 'fgmax_grids.data' in it.
+        # expectation is for standard clawpack organization,
+        # e.g., output and 'fgmax_grids.data' in _output
         fgno = int(os.path.basename(filename).split(".")[0][-4:])
+        outdir = os.path.dirname(filename)
+        data_file = os.path.join(outdir, 'fgmax_grids.data')
 
         fg = fgmax_tools.FGmaxGrid()
-        fg.read_fgmax_grids_data(fgno=fgno)
+        fg.read_fgmax_grids_data(fgno=fgno, data_file=data_file)
         if fg.point_style != 2:
             raise ValueError("FGMaxBackend only works with fg.point_style=2")
 
-        fg.read_output()
+        fg.read_output(outdir=outdir)
 
         # Construct the x and y coordinates
         # Both come in ascending, therefore flip y so that it is ordered as expected.
