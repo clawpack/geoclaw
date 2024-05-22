@@ -166,6 +166,10 @@ def setplot(plotdata=None):
     
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = surgeplot.gauge_surface
+    # Plot red area if gauge is dry
+    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
+    plotitem.plot_var = surgeplot.gauge_dry_regions
+    plotitem.kwargs = {"color":'lightcoral', "linewidth":5}
     
     #  Gauge Location Plot
     def gauge_location_afteraxes(cd):
