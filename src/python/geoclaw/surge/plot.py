@@ -83,13 +83,15 @@ def gauge_locations(current_data, gaugenos='all'):
                                     add_labels=True, xoffset=0.02,
                                     yoffset=0.02)
 
+def gauge_dry_regions(cd, dry_tolerance=1e-16):
+    """Masked array of zeros where gauge is dry."""
+    return np.ma.masked_where(np.abs(cd.gaugesoln.q[0, :]) > dry_tolerance, 
+                              np.zeros(cd.gaugesoln.q[0,:].shape))
 
-def gaugetopo(current_data):
-    q = current_data.q
-    h = q[0, :]
-    eta = q[3, :]
-    topo = eta - h
-    return topo
+def gauge_surface(cd, dry_tolerance=1e-16):
+    """Sea surface at gauge masked when dry."""
+    return np.ma.masked_where(np.abs(cd.gaugesoln.q[0, :]) < dry_tolerance, 
+                              cd.gaugesoln.q[3, :])
 
 
 def plot_landfall_gauge(gauge, axes, landfall=0.0, style='b', kwargs={}):
@@ -97,6 +99,9 @@ def plot_landfall_gauge(gauge, axes, landfall=0.0, style='b', kwargs={}):
 
     This will transform the plot so that it is relative to the landfall value
     provided.
+
+    This can be done using `plotaxes.time_scale` instead so this function will
+    be deprecated and removed in a future release.
     """
     axes = plt.gca()
 
