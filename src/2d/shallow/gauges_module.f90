@@ -207,18 +207,12 @@ contains
             end do
 
             ! Create gauge output files
-            ! with format gauge00012.txt or gauge1234567.txt
             do i = 1, num_gauges
                 num = gauges(i)%gauge_num
-                ! convert num to string numstr:
-                if (num > 100000) then
-                    ! > 5 digits,  no padding
-                    write (numstr,'(I0)') num
-                else
-                    ! <= 5 digits, add zero padding
-                    write (numstr,'(I5.5)') num
-                endif
 
+                ! convert num to string numstr with zero padding if <5 digits
+                ! since we want format gauge00012.txt or gauge1234567.txt:
+                write (numstr,'(I0.5)') num
                 gauges(i)%file_name = 'gauge'//trim(numstr)//'.txt'
 
                 if (gauges(i)%file_format >= 2) then
