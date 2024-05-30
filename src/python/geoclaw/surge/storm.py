@@ -272,6 +272,10 @@ class Storm(object):
          - *verbose* (bool) Output more info regarding reading.
         """
 
+        # Attempt to get name from file if is follows the convention name.storm
+        if ".storm" in os.path.splitext(path):
+            self.name = os.path.splitext(os.path.basename(path))[0]
+
         # Read header
         with open(path, 'r') as data_file:
             num_casts = int(data_file.readline())
