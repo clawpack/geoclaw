@@ -13,7 +13,7 @@ Plotting routines for storm surge simulations with GeoClaw
 
 from __future__ import absolute_import
 from __future__ import print_function
-import numpy
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.lines as mlines
@@ -50,7 +50,7 @@ class track_data(object):
 
         try:
             self._path = path
-            self._data = numpy.loadtxt(self._path)
+            self._data = np.loadtxt(self._path)
         except:
             self._data = None
 
@@ -63,7 +63,7 @@ class track_data(object):
 
         # If it appears that our data is not long enough, try reloading file
         if self._data.shape[0] < frame + 1:
-            self._data = numpy.loadtxt(self._path)
+            self._data = np.loadtxt(self._path)
 
             # Check to make sure that this fixed the problem
             if self._data.shape[0] < frame + 1:
@@ -131,7 +131,7 @@ def surge_afteraxes(current_data, track, land_fall=0.0, plot_direction=False,
         axes.plot(track_data[0], track_data[1], style, **kwargs)
         if plot_direction:
             axes.quiver(track_data[0], track_data[1],
-                        numpy.cos(track_data[2]), numpy.sin(track_data[2]))
+                        np.cos(track_data[2]), np.sin(track_data[2]))
     days_figure_title(current_data, land_fall)
 
 
@@ -150,7 +150,7 @@ def wind_y(cd):
 
 
 def wind_speed(cd):
-    return numpy.sqrt(wind_x(cd)**2 + wind_y(cd)**2)
+    return np.sqrt(wind_x(cd)**2 + wind_y(cd)**2)
 
 
 def pressure(cd):
@@ -169,14 +169,14 @@ def b(cd):
 
 
 def extract_eta(h, eta, DRY_TOL=1e-3):
-    index = numpy.nonzero((numpy.abs(h) < DRY_TOL) + (h == numpy.nan))
-    eta[index[0], index[1]] = numpy.nan
+    index = np.nonzero((np.abs(h) < DRY_TOL) + (h == np.nan))
+    eta[index[0], index[1]] = np.nan
     return eta
 
 
 def extract_velocity(h, hu, DRY_TOL=1e-8):
-    u = numpy.zeros(hu.shape)
-    index = numpy.nonzero((numpy.abs(h) > DRY_TOL) * (h != numpy.nan))
+    u = np.zeros(hu.shape)
+    index = np.nonzero((np.abs(h) > DRY_TOL) * (h != np.nan))
     u[index[0], index[1]] = hu[index[0], index[1]] / h[index[0], index[1]]
     return u
 
@@ -197,7 +197,7 @@ def water_speed(current_data):
     u = water_u(current_data)
     v = water_v(current_data)
 
-    return numpy.sqrt(u**2+v**2)
+    return np.sqrt(u**2+v**2)
 
 
 # ========================================================================
@@ -241,7 +241,7 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
                                          plot_type='2d_contourf')
         plotitem.plot_var = geoplot.surface_or_depth
         if bounds is not None:
-            contours = numpy.linspace(bounds[0], bounds[1], 11)
+            contours = np.linspace(bounds[0], bounds[1], 11)
             plotitem.contour_levels = contours
             plotitem.fill_cmin = bounds[0]
             plotitem.fill_cmax = bounds[1]
@@ -302,7 +302,7 @@ def add_speed(plotaxes, plot_type='pcolor', bounds=None,  contours=None,
         plotitem.colorbar_shrink = shrink
         plotitem.fill_cmap = plt.get_cmap('PuBu')
         if bounds is not None:
-            plotitem.contour_levels = numpy.linspace(bounds[0], bounds[1], 11)
+            plotitem.contour_levels = np.linspace(bounds[0], bounds[1], 11)
             plotitem.fill_cmin = bounds[0]
             plotitem.fill_cmap = bounds[1]
         elif contours is not None:
@@ -442,7 +442,7 @@ def plot_track(t, x, y, wind_radius, wind_speed, Pc, name=None):
         name = " - %s" % name
 
     colors = ['r', 'b']
-    divide = (numpy.max(Pc) + numpy.min(Pc)) / 2.0
+    divide = (np.max(Pc) + np.min(Pc)) / 2.0
 
     fig = plt.figure(1)
     axes = fig.add_subplot(111)
@@ -463,7 +463,7 @@ def plot_track(t, x, y, wind_radius, wind_speed, Pc, name=None):
 
     axes = fig.add_subplot(133)
     axes.plot(sec2days(t), Pc)
-    axes.plot(sec2days(t), numpy.ones(t.shape) * divide, 'k--')
+    axes.plot(sec2days(t), np.ones(t.shape) * divide, 'k--')
     axes.set_title("Central Pressure%s" % name)
 
 
@@ -471,7 +471,7 @@ def plot_track(t, x, y, wind_radius, wind_speed, Pc, name=None):
 
 Easily plot the track and intensity of a storm using a mapping package.
 
-:Inumpyut:
+:Input:
     - *axes* (matplotlib.pyplot.axes) Axes to plot into.  Default is *None*
     - *intensity* (bool) Plot the intensity of storm along the track.
     Defaults to *False*.
