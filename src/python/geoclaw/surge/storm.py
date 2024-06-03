@@ -62,12 +62,12 @@ ATCF_basins = {"AL": "Atlantic",
 TCVitals_Basins = {"L": "North Atlantic",
                    "E": "North East Pacific",
                    "C": "North Central Pacific",
- 		   "W": "North West Pacific",
-		   "B": "Bay of Bengal (North Indian Ocean)",
-		   "A": "Arabian Sea (North Indian Ocean)",
-		   "Q": "South Atlantic",
-		   "P": "South Pacific",
-		   "S": "South Indian Ocean"}
+                   "W": "North West Pacific",
+                   "B": "Bay of Bengal (North Indian Ocean)",
+                   "A": "Arabian Sea (North Indian Ocean)",
+                   "Q": "South Atlantic",
+                   "P": "South Pacific",
+                   "S": "South Indian Ocean"}
 
 # Tropical Cyclone Designations
 # see https://www.nrlmry.navy.mil/atcf_web/docs/database/new/abrdeck.html
@@ -209,10 +209,12 @@ class Storm(object):
     #  Basic object support
     def __str__(self):
         r""""""
-        output = "Name: %s" % self.name
-        output = "\n".join((output, "Dates: %s - %s" % (self.t[0].isoformat(),
-                                                        self.t[-1].isoformat())
-                            ))
+        output = f"Name: {self.name}\n"
+        if isinstance(self.t[0], datetime.datetime):
+            output += f"Dates: {self.t[0].isoformat()}"
+            output += f" - {self.t[-1].isoformat()}"
+        else:
+            output += f"Dates: {self.t[0]} - {self.t[-1]}"
         return output
 
     def __repr__(self):
@@ -379,7 +381,7 @@ class Storm(object):
         for c in ["LAT", "LON", "VMAX", "MSLP", "ROUTER", "RMW",
                   "RAD", "RAD1", "RAD2", "RAD3", "RAD4"]:
             df[c] = df[c].where(df[c] != 0, np.nan)  # value 0 means NaN
-            df[c] = df.groupby("DATE")[c].bfill()
+            df[c] = df.groupby("DATE")[c].fillna(methos="bfill")
         df = df.groupby("DATE").first()
 
         # Wind profile (occasionally missing for older ATCF storms)
@@ -904,9 +906,9 @@ class Storm(object):
         fill_dict.update({"storm_radius": lambda t, storm: 500e3})
         # Handle older interface that had specific fill functions
         if "max_wind_radius_fill" in kwargs.keys():
-            fill_dict.update({"max_wind_radius": max_wind_radius_fill})
+            fill_dict.update({"max_wind_radius": kwargs['max_wind_radius_fill']})
         if "storm_radius_fill" in kwargs.keys():
-            fill_dict.update({"storm_radius": storm_radius_fill})
+            fill_dict.update({"storm_radius": kwargs['storm_radius_fill']})
 
         # Loop through each line of data and if the line is valid, perform the
         # necessary work to write it out.  Otherwise either raise an exception
