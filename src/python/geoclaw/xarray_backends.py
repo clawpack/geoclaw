@@ -78,6 +78,8 @@ If rundata.fgmax_data.num_fgmax_val == 1
 - h_max, Maximum water depth
 - eta_max, Maximum water surface elevation
 - h_max_time, Time of maximum water depth
+- B, Basal topography at the first time fgmax first monitored maximum amr level
+- level, Maximum amr level
 
 If rundata.fgmax_data.num_fgmax_val == 2:
 
@@ -134,7 +136,8 @@ nodata = np.nan
 
 def _prepare_var(data, mask, dims, units, nodata, long_name):
     "Reorient array into the format xarray expects and generate the mapping."
-    data[mask] = nodata
+    if mask is not None:
+        data[mask] = nodata
     data = data.T
     data = np.flipud(data)
     mapping = (
@@ -346,6 +349,30 @@ class FGMaxBackend(BackendEntrypoint):
             "seconds",
             nodata,
             "Time of maximum water depth",
+        )
+
+        data_vars["B"] = _prepare_var(
+            fg.B,
+            None,
+            [
+                "y",
+                "x",
+            ],
+            "meters",
+            nodata,
+            "Basal topography at the first time fgmax first monitored maximum amr level",
+        )
+
+        data_vars["level"] = _prepare_var(
+            fg.level,
+            None,
+            [
+                "y",
+                "x",
+            ],
+            "(no units)",
+            -1,
+            "Maximum amr level",
         )
 
         if hasattr(fg, "s"):
