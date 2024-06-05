@@ -1,7 +1,8 @@
 try:
+    import rioxarray
     import xarray as xr
 except:
-    'You must install xarray in order to use the xarray backends'
+    'You must install xarray and rioxarray in order to use the xarray backends'
     raise
 
 from clawpack.geoclaw.xarray_backends import FGOutBackend, FGMaxBackend

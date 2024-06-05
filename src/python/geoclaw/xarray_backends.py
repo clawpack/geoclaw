@@ -3,7 +3,14 @@ xarray backends module: $CLAW/geoclaw/src/python/geoclaw/xarray_backends.py
 
 Xarray backends for GeoClaw fixed grids and fgmax grids.
 
-These only work for point_style = 2 (uniform regular)
+These only work for point_style = 2 (uniform regular) and have a dependency on
+xarray and rioxarray. Xarray provides the core datastructure and rioxarray
+provides an interface to rasterio, used to assign geospatial projection
+information.
+
+- https://docs.xarray.dev/en/stable/index.html
+- https://corteva.github.io/rioxarray/stable/readme.html
+- https://rasterio.readthedocs.io/en/latest/index.html
 
 The expectation is that you run commands that use these backends from the same
 directory you run "make output".
@@ -16,6 +23,7 @@ Includes:
 Usage:
 
 .. code-block:: python
+    import rioxarray  # activate the rio accessor
     import xarray as xr
     from clawpack.geoclaw.xarray_backends import FGOutBackend, FGMaxBackend
 
