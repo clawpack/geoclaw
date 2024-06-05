@@ -10,7 +10,7 @@ module fgout_module
         real(kind=8), pointer :: late(:,:,:)
         
         ! Geometry
-        integer :: num_vars(2),mx,my,point_style,fgno,output_format
+        integer :: num_vars(2),mx,my,point_style,fgno,output_format,output_style
         real(kind=8) :: dx,dy,x_low,x_hi,y_low,y_hi
         
         ! Time Tracking and output types
@@ -84,18 +84,27 @@ contains
                 fg => FGOUT_fgrids(i)
                 ! Read in this grid's data
                 read(unit,*) fg%fgno
-                read(unit,*) fg%start_time
-                read(unit,*) fg%end_time
+                read(unit,*) fg%output_style
                 read(unit,*) fg%num_output
+                allocate(fg%output_times(fg%num_output))
+                allocate(fg%output_frames(fg%num_output))
+
+                if (fg%output_style == 1) then
+                    read(unit,*) fg%start_time
+                    read(unit,*) fg%end_time
+                else if (fg%output_style == 2) then
+                    read(unit,*) (fg%output_times(k), k=1,fg%num_output)
+                    fg%start_time = fg%output_times(1)
+                    fg%end_time = fg%output_times(fg%num_output)
+                endif
+                
                 read(unit,*) fg%point_style
                 read(unit,*) fg%output_format
                 read(unit,*) fg%mx, fg%my
                 read(unit,*) fg%x_low, fg%y_low
                 read(unit,*) fg%x_hi, fg%y_hi
                 
-                allocate(fg%output_times(fg%num_output))
-                allocate(fg%output_frames(fg%num_output))
-                
+            
                 ! Initialize next_output_index
                 ! (might be reset below in case of a restart)
                 fg%next_output_index = 1
@@ -104,49 +113,55 @@ contains
                     print *, 'set_fgout: ERROR, unrecognized point_style = ',\
                           fg%point_style
                 endif
-                    
-               ! Setup data for this grid
-               ! Set dtfg (the timestep length between outputs) for each grid
-               if (fg%end_time <= fg%start_time) then
-                   if (fg%num_output > 1) then 
-                      print *,'set_fgout: ERROR for fixed grid', i
-                      print *,'start_time <= end_time yet num_output > 1'
-                      print *,'set end_time > start_time or set num_output = 1'
-                      stop
+                
+               if (fg%output_style == 1) then    
+                   ! Setup data for this grid
+                   ! Set fg%dt (the timestep length between outputs)
+                   if (fg%end_time <= fg%start_time) then
+                       if (fg%num_output > 1) then 
+                          print *,'set_fgout: ERROR for fixed grid', i
+                          print *,'start_time <= end_time yet num_output > 1'
+                          print *,'set end_time > start_time or set num_output = 1'
+                          stop
+                       else
+                           ! only a single fgout time:
+                           fg%dt = 0.d0
+                       endif
                    else
-                       fg%dt = 0.d0
-                   endif
-               else
-                   if (fg%num_output < 2) then
-                       print *,'set_fgout: ERROR for fixed grid', i
-                       print *,'end_time > start_time, yet num_output = 1'
-                       print *,'set num_output > 2'
-                       stop
-                   else
-                       fg%dt = (fg%end_time  - fg%start_time) &
-                                           / (fg%num_output - 1)
-                       do k=1,fg%num_output
-                           fg%output_times(k) = fg%start_time + (k-1)*fg%dt
-                           if (rest) then
-                               ! don't write initial time or earlier
-                               ts = tstart_thisrun+FGOUT_ttol
-                           else
-                               ! do write initial time
-                               ts = tstart_thisrun-FGOUT_ttol
-                           endif
-                               
-                           if (fg%output_times(k) < ts) then
-                                ! will not output this time in this run
-                                ! (might have already be done when restarting)
-                                fg%output_frames(k) = -2
-                                fg%next_output_index = k+1
-                           else
-                                ! will be reset to frameno when this is written
-                                fg%output_frames(k) = -1
-                           endif
-                       enddo
-                   endif
+                       if (fg%num_output < 2) then
+                           print *,'set_fgout: ERROR for fixed grid', i
+                           print *,'end_time > start_time, yet num_output = 1'
+                           print *,'set num_output > 2'
+                           stop
+                       else
+                           fg%dt = (fg%end_time  - fg%start_time) &
+                                               / (fg%num_output - 1)
+                           do k=1,fg%num_output
+                               fg%output_times(k) = fg%start_time + (k-1)*fg%dt
+                           enddo
+                       endif
+                    endif
                 endif
+                       
+               do k=1,fg%num_output
+                   if (rest) then
+                       ! don't write initial time or earlier
+                       ts = tstart_thisrun+FGOUT_ttol
+                   else
+                       ! do write initial time
+                       ts = tstart_thisrun-FGOUT_ttol
+                   endif
+                       
+                   if (fg%output_times(k) < ts) then
+                        ! will not output this time in this run
+                        ! (might have already be done when restarting)
+                        fg%output_frames(k) = -2
+                        fg%next_output_index = k+1
+                   else
+                        ! will be reset to frameno when this is written
+                        fg%output_frames(k) = -1
+                   endif
+               enddo
 
 
 

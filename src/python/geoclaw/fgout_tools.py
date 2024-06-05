@@ -178,6 +178,7 @@ class FGoutGrid(object):
         self.npts = None
         self.nx = None
         self.ny = None
+        self.output_style = 1
         self.tstart =  None
         self.tend = None
         self.nout = None
@@ -372,18 +373,33 @@ class FGoutGrid(object):
             errmsg = "fgout output_format must be ascii, binary32, or binary64"
             raise NotImplementedError(errmsg)
 
-        assert self.tstart is not None, 'Need to set tstart'
-        assert self.tend is not None, 'Need to set tend'
-        assert self.nout is not None, 'Need to set nout'
-        assert self.point_style is not None, 'Need to set point_style'
+
         
         # write header, independent of point_style:
         #fid = open(self.input_file_name,'w')
         fid.write("\n")
         fid.write("%i                           # fgno\n" % self.fgno)
-        fid.write("%16.10e            # tstart\n"  % self.tstart)
-        fid.write("%16.10e            # tend\n"  % self.tend)
-        fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
+
+        fid.write("%i                           # output_style\n" \
+                    % self.output_style)
+        
+        if self.output_style == 1:
+            assert self.tstart is not None, 'Need to set tstart'
+            assert self.tend is not None, 'Need to set tend'
+            assert self.nout is not None, 'Need to set nout'
+            fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
+            fid.write("%16.10e            # tstart\n"  % self.tstart)
+            fid.write("%16.10e            # tend\n"  % self.tend)
+        elif self.output_style == 2:
+            self.nout = len(self.output_times)
+            fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
+            
+            # remove [] and , from list of times:
+            output_times_str = repr(list(self.output_times))[1:-1]
+            output_times_str = output_times_str.replace(',','')
+            fid.write("%s            # output_times\n"  % output_times_str)
+        else:
+            raise ValueError('fgout output_style must be 1 or 2')
         fid.write("%i %s              # point_style\n" \
                             % (self.point_style,12*" "))
         fid.write("%i %s              # output_format\n" \
