@@ -103,8 +103,12 @@ See the following links for additional information about xarray Backends.
 import os
 
 import numpy as np
-import rioxarray  # activate the rio accessor
-import xarray as xr
+try:
+    import rioxarray  # activate the rio accessor
+    import xarray as xr
+except ImportError:
+    raise ImportError('rioxarray and xarray are required to use the FGOutBackend and FGMaxBackend')
+
 from clawpack.geoclaw import fgmax_tools, fgout_tools
 from xarray.backends import BackendEntrypoint
 
