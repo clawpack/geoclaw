@@ -51,6 +51,19 @@ module model_storm_module
 
     end type model_storm_type
 
+    ! How to deterimine which way a storm should be made to spin
+    ! The default defers simply to assuming y is a latitude
+    ! Here either an integer or bool can be returned but as implemented 1
+    ! refers to the Northern Hemisphere and therefore causes the storm to spin
+    ! in a counter-clockwise direction.
+    abstract interface
+        logical pure function rotation_def(x, y)
+            implicit none
+            real(kind=8), intent(in) :: x, y
+        end function rotation_def
+    end interface
+    procedure(rotation_def), pointer :: rotation
+
     ! Interal tracking variables for storm
     integer, private :: last_storm_index
 
@@ -647,7 +660,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -719,7 +732,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -811,7 +824,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
             enddo
         enddo
 
@@ -1254,8 +1267,8 @@ contains
                 trans_speed_x = tv(1) * mwr * r / (mwr**2.d0 + r**2.d0)
                 trans_speed_y = tv(2) * mwr * r / (mwr**2.d0 + r**2.d0)
                 
-                aux(wind_index,i,j)   = wind * merge(-1, 1, y >= 0) * sin(theta) + trans_speed_x
-                aux(wind_index+1,i,j) = wind * merge(1, -1, y >= 0) * cos(theta) + trans_speed_y
+                aux(wind_index,i,j)   = wind * merge(-1, 1, rotation(x, y)) * sin(theta) + trans_speed_x
+                aux(wind_index+1,i,j) = wind * merge(1, -1, rotation(x, y)) * cos(theta) + trans_speed_y
             enddo
         enddo
 
@@ -1330,7 +1343,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                 wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                convert_height, y >= 0)
+                convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -1418,7 +1431,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                 wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                convert_height, y >= 0)
+                convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -1491,7 +1504,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -1583,7 +1596,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo

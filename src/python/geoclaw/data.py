@@ -550,12 +550,13 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     storm_spec_not_implemented = ['CLE']
 
     def __init__(self):
-        super(SurgeData,self).__init__()
+        super(SurgeData, self).__init__()
 
         # Source term controls
-        self.add_attribute('wind_forcing',False)
-        self.add_attribute('drag_law',1)
-        self.add_attribute('pressure_forcing',False)
+        self.add_attribute('wind_forcing', False)
+        self.add_attribute('drag_law', 1)
+        self.add_attribute('pressure_forcing', False)
+        self.add_attribute('rotation', 0)
 
         # Algorithm parameters - Indexing is python based
         self.add_attribute("wind_index", 4)
@@ -563,8 +564,8 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("display_landfall_time", False)
 
         # AMR parameters
-        self.add_attribute('wind_refine',[20.0,40.0,60.0])
-        self.add_attribute('R_refine',[60.0e3,40e3,20e3])
+        self.add_attribute('wind_refine', [20.0,40.0,60.0])
+        self.add_attribute('R_refine', [60.0e3,40e3,20e3])
 
         # Storm parameters
         self.add_attribute('storm_type', None)  # Backwards compatibility
@@ -572,7 +573,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("storm_file", None) # File(s) containing data
 
 
-    def write(self,out_file='surge.data',data_source="setrun.py"):
+    def write(self, out_file='surge.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
 
         # print "Creating data file %s" % out_file
@@ -582,6 +583,8 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.data_write('drag_law', description='(Type of drag law to use)')
         self.data_write('pressure_forcing',
                         description="(Pressure source term used)")
+        self.data_write('rotation', 
+                        description="(type of rotation storms should have)")
         self.data_write()
 
         self.data_write("wind_index", value=self.wind_index + 1,
