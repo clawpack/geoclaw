@@ -6,7 +6,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     use geoclaw_module, only: manning_break, num_manning
     use geoclaw_module, only: spherical_distance, coordinate_system
     use geoclaw_module, only: RAD2DEG, pi, dry_tolerance, DEG2RAD
-    use geoclaw_module, only: rho_air
+    use geoclaw_module, only: rho_air, rho
     use geoclaw_module, only: earth_radius, sphere_source
       
     use storm_module, only: wind_forcing, pressure_forcing, wind_drag
@@ -39,10 +39,6 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     ! Parameter controls when to zero out the momentum at a depth in the
     ! friction source term
     real(kind=8), parameter :: depth_tolerance = 1.0d-30
-
-    ! Physics
-    ! Nominal density of water
-    real(kind=8), parameter :: rho = 1025.d0
 
     ! ----------------------------------------------------------------
     ! Spherical geometry source term(s)
@@ -154,7 +150,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
                     endif
                     wind_speed = sqrt(aux(wind_index,i,j)**2        &
                                     + aux(wind_index+1,i,j)**2)
-                    tau = wind_drag(wind_speed, phi) * rho_air * wind_speed / rho
+                    tau = wind_drag(wind_speed, phi) * rho_air * wind_speed / rho(1)
                     q(2,i,j) = q(2,i,j) + dt * tau * aux(wind_index,i,j)
                     q(3,i,j) = q(3,i,j) + dt * tau * aux(wind_index+1,i,j)
                 endif
@@ -195,8 +191,8 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     !                 ! Modify momentum in each layer
     !             if (h > dry_tolerance) then
-    !                 q(2, i, j) = q(2, i, j) - dt * h * P_gradient(1) / rho
-    !                 q(3, i, j) = q(3, i, j) - dt * h * P_gradient(2) / rho
+    !                 q(2, i, j) = q(2, i, j) - dt * h * P_gradient(1) / rho(1)
+    !                 q(3, i, j) = q(3, i, j) - dt * h * P_gradient(2) / rho(1)
     !             end if
     !         enddo
     !     enddo
