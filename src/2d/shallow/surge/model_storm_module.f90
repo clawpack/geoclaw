@@ -68,12 +68,6 @@ module model_storm_module
     ! track to be close to but not equal the start time of the simulation
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
 
-    ! Global constants #TODO: Some of these are in geoclaw already
-    real(kind=8) :: pi=3.1415927
-    real(kind=8) :: omega=7.2921e-5
-    real(kind=8) :: chi=1.0
-    real(kind=8) :: alpha=1.0
-
 contains
 
 
@@ -974,6 +968,7 @@ contains
 
         ! Variables
         real(kind=8) :: denominator, M_a
+        real(kind=8), parameter :: alpha=1.0
 
         ! Calculate necessary components of the derivative to make
         ! calculations easier
@@ -992,6 +987,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: f, r_m, v_m, r_a
+        real(kind=8), parameter :: alpha=1.0
 
         v_a = ((2.0*(r_a/r_m)**2)/(2.0-alpha+alpha*(r_a/r_m)**2))**(1.0/(2.0-alpha))
         v_a = v_a*(0.5*f*r_m**2 + r_m*v_m)
@@ -1061,6 +1057,7 @@ contains
         ! Parameters and Other variables
         real(kind=8) :: V_m, dr, r_guess, r_p
         integer :: i
+        real(kind=8), parameter :: chi=1.0
 
         ! Intialize
         m_out(res) = 0.5*f*r_0**2
@@ -1104,6 +1101,8 @@ contains
         real(kind=8) :: dr, r
         real(kind=8) :: inner_res, outer_res
         real(kind=8), dimension(1:res) :: v_out, v_in
+        real(kind=8), parameter :: chi=1.0
+        real(kind=8), parameter :: alpha=1.0
 
         ! Initialize guesses for merge and r_0
         r_a = 2.0*r_m
