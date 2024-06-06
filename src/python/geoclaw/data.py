@@ -557,7 +557,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute('wind_forcing', False)
         self.add_attribute('drag_law', 1)
         self.add_attribute('pressure_forcing', False)
-        self.add_attribute('rotation', 0)
+        self.add_attribute('rotation_override', 0)
 
         # Algorithm parameters - Indexing is python based
         self.add_attribute("wind_index", 4)
@@ -584,8 +584,19 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.data_write('drag_law', description='(Type of drag law to use)')
         self.data_write('pressure_forcing',
                         description="(Pressure source term used)")
-        self.data_write('rotation', 
-                        description="(type of rotation storms should have)")
+        if isinstance(self.rotation_override, str):
+            if self.rotation_override.lower() == "normal":
+                self.rotation_override = 0
+            elif "n" in self.rotation_override.lower():
+                self.rotation_override = 1
+            elif "s" in self.rotation_override.lower():
+                self.rotation_override = 2
+            else:
+                raise ValueError("Unknown rotation_override specification.")
+        else:
+            self.rotation_override = int(self.rotation_override)
+        self.data_write('rotation_override', 
+                        description="(Override storm rotation)")
         self.data_write()
 
         self.data_write("wind_index", value=self.wind_index + 1,

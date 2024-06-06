@@ -380,7 +380,7 @@ class Storm(object):
         for c in ["LAT", "LON", "VMAX", "MSLP", "ROUTER", "RMW",
                   "RAD", "RAD1", "RAD2", "RAD3", "RAD4"]:
             df[c] = df[c].where(df[c] != 0, np.nan)  # value 0 means NaN
-            df[c] = df.groupby("DATE")[c].fillna(methos="bfill")
+            df[c] = df.groupby("DATE")[c].bfill()
         df = df.groupby("DATE").first()
 
         # Wind profile (occasionally missing for older ATCF storms)

@@ -29,7 +29,6 @@ module storm_module
 
     ! Source term control and parameters
     logical :: wind_forcing, pressure_forcing
-    integer :: rotation_override
 
     ! Wind drag law support
     abstract interface
@@ -127,7 +126,7 @@ contains
 
         ! Locals
         integer, parameter :: unit = 13
-        integer :: i, drag_law
+        integer :: i, drag_law, rotation_override
         character(len=200) :: storm_file_path, line
 
         if (.not.module_setup) then
@@ -158,8 +157,10 @@ contains
             select case(rotation_override)
                 case(0)
                     rotation => hemisphere_rotation
-                case(1:2)
-                    rotation => user_rotation
+                case(1)
+                    rotation => N_rotation
+                case(2)
+                    rotation => S_rotation
                 case default
                     stop " *** ERROR *** Roation override invalid."
             end select
@@ -500,10 +501,16 @@ contains
         rotation = (y >= 0.d0)
     end function hemisphere_rotation
     ! This version just returns the user defined direction
-    logical pure function user_rotation(x, y) result(rotation)
+    logical pure function N_rotation(x, y) result(rotation)
         implicit none
         real(kind=8), intent(in) :: x, y
-        rotation = (rotation_override == 1)
-    end function user_rotation
+        rotation = .true.
+    end function N_rotation
+    ! This version just returns the user defined direction
+    logical pure function S_rotation(x, y) result(rotation)
+        implicit none
+        real(kind=8), intent(in) :: x, y
+        rotation = .false.
+    end function S_rotation
     
 end module storm_module
