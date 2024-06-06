@@ -185,6 +185,7 @@ class FGoutGrid(object):
         self.fgno = fgno
         self.outdir = outdir
         self.output_format = output_format
+        self.dclaw = False
         
         self.drytol = 1e-3          # used for computing u,v from hu,hv
 
@@ -430,6 +431,7 @@ class FGoutGrid(object):
             print("   upper right = (%15.10f,%15.10f)" % (x2,y2))
             print("   dx = %15.10e,  dy = %15.10e" % (dx,dy))
             
+            fid.write("%s                     # dclaw" % self.dclaw)
 
 
     def read_frame(self, frameno):
