@@ -160,8 +160,8 @@ contains
                                             0.5d0 * (x(1) + y(1)), y(2))
                     storm%velocity(2, i) = sign(ds / dt, y(2) - x(2))
                 else
-                    storm%velocity(1, i) = abs(x(2) - x(1)) / dt
-                    storm%velocity(2, i) = abs(y(2) - y(1)) / dt
+                    storm%velocity(1, i) = (y(1) - x(1)) / dt
+                    storm%velocity(2, i) = (y(2) - x(2)) / dt
                 end if
             end do
 
@@ -345,7 +345,7 @@ contains
                               max_wind_speed, central_pressure,               &
                               radius, central_pressure_change)
 
-        use geoclaw_module, only: deg2rad, latlon2xy, xy2latlon
+        use geoclaw_module, only: deg2rad, latlon2xy, xy2latlon, coordinate_system
 
         implicit none
 
@@ -389,13 +389,20 @@ contains
 
             ! Convert coordinates temporarily to meters so that we can use
             ! the pre-calculated m/s velocities from before
-            x = latlon2xy(storm%track(2:3,i),storm%track(2:3,i))
-            x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
-
-            fn = [xy2latlon(x,storm%track(2:3,i)), &
-                  storm%velocity(:,i), storm%max_wind_radius(i), &
-                  storm%max_wind_speed(i), storm%central_pressure(i), &
-                  storm%radius(i), storm%central_pressure_change(i)]
+            if (coordinate_system == 2) then
+                x = latlon2xy(storm%track(2:3,i),storm%track(2:3,i))
+                x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
+                fn = [xy2latlon(x,storm%track(2:3,i)), &
+                      storm%velocity(:,i), storm%max_wind_radius(i), &
+                      storm%max_wind_speed(i), storm%central_pressure(i), &
+                      storm%radius(i), storm%central_pressure_change(i)]
+            else
+                x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
+                fn = [x, &
+                      storm%velocity(:,i), storm%max_wind_radius(i), &
+                      storm%max_wind_speed(i), storm%central_pressure(i), &
+                      storm%radius(i), storm%central_pressure_change(i)]
+            end if
         else
             ! Inbetween two forecast time points (the function storm_index
             ! ensures that we are not before the first data point, i.e. i > 1)
@@ -437,11 +444,8 @@ contains
     pure subroutine adjust_max_wind(tv, mws, mod_mws, convert_height)
 
         real (kind=8), intent(inout) :: tv(2)
-
         real (kind=8), intent(in) :: mws
-
         logical, intent(in) :: convert_height
-
         real (kind=8), intent(out) :: mod_mws
 
         real (kind=8) :: trans_speed, trans_mod
@@ -528,21 +532,21 @@ contains
     ! ==========================================================================
     pure subroutine calculate_polar_coordinate(x, y, sloc, r, theta)
 
-    use geoclaw_module, only: deg2rad, coordinate_system
-    use geoclaw_module, only: spherical_distance
+        use geoclaw_module, only: deg2rad, coordinate_system
+        use geoclaw_module, only: spherical_distance
 
-    real(kind=8), intent(in) :: x, y, sloc(2)
-    real(kind=8), intent(out) :: r, theta
+        real(kind=8), intent(in) :: x, y, sloc(2)
+        real(kind=8), intent(out) :: r, theta
 
-    if (coordinate_system == 2) then
-        ! lat-long coordinates, uses Haversine formula
-        r = spherical_distance(x, y, sloc(1), sloc(2))
-        theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
-    else
-        ! Strictly cartesian
-        r = sqrt( (x - sloc(1))**2 + (y - sloc(2))**2)
-        theta = atan2(y - sloc(2), x - sloc(1))
-    end if
+        if (coordinate_system == 2) then
+            ! lat-long coordinates, uses Haversine formula
+            r = spherical_distance(x, y, sloc(1), sloc(2))
+            theta = atan2((y - sloc(2)),(x - sloc(1)))
+        else
+            ! Strictly cartesian
+            r = sqrt( (x - sloc(1))**2 + (y - sloc(2))**2)
+            theta = atan2((y - sloc(2)), (x - sloc(1)))
+        end if
 
     end subroutine calculate_polar_coordinate
 
