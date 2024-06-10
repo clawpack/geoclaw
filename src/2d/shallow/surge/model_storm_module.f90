@@ -51,6 +51,19 @@ module model_storm_module
 
     end type model_storm_type
 
+    ! How to deterimine which way a storm should be made to spin
+    ! The default defers simply to assuming y is a latitude
+    ! Here either an integer or bool can be returned but as implemented 1
+    ! refers to the Northern Hemisphere and therefore causes the storm to spin
+    ! in a counter-clockwise direction.
+    abstract interface
+        logical pure function rotation_def(x, y)
+            implicit none
+            real(kind=8), intent(in) :: x, y
+        end function rotation_def
+    end interface
+    procedure(rotation_def), pointer :: rotation
+
     ! Interal tracking variables for storm
     integer, private :: last_storm_index
 
@@ -67,12 +80,6 @@ module model_storm_module
     ! Time tracking tolerance allowance - allows for the beginning of the storm
     ! track to be close to but not equal the start time of the simulation
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
-
-    ! Global constants #TODO: Some of these are in geoclaw already
-    real(kind=8) :: pi=3.1415927
-    real(kind=8) :: omega=7.2921e-5
-    real(kind=8) :: chi=1.0
-    real(kind=8) :: alpha=1.0
 
 contains
 
@@ -153,8 +160,8 @@ contains
                                             0.5d0 * (x(1) + y(1)), y(2))
                     storm%velocity(2, i) = sign(ds / dt, y(2) - x(2))
                 else
-                    storm%velocity(1, i) = abs(x(2) - x(1)) / dt
-                    storm%velocity(2, i) = abs(y(2) - y(1)) / dt
+                    storm%velocity(1, i) = (y(1) - x(1)) / dt
+                    storm%velocity(2, i) = (y(2) - x(2)) / dt
                 end if
             end do
 
@@ -338,7 +345,7 @@ contains
                               max_wind_speed, central_pressure,               &
                               radius, central_pressure_change)
 
-        use geoclaw_module, only: deg2rad, latlon2xy, xy2latlon
+        use geoclaw_module, only: deg2rad, latlon2xy, xy2latlon, coordinate_system
 
         implicit none
 
@@ -382,13 +389,20 @@ contains
 
             ! Convert coordinates temporarily to meters so that we can use
             ! the pre-calculated m/s velocities from before
-            x = latlon2xy(storm%track(2:3,i),storm%track(2:3,i))
-            x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
-
-            fn = [xy2latlon(x,storm%track(2:3,i)), &
-                  storm%velocity(:,i), storm%max_wind_radius(i), &
-                  storm%max_wind_speed(i), storm%central_pressure(i), &
-                  storm%radius(i), storm%central_pressure_change(i)]
+            if (coordinate_system == 2) then
+                x = latlon2xy(storm%track(2:3,i),storm%track(2:3,i))
+                x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
+                fn = [xy2latlon(x,storm%track(2:3,i)), &
+                      storm%velocity(:,i), storm%max_wind_radius(i), &
+                      storm%max_wind_speed(i), storm%central_pressure(i), &
+                      storm%radius(i), storm%central_pressure_change(i)]
+            else
+                x = x + (t - storm%track(1,i)) * storm%velocity(:,i)
+                fn = [x, &
+                      storm%velocity(:,i), storm%max_wind_radius(i), &
+                      storm%max_wind_speed(i), storm%central_pressure(i), &
+                      storm%radius(i), storm%central_pressure_change(i)]
+            end if
         else
             ! Inbetween two forecast time points (the function storm_index
             ! ensures that we are not before the first data point, i.e. i > 1)
@@ -430,11 +444,8 @@ contains
     pure subroutine adjust_max_wind(tv, mws, mod_mws, convert_height)
 
         real (kind=8), intent(inout) :: tv(2)
-
         real (kind=8), intent(in) :: mws
-
         logical, intent(in) :: convert_height
-
         real (kind=8), intent(out) :: mod_mws
 
         real (kind=8) :: trans_speed, trans_mod
@@ -521,21 +532,21 @@ contains
     ! ==========================================================================
     pure subroutine calculate_polar_coordinate(x, y, sloc, r, theta)
 
-    use geoclaw_module, only: deg2rad, coordinate_system
-    use geoclaw_module, only: spherical_distance
+        use geoclaw_module, only: deg2rad, coordinate_system
+        use geoclaw_module, only: spherical_distance
 
-    real(kind=8), intent(in) :: x, y, sloc(2)
-    real(kind=8), intent(out) :: r, theta
+        real(kind=8), intent(in) :: x, y, sloc(2)
+        real(kind=8), intent(out) :: r, theta
 
-    if (coordinate_system == 2) then
-        ! lat-long coordinates, uses Haversine formula
-        r = spherical_distance(x, y, sloc(1), sloc(2))
-        theta = atan2((y - sloc(2)) * DEG2RAD,(x - sloc(1)) * DEG2RAD)
-    else
-        ! Strictly cartesian
-        r = sqrt( (x - sloc(1))**2 + (y - sloc(2))**2)
-        theta = atan2(y - sloc(2), x - sloc(1))
-    end if
+        if (coordinate_system == 2) then
+            ! lat-long coordinates, uses Haversine formula
+            r = spherical_distance(x, y, sloc(1), sloc(2))
+            theta = atan2((y - sloc(2)),(x - sloc(1)))
+        else
+            ! Strictly cartesian
+            r = sqrt( (x - sloc(1))**2 + (y - sloc(2))**2)
+            theta = atan2((y - sloc(2)), (x - sloc(1)))
+        end if
 
     end subroutine calculate_polar_coordinate
 
@@ -653,7 +664,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -725,7 +736,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -817,7 +828,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
             enddo
         enddo
 
@@ -974,6 +985,7 @@ contains
 
         ! Variables
         real(kind=8) :: denominator, M_a
+        real(kind=8), parameter :: alpha=1.0
 
         ! Calculate necessary components of the derivative to make
         ! calculations easier
@@ -992,6 +1004,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: f, r_m, v_m, r_a
+        real(kind=8), parameter :: alpha=1.0
 
         v_a = ((2.0*(r_a/r_m)**2)/(2.0-alpha+alpha*(r_a/r_m)**2))**(1.0/(2.0-alpha))
         v_a = v_a*(0.5*f*r_m**2 + r_m*v_m)
@@ -1061,6 +1074,7 @@ contains
         ! Parameters and Other variables
         real(kind=8) :: V_m, dr, r_guess, r_p
         integer :: i
+        real(kind=8), parameter :: chi=1.0
 
         ! Intialize
         m_out(res) = 0.5*f*r_0**2
@@ -1104,6 +1118,8 @@ contains
         real(kind=8) :: dr, r
         real(kind=8) :: inner_res, outer_res
         real(kind=8), dimension(1:res) :: v_out, v_in
+        real(kind=8), parameter :: chi=1.0
+        real(kind=8), parameter :: alpha=1.0
 
         ! Initialize guesses for merge and r_0
         r_a = 2.0*r_m
@@ -1255,8 +1271,8 @@ contains
                 trans_speed_x = tv(1) * mwr * r / (mwr**2.d0 + r**2.d0)
                 trans_speed_y = tv(2) * mwr * r / (mwr**2.d0 + r**2.d0)
                 
-                aux(wind_index,i,j)   = wind * merge(-1, 1, y >= 0) * sin(theta) + trans_speed_x
-                aux(wind_index+1,i,j) = wind * merge(1, -1, y >= 0) * cos(theta) + trans_speed_y
+                aux(wind_index,i,j)   = wind * merge(-1, 1, rotation(x, y)) * sin(theta) + trans_speed_x
+                aux(wind_index+1,i,j) = wind * merge(1, -1, rotation(x, y)) * cos(theta) + trans_speed_y
             enddo
         enddo
 
@@ -1331,7 +1347,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                 wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                convert_height, y >= 0)
+                convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -1419,7 +1435,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                 wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                convert_height, y >= 0)
+                convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -1492,7 +1508,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo
@@ -1584,7 +1600,7 @@ contains
 
                 call post_process_wind_estimate(maux, mbc, mx, my, i, j, wind, aux, &
                     wind_index, pressure_index, r, radius, tv, mod_mws, theta, &
-                    convert_height, y >= 0)
+                    convert_height, rotation(x, y))
 
             enddo
         enddo

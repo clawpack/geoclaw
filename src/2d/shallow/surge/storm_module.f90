@@ -11,7 +11,7 @@
 
 module storm_module
 
-    use model_storm_module, only: model_storm_type
+    use model_storm_module, only: model_storm_type, rotation
     use data_storm_module, only: data_storm_type
 
     implicit none
@@ -126,7 +126,7 @@ contains
 
         ! Locals
         integer, parameter :: unit = 13
-        integer :: i, drag_law
+        integer :: i, drag_law, rotation_override
         character(len=200) :: storm_file_path, line
 
         if (.not.module_setup) then
@@ -153,6 +153,17 @@ contains
                     stop "*** ERROR *** Invalid wind drag law."
             end select
             read(unit,*) pressure_forcing
+            read(unit,*) rotation_override
+            select case(rotation_override)
+                case(0)
+                    rotation => hemisphere_rotation
+                case(1)
+                    rotation => N_rotation
+                case(2)
+                    rotation => S_rotation
+                case default
+                    stop " *** ERROR *** Roation override invalid."
+            end select
             read(unit,*)
 
             ! Set some parameters
@@ -480,4 +491,26 @@ contains
 
     end subroutine output_storm_location
 
+    ! ==========================================================================
+    ! Default to assuming y is a latitude and if y >= 0 we are want to spin
+    ! counter-clockwise
+    ! ==========================================================================
+    logical pure function hemisphere_rotation(x, y) result(rotation)
+        implicit none
+        real(kind=8), intent(in) :: x, y
+        rotation = (y >= 0.d0)
+    end function hemisphere_rotation
+    ! This version just returns the user defined direction
+    logical pure function N_rotation(x, y) result(rotation)
+        implicit none
+        real(kind=8), intent(in) :: x, y
+        rotation = .true.
+    end function N_rotation
+    ! This version just returns the user defined direction
+    logical pure function S_rotation(x, y) result(rotation)
+        implicit none
+        real(kind=8), intent(in) :: x, y
+        rotation = .false.
+    end function S_rotation
+    
 end module storm_module
