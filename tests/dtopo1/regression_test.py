@@ -18,18 +18,24 @@ import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 
 
-class ParticlesTest(test.GeoClawRegressionTest):
+class DTopoTests(test.GeoClawRegressionTest):
 
-    r"""Particles regression test for GeoClaw"""
+    r"""dtopo1 regression test for GeoClaw"""
 
     def setUp(self):
 
-        super(ParticlesTest, self).setUp()
+        super(DTopoTests, self).setUp()
         start_dir = os.getcwd()
 
-        # Make topography
+        # Make topography and dtopo
 
         shutil.copy(os.path.join(self.test_path, "maketopo.py"),
+                                 self.temp_path)
+        shutil.copy(os.path.join(self.test_path, "dtopo1.csv"),
+                                 self.temp_path)               
+        shutil.copy(os.path.join(self.test_path, "dtopo2.csv"),
+                                 self.temp_path)
+        shutil.copy(os.path.join(self.test_path, "dtopo3.tt1"),
                                  self.temp_path)
         os.chdir(self.temp_path)
         os.system('python maketopo.py')
@@ -37,10 +43,7 @@ class ParticlesTest(test.GeoClawRegressionTest):
 
 
     def runTest(self, save=False, indices=(2, 3)):
-        r"""Test particles example
-
-        Note that this stub really only runs the code and performs no tests.
-
+        r"""DTopography basic regression test
         """
 
         # Write out data files
@@ -49,16 +52,22 @@ class ParticlesTest(test.GeoClawRegressionTest):
 
         # Run code
         self.run_code()
-
+        
         import clawpack.pyclaw.gauges as gauges
         gauge = gauges.GaugeSolution(1, path=self.temp_path)
-        print('+++ Gauge 1:\n', gauge.q)
+        #print('+++ Gauge 1:\n', gauge.q)
         gauge = gauges.GaugeSolution(2, path=self.temp_path)
-        print('+++ Gauge 2:\n', gauge.q)
-
+        #print('+++ Gauge 2:\n', gauge.q)
+        
         # Perform tests
-        self.check_gauges(save=save, gauge_id=1, indices=(1, 2))
-        self.check_gauges(save=save, gauge_id=2, indices=(1, 2))
+        self.check_gauges(save=save, gauge_id=1, 
+                          indices=(2, 3))
+        print('gauge 1 ascii agrees')
+        self.check_gauges(save=save, gauge_id=2,
+                          indices=(2, 3))
+        print('gauge 2 binary agrees')
+
+        # If we have gotten here then we do not need to copy the run results
         self.success = True
 
 
@@ -66,7 +75,7 @@ if __name__=="__main__":
     if len(sys.argv) > 1:
         if bool(sys.argv[1]):
             # Fake the setup and save out output
-            test = ParticlesTest()
+            test = DTopoTests()
             try:
                 test.setUp()
                 test.runTest(save=True)
