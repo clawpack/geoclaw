@@ -326,11 +326,32 @@ class FGoutGrid(object):
             raise ValueError('fgout grid fgno = %i not found in %s' \
                              % (fgno, data_file))
 
-        self.tstart = float(fgout_input[0].split()[0])
-        self.tend = float(fgout_input[1].split()[0])
-        self.nout = int(fgout_input[2].split()[0])
-        self.point_style = point_style = int(fgout_input[3].split()[0])
-        output_format = int(fgout_input[4].split()[0])
+        lineno = 0 # next input line
+        self.output_style = int(fgout_input[lineno].split()[lineno])
+        lineno += 1
+        if (self.output_style == 1):
+            # equally spaced times:
+            self.nout = int(fgout_input[lineno].split()[0])
+            lineno += 1
+            self.tstart = float(fgout_input[lineno].split()[0])
+            lineno += 1
+            self.tend = float(fgout_input[lineno].split()[0])
+            lineno += 1
+            self.times = numpy.linspace(self.tstart, self.tend, self.nout)
+        elif (self.output_style == 2):
+            # list of times:
+            self.nout = int(fgout_input[lineno].split()[0])
+            lineno += 1
+            times_str = fgout_input[lineno].split()[:self.nout]
+            self.times = numpy.array([float(ts) for ts in times_str])
+            lineno += 1
+        else:
+            raise ValueError('Unrecognized fgout output_style: %s' \
+                             % self.output_style)
+        self.point_style = point_style = int(fgout_input[lineno].split()[0])
+        lineno += 1
+        output_format = int(fgout_input[lineno].split()[0])
+        lineno += 1
         if output_format == 1:
             self.output_format = 'ascii'
         elif output_format == 3:
@@ -338,12 +359,15 @@ class FGoutGrid(object):
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 2:
-            self.nx = nx = int(fgout_input[5].split()[0])
-            self.ny = ny = int(fgout_input[5].split()[1])
-            self.x1 = float(fgout_input[6].split()[0])
-            self.y1 = float(fgout_input[6].split()[1])
-            self.x2 = float(fgout_input[7].split()[0])
-            self.y2 = float(fgout_input[7].split()[1])
+            self.nx = nx = int(fgout_input[lineno].split()[0])
+            self.ny = ny = int(fgout_input[lineno].split()[1])
+            lineno += 1
+            self.x1 = float(fgout_input[lineno].split()[0])
+            self.y1 = float(fgout_input[lineno].split()[1])
+            lineno += 1
+            self.x2 = float(fgout_input[lineno].split()[0])
+            self.y2 = float(fgout_input[lineno].split()[1])
+            lineno += 1
         else:
             raise NotImplementedError("fgout not implemented for point_style %i" \
                 % point_style)
