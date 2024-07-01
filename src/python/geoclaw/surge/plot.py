@@ -249,7 +249,7 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
                                          plot_type='2d_contourf')
         plotitem.plot_var = geoplot.surface_or_depth
         if bounds is not None:
-            contours = numpy.linspace(bounds[0], bounds[1], 11)
+            contours = np.linspace(bounds[0], bounds[1], 11)
             plotitem.contour_levels = contours
             plotitem.fill_cmin = bounds[0]
             plotitem.fill_cmax = bounds[1]
@@ -310,7 +310,7 @@ def add_speed(plotaxes, plot_type='pcolor', bounds=None,  contours=None,
         plotitem.colorbar_shrink = shrink
         plotitem.fill_cmap = plt.get_cmap('PuBu')
         if bounds is not None:
-            plotitem.contour_levels = numpy.linspace(bounds[0], bounds[1], 11)
+            plotitem.contour_levels = np.linspace(bounds[0], bounds[1], 11)
             plotitem.fill_cmin = bounds[0]
             plotitem.fill_cmap = bounds[1]
         elif contours is not None:
