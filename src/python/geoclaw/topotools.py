@@ -414,7 +414,7 @@ class Topography(object):
 
 
     def __init__(self, path=None, topo_type=None, topo_func=None, 
-                       unstructured=False):
+                       unstructured=False, **kwargs):
         r"""Topography initialization routine.
         
         See :class:`Topography` for more info.
@@ -444,7 +444,7 @@ class Topography(object):
 
         if path:
             self.read(path=path, topo_type=topo_type,
-                      unstructured=unstructured)
+                      unstructured=unstructured, **kwargs)
 
     def set_xyZ(self, X, Y, Z):
         r"""
