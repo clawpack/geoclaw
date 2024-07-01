@@ -178,12 +178,14 @@ class FGoutGrid(object):
         self.npts = None
         self.nx = None
         self.ny = None
+        self.output_style = 1
         self.tstart =  None
         self.tend = None
         self.nout = None
         self.fgno = fgno
         self.outdir = outdir
         self.output_format = output_format
+        self.dclaw = False
         
         self.drytol = 1e-3          # used for computing u,v from hu,hv
 
@@ -324,11 +326,32 @@ class FGoutGrid(object):
             raise ValueError('fgout grid fgno = %i not found in %s' \
                              % (fgno, data_file))
 
-        self.tstart = float(fgout_input[0].split()[0])
-        self.tend = float(fgout_input[1].split()[0])
-        self.nout = int(fgout_input[2].split()[0])
-        self.point_style = point_style = int(fgout_input[3].split()[0])
-        output_format = int(fgout_input[4].split()[0])
+        lineno = 0 # next input line
+        self.output_style = int(fgout_input[lineno].split()[lineno])
+        lineno += 1
+        if (self.output_style == 1):
+            # equally spaced times:
+            self.nout = int(fgout_input[lineno].split()[0])
+            lineno += 1
+            self.tstart = float(fgout_input[lineno].split()[0])
+            lineno += 1
+            self.tend = float(fgout_input[lineno].split()[0])
+            lineno += 1
+            self.times = numpy.linspace(self.tstart, self.tend, self.nout)
+        elif (self.output_style == 2):
+            # list of times:
+            self.nout = int(fgout_input[lineno].split()[0])
+            lineno += 1
+            times_str = fgout_input[lineno].split()[:self.nout]
+            self.times = numpy.array([float(ts) for ts in times_str])
+            lineno += 1
+        else:
+            raise ValueError('Unrecognized fgout output_style: %s' \
+                             % self.output_style)
+        self.point_style = point_style = int(fgout_input[lineno].split()[0])
+        lineno += 1
+        output_format = int(fgout_input[lineno].split()[0])
+        lineno += 1
         if output_format == 1:
             self.output_format = 'ascii'
         elif output_format == 3:
@@ -336,12 +359,15 @@ class FGoutGrid(object):
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 2:
-            self.nx = nx = int(fgout_input[5].split()[0])
-            self.ny = ny = int(fgout_input[5].split()[1])
-            self.x1 = float(fgout_input[6].split()[0])
-            self.y1 = float(fgout_input[6].split()[1])
-            self.x2 = float(fgout_input[7].split()[0])
-            self.y2 = float(fgout_input[7].split()[1])
+            self.nx = nx = int(fgout_input[lineno].split()[0])
+            self.ny = ny = int(fgout_input[lineno].split()[1])
+            lineno += 1
+            self.x1 = float(fgout_input[lineno].split()[0])
+            self.y1 = float(fgout_input[lineno].split()[1])
+            lineno += 1
+            self.x2 = float(fgout_input[lineno].split()[0])
+            self.y2 = float(fgout_input[lineno].split()[1])
+            lineno += 1
         else:
             raise NotImplementedError("fgout not implemented for point_style %i" \
                 % point_style)
@@ -372,18 +398,33 @@ class FGoutGrid(object):
             errmsg = "fgout output_format must be ascii, binary32, or binary64"
             raise NotImplementedError(errmsg)
 
-        assert self.tstart is not None, 'Need to set tstart'
-        assert self.tend is not None, 'Need to set tend'
-        assert self.nout is not None, 'Need to set nout'
-        assert self.point_style is not None, 'Need to set point_style'
+
         
         # write header, independent of point_style:
         #fid = open(self.input_file_name,'w')
         fid.write("\n")
         fid.write("%i                           # fgno\n" % self.fgno)
-        fid.write("%16.10e            # tstart\n"  % self.tstart)
-        fid.write("%16.10e            # tend\n"  % self.tend)
-        fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
+
+        fid.write("%i                           # output_style\n" \
+                    % self.output_style)
+        
+        if self.output_style == 1:
+            assert self.tstart is not None, 'Need to set tstart'
+            assert self.tend is not None, 'Need to set tend'
+            assert self.nout is not None, 'Need to set nout'
+            fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
+            fid.write("%16.10e            # tstart\n"  % self.tstart)
+            fid.write("%16.10e            # tend\n"  % self.tend)
+        elif self.output_style == 2:
+            self.nout = len(self.output_times)
+            fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
+            
+            # remove [] and , from list of times:
+            output_times_str = repr(list(self.output_times))[1:-1]
+            output_times_str = output_times_str.replace(',','')
+            fid.write("%s            # output_times\n"  % output_times_str)
+        else:
+            raise ValueError('fgout output_style must be 1 or 2')
         fid.write("%i %s              # point_style\n" \
                             % (self.point_style,12*" "))
         fid.write("%i %s              # output_format\n" \
@@ -414,6 +455,7 @@ class FGoutGrid(object):
             print("   upper right = (%15.10f,%15.10f)" % (x2,y2))
             print("   dx = %15.10e,  dy = %15.10e" % (dx,dy))
             
+            fid.write("%s                     # dclaw" % self.dclaw)
 
 
     def read_frame(self, frameno):
