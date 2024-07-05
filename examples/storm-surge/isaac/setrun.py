@@ -313,17 +313,16 @@ def setrun(claw_pkg='geoclaw'):
     regions = rundata.regiondata.regions
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
-    # Gauges from Ike AWR paper (2011 Dawson et al)
-    rundata.gaugedata.gauges.append([1, -95.04, 29.07,
+
+    # Pilots Station East, S.W. Pass, LA - 28°55.9429'N, 89°24.4445'W
+    # https://tidesandcurrents.noaa.gov/stationhome.html?id=8760922
+    rundata.gaugedata.gauges.append([1, -89.40740833, 28.93238167,
                                      rundata.clawdata.t0,
                                      rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([2, -94.71, 29.28,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([3, -94.39, 29.49,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([4, -94.13, 29.58,
+
+    # Grand Isle, LA - 29°15.8761'N 89°57.4960'W
+    # https://tidesandcurrents.noaa.gov/stationhome.html?id=8761724
+    rundata.gaugedata.gauges.append([2, -89.95826667, 29.26460167,
                                      rundata.clawdata.t0,
                                      rundata.clawdata.tfinal])
 

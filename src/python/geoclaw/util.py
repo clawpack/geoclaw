@@ -361,7 +361,8 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
                                end_date.strftime(cache_date_fmt))
         filename = '{}_{}_{}'.format(time_zone, datum, units)
         abs_cache_dir = os.path.abspath(cache_dir)
-        return os.path.join(abs_cache_dir, product, station, dates, filename)
+        return os.path.join(abs_cache_dir, product, str(station), dates, 
+                            filename)
 
     def save_to_cache(cache_path, data):
         # make parent directories if they do not exist
