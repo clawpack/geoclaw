@@ -29,3 +29,9 @@ ds.to_netcdf('fgout0001_0001.nc')
 filename = "_output/fgmax0001.txt"
 ds = xr.open_dataset(filename, engine=FGMaxBackend, backend_kwargs={'epsg':epsg_code})
 ds.to_netcdf('fgmax0001.nc')
+
+# To see the use of clipping, change the tfinal in setrun to something like 2*3600.0
+# the fgmax0001_clipped.nc will only be the area where the wave arrived within the considered time. 
+filename = "_output/fgmax0001.txt"
+ds = xr.open_dataset(filename, engine=FGMaxBackend, backend_kwargs={'epsg':epsg_code, "clip": True})
+ds.to_netcdf('fgmax0001_clipped.nc')

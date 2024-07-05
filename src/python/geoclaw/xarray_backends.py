@@ -99,7 +99,7 @@ If rundata.fgmax_data.num_fgmax_val == 5:
 See the following links for additional information about xarray Backends.
 
 - https://docs.xarray.dev/en/stable/generated/xarray.backends.BackendEntrypoint.html#xarray.backends.BackendEntrypoint
-- import https://docs.xarray.dev/en/stable/generated/xarray.open_dataset.html
+- https://docs.xarray.dev/en/stable/generated/xarray.open_dataset.html
 """
 
 import os
@@ -274,6 +274,8 @@ class FGMaxBackend(BackendEntrypoint):
         filename,
         epsg=None,
         drop_variables=None,
+        clip=False, # if True, clip the entire array to the extent where arrival_time is defined.
+
     ):
 
         if drop_variables is None:
@@ -470,6 +472,7 @@ class FGMaxBackend(BackendEntrypoint):
                     "Time of minimum depth",
                 )
 
+
         # drop requested variables
         for var in drop_variables:
             if var in data_vars.keys():
@@ -500,9 +503,36 @@ class FGMaxBackend(BackendEntrypoint):
             # https://corteva.github.io/rioxarray/stable/getting_started/crs_management.html#Spatial-dimensions
             # https://gis.stackexchange.com/questions/470207/how-to-write-crs-info-to-netcdf-in-a-way-qgis-can-read-python-xarray
 
+        # clip
+        if clip:
+            clip_data = fg.arrival_time.data>=0
+            clip_data = clip_data.T
+            clip_data = np.flipud(clip_data)
+            ds = _clip(ds, clip_data)
+
         return ds
 
-    open_dataset_parameters = ["filename", "drop_variables"]
+    open_dataset_parameters = ["filename", "drop_variables", "clip"]
 
     description = "Use Clawpack fix grid monitoring files in Xarray"
     url = "https://www.clawpack.org/fgmax.html#fgmax"
+
+
+def _clip(ds, clip_data):
+    # clip DS to the extent where clip_data is true.
+    # useful for when there are large areas where nothing happened.
+
+    nrow, ncol = clip_data.shape
+
+    valid_col = np.sum(clip_data, axis=0)>0
+    valid_row = np.sum(clip_data, axis=1)>0
+
+    sel_rows = np.nonzero(valid_row)[0]
+    sel_cols = np.nonzero(valid_col)[0]
+
+    first_row = sel_rows[0]
+    last_row = sel_rows[-1]
+    first_col = sel_cols[0]
+    last_col = sel_cols[-1]
+
+    ds = ds.isel(y=np.arange(first_row, last_row), x=np.arange(first_col, last_col))
