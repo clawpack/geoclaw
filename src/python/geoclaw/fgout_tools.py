@@ -36,14 +36,25 @@ class FGoutFrame(object):
     and stored only when needed by the user.
     """
 
-    def __init__(self, fgout_grid, frameno=None):
+    def __init__(self, fgout_grid, frameno=None, qmap='geoclaw'):
         self.fgout_grid = fgout_grid
         self.frameno = frameno
         self.t = None
 
         # mapping from variable names to possible values in q_out_vars
         # default for GeoClaw:
-        self.qmap = {'h':1, 'hu':2, 'hv':3, 'eta':4, 'B':5}
+        if type(qmap) is dict:
+            self.qmap = qmap
+        elif qmap == 'geoclaw':
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'eta':4, 'B':5}
+        elif qmap == 'geoclaw-bouss':
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'huc':4, 'hvc':5,
+                         'eta':4, 'B':5}
+        elif qmap == 'dclaw':
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'hm':4, 
+                         'eta':8, 'B':9}
+        else:
+            raise InputError('Invalid qmap: %s' % qmap)
 
         # private attributes for those that are only created if
         # needed by the user:
@@ -56,6 +67,7 @@ class FGoutFrame(object):
         self._v = None
         self._s = None
         self._hss = None
+        self._hm = None
 
     # Define shortcuts to attributes of self.fgout_grid that are the same
     # for all frames (e.g. X,Y) to avoid storing grid for every frame.
@@ -166,6 +178,8 @@ class FGoutFrame(object):
             try:
                 i_eta = q_out_vars.index(self.qmap['eta'])
                 self._eta = self.q[i_eta,:,:]
+                print('+++qmap["eta"] = %i' % self.qmap["eta"])
+                print('+++i_eta = %i' % i_eta)
             except:
                 try:
                     i_h = q_out_vars.index(self.qmap['h'])
@@ -184,11 +198,16 @@ class FGoutFrame(object):
             try:
                 i_B = q_out_vars.index(self.qmap['B'])
                 self._B = self.q[i_B,:,:]
+                print('+++qmap["B"] = %i' % self.qmap["B"])
+                print('+++i_B = %i' % i_B)
             except:
                 try:
                     i_h = q_out_vars.index(self.qmap['h'])
                     i_eta = q_out_vars.index(self.qmap['eta'])
                     self._B = self.q[i_eta,:,:] - self.q[i_h,:,:]
+                    print('+++ computing B: i_h = %i, i_eta = %i' % (i_h,i_eta))
+                    print('+++qmap["h"] = %i' % self.qmap["h"])
+                    print('+++qmap["eta"] = %i' % self.qmap["eta"])
                 except:
                     print('*** Could not find B or eta-h in q_out_vars')
                     raise
@@ -207,6 +226,21 @@ class FGoutFrame(object):
         if self._hss is None:
             self._hss = self.h * self.s**2
         return self._hss
+
+    @property
+    def hm(self):
+        """dclaw: h * mass fraction"""
+        if self._hm is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hm = q_out_vars.index(self.qmap['hm'])
+                self._hm = self.q[i_hm,:,:]
+                print('+++qmap["hm"] = %i' % self.qmap["hm"])
+                print('+++i_hm = %i' % i_hm)
+            except:
+                print('*** Could not find hm in q_out_vars')
+                raise
+        return self._hm
 
 
 class FGoutGrid(object):
@@ -376,7 +410,7 @@ class FGoutGrid(object):
 
         if fgout_input is None:
             raise ValueError('fgout grid fgno = %i not found in %s' \
-                             % (fgno, data_file))
+                             % (self.fgno, data_file))
 
         lineno = 0 # next input line
         self.output_style = int(fgout_input[lineno].split()[lineno])
@@ -521,7 +555,7 @@ class FGoutGrid(object):
         fid.write('\n')
 
 
-    def read_frame(self, frameno):
+    def read_frame(self, frameno, qmap='geoclaw'):
         """
         Read a single frame of fgout data.
         """
@@ -545,7 +579,7 @@ class FGoutGrid(object):
         state = fr.states[0]  # only 1 AMR grid
         patch = state.patch
 
-        fgout_frame = FGoutFrame(self, frameno)
+        fgout_frame = FGoutFrame(self, frameno, qmap)
         fgout_frame.fgout_grid = self
 
         fgout_frame.q = state.q
