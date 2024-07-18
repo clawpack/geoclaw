@@ -36,25 +36,10 @@ class FGoutFrame(object):
     and stored only when needed by the user.
     """
 
-    def __init__(self, fgout_grid, frameno=None, qmap='geoclaw'):
+    def __init__(self, fgout_grid, frameno=None):
         self.fgout_grid = fgout_grid
         self.frameno = frameno
         self.t = None
-
-        # mapping from variable names to possible values in q_out_vars
-        # default for GeoClaw:
-        if type(qmap) is dict:
-            self.qmap = qmap
-        elif qmap == 'geoclaw':
-            self.qmap = {'h':1, 'hu':2, 'hv':3, 'eta':4, 'B':5}
-        elif qmap == 'geoclaw-bouss':
-            self.qmap = {'h':1, 'hu':2, 'hv':3, 'huc':4, 'hvc':5,
-                         'eta':4, 'B':5}
-        elif qmap == 'dclaw':
-            self.qmap = {'h':1, 'hu':2, 'hv':3, 'hm':4, 
-                         'eta':8, 'B':9}
-        else:
-            raise InputError('Invalid qmap: %s' % qmap)
 
         # private attributes for those that are only created if
         # needed by the user:
@@ -103,6 +88,10 @@ class FGoutFrame(object):
     @property
     def drytol(self):
         return self.fgout_grid.drytol
+        
+    @property
+    def qmap(self):
+        return self.fgout_grid.qmap
             
     # Define attributes such as h as @properties with lazy evaluation:
     # the corresponding array is created and stored only when first
@@ -178,8 +167,8 @@ class FGoutFrame(object):
             try:
                 i_eta = q_out_vars.index(self.qmap['eta'])
                 self._eta = self.q[i_eta,:,:]
-                print('+++qmap["eta"] = %i' % self.qmap["eta"])
-                print('+++i_eta = %i' % i_eta)
+                #print('+++qmap["eta"] = %i' % self.qmap["eta"])
+                #print('+++i_eta = %i' % i_eta)
             except:
                 try:
                     i_h = q_out_vars.index(self.qmap['h'])
@@ -198,16 +187,16 @@ class FGoutFrame(object):
             try:
                 i_B = q_out_vars.index(self.qmap['B'])
                 self._B = self.q[i_B,:,:]
-                print('+++qmap["B"] = %i' % self.qmap["B"])
-                print('+++i_B = %i' % i_B)
+                #print('+++qmap["B"] = %i' % self.qmap["B"])
+                #print('+++i_B = %i' % i_B)
             except:
                 try:
                     i_h = q_out_vars.index(self.qmap['h'])
                     i_eta = q_out_vars.index(self.qmap['eta'])
                     self._B = self.q[i_eta,:,:] - self.q[i_h,:,:]
-                    print('+++ computing B: i_h = %i, i_eta = %i' % (i_h,i_eta))
-                    print('+++qmap["h"] = %i' % self.qmap["h"])
-                    print('+++qmap["eta"] = %i' % self.qmap["eta"])
+                    #print('+++ computing B: i_h = %i, i_eta = %i' % (i_h,i_eta))
+                    #print('+++qmap["h"] = %i' % self.qmap["h"])
+                    #print('+++qmap["eta"] = %i' % self.qmap["eta"])
                 except:
                     print('*** Could not find B or eta-h in q_out_vars')
                     raise
@@ -228,6 +217,32 @@ class FGoutFrame(object):
         return self._hss
 
     @property
+    def huc(self):
+        """huc - Boussinesq correction to hu"""
+        if self._huc is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_huc = q_out_vars.index(self.qmap['huc'])
+                self._huc = self.q[i_huc,:,:]
+            except:
+                print('*** Could not find huc in q_out_vars')
+                raise
+        return self._huc
+
+    @property
+    def hvc(self):
+        """hvc - Boussinesq correction to hv"""
+        if self._hvc is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hvc = q_out_vars.index(self.qmap['hvc'])
+                self._hvc = self.q[i_hvc,:,:]
+            except:
+                print('*** Could not find hvc in q_out_vars')
+                raise
+        return self._hvc
+
+    @property
     def hm(self):
         """dclaw: h * mass fraction"""
         if self._hm is None:
@@ -235,12 +250,51 @@ class FGoutFrame(object):
             try:
                 i_hm = q_out_vars.index(self.qmap['hm'])
                 self._hm = self.q[i_hm,:,:]
-                print('+++qmap["hm"] = %i' % self.qmap["hm"])
-                print('+++i_hm = %i' % i_hm)
+                #print('+++qmap["hm"] = %i' % self.qmap["hm"])
+                #print('+++i_hm = %i' % i_hm)
             except:
                 print('*** Could not find hm in q_out_vars')
                 raise
         return self._hm
+
+    @property
+    def pb(self):
+        """dclaw variable """
+        if self._pb is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_pb = q_out_vars.index(self.qmap['pb'])
+                self._pb = self.q[i_pb,:,:]
+            except:
+                print('*** Could not find pb in q_out_vars')
+                raise
+        return self._pb
+
+    @property
+    def hchi(self):
+        """dclaw variable """
+        if self._hchi is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hchi = q_out_vars.index(self.qmap['hchi'])
+                self._hchi = self.q[i_hchi,:,:]
+            except:
+                print('*** Could not find hchi in q_out_vars')
+                raise
+        return self._hchi
+
+    @property
+    def bdif(self):
+        """dclaw variable """
+        if self._bdif is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_bdif = q_out_vars.index(self.qmap['bdif'])
+                self._bdif = self.q[i_bdif,:,:]
+            except:
+                print('*** Could not find bdif in q_out_vars')
+                raise
+        return self._bdif
 
 
 class FGoutGrid(object):
@@ -250,9 +304,25 @@ class FGoutGrid(object):
     fgout input data and the output generated by a GeoClaw run.
     """
 
-    def __init__(self,fgno=None,outdir='.',output_format=None):
+    def __init__(self,fgno=None,outdir='.',output_format=None,
+                 qmap='geoclaw'):
 
 
+        # mapping from variable names to possible values in q_out_vars
+        if type(qmap) is dict:
+            self.qmap = qmap
+        elif qmap == 'geoclaw':
+            # default for GeoClaw:
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'eta':4, 'B':5}
+        elif qmap == 'geoclaw-bouss':
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'huc':4, 'hvc':5,
+                         'eta':4, 'B':5}
+        elif qmap == 'dclaw':
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'hm':4, 'pb':5, 'hchi':6,
+                         'bdif':7, 'eta':8, 'B':9}
+        else:
+            raise InputError('Invalid qmap: %s' % qmap)
+        
         # GeoClaw input values:
         self.id = ''  # identifier, optional
         self.point_style = 2  # only option currently supported
@@ -464,6 +534,9 @@ class FGoutGrid(object):
                 self.q_out_vars.append(int(token))
             except:
                 break
+        print('Found fgout grid q_out_vars = ',self.q_out_vars)
+        print('Using this mapping to fgout variable names: ')
+        print('      qmap = ',self.qmap)
 
 
     def write_to_fgout_data(self, fid):
@@ -555,7 +628,7 @@ class FGoutGrid(object):
         fid.write('\n')
 
 
-    def read_frame(self, frameno, qmap='geoclaw'):
+    def read_frame(self, frameno):
         """
         Read a single frame of fgout data.
         """
@@ -579,7 +652,7 @@ class FGoutGrid(object):
         state = fr.states[0]  # only 1 AMR grid
         patch = state.patch
 
-        fgout_frame = FGoutFrame(self, frameno, qmap)
+        fgout_frame = FGoutFrame(self, frameno)
         fgout_frame.fgout_grid = self
 
         fgout_frame.q = state.q
