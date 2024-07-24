@@ -468,7 +468,7 @@ class FGoutGrid(object):
         data_path = os.path.join(self.outdir, data_file)
         print('Reading fgout grid info from \n    %s' % data_path)
         
-        with open(data_file) as filep:
+        with open(data_path) as filep:
             lines = filep.readlines()
         fgout_input = None
         for lineno,line in enumerate(lines):
