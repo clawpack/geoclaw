@@ -483,7 +483,14 @@ class FGoutGrid(object):
                              % (self.fgno, data_file))
 
         lineno = 0 # next input line
-        self.output_style = int(fgout_input[lineno].split()[lineno])
+        next_value = fgout_input[lineno].split()[lineno]  # a string
+        next_value_int = ('.' not in next_value)  # should be True in v5.11
+        err_msg = '\n*** Expecting integer output_style next in %s' \
+            % data_file \
+            + '\n    If this is fgout data from before v5.11, try using' \
+            + '\n    read_fgout_grids_data_pre511'
+        assert next_value_int, err_msg
+        self.output_style = int(next_value)
         lineno += 1
         if (self.output_style == 1):
             # equally spaced times:
