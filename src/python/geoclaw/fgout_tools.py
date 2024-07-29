@@ -544,6 +544,11 @@ class FGoutGrid(object):
         For backward compatibility, this reads fgout_grids.data files
         in the format used prior to v5.11.
 
+        In this case, the following values are used, as set in __init__():
+            self.output_style = 1
+            self.qmap = 'qmap'
+            self.q_out_vars = [1,2,3,4]  # h,hu,hv,eta
+
         Read input info for fgout grid number fgno from the data file
         fgout_grids.data, which should have been created by setrun.py.
         This file now contains info about all fgout grids.
