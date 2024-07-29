@@ -704,6 +704,14 @@ class FGoutGrid(object):
             fgoutX = self.X
             fgoutY = self.Y
         except:
+            msg = '\n*** Before reading frame, you must set FGoutGrid data,' \
+                  '\n*** Typically by calling read_fgout_grids_data'
+            raise ValueError(msg)
+
+            # prior to v5.11, self.read_fgout_grids_data() called here
+            # rather than raising exception...
+            print(msg)
+            print('*** Calling read_fgout_grids_data...')
             self.read_fgout_grids_data()
             fgoutX = self.X
             fgoutY = self.Y
