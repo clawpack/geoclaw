@@ -34,7 +34,6 @@ from clawpack.geoclaw import fgout_tools
 fgno = 1  # which fgout grid
 
 outdir = '_output'
-format = 'binary'  # format of fgout grid output
 
 if 1:
     # use all fgout frames in outdir:
@@ -48,7 +47,8 @@ else:
     fgframes = range(1,26)  # frames of fgout solution to use in animation
 
 # Instantiate object for reading fgout frames:
-fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, format) 
+fgout_grid = fgout_tools.FGoutGrid(fgno, outdir) 
+fgout_grid.read_fgout_grids_data()
 
 
 # Plot one frame of fgout data and define the Artists that will need to
