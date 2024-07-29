@@ -321,9 +321,11 @@ class FGoutGrid(object):
             self.qmap = {'h':1, 'hu':2, 'hv':3, 'hm':4, 'pb':5, 'hchi':6,
                          'bdif':7, 'eta':8, 'B':9}
         else:
-            raise InputError('Invalid qmap: %s' % qmap)
+            raise ValueError('Invalid qmap: %s' % qmap)
         
         # GeoClaw input values:
+        # Many of these should be read from fgout_grids.data
+        # using read_fgout_grids_data before using read_frame
         self.id = ''  # identifier, optional
         self.point_style = 2  # only option currently supported
         self.npts = None
@@ -335,7 +337,10 @@ class FGoutGrid(object):
         self.nout = None
         self.fgno = fgno
         self.outdir = outdir
+
+        # Note output_format will be reset by read_fgout_grids_data:
         self.output_format = output_format
+
         self.q_out_vars = [1,2,3,4]  # list of which components to print
                                           # default: h,hu,hv,eta (5=topo)
         self.nqout = None # number of vars to print out
@@ -517,8 +522,13 @@ class FGoutGrid(object):
         lineno += 1
         if output_format == 1:
             self.output_format = 'ascii'
+        elif output_format == 2:
+            self.output_format = 'binary32'
         elif output_format == 3:
             self.output_format = 'binary'
+        else:
+            raise NotImplementedError("fgout not implemented for " \
+                    + "output_format %i"  % output_format)
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 2:
