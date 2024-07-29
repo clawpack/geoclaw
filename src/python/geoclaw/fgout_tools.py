@@ -316,7 +316,7 @@ class FGoutGrid(object):
             self.qmap = {'h':1, 'hu':2, 'hv':3, 'eta':4, 'B':5}
         elif qmap == 'geoclaw-bouss':
             self.qmap = {'h':1, 'hu':2, 'hv':3, 'huc':4, 'hvc':5,
-                         'eta':4, 'B':5}
+                         'eta':6, 'B':7}
         elif qmap == 'dclaw':
             self.qmap = {'h':1, 'hu':2, 'hv':3, 'hm':4, 'pb':5, 'hchi':6,
                          'bdif':7, 'eta':8, 'B':9}
