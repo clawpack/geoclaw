@@ -538,6 +538,59 @@ class FGoutGrid(object):
         print('Using this mapping to fgout variable names: ')
         print('      qmap = ',self.qmap)
 
+    def read_fgout_grids_data_pre511(self, fgno=None,
+                                     data_file='fgout_grids.data'):
+        """
+        For backward compatibility, this reads fgout_grids.data files
+        in the format used prior to v5.11.
+
+        Read input info for fgout grid number fgno from the data file
+        fgout_grids.data, which should have been created by setrun.py.
+        This file now contains info about all fgout grids.
+        """
+
+        if fgno is not None:
+            self.fgno = fgno
+        assert self.fgno is not None, '*** fgno must be set'
+
+        data_path = os.path.join(self.outdir, data_file)
+        print('Reading fgout grid info from \n    %s' % data_path)
+        
+        with open(data_path) as filep:
+            lines = filep.readlines()
+        fgout_input = None
+        for lineno,line in enumerate(lines):
+            if 'fgno' in line:
+                if int(line.split()[0]) == self.fgno:
+                    fgout_input = lines[lineno+1:]
+                    #print('Found line %i: %s' % (lineno,line))
+                    break
+
+        if fgout_input is None:
+            raise ValueError('fgout grid fgno = %i not found in %s' \
+                             % (fgno, data_file))
+
+        self.tstart = float(fgout_input[0].split()[0])
+        self.tend = float(fgout_input[1].split()[0])
+        self.nout = int(fgout_input[2].split()[0])
+        self.point_style = point_style = int(fgout_input[3].split()[0])
+        output_format = int(fgout_input[4].split()[0])
+        if output_format == 1:
+            self.output_format = 'ascii'
+        elif output_format == 3:
+            self.output_format = 'binary'
+        print('Reading input for fgno=%i, point_style = %i ' \
+                % (self.fgno, self.point_style))
+        if point_style == 2:
+            self.nx = nx = int(fgout_input[5].split()[0])
+            self.ny = ny = int(fgout_input[5].split()[1])
+            self.x1 = float(fgout_input[6].split()[0])
+            self.y1 = float(fgout_input[6].split()[1])
+            self.x2 = float(fgout_input[7].split()[0])
+            self.y2 = float(fgout_input[7].split()[1])
+        else:
+            raise NotImplementedError("fgout not implemented for point_style %i" \
+                % point_style)
 
     def write_to_fgout_data(self, fid):
         """
