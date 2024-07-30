@@ -52,6 +52,7 @@ class FGoutFrame(object):
         self._v = None
         self._s = None
         self._hss = None
+        self._hm = None
 
     # Define shortcuts to attributes of self.fgout_grid that are the same
     # for all frames (e.g. X,Y) to avoid storing grid for every frame.
@@ -87,6 +88,10 @@ class FGoutFrame(object):
     @property
     def drytol(self):
         return self.fgout_grid.drytol
+        
+    @property
+    def qmap(self):
+        return self.fgout_grid.qmap
             
     # Define attributes such as h as @properties with lazy evaluation:
     # the corresponding array is created and stored only when first
@@ -96,16 +101,31 @@ class FGoutFrame(object):
     def h(self):
         """depth"""
         if self._h is None:
-            #print('+++ setting _h...')
-            self._h = self.q[0,:,:]
-        #print('+++ getting _h...')
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_h = q_out_vars.index(self.qmap['h'])
+                self._h = self.q[i_h,:,:]
+            except:
+                try:
+                    i_eta = q_out_vars.index(self.qmap['eta'])
+                    i_B = q_out_vars.index(self.qmap['B'])
+                    self._h = self.q[i_eta,:,:] - self.q[i_B,:,:]
+                except:
+                    print('*** Could not find h or eta-B in q_out_vars')
+                    raise
         return self._h
 
     @property
     def hu(self):
         """momentum h*u"""
         if self._hu is None:
-            self._hu = self.q[1,:,:]
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hu = q_out_vars.index(self.qmap['hu'])
+                self._hu = self.q[i_hu,:,:]
+            except:
+                print('*** Could not find hu in q_out_vars')
+                raise
         return self._hu
 
     @property
@@ -121,7 +141,13 @@ class FGoutFrame(object):
     def hv(self):
         """momentum h*v"""
         if self._hv is None:
-            self._hv = self.q[2,:,:]
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hv = q_out_vars.index(self.qmap['hv'])
+                self._hv = self.q[i_hv,:,:]
+            except:
+                print('*** Could not find hv in q_out_vars')
+                raise
         return self._hv
 
     @property
@@ -137,14 +163,43 @@ class FGoutFrame(object):
     def eta(self):
         """surface eta = h+B"""
         if self._eta is None:
-            self._eta = self.q[-1,:,:]
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_eta = q_out_vars.index(self.qmap['eta'])
+                self._eta = self.q[i_eta,:,:]
+                #print('+++qmap["eta"] = %i' % self.qmap["eta"])
+                #print('+++i_eta = %i' % i_eta)
+            except:
+                try:
+                    i_h = q_out_vars.index(self.qmap['h'])
+                    i_B = q_out_vars.index(self.qmap['B'])
+                    self._eta = self.q[i_h,:,:] + self.q[i_B,:,:]
+                except:
+                    print('*** Could not find eta or h+B in q_out_vars')
+                    raise
         return self._eta
 
     @property
     def B(self):
         """topography"""
         if self._B is None:
-            self._B = self.q[-1,:,:] - self.q[0,:,:]
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_B = q_out_vars.index(self.qmap['B'])
+                self._B = self.q[i_B,:,:]
+                #print('+++qmap["B"] = %i' % self.qmap["B"])
+                #print('+++i_B = %i' % i_B)
+            except:
+                try:
+                    i_h = q_out_vars.index(self.qmap['h'])
+                    i_eta = q_out_vars.index(self.qmap['eta'])
+                    self._B = self.q[i_eta,:,:] - self.q[i_h,:,:]
+                    #print('+++ computing B: i_h = %i, i_eta = %i' % (i_h,i_eta))
+                    #print('+++qmap["h"] = %i' % self.qmap["h"])
+                    #print('+++qmap["eta"] = %i' % self.qmap["eta"])
+                except:
+                    print('*** Could not find B or eta-h in q_out_vars')
+                    raise
         return self._B
 
     @property
@@ -161,6 +216,86 @@ class FGoutFrame(object):
             self._hss = self.h * self.s**2
         return self._hss
 
+    @property
+    def huc(self):
+        """huc - Boussinesq correction to hu"""
+        if self._huc is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_huc = q_out_vars.index(self.qmap['huc'])
+                self._huc = self.q[i_huc,:,:]
+            except:
+                print('*** Could not find huc in q_out_vars')
+                raise
+        return self._huc
+
+    @property
+    def hvc(self):
+        """hvc - Boussinesq correction to hv"""
+        if self._hvc is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hvc = q_out_vars.index(self.qmap['hvc'])
+                self._hvc = self.q[i_hvc,:,:]
+            except:
+                print('*** Could not find hvc in q_out_vars')
+                raise
+        return self._hvc
+
+    @property
+    def hm(self):
+        """dclaw: h * mass fraction"""
+        if self._hm is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hm = q_out_vars.index(self.qmap['hm'])
+                self._hm = self.q[i_hm,:,:]
+                #print('+++qmap["hm"] = %i' % self.qmap["hm"])
+                #print('+++i_hm = %i' % i_hm)
+            except:
+                print('*** Could not find hm in q_out_vars')
+                raise
+        return self._hm
+
+    @property
+    def pb(self):
+        """dclaw variable """
+        if self._pb is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_pb = q_out_vars.index(self.qmap['pb'])
+                self._pb = self.q[i_pb,:,:]
+            except:
+                print('*** Could not find pb in q_out_vars')
+                raise
+        return self._pb
+
+    @property
+    def hchi(self):
+        """dclaw variable """
+        if self._hchi is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_hchi = q_out_vars.index(self.qmap['hchi'])
+                self._hchi = self.q[i_hchi,:,:]
+            except:
+                print('*** Could not find hchi in q_out_vars')
+                raise
+        return self._hchi
+
+    @property
+    def bdif(self):
+        """dclaw variable """
+        if self._bdif is None:
+            q_out_vars = self.fgout_grid.q_out_vars
+            try:
+                i_bdif = q_out_vars.index(self.qmap['bdif'])
+                self._bdif = self.q[i_bdif,:,:]
+            except:
+                print('*** Could not find bdif in q_out_vars')
+                raise
+        return self._bdif
+
 
 class FGoutGrid(object):
 
@@ -169,10 +304,28 @@ class FGoutGrid(object):
     fgout input data and the output generated by a GeoClaw run.
     """
 
-    def __init__(self,fgno=None,outdir=None,output_format=None):
+    def __init__(self,fgno=None,outdir='.',output_format=None,
+                 qmap='geoclaw'):
 
 
+        # mapping from variable names to possible values in q_out_vars
+        if type(qmap) is dict:
+            self.qmap = qmap
+        elif qmap == 'geoclaw':
+            # default for GeoClaw:
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'eta':4, 'B':5}
+        elif qmap == 'geoclaw-bouss':
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'huc':4, 'hvc':5,
+                         'eta':6, 'B':7}
+        elif qmap == 'dclaw':
+            self.qmap = {'h':1, 'hu':2, 'hv':3, 'hm':4, 'pb':5, 'hchi':6,
+                         'bdif':7, 'eta':8, 'B':9}
+        else:
+            raise ValueError('Invalid qmap: %s' % qmap)
+        
         # GeoClaw input values:
+        # Many of these should be read from fgout_grids.data
+        # using read_fgout_grids_data before using read_frame
         self.id = ''  # identifier, optional
         self.point_style = 2  # only option currently supported
         self.npts = None
@@ -184,8 +337,13 @@ class FGoutGrid(object):
         self.nout = None
         self.fgno = fgno
         self.outdir = outdir
+
+        # Note output_format will be reset by read_fgout_grids_data:
         self.output_format = output_format
-        self.dclaw = False
+
+        self.q_out_vars = [1,2,3,4]  # list of which components to print
+                                          # default: h,hu,hv,eta (5=topo)
+        self.nqout = None # number of vars to print out
         
         self.drytol = 1e-3          # used for computing u,v from hu,hv
 
@@ -312,7 +470,10 @@ class FGoutGrid(object):
             self.fgno = fgno
         assert self.fgno is not None, '*** fgno must be set'
 
-        with open(data_file) as filep:
+        data_path = os.path.join(self.outdir, data_file)
+        print('Reading fgout grid info from \n    %s' % data_path)
+        
+        with open(data_path) as filep:
             lines = filep.readlines()
         fgout_input = None
         for lineno,line in enumerate(lines):
@@ -324,10 +485,17 @@ class FGoutGrid(object):
 
         if fgout_input is None:
             raise ValueError('fgout grid fgno = %i not found in %s' \
-                             % (fgno, data_file))
+                             % (self.fgno, data_file))
 
         lineno = 0 # next input line
-        self.output_style = int(fgout_input[lineno].split()[lineno])
+        next_value = fgout_input[lineno].split()[lineno]  # a string
+        next_value_int = ('.' not in next_value)  # should be True in v5.11
+        err_msg = '\n*** Expecting integer output_style next in %s' \
+            % data_file \
+            + '\n    If this is fgout data from before v5.11, try using' \
+            + '\n    read_fgout_grids_data_pre511'
+        assert next_value_int, err_msg
+        self.output_style = int(next_value)
         lineno += 1
         if (self.output_style == 1):
             # equally spaced times:
@@ -354,8 +522,13 @@ class FGoutGrid(object):
         lineno += 1
         if output_format == 1:
             self.output_format = 'ascii'
+        elif output_format == 2:
+            self.output_format = 'binary32'
         elif output_format == 3:
             self.output_format = 'binary'
+        else:
+            raise NotImplementedError("fgout not implemented for " \
+                    + "output_format %i"  % output_format)
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 2:
@@ -371,7 +544,75 @@ class FGoutGrid(object):
         else:
             raise NotImplementedError("fgout not implemented for point_style %i" \
                 % point_style)
+        tokens = fgout_input[lineno].split()
+        self.q_out_vars = []
+        for token in tokens:
+            try:
+                self.q_out_vars.append(int(token))
+            except:
+                break
+        print('Found fgout grid q_out_vars = ',self.q_out_vars)
+        print('Using this mapping to fgout variable names: ')
+        print('      qmap = ',self.qmap)
 
+    def read_fgout_grids_data_pre511(self, fgno=None,
+                                     data_file='fgout_grids.data'):
+        """
+        For backward compatibility, this reads fgout_grids.data files
+        in the format used prior to v5.11.
+
+        In this case, the following values are used, as set in __init__():
+            self.output_style = 1
+            self.qmap = 'qmap'
+            self.q_out_vars = [1,2,3,4]  # h,hu,hv,eta
+
+        Read input info for fgout grid number fgno from the data file
+        fgout_grids.data, which should have been created by setrun.py.
+        This file now contains info about all fgout grids.
+        """
+
+        if fgno is not None:
+            self.fgno = fgno
+        assert self.fgno is not None, '*** fgno must be set'
+
+        data_path = os.path.join(self.outdir, data_file)
+        print('Reading fgout grid info from \n    %s' % data_path)
+        
+        with open(data_path) as filep:
+            lines = filep.readlines()
+        fgout_input = None
+        for lineno,line in enumerate(lines):
+            if 'fgno' in line:
+                if int(line.split()[0]) == self.fgno:
+                    fgout_input = lines[lineno+1:]
+                    #print('Found line %i: %s' % (lineno,line))
+                    break
+
+        if fgout_input is None:
+            raise ValueError('fgout grid fgno = %i not found in %s' \
+                             % (fgno, data_file))
+
+        self.tstart = float(fgout_input[0].split()[0])
+        self.tend = float(fgout_input[1].split()[0])
+        self.nout = int(fgout_input[2].split()[0])
+        self.point_style = point_style = int(fgout_input[3].split()[0])
+        output_format = int(fgout_input[4].split()[0])
+        if output_format == 1:
+            self.output_format = 'ascii'
+        elif output_format == 3:
+            self.output_format = 'binary'
+        print('Reading input for fgno=%i, point_style = %i ' \
+                % (self.fgno, self.point_style))
+        if point_style == 2:
+            self.nx = nx = int(fgout_input[5].split()[0])
+            self.ny = ny = int(fgout_input[5].split()[1])
+            self.x1 = float(fgout_input[6].split()[0])
+            self.y1 = float(fgout_input[6].split()[1])
+            self.x2 = float(fgout_input[7].split()[0])
+            self.y2 = float(fgout_input[7].split()[1])
+        else:
+            raise NotImplementedError("fgout not implemented for point_style %i" \
+                % point_style)
 
     def write_to_fgout_data(self, fid):
         """
@@ -455,7 +696,11 @@ class FGoutGrid(object):
             print("   upper right = (%15.10f,%15.10f)" % (x2,y2))
             print("   dx = %15.10e,  dy = %15.10e" % (dx,dy))
             
-            fid.write("%s                     # dclaw" % self.dclaw)
+        # q_out_vars is a list of q components to print, e.g. [1,4]
+
+        format = len(self.q_out_vars) * '%s '
+        fid.write(format % tuple(self.q_out_vars)+ " # q_out_vars\n")
+        fid.write('\n')
 
 
     def read_frame(self, frameno):
@@ -465,6 +710,22 @@ class FGoutGrid(object):
 
         from datetime import timedelta
 
+        try:
+            fgoutX = self.X
+            fgoutY = self.Y
+        except:
+            msg = '\n*** Before reading frame, you must set FGoutGrid data,' \
+                  '\n*** Typically by calling read_fgout_grids_data'
+            raise ValueError(msg)
+
+            # prior to v5.11, self.read_fgout_grids_data() called here
+            # rather than raising exception...
+            print(msg)
+            print('*** Calling read_fgout_grids_data...')
+            self.read_fgout_grids_data()
+            fgoutX = self.X
+            fgoutY = self.Y
+            
         try:
             fr = self.plotdata.getframe(frameno)
         except:
@@ -483,36 +744,7 @@ class FGoutGrid(object):
     
         fgout_frame.frameno = frameno
         
-        X,Y = patch.grid.p_centers[:2]
-        
-        try:
-            fgoutX = self.X
-            fgoutY = self.Y
-        except:
-            # presumably x,y, etc. were not set for this fgout_grid
-            # (e.g. by read_fgout_grids_data) so infer from this frame and set
-            
-            # reset most attributes including private _x etc to None:
-            self.__init__(fgno=self.fgno,outdir=self.outdir,
-                          output_format=self.output_format)
-                          
-            print('    Setting grid attributes based on Frame %i:' % frameno)
-            x = X[:,0]
-            y = Y[0,:]
-            dx = x[1] - x[0]
-            dy = y[1] - y[0]
-            self.x1 = x[0] - dx/2
-            self.x2 = x[-1] + dx/2
-            self.y1 = y[0] - dy/2
-            self.y2 = y[-1] + dy/2
-            self.nx = len(x)
-            self.ny = len(y)
-            fgoutX = self.X  # will be computed from info above
-            fgoutY = self.Y  # will be computed from info above
-            print('      Grid edges: ',self.extent_edges)
-            print('      with %i cells in x and %i cells in y' \
-                    % (self.nx,self.ny))
-            
+        X,Y = patch.grid.p_centers[:2]    
             
         if not numpy.allclose(X, fgoutX):
             errmsg = '*** X read from output does not match fgout_grid.X'
