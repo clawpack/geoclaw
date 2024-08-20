@@ -536,4 +536,4 @@ def _clip(ds, clip_data):
     last_col = sel_cols[-1]
 
     ds = ds.isel(y=np.arange(first_row, last_row), x=np.arange(first_col, last_col))
-    return ds 
+    return ds
