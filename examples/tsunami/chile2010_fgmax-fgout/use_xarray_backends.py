@@ -1,11 +1,13 @@
+import glob
+
 try:
     import rioxarray
     import xarray as xr
 except:
-    'You must install xarray and rioxarray in order to use the xarray backends'
+    "You must install xarray and rioxarray in order to use the xarray backends"
     raise
 
-from clawpack.geoclaw.xarray_backends import FGOutBackend, FGMaxBackend
+from clawpack.geoclaw.xarray_backends import FGMaxBackend, FGOutBackend
 
 # epsg code for lat-lon
 # Optionally, provide an epsg code to assign the associated coordinate system to the file.
@@ -16,22 +18,39 @@ from clawpack.geoclaw.xarray_backends import FGOutBackend, FGMaxBackend
 epsg_code = 4326
 
 # An example of a fgout grid.
-filename = '_output/fgout0001.b0001'
+filename = "_output/fgout0001.b0001"
 # provide the .bxxx file if binary format is used or the
 # .qxxx file if ascii format is used.
 # the format, fg number, and frame number are inferred from the filename.
 
-ds = xr.open_dataset(filename, engine=FGOutBackend, backend_kwargs={'epsg':epsg_code})
+ds = xr.open_dataset(
+    filename, engine=FGOutBackend, backend_kwargs={"epsg": epsg_code, "qmap": "geoclaw"}
+)
 # ds is now an xarray object. It can be interacted with directly or written to netcdf using
-ds.to_netcdf('fgout0001_0001.nc')
+ds.to_netcdf("fgout0001_0001.nc")
+
+# It is possible to combine all fgout files into a single netcdf file
+# using xr.open_mfdataset
+# https://docs.xarray.dev/en/stable/generated/xarray.open_mfdataset.html
+fgout_files = glob.glob("_output/fgout0001.b*")
+ds_all = xr.open_mfdataset(
+    fgout_files,
+    engine=FGOutBackend,
+    backend_kwargs={"epsg": epsg_code, "qmap": "geoclaw"},
+)
+
+print(ds_all)
+ds_all.to_netcdf("fgout_all.nc")
 
 # An example of a fgmax grid.
 filename = "_output/fgmax0001.txt"
-ds = xr.open_dataset(filename, engine=FGMaxBackend, backend_kwargs={'epsg':epsg_code})
-ds.to_netcdf('fgmax0001.nc')
+ds = xr.open_dataset(filename, engine=FGMaxBackend, backend_kwargs={"epsg": epsg_code})
+ds.to_netcdf("fgmax0001.nc")
 
 # To see the use of clipping, change the tfinal in setrun to something like 2*3600.0
-# the fgmax0001_clipped.nc will only be the area where the wave arrived within the considered time. 
+# the fgmax0001_clipped.nc will only be the area where the wave arrived within the considered time.
 filename = "_output/fgmax0001.txt"
-ds = xr.open_dataset(filename, engine=FGMaxBackend, backend_kwargs={'epsg':epsg_code, "clip": True})
-ds.to_netcdf('fgmax0001_clipped.nc')
+ds = xr.open_dataset(
+    filename, engine=FGMaxBackend, backend_kwargs={"epsg": epsg_code, "clip": True}
+)
+ds.to_netcdf("fgmax0001_clipped.nc")

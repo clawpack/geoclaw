@@ -105,18 +105,21 @@ See the following links for additional information about xarray Backends.
 import os
 
 import numpy as np
+
 try:
     import rioxarray  # activate the rio accessor
     import xarray as xr
 except ImportError:
-    raise ImportError('rioxarray and xarray are required to use the FGOutBackend and FGMaxBackend')
+    raise ImportError(
+        "rioxarray and xarray are required to use the FGOutBackend and FGMaxBackend"
+    )
 
 from clawpack.geoclaw import fgmax_tools, fgout_tools
 from xarray.backends import BackendEntrypoint
 
-_qelements_dclaw = ["h", "hu", "hv", "hm", "pb", "hchi", "delta_a", "eta"]
-_qelements_geoclaw = ["h", "hu", "hv", "eta"]
-
+_qelements_dclaw = ["h", "hu", "hv", "hm", "pb", "hchi", "delta_a", "eta", "B"]
+_qelements_geoclaw = ["h", "hu", "hv", "eta", "B"]
+_qelements_geoclaw_bouss = ["h", "hu", "hv", "huc", "hvc", "eta", "B"]
 _qunits = {
     "h": "meters",
     "hu": "meters squared per second",
@@ -126,6 +129,9 @@ _qunits = {
     "hchi": "meters",
     "delta_a": "meters",
     "eta": "meters",
+    "B": "meters",
+    "huc": "",
+    "hvc": "",
 }
 
 time_unit = "seconds"
@@ -154,6 +160,7 @@ class FGOutBackend(BackendEntrypoint):
     def open_dataset(
         self,
         filename,  # path to fgout file.
+        qmap="geoclaw",  # qmap value for FGoutGrid ('geoclaw', 'dclaw', or 'geoclaw-bouss')
         epsg=None,  # epsg code
         drop_variables=None,  # name of any elements of q to drop.
     ):
@@ -179,7 +186,9 @@ class FGOutBackend(BackendEntrypoint):
         else:
             raise ValueError("Invalid FGout output format. Must be ascii or binary.")
 
-        fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, output_format)
+        fgout_grid = fgout_tools.FGoutGrid(
+            fgno=fgno, outdir=outdir, output_format=output_format, qmap=qmap
+        )
 
         if fgout_grid.point_style != 2:
             raise ValueError("FGOutBackend only works with fg.point_style=2")
@@ -195,34 +204,51 @@ class FGOutBackend(BackendEntrypoint):
         ni = len(y)
 
         # mask based on dry tolerance
-        mask = fgout.q[0, :, :] < 0.001
+        try:
+            mask = fgout.h < 0.001
+        except:
+            try:
+                mask = (fgout.eta - fgout.B) < 0.001
+            except:
+                mask = np.ones((ni, nj), dtype=bool)
 
-        # determine if geoclaw or dclaw
-        nvars = fgout.q.shape[0]
-        if nvars == 8:
+        # determine if geoclaw, geoclaw-bouss, or dclaw
+        if qmap == "dclaw":
             _qelements = _qelements_dclaw
-        else:
+        elif qmap == "geoclaw":
             _qelements = _qelements_geoclaw
+        elif qmap == "geoclaw-bouss":
+            _qelements = _qelements_geoclaw_bouss
 
         # create data_vars dictionary
         data_vars = {}
-        for i in range(nvars):
-            Q = fgout.q[i, :, :]
-            # mask all but eta based on h presence.
-            if i < 7:
-                Q[mask] = nodata
-
-            # to keep xarray happy, need to transpose and flip ud.
-            Q = Q.T
-            Q = np.flipud(Q)
-            Q = Q.reshape((1, ni, nj))  # reshape to add a time dimension.
+        for i, i_var in enumerate(fgout_grid.q_out_vars):
 
             # construct variable
-            varname = _qelements[i]
 
-            data_array_attrs = {"units": _qunits[varname], "_FillValue": nodata}
+            # Find the varname in fgout.qmap associated with
+            # q_out_vars[i]
+            varname = None
+            for name, index in fgout_grid.qmap.items():
+                if i_var == index:
+                    varname = name
 
+            # construct xarray dataset if varname not in drop vars.
             if varname not in drop_variables:
+
+                Q = fgout.q[i, :, :]
+
+                # mask all but eta based on h presence.
+                if varname not in ("B", "eta"):
+                    Q[mask] = nodata
+
+                # to keep xarray happy, need to transpose and flip ud.
+                Q = Q.T
+                Q = np.flipud(Q)
+                Q = Q.reshape((1, ni, nj))  # reshape to add a time dimension.
+
+                data_array_attrs = {"units": _qunits[varname], "_FillValue": nodata}
+
                 data_vars[varname] = (
                     [
                         "time",
@@ -274,8 +300,7 @@ class FGMaxBackend(BackendEntrypoint):
         filename,
         epsg=None,
         drop_variables=None,
-        clip=False, # if True, clip the entire array to the extent where arrival_time is defined.
-
+        clip=False,  # if True, clip the entire array to the extent where arrival_time is defined.
     ):
 
         if drop_variables is None:
@@ -285,7 +310,7 @@ class FGMaxBackend(BackendEntrypoint):
         # e.g., output and 'fgmax_grids.data' in _output
         fgno = int(os.path.basename(filename).split(".")[0][-4:])
         outdir = os.path.dirname(filename)
-        data_file = os.path.join(outdir, 'fgmax_grids.data')
+        data_file = os.path.join(outdir, "fgmax_grids.data")
 
         fg = fgmax_tools.FGmaxGrid()
         fg.read_fgmax_grids_data(fgno=fgno, data_file=data_file)
@@ -472,7 +497,6 @@ class FGMaxBackend(BackendEntrypoint):
                     "Time of minimum depth",
                 )
 
-
         # drop requested variables
         for var in drop_variables:
             if var in data_vars.keys():
@@ -505,7 +529,7 @@ class FGMaxBackend(BackendEntrypoint):
 
         # clip
         if clip:
-            clip_data = fg.arrival_time.data>=0
+            clip_data = fg.arrival_time.data >= 0
             clip_data = clip_data.T
             clip_data = np.flipud(clip_data)
             ds = _clip(ds, clip_data)
@@ -524,8 +548,8 @@ def _clip(ds, clip_data):
 
     nrow, ncol = clip_data.shape
 
-    valid_col = np.sum(clip_data, axis=0)>0
-    valid_row = np.sum(clip_data, axis=1)>0
+    valid_col = np.sum(clip_data, axis=0) > 0
+    valid_row = np.sum(clip_data, axis=1) > 0
 
     sel_rows = np.nonzero(valid_row)[0]
     sel_cols = np.nonzero(valid_col)[0]
