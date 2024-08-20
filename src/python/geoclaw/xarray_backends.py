@@ -34,9 +34,19 @@ Usage:
     # .qxxx file if ascii format is used.
     # the format, fg number, and frame number are inferred from the filename.
 
-    ds = xr.open_dataset(filename, engine=FGOutBackend, backend_kwargs={'epsg':epsg_code})
+    ds = xr.open_dataset(
+        filename,
+        engine=FGOutBackend,
+        backend_kwargs={
+            'qmap': 'geoclaw',
+            'epsg':epsg_code
+                })
     # ds is now an xarray object. It can be interacted with directly or written to netcdf using
     ds.write_netcdf('filename.nc')
+
+    # A 'qmap' backend_kwargs is required as it indicates the qmap used for
+    # selecting elements of q to include in fgout. See
+    # https://www.clawpack.org/dev/fgout.html#specifying-q-out-vars
 
     # Optionally, provide an epsg code to assign the associated coordinate system to the file.
     # default behavior assigns no coordinate system.
@@ -48,18 +58,32 @@ Usage:
 
 Dimensions:
 
-Files opened with FGOutBackend will have dimensions time, y, x.
-Files opened with FGMaxBackend will have dimensions y, x.
+Files opened with FGOutBackend will have dimensions (time, y, x).
+Files opened with FGMaxBackend will have dimensions (y, x).
 
 Variable naming:
 
-For fixed grid geoclaw files, the dataset will have the following variables:
+For fixed grid files, the dataset will have the elements of q specified
+by qmap and q_out_vars. This may be as many as the full list described below or
+as few as specified by the user.
+
+For fixed grid geoclaw files, the full set of variables is:
 - h
 - hu
 - hv
 - eta
+- B
 
-Fixed grid dclaw files will have
+For fixed grid geoclaw-bouss files, the full set of variables is:
+- h
+- hu
+- hv
+- huc
+- hvc
+- eta
+- B
+
+Fixed grid dclaw files, the full set of variables is:
 - h
 - hu
 - hv
@@ -68,6 +92,7 @@ Fixed grid dclaw files will have
 - hchi
 - delta_a
 - eta
+- B
 
 Depending on the number of variables specified in the setrun.py fgmax files will
 have a portion of the following variables:
@@ -130,8 +155,8 @@ _qunits = {
     "delta_a": "meters",
     "eta": "meters",
     "B": "meters",
-    "huc": "",
-    "hvc": "",
+    "huc": "meters squared per second",
+    "hvc": "meters squared per second",
 }
 
 time_unit = "seconds"
