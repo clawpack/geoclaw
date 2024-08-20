@@ -10,7 +10,7 @@ module fgout_module
         real(kind=8), pointer :: late(:,:,:)
 
         ! Geometry
-        integer :: num_vars,mx,my,point_style,fgno,output_format,output_style
+        integer :: mx,my,point_style,fgno,output_format,output_style
         real(kind=8) :: dx,dy,x_low,x_hi,y_low,y_hi
 
         ! Time Tracking and output types
@@ -19,11 +19,13 @@ module fgout_module
 
         integer, allocatable :: output_frames(:)
         real(kind=8), allocatable :: output_times(:)
-        
+
+        integer :: num_vars ! number of variables to interpolate (num_eqn+3)
         integer :: nqout ! number of q components to output (+1 for eta)
-        logical, allocatable :: iqout(:)  ! which components to output
-        integer :: bathy_index,eta_index
-        logical :: dclaw  ! False for GeoClaw
+        logical, allocatable :: q_out_vars(:) ! which components to print
+
+        !logical, allocatable :: iqout(:)  ! which components to output
+        integer :: bathy_index,eta_index,time_index
 
     end type fgout_grid
 
@@ -43,14 +45,16 @@ contains
     ! Setup routine that reads in the fixed grids data file and sets up the
     ! appropriate data structures
 
-    subroutine set_fgout(rest,fname)
+    subroutine set_fgout(rest,num_eqn,fname)
 
         use amr_module, only: parmunit, tstart_thisrun
+        use utility_module, only: parse_values
 
         implicit none
 
         ! Subroutine arguments
-        logical :: rest  ! restart?
+        logical, intent(in) :: rest  ! restart?
+        integer, intent(in) :: num_eqn
         character(len=*), optional, intent(in) :: fname
 
         ! Local storage
@@ -59,6 +63,9 @@ contains
         type(fgout_grid), pointer :: fg
         real(kind=8) :: ts
 
+        integer :: n, iq
+        real(kind=8) :: values(num_eqn+2)
+        character(len=80) :: str
 
         if (.not.module_setup) then
 
@@ -109,7 +116,25 @@ contains
                 read(unit,*) fg%mx, fg%my
                 read(unit,*) fg%x_low, fg%y_low
                 read(unit,*) fg%x_hi, fg%y_hi
-                read(unit,*) fg%dclaw
+
+                allocate(fg%q_out_vars(num_eqn+2))  ! for q + eta, topo
+                do iq=1,num_eqn+2
+                    fg%q_out_vars(iq) = .false.
+                enddo
+                read(unit,'(a)') str
+                call parse_values(str, n, values)
+                do k=1,n
+                    iq = nint(values(k))
+                    fg%q_out_vars(iq) = .true.
+                enddo
+                write(6,*) '+++ q_out_vars:', fg%q_out_vars
+
+                fg%num_vars = num_eqn + 3  ! also interp topo,eta,time
+                fg%nqout = 0  ! count how many are to be output
+                do k=1,num_eqn+2
+                    if (fg%q_out_vars(k)) fg%nqout = fg%nqout + 1
+                enddo
+                !fg%nqout = fg%nqout + 1  ! for eta
 
 
                 ! Initialize next_output_index
@@ -193,68 +218,15 @@ contains
                     print *,'y grid points my <= 0, set my >= 1'
                 endif
 
-                
-                ! For now, hard-wire with defaults for either GeoClaw or D-Claw
-                ! need to save q plus topo, eta, t for interp in space-time
-                
-                if (fg%dclaw) then
-                    ! For D-Claw:
-                    fg%num_vars = 10
-                    ! for h, hu, hv, hm, pb, hchi, b_eroded, bathy, eta, time
-                else
-                    ! GeoClaw:
-                    fg%num_vars = 6
-                    ! for h, hu, hv, bathy, eta, time
-                endif
-                
-                ! specify which components of q (plus eta?) to output:
-                ! (eventually this should be set from user input)
+                fg%bathy_index = num_eqn + 2
+                fg%eta_index = num_eqn + 1
+                fg%time_index = num_eqn + 3
 
-                if (fg%num_vars == 6) then
-                    ! GeoClaw
-                    ! indexes used in early and late arrays:
-                    ! 1:3 are q variables, 6 is time
-                    fg%bathy_index = 4
-                    fg%eta_index = 5
-
-                    allocate(fg%iqout(4))
-                    fg%iqout(1) = .true.  ! output h?
-                    fg%iqout(2) = .true.  ! output hu?
-                    fg%iqout(3) = .true.  ! output hv?
-                    fg%iqout(4) = .true.  ! output eta?
-                    fg%nqout = 0
-                    do k=1,4
-                        if (fg%iqout(k)) fg%nqout = fg%nqout + 1
-                    enddo
-                endif
-
-                if (fg%num_vars == 10) then
-                    ! D-Claw:
-                    ! indexes used in early and late arrays:
-                    ! 1:7 are q variables, 10 is time
-                    fg%bathy_index = 8
-                    fg%eta_index = 9
-
-                    allocate(fg%iqout(8))
-                    fg%iqout(1) = .true.  ! output h?
-                    fg%iqout(2) = .true.  ! output hu?
-                    fg%iqout(3) = .true.  ! output hv?
-                    fg%iqout(4) = .true.  ! output hm?
-                    fg%iqout(5) = .true.  ! output pb?
-                    fg%iqout(6) = .true.  ! output hchi?
-                    fg%iqout(7) = .true.  ! output beroded?
-                    fg%iqout(8) = .true.  ! output eta?
-                    fg%nqout = 0
-                    do k=1,8
-                        if (fg%iqout(k)) fg%nqout = fg%nqout + 1
-                    enddo
-                endif
-                    
                 write(6,*) '+++ nqout = ',fg%nqout
 
                 ! Allocate new fixed grid data arrays at early, late time:
                 ! dimension (10,:,:) to work for either GeoClaw or D-Claw
-                
+
                 allocate(fg%early(10, fg%mx,fg%my))
                 fg%early = nan()
 
@@ -412,7 +384,7 @@ contains
 
 
                     ! save the time this fgout point was computed:
-                    fg_data(num_vars,ifg,jfg) = t
+                    fg_data(fgrid%time_index,ifg,jfg) = t
 
 
                 endif ! if fgout point is on this grid
@@ -441,7 +413,7 @@ contains
         ! I/O
         integer, parameter :: unit = 87
         character(len=15) :: fg_filename
-        character(len=4) :: cfgno, cframeno
+        character(len=8) :: cfgno, cframeno
         character(len=8) :: file_format
         integer :: grid_number,ipos,idigit,out_number,columns
         integer :: ifg,ifg1, iframe,iframe1
@@ -472,7 +444,7 @@ contains
                                            "a10,'             format'/,/)"
 
         ! Other locals
-        integer :: i,j,m,iq,k
+        integer :: i,j,m,iq,k,jq,num_eqn
         real(kind=8) :: t0,tf,tau, qaug(10)
         real(kind=8), allocatable :: qeta(:,:,:)
         real(kind=4), allocatable :: qeta4(:,:,:)
@@ -546,76 +518,34 @@ contains
                     endif
                 endif
 
-                ! Output the conserved quantities and eta value
+                ! Output the requested quantities and eta value:
+
                 iq = 1
-                ! qaug(1:3) are h,hu,hv for both GeoClaw and D-Claw:
-                if (fgrid%iqout(1)) then
-                    qeta(iq,i,j) = qaug(1) ! h
-                    iq = iq+1
-                endif
-                if (fgrid%iqout(2)) then
-                    qeta(iq,i,j) = qaug(2) ! hu
-                    iq = iq+1
-                endif
-                if (fgrid%iqout(3)) then
-                    qeta(iq,i,j) = qaug(3) ! hv
-                    iq = iq+1
-                endif
-                
-                if (fgrid%num_vars == 6) then
-                    ! GeoClaw:
-                    if (fgrid%iqout(4)) then
-                        qeta(iq,i,j) = qaug(5) ! eta since qaug(4)=topo
+                num_eqn = size(fgrid%q_out_vars) - 2  ! last components eta,B
+                do jq=1,num_eqn+2
+                    if (fgrid%q_out_vars(jq)) then
+                        qeta(iq,i,j) = qaug(jq)
                         iq = iq+1
                     endif
-                    
-                else if (fgrid%num_vars == 10) then
-                    ! D-Claw:
-                    if (fgrid%iqout(4)) then
-                        qeta(iq,i,j) = qaug(4) ! hm
-                        iq = iq+1
-                    endif
-                    if (fgrid%iqout(5)) then
-                        qeta(iq,i,j) = qaug(5) ! pb
-                        iq = iq+1
-                    endif
-                    if (fgrid%iqout(6)) then
-                        qeta(iq,i,j) = qaug(6) ! hchi
-                        iq = iq+1
-                    endif
-                    if (fgrid%iqout(7)) then
-                        qeta(iq,i,j) = qaug(7) ! b_eroded
-                        iq = iq+1
-                    endif
-                    if (fgrid%iqout(8)) then
-                        qeta(iq,i,j) = qaug(9) ! eta since qaug(8)=topo
-                        iq = iq+1
-                    endif
-                endif
+                enddo
+
+                ! now append eta value: (this is now included in loop above)
+                !qeta(iq,i,j) = qaug(fgrid%eta_index)
+                ! NOTE: qaug(fgrid%bathy_index) contains topo B value
+
             enddo
         enddo
 
 
-        ! Make the file names and open output files
-        cfgno = '0000'
-        ifg = fgrid%fgno
-        ifg1 = ifg
-        do ipos=4,1,-1
-            idigit = mod(ifg1,10)
-            cfgno(ipos:ipos) = char(ichar('0') + idigit)
-            ifg1 = ifg1/10
-            enddo
+        ! convert fgrid%fgno to a string of length at least 4 with leading 0's
+        ! e.g. '0001' or '12345':
+        write(cfgno, '(I0.4)') fgrid%fgno
 
-        cframeno = '0000'
-        iframe = out_index
-        iframe1 = iframe
-        do ipos=4,1,-1
-            idigit = mod(iframe1,10)
-            cframeno(ipos:ipos) = char(ichar('0') + idigit)
-            iframe1 = iframe1/10
-            enddo
+        ! convert out_index to a string of length at least 4 with leading 0's
+        write(cframeno, '(I0.4)') out_index
 
-        fg_filename = 'fgout' // cfgno // '.q' // cframeno
+
+        fg_filename = 'fgout' // trim(cfgno) // '.q' // trim(cframeno)
 
         open(unit,file=fg_filename,status='unknown',form='formatted')
 
@@ -637,14 +567,14 @@ contains
 
         if (fgrid%output_format == 3) then
             ! binary output goes in .b file as full 8-byte (float64):
-            fg_filename = 'fgout' // cfgno // '.b' // cframeno
+            fg_filename = 'fgout' // trim(cfgno) // '.b' // trim(cframeno)
             open(unit=unit, file=fg_filename, status="unknown",    &
                  access='stream')
             write(unit) qeta
             close(unit)
         else if (fgrid%output_format == 2) then
             ! binary output goes in .b file as 4-byte (float32):
-            fg_filename = 'fgout' // cfgno // '.b' // cframeno
+            fg_filename = 'fgout' // trim(cfgno) // '.b' // trim(cframeno)
             open(unit=unit, file=fg_filename, status="unknown",    &
                  access='stream')
             allocate(qeta4(fgrid%nqout, fgrid%mx, fgrid%my))
@@ -671,7 +601,7 @@ contains
             write(6,*) '*** should be ascii, binary32, or binary64'
         endif
 
-        fg_filename = 'fgout' // cfgno // '.t' // cframeno
+        fg_filename = 'fgout' // trim(cfgno) // '.t' // trim(cframeno)
         open(unit=unit, file=fg_filename, status='unknown', form='formatted')
         ! time, num_eqn+1, num_grids, num_aux, num_dim, num_ghost:
         write(unit, t_file_format) out_time, fgrid%nqout, 1, 0, 2, 0,file_format
@@ -679,10 +609,6 @@ contains
 
         print "(a,i4,a,i4,a,e18.8)",'Writing fgout grid #',fgrid%fgno, &
               '  frame ',out_index,' at time =',out_time
-
-        ! Index into qeta for binary output
-        ! Note that this implicitly assumes that we are outputting only h, hu, hv
-        ! and will not output more (change num_eqn parameter above)
 
     end subroutine fgout_write
 

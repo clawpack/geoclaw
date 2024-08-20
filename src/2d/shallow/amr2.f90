@@ -491,7 +491,7 @@ program amr2
         call read_dtopo_settings()        ! specifies file with dtopo from earthquake
         call read_topo_settings(rest)     ! specifies topography (bathymetry) files
         call set_qinit()                  ! specifies file with dh if this used instead
-        call set_fgout(rest)            ! Fixed grid settings
+        call set_fgout(rest,nvar)         ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
         !call set_multilayer()             ! Set multilayer SWE parameters
         call set_storm()                  ! Set storm parameters
@@ -526,7 +526,7 @@ program amr2
         call read_dtopo_settings()        ! specifies file with dtopo from earthquake
         call read_topo_settings(rest)     ! specifies topography (bathymetry) files
         call set_qinit()                  ! specifies file with dh if this used instead
-        call set_fgout(rest)            ! Fixed grid settings
+        call set_fgout(rest,nvar)         ! Fixed grid settings
         call setup_variable_friction()    ! Variable friction parameter
         call set_multilayer()             ! Set multilayer SWE parameters
         call set_storm()                  ! Set storm parameters

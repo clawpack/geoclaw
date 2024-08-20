@@ -13,6 +13,9 @@ Plotting routines for storm surge simulations with GeoClaw
 
 from __future__ import absolute_import
 from __future__ import print_function
+
+import warnings
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -23,6 +26,7 @@ import clawpack.visclaw.colormaps as colormaps
 import clawpack.visclaw.gaugetools as gaugetools
 import clawpack.visclaw.geoplot as geoplot
 import clawpack.geoclaw.data as geodata
+# import clawpack.geoclaw.surge.storm
 
 # TODO:  Assign these based on data files
 bathy_index = 0
@@ -41,7 +45,9 @@ land_cmap = geoplot.land_colors
 
 surge_data = geodata.SurgeData()
 
-
+# ==============================
+#  Track Plotting Functionality
+# ==============================
 class track_data(object):
     """Read in storm track data from run output"""
 
@@ -68,8 +74,8 @@ class track_data(object):
 
             # Check to make sure that this fixed the problem
             if self._data.shape[0] < frame + 1:
-                print(" *** WARNING *** Could not find track data for ",
-                      "frame %s." % frame)
+                warnings.warn(f" *** WARNING *** Could not find track data",
+                               " for frame {frame}.")
                 return None, None, None
 
         return self._data[frame, 1:]
@@ -165,8 +171,15 @@ def pressure(cd):
     # The division by 100.0 is to convert from Pa to millibars
     return cd.aux[pressure_field, :, :] / 100.0
 
-# def category(Storm, cd):
-#     return cd.aux[Storm.category, :, :]
+
+def storm_radius(cd, track):
+    """Distance from center of storm"""
+    track_data = track.get_track(cd.frameno)
+
+    if track_data[0] is not None and track_data[1] is not None:
+        return np.sqrt((cd.x - track_data[0])**2 + (cd.y - track_data[1])**2)
+    else:
+        return None
 
 
 # ========================================================================
@@ -433,6 +446,15 @@ def add_bathy_contours(plotaxes, contour_levels=None, color='k'):
     plotitem.amr_contour_show = [1] * 10
     plotitem.celledges_show = 0
     plotitem.patchedges_show = 0
+
+
+def add_storm_radii(plotaxes, track, radii=[100e3], color='r'):
+    """Add radii to plots based on storm position"""
+    plotitem = plotaxes.new_plotitem(name="storm radius", 
+                                     plot_type="2d_contour")
+    plotitem.plot_var = lambda cd: storm_radius(cd, track)
+    plotitem.contour_levels = radii
+    plotitem.contour_colors = color
 
 
 # ===== Storm related plotting =======
