@@ -142,9 +142,7 @@ except ImportError:
 from clawpack.geoclaw import fgmax_tools, fgout_tools
 from xarray.backends import BackendEntrypoint
 
-_qelements_dclaw = ["h", "hu", "hv", "hm", "pb", "hchi", "bdif", "eta", "B"]
-_qelements_geoclaw = ["h", "hu", "hv", "eta", "B"]
-_qelements_geoclaw_bouss = ["h", "hu", "hv", "huc", "hvc", "eta", "B"]
+
 _qunits = {
     "h": "meters",
     "hu": "meters squared per second",
@@ -236,14 +234,6 @@ class FGOutBackend(BackendEntrypoint):
                 mask = (fgout.eta - fgout.B) < 0.001
             except:
                 mask = np.ones((ni, nj), dtype=bool)
-
-        # determine if geoclaw, geoclaw-bouss, or dclaw
-        if qmap == "dclaw":
-            _qelements = _qelements_dclaw
-        elif qmap == "geoclaw":
-            _qelements = _qelements_geoclaw
-        elif qmap == "geoclaw-bouss":
-            _qelements = _qelements_geoclaw_bouss
 
         # create data_vars dictionary
         data_vars = {}
