@@ -3,7 +3,7 @@ import glob
 try:
     import rioxarray
     import xarray as xr
-except:
+except ImportError:
     "You must install xarray and rioxarray in order to use the xarray backends"
     raise
 
@@ -30,7 +30,7 @@ ds = xr.open_dataset(
         "epsg": epsg_code,
         "qmap": "geoclaw",
         # qmap is the qmap specified to the fgout object in setrun.py see
-        # the following documentation page for more details. 
+        # the following documentation page for more details.
         # https://www.clawpack.org/dev/fgout.html#specifying-q-out-vars
         "dry_tolerance": None,
         # variables that are not eta and B are masked
@@ -56,7 +56,9 @@ try:
         engine=FGOutBackend,
         backend_kwargs={"epsg": epsg_code, "qmap": "geoclaw"},
     )
-except ImportError:  # if dask is not available, use xr.concat.
+except ValueError:  # if dask is not available, use xr.concat.
+# if dask is not installed xr.open_mfdataset() will fail with something like
+# ValueError: unrecognized chunk manager dask - must be one of: []
     fgouts = []
     for filename in fgout_files:
         ds = xr.open_dataset(
