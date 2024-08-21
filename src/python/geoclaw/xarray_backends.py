@@ -142,7 +142,6 @@ except ImportError:
 from clawpack.geoclaw import fgmax_tools, fgout_tools
 from xarray.backends import BackendEntrypoint
 
-
 _qunits = {
     "h": "meters",
     "hu": "meters squared per second",
@@ -229,11 +228,10 @@ class FGOutBackend(BackendEntrypoint):
         # mask based on dry tolerance
         try:
             mask = fgout.h < 0.001
-        except:
-            try:
-                mask = (fgout.eta - fgout.B) < 0.001
-            except:
-                mask = np.ones((ni, nj), dtype=bool)
+            # internally fgout_tools will try fgou.eta-fgout.B if h is not present.
+        except AttributeError:
+            print("FGOutBackend: No h, eta, or B. No mask applied.")
+            mask = np.ones((nj, ni), dtype=bool)
 
         # create data_vars dictionary
         data_vars = {}
