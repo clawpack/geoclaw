@@ -3,7 +3,7 @@ import glob
 try:
     import rioxarray
     import xarray as xr
-except ImportError:
+except:
     "You must install xarray and rioxarray in order to use the xarray backends"
     raise
 
