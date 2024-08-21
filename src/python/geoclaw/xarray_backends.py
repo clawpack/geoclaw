@@ -184,6 +184,8 @@ class FGOutBackend(BackendEntrypoint):
         filename,  # path to fgout file.
         qmap="geoclaw",  # qmap value for FGoutGrid ('geoclaw', 'dclaw', or 'geoclaw-bouss')
         epsg=None,  # epsg code
+        drytol=0.001, # dry tolerance for masking elements of q that are not eta or B
+            # used only if h or eta-B is available based on q_out_vars.
         drop_variables=None,  # name of any elements of q to drop.
     ):
 
@@ -227,7 +229,7 @@ class FGOutBackend(BackendEntrypoint):
 
         # mask based on dry tolerance
         try:
-            mask = fgout.h < 0.001
+            mask = fgout.h < drytol
             # internally fgout_tools will try fgou.eta-fgout.B if h is not present.
         except AttributeError:
             print("FGOutBackend: No h, eta, or B. No mask applied.")
