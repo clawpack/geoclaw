@@ -24,7 +24,19 @@ filename = "_output/fgout0001.b0001"
 # the format, fg number, and frame number are inferred from the filename.
 
 ds = xr.open_dataset(
-    filename, engine=FGOutBackend, backend_kwargs={"epsg": epsg_code, "qmap": "geoclaw"}
+    filename,
+    engine=FGOutBackend,
+    backend_kwargs={
+        "epsg": epsg_code,
+        "qmap": "geoclaw",
+        # qmap is the qmap specified to the fgout object in setrun.py see
+        # the following documentation page for more details. 
+        # https://www.clawpack.org/dev/fgout.html#specifying-q-out-vars
+        "dry_tolerance": None,
+        # variables that are not eta and B are masked
+        # where h>dry_tolerance. To turn this functionality
+        # off set dry_tolerance = None.
+    },
 )
 # ds is now an xarray object. It can be interacted with directly or written to netcdf using
 ds.to_netcdf("fgout0001_0001.nc")

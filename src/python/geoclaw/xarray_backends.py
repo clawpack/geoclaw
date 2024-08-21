@@ -184,8 +184,12 @@ class FGOutBackend(BackendEntrypoint):
         filename,  # path to fgout file.
         qmap="geoclaw",  # qmap value for FGoutGrid ('geoclaw', 'dclaw', or 'geoclaw-bouss')
         epsg=None,  # epsg code
-        drytol=0.001, # dry tolerance for masking elements of q that are not eta or B
-            # used only if h or eta-B is available based on q_out_vars.
+        dry_tolerance=0.001,
+        # dry tolerance used for for masking elements of q that are not
+        # eta or B. Default behavior is to mask all elements of q except for
+        # eta and B where h>0.001.
+        # used only if h or eta-B is available based on q_out_vars.
+        # if dry_tolerance = None, no masking is applied to any variable.
         drop_variables=None,  # name of any elements of q to drop.
     ):
 
@@ -228,12 +232,13 @@ class FGOutBackend(BackendEntrypoint):
         ni = len(y)
 
         # mask based on dry tolerance
-        try:
-            mask = fgout.h < drytol
-            # internally fgout_tools will try fgou.eta-fgout.B if h is not present.
-        except AttributeError:
-            print("FGOutBackend: No h, eta, or B. No mask applied.")
-            mask = np.ones((nj, ni), dtype=bool)
+        if dry_tolerance is not None:
+            try:
+                mask = fgout.h < dry_tolerance
+                # internally fgout_tools will try fgou.eta-fgout.B if h is not present.
+            except AttributeError:
+                print("FGOutBackend: No h, eta, or B. No mask applied.")
+                mask = np.ones((nj, ni), dtype=bool)
 
         # create data_vars dictionary
         data_vars = {}
@@ -254,7 +259,7 @@ class FGOutBackend(BackendEntrypoint):
                 Q = fgout.q[i, :, :]
 
                 # mask all but eta based on h presence.
-                if varname not in ("B", "eta"):
+                if (varname not in ("B", "eta")) and dry_tolerance is not None:
                     Q[mask] = nodata
 
                 # to keep xarray happy, need to transpose and flip ud.
