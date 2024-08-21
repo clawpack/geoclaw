@@ -90,7 +90,7 @@ Fixed grid dclaw files, the full set of variables is:
 - hm
 - pb
 - hchi
-- delta_a
+- bdiff
 - eta
 - B
 
@@ -142,7 +142,7 @@ except ImportError:
 from clawpack.geoclaw import fgmax_tools, fgout_tools
 from xarray.backends import BackendEntrypoint
 
-_qelements_dclaw = ["h", "hu", "hv", "hm", "pb", "hchi", "delta_a", "eta", "B"]
+_qelements_dclaw = ["h", "hu", "hv", "hm", "pb", "hchi", "bdiff", "eta", "B"]
 _qelements_geoclaw = ["h", "hu", "hv", "eta", "B"]
 _qelements_geoclaw_bouss = ["h", "hu", "hv", "huc", "hvc", "eta", "B"]
 _qunits = {
@@ -152,11 +152,11 @@ _qunits = {
     "hm": "meters",
     "pb": "newton per meter squared",
     "hchi": "meters",
-    "delta_a": "meters",
+    "bdiff": "meters",
     "eta": "meters",
     "B": "meters",
-    "huc": "meters squared per second",
-    "hvc": "meters squared per second",
+    "huc": "varies",
+    "hvc": "varies",
 }
 
 time_unit = "seconds"
