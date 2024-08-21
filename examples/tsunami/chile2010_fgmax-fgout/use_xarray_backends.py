@@ -3,7 +3,7 @@ import glob
 try:
     import rioxarray
     import xarray as xr
-except:
+except ImportError:
     "You must install xarray and rioxarray in order to use the xarray backends"
     raise
 
@@ -30,16 +30,33 @@ ds = xr.open_dataset(
 ds.to_netcdf("fgout0001_0001.nc")
 
 # It is possible to combine all fgout files into a single netcdf file
-# using xr.open_mfdataset
+# using xr.open_mfdataset (requires dask) or xr.concat (does not require dask)
 # https://docs.xarray.dev/en/stable/generated/xarray.open_mfdataset.html
-fgout_files = glob.glob("_output/fgout0001.b*")
-ds_all = xr.open_mfdataset(
-    fgout_files,
-    engine=FGOutBackend,
-    backend_kwargs={"epsg": epsg_code, "qmap": "geoclaw"},
-)
+# https://docs.xarray.dev/en/latest/generated/xarray.concat.html
+# for instructions on installing xarray with dask see:
+# https://docs.xarray.dev/en/latest/getting-started-guide/installing.html#instructions
 
-print(ds_all)
+fgout_files = glob.glob("_output/fgout0001.b*")
+
+try:
+    ds_all = xr.open_mfdataset(
+        fgout_files,
+        engine=FGOutBackend,
+        backend_kwargs={"epsg": epsg_code, "qmap": "geoclaw"},
+    )
+except ImportError:  # if dask is not available, use xr.concat.
+    fgouts = []
+    for filename in fgout_files:
+        ds = xr.open_dataset(
+            filename,
+            engine=FGOutBackend,
+            backend_kwargs={"epsg": epsg_code, "qmap": "geoclaw"},
+        )
+        fgouts.append(ds)
+
+    ds_all = xr.concat(fgouts, dim="time")
+
+# save out.
 ds_all.to_netcdf("fgout_all.nc")
 
 # An example of a fgmax grid.
