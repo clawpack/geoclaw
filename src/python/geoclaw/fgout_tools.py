@@ -18,7 +18,7 @@ Includes:
             fgout frames, as a single netCDF file
 - function read_netcdf: Read a netCDF file and return a list of fgout frames,
             assuming the file contains all the qoi's needed to reconstruct q.
-- function read_netcdf_arrays: Read a netCDF file and extract the 
+- function read_netcdf_arrays: Read a netCDF file and extract the
             requested quantities of interest as numpy arrays.
 - print_netcdf_info: Print info about the contents of a netCDF file containing
             some fgout frames.
@@ -56,7 +56,7 @@ class FGoutFrame(object):
 
     # Define shortcuts to attributes of self.fgout_grid that are the same
     # for all frames (e.g. X,Y) to avoid storing grid for every frame.
-    
+
     @property
     def x(self):
         return self.fgout_grid.x
@@ -64,15 +64,15 @@ class FGoutFrame(object):
     @property
     def y(self):
         return self.fgout_grid.y
-        
+
     @property
     def X(self):
         return self.fgout_grid.X
-        
+
     @property
     def Y(self):
         return self.fgout_grid.Y
-        
+
     @property
     def delta(self):
         return self.fgout_grid.delta
@@ -80,19 +80,19 @@ class FGoutFrame(object):
     @property
     def extent_centers(self):
         return self.fgout_grid.extent_centers
-        
+
     @property
     def extent_edges(self):
         return self.fgout_grid.extent_edges
-        
+
     @property
     def drytol(self):
         return self.fgout_grid.drytol
-        
+
     @property
     def qmap(self):
         return self.fgout_grid.qmap
-            
+
     # Define attributes such as h as @properties with lazy evaluation:
     # the corresponding array is created and stored only when first
     # accessed by the user.  Those not needed are not created.
@@ -105,14 +105,14 @@ class FGoutFrame(object):
             try:
                 i_h = q_out_vars.index(self.qmap['h'])
                 self._h = self.q[i_h,:,:]
-            except:
+            except ValueError: # if q_out_vars does not contain qmap['h'], a value error is thrown
                 try:
                     i_eta = q_out_vars.index(self.qmap['eta'])
                     i_B = q_out_vars.index(self.qmap['B'])
                     self._h = self.q[i_eta,:,:] - self.q[i_B,:,:]
-                except:
+                except ValueError:
                     print('*** Could not find h or eta-B in q_out_vars')
-                    raise
+                    raise AttributeError
         return self._h
 
     @property
@@ -322,7 +322,7 @@ class FGoutGrid(object):
                          'bdif':7, 'eta':8, 'B':9}
         else:
             raise ValueError('Invalid qmap: %s' % qmap)
-        
+
         # GeoClaw input values:
         # Many of these should be read from fgout_grids.data
         # using read_fgout_grids_data before using read_frame
@@ -344,12 +344,12 @@ class FGoutGrid(object):
         self.q_out_vars = [1,2,3,4]  # list of which components to print
                                           # default: h,hu,hv,eta (5=topo)
         self.nqout = None # number of vars to print out
-        
+
         self.drytol = 1e-3          # used for computing u,v from hu,hv
 
         # private attributes for those that are only created if
         # needed by the user:
-        
+
         self._X = None
         self._Y = None
         self._x = None
@@ -375,7 +375,7 @@ class FGoutGrid(object):
             dy = (self.y2 - self.y1)/self.ny
             self._y = numpy.linspace(self.y1+dy/2, self.y2-dy/2, self.ny)
         return self._y
-        
+
     @property
     def X(self):
         """2D array X of longitudes (cell centers)"""
@@ -397,7 +397,7 @@ class FGoutGrid(object):
             dy = (self.y2 - self.y1)/self.ny
             self._delta = (dx,dy)
         return self._delta
-        
+
     @property
     def extent_centers(self):
         """Extent of cell centers [xmin,xmax,ymin,ymax]"""
@@ -405,7 +405,7 @@ class FGoutGrid(object):
             self._extent_centers = [self.x.min(), self.x.max(),\
                                     self.y.min(), self.y.max()]
         return self._extent_centers
-        
+
     @property
     def extent_edges(self):
         """Extent of cell edges [xmin,xmax,ymin,ymax]"""
@@ -414,10 +414,10 @@ class FGoutGrid(object):
             self._extent_edges = [self.x.min()-dx/2, self.x.max()+dx/2,\
                                     self.y.min()-dy/2, self.y.max()+dy/2]
         return self._extent_edges
-        
+
 
     # Create plotdata of class clawpack.visclaw.ClawPlotData
-    # only when needed for reading GeoClaw output, 
+    # only when needed for reading GeoClaw output,
     # since this must be done after fgno, outdir, output_format
     # have been specified:
 
@@ -450,7 +450,7 @@ class FGoutGrid(object):
             file_prefix_str = plotdata.file_prefix + '.b'
         else:
             file_prefix_str = plotdata.file_prefix + '.q'
-        
+
         # Contrary to usual default, set save_frames to False so that all
         # the fgout frames read in are not saved in plotdata.framesoln_dict.
         # Otherwise this might be a memory hog when making an animation with
@@ -472,7 +472,7 @@ class FGoutGrid(object):
 
         data_path = os.path.join(self.outdir, data_file)
         print('Reading fgout grid info from \n    %s' % data_path)
-        
+
         with open(data_path) as filep:
             lines = filep.readlines()
         fgout_input = None
@@ -577,7 +577,7 @@ class FGoutGrid(object):
 
         data_path = os.path.join(self.outdir, data_file)
         print('Reading fgout grid info from \n    %s' % data_path)
-        
+
         with open(data_path) as filep:
             lines = filep.readlines()
         fgout_input = None
@@ -628,7 +628,7 @@ class FGoutGrid(object):
             errmsg = 'point_style %s is not implement, only point_style==2' \
                                     % point_style
             raise NotImplementedError(errmsg)
-                
+
         if self.output_format == 'ascii':
             output_format = 1
         elif self.output_format == 'binary32':
@@ -640,7 +640,7 @@ class FGoutGrid(object):
             raise NotImplementedError(errmsg)
 
 
-        
+
         # write header, independent of point_style:
         #fid = open(self.input_file_name,'w')
         fid.write("\n")
@@ -648,7 +648,7 @@ class FGoutGrid(object):
 
         fid.write("%i                           # output_style\n" \
                     % self.output_style)
-        
+
         if self.output_style == 1:
             assert self.tstart is not None, 'Need to set tstart'
             assert self.tend is not None, 'Need to set tend'
@@ -659,7 +659,7 @@ class FGoutGrid(object):
         elif self.output_style == 2:
             self.nout = len(self.output_times)
             fid.write("%i %s           # nout\n" % (self.nout, 11*" "))
-            
+
             # remove [] and , from list of times:
             output_times_str = repr(list(self.output_times))[1:-1]
             output_times_str = output_times_str.replace(',','')
@@ -695,7 +695,7 @@ class FGoutGrid(object):
             print("   lower left  = (%15.10f,%15.10f)" % (x1,y1))
             print("   upper right = (%15.10f,%15.10f)" % (x2,y2))
             print("   dx = %15.10e,  dy = %15.10e" % (dx,dy))
-            
+
         # q_out_vars is a list of q components to print, e.g. [1,4]
 
         format = len(self.q_out_vars) * '%s '
@@ -725,7 +725,7 @@ class FGoutGrid(object):
             self.read_fgout_grids_data()
             fgoutX = self.X
             fgoutY = self.Y
-            
+
         try:
             fr = self.plotdata.getframe(frameno)
         except:
@@ -741,11 +741,11 @@ class FGoutGrid(object):
         fgout_frame.q = state.q
 
         fgout_frame.t = state.t
-    
+
         fgout_frame.frameno = frameno
-        
-        X,Y = patch.grid.p_centers[:2]    
-            
+
+        X,Y = patch.grid.p_centers[:2]
+
         if not numpy.allclose(X, fgoutX):
             errmsg = '*** X read from output does not match fgout_grid.X'
             raise ValueError(errmsg)
@@ -753,7 +753,7 @@ class FGoutGrid(object):
         if not numpy.allclose(Y, fgoutY):
             errmsg = '*** Y read from output does not match fgout_grid.Y'
             raise ValueError(errmsg)
-                
+
         return fgout_frame
 
 
@@ -766,29 +766,29 @@ def make_fgout_fcn_xy(fgout, qoi, method='nearest',
     """
     Create a function that can be called at (x,y) and return the qoi
     interpolated in space from the fgout array.
-    
-    qoi should be a string (e.g. 'h', 'u' or 'v') corresponding to 
+
+    qoi should be a string (e.g. 'h', 'u' or 'v') corresponding to
     an attribute of fgout.
-    
-    The function returned takes arguments x,y that can be floats or 
+
+    The function returned takes arguments x,y that can be floats or
     (equal length) 1D arrays of values that lie within the spatial
-    extent of fgout. 
-    
-    bounds_error and fill_value determine the behavior if (x,y) is not in 
+    extent of fgout.
+
+    bounds_error and fill_value determine the behavior if (x,y) is not in
     the bounds of the data, as in scipy.interpolate.RegularGridInterpolator.
     """
-    
+
     from scipy.interpolate import RegularGridInterpolator
-    
+
     try:
         q = getattr(fgout,qoi)
     except:
         print('*** fgout missing attribute qoi = %s?' % qoi)
-        
+
     err_msg = '*** q must have same shape as fgout.X\n' \
             + 'fgout.X.shape = %s,   q.shape = %s' % (fgout.X.shape,q.shape)
     assert fgout.X.shape == q.shape, err_msg
-    
+
     x1 = fgout.X[:,0]
     y1 = fgout.Y[0,:]
     fgout_fcn1 = RegularGridInterpolator((x1,y1), q, method=method,
@@ -816,39 +816,39 @@ def make_fgout_fcn_xyt(fgout1, fgout2, qoi, method_xy='nearest',
     """
     Create a function that can be called at (x,y,t) and return the qoi
     interpolated in space and time between the two frames fgout1 and fgout2.
-    
-    qoi should be a string (e.g. 'h', 'u' or 'v') corresponding to 
+
+    qoi should be a string (e.g. 'h', 'u' or 'v') corresponding to
     an attribute of fgout.
-    
+
     method_xy is the method used in creating the spatial interpolator,
     and is passed to make_fgout_fcn_xy.
-    
+
     method_t is the method used for interpolation in time, currently only
     'linear' is supported, which linearly interpolates.
-    
-    bounds_error and fill_value determine the behavior if (x,y,t) is not in 
+
+    bounds_error and fill_value determine the behavior if (x,y,t) is not in
     the bounds of the data.
-    
+
     The function returned takes arguments x,y (floats or equal-length 1D arrays)
     of values that lie within the spatial extent of fgout1, fgout2
     (which are assumed to cover the same uniform grid at different times)
-    and t should be a float that lies between fgout1.t and fgout2.t. 
+    and t should be a float that lies between fgout1.t and fgout2.t.
     """
-    
+
     assert numpy.allclose(fgout1.X, fgout2.X), \
                             '*** fgout1 and fgout2 must have same X'
     assert numpy.allclose(fgout1.Y, fgout2.Y), \
                             '*** fgout1 and fgout2 must have same Y'
-    
+
     t1 = fgout1.t
     t2 = fgout2.t
     #assert t1 < t2, '*** expected fgout1.t < fgout2.t'
-    
+
     fgout1_fcn_xy = make_fgout_fcn_xy(fgout1, qoi, method=method_xy,
                        bounds_error=bounds_error, fill_value=fill_value)
     fgout2_fcn_xy = make_fgout_fcn_xy(fgout2, qoi, method=method_xy,
                        bounds_error=bounds_error, fill_value=fill_value)
-                
+
     def fgout_fcn(x,y,t):
         """
         Function that can be evaluated at single point or arrays (x,y)
@@ -877,15 +877,15 @@ def make_fgout_fcn_xyt(fgout1, fgout2, qoi, method_xy='nearest',
                 qout = (1-alpha)*qout1 + alpha*qout2
         else:
             raise NotImplementedError('method_t = %s not supported' % method_t)
-            
+
         return qout
-        
+
     return fgout_fcn
 
 # ===============================
 # Functions for writing a set of fgout frames as a netCDF file, and
-# reading such a file:    
-    
+# reading such a file:
+
 def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
                  qois = ['h','hu','hv','eta'], datatype='f4',
                  include_B0=False, include_Bfinal=False,
@@ -894,63 +894,63 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
     Write a list of fgout frames (at different times on the same rectangular
     grid) to a single netCDF file, with some metadata and the topography,
     if desired.
-    
+
     fgout_frames should be a list of FGoutFrame objects, all of the same size
     and at increasing times.
-    
+
     fname_nc is the name of the file to write.
-    
+
     qois is a list of strings, the quantities of interest to include in file.
-        This could include any of: 
+        This could include any of:
 
             'h', 'eta', 'hu', 'hv', 'u', 'v', 's', 'hss', 'B'.
 
         All other quantities can be computed from h, hu, hv, eta,
         the original fgout variables from GeoClaw, but for some applications
         you might only want to save 'h' and 's', for example.
-    
+
     datatype should be 'f4' [default] or 'f8', specifying bytes per qoi value.
         'f8' has full precision of the original data, but the file will be
         twice as large and may not be needed for downstream applications.
-        
+
     Note that the topography B = eta - h, so it is not necessary to store all
     three of these.  Also, B is often the same for all frames, so rather than
     storing B at each frame as a qoi, two other options are also provided
     (and then storing eta or h for all frames allows calculating the other):
-    
+
     include_Bfinal: If True, include the topography B array from the final frame
     as the Bfinal array.
-    
+
     include_B0: If True, include the topography B array from the first frame
-    as the B0 array.  This is only useful if, e.g., the first frame is initial 
+    as the B0 array.  This is only useful if, e.g., the first frame is initial
     topography before co-seismic deformation, and at later times the topography
-    is always equal to Bfinal. 
-    
+    is always equal to Bfinal.
+
     `description` is a string that will be added as metadata.
-    A metadata field `history` will also be added, which includes the 
-    time the file was created and the path to the directory where it was made. 
-    """    
-    
+    A metadata field `history` will also be added, which includes the
+    time the file was created and the path to the directory where it was made.
+    """
+
     import netCDF4
     from datetime import datetime, timedelta
     from cftime import num2date, date2num
     import time
     timestr = time.ctime(time.time())  # current time for metadata
-    
+
     fg_times = numpy.array([fg.t for fg in fgout_frames])
-    
+
     if verbose:
         print('Creating %s with fgout frames at times: ' % fname_nc)
         print(fg_times)
-    
+
     fg0 = fgout_frames[0]
     x = fg0.x
     y = fg0.y
-    
+
     xs = numpy.array([fg.x for fg in fgout_frames])
     ys = numpy.array([fg.y for fg in fgout_frames])
     # assert same for all times
-    
+
     units = {'h':'meters', 'eta':'meters', 'hu':'m^2/s', 'hv':'m^2/s',
              'u':'m/s', 'v':'m/s', 's':'m/s', 'hss':'m^3/s^2', 'B':'meters'}
 
@@ -969,12 +969,12 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
         latitudes = rootgrp.createVariable('lat','f8',('lat',))
         latitudes[:] = y
         latitudes.units = 'degrees_north'
-        
+
         time = rootgrp.createDimension('time', len(fg_times))
         times = rootgrp.createVariable('time','f8',('time',))
         times[:] = fg_times
         times.units = 'seconds'
-        
+
         if 0:
             # Could make times be datetimes relative to some event time, e.g.:
             times.units = 'seconds since 1700-01-26 21:00:00.0'
@@ -982,7 +982,7 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
             dates = [datetime(1700,1,26,21) + timedelta(seconds=ss) \
                         for ss in fg_times]
             times[:] = date2num(dates,units=times.units,calendar=times.calendar)
-        
+
         if include_B0:
             B0 = rootgrp.createVariable('B0',datatype,('lon','lat',))
             B0[:,:] = fg0.B
@@ -993,7 +993,7 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
             Bfinal = rootgrp.createVariable('Bfinal',datatype,('lon','lat',))
             Bfinal[:,:] = fg_final.B
             Bfinal.units = 'meters'
-        
+
         for qoi in qois:
             qoi_frames = [getattr(fgout,qoi) for fgout in fgout_frames]
             qoi_var = rootgrp.createVariable(qoi,datatype,('time','lon','lat',))
@@ -1002,7 +1002,7 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
 
 def get_as_array(var, rootgrp, verbose=True):
     """
-    Utility function to retrieve variable from netCDF file and convert to 
+    Utility function to retrieve variable from netCDF file and convert to
     numpy array.
     """
     a = rootgrp.variables.get(var, None)
@@ -1011,7 +1011,7 @@ def get_as_array(var, rootgrp, verbose=True):
         return numpy.array(a)
     else:
         if verbose: print('    Did not find %s' % var)
-        return None    
+        return None
 
 
 def read_netcdf_arrays(fname_nc, qois, verbose=True):
@@ -1022,19 +1022,19 @@ def read_netcdf_arrays(fname_nc, qois, verbose=True):
         'h', 'eta', 'hu', 'hv', 'u', 'v', 's', 'hss', 'B'.
 
     qois can also include the time-independent 'B0' and/or 'Bfinal'
-    
-    Returns 
+
+    Returns
 
         x, y, t, qoi_arrays
 
     where x,y define the longitude, latitudes, t is the times of the frames,
     and qoi_arrays is a dictionary indexed by the strings from qois.
-    
+
     Each dict element is an array with shape (len(t), len(x), len(y))
     for time-dependent qoi's, or (len(x), len(y)) for B0 or Bfinal,
     or None if that qoi was not found in the netCDF file.
     """
-     
+
     import netCDF4
 
     with netCDF4.Dataset(fname_nc, 'r') as rootgrp:
@@ -1046,17 +1046,17 @@ def read_netcdf_arrays(fname_nc, qois, verbose=True):
         x = get_as_array('lon', rootgrp, verbose)
         y = get_as_array('lat', rootgrp, verbose)
         t = get_as_array('time', rootgrp, verbose)
-        
+
         vars = list(rootgrp.variables)
-        
+
         qoi_arrays = {}
         for qoi in qois:
             qoi_array = get_as_array(qoi, rootgrp, verbose)
             qoi_arrays[qoi] = qoi_array
-            
+
     return x,y,t,qoi_arrays
-            
-            
+
+
 
 def read_netcdf(fname_nc, fgout_grid=None, verbose=True):
     """
@@ -1065,7 +1065,7 @@ def read_netcdf(fname_nc, fgout_grid=None, verbose=True):
     the qoi's 'h','hu','hv','eta' required to reconstruct the q array
     as output by GeoClaw.
     """
-    
+
     import netCDF4
 
     with netCDF4.Dataset(fname_nc, 'r') as rootgrp:
@@ -1079,7 +1079,7 @@ def read_netcdf(fname_nc, fgout_grid=None, verbose=True):
         t = get_as_array('time', rootgrp, verbose)
 
         vars = list(rootgrp.variables)
-        
+
 
         for qoi in ['h','hu','hv','eta']:
             errmsg = '*** Cannot reconstruct fgout frame without %s' % qoi
@@ -1088,14 +1088,14 @@ def read_netcdf(fname_nc, fgout_grid=None, verbose=True):
         hu = get_as_array('hu', rootgrp, verbose)
         hv = get_as_array('hv', rootgrp, verbose)
         eta = get_as_array('eta', rootgrp, verbose)
-        
+
         if (x is None) or (y is None):
             print('*** Could not create grid')
         else:
             X,Y = numpy.meshgrid(x,y)
-        
+
         fgout_frames = []
-                
+
         for k in range(eta.shape[0]):
             fgout = FGoutFrame(fgout_grid=fgout_grid, frameno=k)
             fgout.x = x
@@ -1109,9 +1109,9 @@ def read_netcdf(fname_nc, fgout_grid=None, verbose=True):
             fgout.X = X
             fgout.Y = Y
             fgout_frames.append(fgout)
-            
+
         print('Created fgout_frames as list of length %i' % len(fgout_frames))
-        
+
     return fgout_frames
 
 def print_netcdf_info(fname_nc):
@@ -1127,7 +1127,7 @@ def print_netcdf_info(fname_nc):
         t = get_as_array('time', rootgrp, verbose=False)
 
         vars = list(rootgrp.variables)
-        
+
         print('===================================================')
         print('netCDF file %s contains:' % fname_nc)
         print('description: \n', rootgrp.description)
@@ -1137,5 +1137,3 @@ def print_netcdf_info(fname_nc):
         print('%i times from %.3f to %.3f' % (len(t),t[0],t[-1]))
         print('variables: ',vars)
         print('===================================================')
-    
-        
