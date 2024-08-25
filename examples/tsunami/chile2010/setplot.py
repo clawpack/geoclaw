@@ -57,18 +57,14 @@ def setplot(plotdata=None):
 
     # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes('pcolor')
-    plotaxes.title = 'Surface'
-    plotaxes.scaled = True
+    plotaxes.title = 'Surface at time h:m:s'
+    plotaxes.aspect_latitude = -30.
+    plotaxes.xticks_fontsize = 10
+    plotaxes.yticks_fontsize = 10
+    plotaxes.xlabel = 'longitude'
+    plotaxes.ylabel = 'latitude'
 
-    def fixup(current_data):
-        import pylab
-        addgauges(current_data)
-        t = current_data.t
-        t = t / 3600.  # hours
-        pylab.title('Surface at %4.2f hours' % t, fontsize=20)
-        pylab.xticks(fontsize=15)
-        pylab.yticks(fontsize=15)
-    plotaxes.afteraxes = fixup
+    plotaxes.afteraxes = addgauges
 
     # Water
     plotitem = plotaxes.new_plotitem(plot_type='2d_pcolor')
@@ -78,6 +74,8 @@ def setplot(plotdata=None):
     plotitem.pcolor_cmin = -0.2
     plotitem.pcolor_cmax = 0.2
     plotitem.add_colorbar = True
+    plotitem.colorbar_shrink = 0.8
+    plotitem.colorbar_extend = 'both'
     plotitem.amr_celledges_show = [0,0,0]
     plotitem.patchedges_show = 1
 
@@ -114,18 +112,37 @@ def setplot(plotdata=None):
 
     # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes()
-    plotaxes.xlimits = 'auto'
-    plotaxes.ylimits = 'auto'
+    plotaxes.time_scale = 1/3600.  # convert to hours
+    plotaxes.xlimits = [0, 9]
+    plotaxes.ylimits = [-0.3, 0.3]
     plotaxes.title = 'Surface'
+    plotaxes.title_fontsize = 15
+    plotaxes.time_label = 'time (hours)'
+    plotaxes.ylabel = 'surface elevation (m)'
+    plotaxes.grid = True
+
+    def add_obs(current_data):
+        from pylab import plot, legend
+        gaugeno = current_data.gaugeno
+        if gaugeno == 32412:
+            try:
+                tgauge = TG32412[:,0] / 3600.  # convert to hours
+                plot(tgauge, TG32412[:,1], 'r', linewidth=1.0)
+                legend(['GeoClaw','Obs'],loc='lower right')
+            except: pass
+
+    plotaxes.afteraxes = add_obs
 
     # Plot surface as blue curve:
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = 3
+    plotitem.plot_var = 3  # eta
     plotitem.plotstyle = 'b-'
+    plotitem.kwargs = {'linewidth':1.8}
+
 
     # Plot topo as green curve:
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.show = False
+    plotitem.show = False  # not being used
 
     def gaugetopo(current_data):
         q = current_data.q
@@ -137,24 +154,6 @@ def setplot(plotdata=None):
     plotitem.plot_var = gaugetopo
     plotitem.plotstyle = 'g-'
 
-    def add_zeroline(current_data):
-        from pylab import plot, legend, xticks, floor, axis, xlabel
-        t = current_data.t 
-        gaugeno = current_data.gaugeno
-
-        if gaugeno == 32412:
-            try:
-                plot(TG32412[:,0], TG32412[:,1], 'r')
-                legend(['GeoClaw','Obs'],loc='lower right')
-            except: pass
-            axis((0,t.max(),-0.3,0.3))
-
-        plot(t, 0*t, 'k')
-        n = int(floor(t.max()/3600.) + 2)
-        xticks([3600*i for i in range(n)], ['%i' % i for i in range(n)])
-        xlabel('time (hours)')
-
-    plotaxes.afteraxes = add_zeroline
 
 
     #-----------------------------------------
