@@ -1,4 +1,6 @@
 
+GeoClaw Boussinesq solver examples
+
 The radial_flat subdirectory contains one example using the Boussinesq
 solver introduced in Clawpack v5.10.0.
 
@@ -14,8 +16,12 @@ OpenMP along with MPI.  Some flags have to be set as environment variables
 or directly in the application Makefile, e.g. see the lines commented out in
 radial_flat/Makefile.
 
+The file setenv.sh illustrates how you might set some environment
+variables for the bash shell.
+
 A file petscMPIoptions is also required to set some PETSc parameters for the
 iterative method used to solve the large sparse linear systems that arise at 
 each refinement level when the Boussinesq equations are solved. 
 One of the environment variables mentioned above points to this file, and a
 sample is included in this directory.
+
