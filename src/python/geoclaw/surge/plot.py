@@ -122,13 +122,35 @@ def plot_landfall_gauge(gauge, axes, landfall=0.0, style='b', kwargs={}):
 # ========================================================================
 #  Surge related helper functions
 # ========================================================================
-def days_figure_title(current_data, land_fall=0.0):
-    t = (current_data.t - land_fall) / (60**2 * 24)
-    days = int(t)
-    hours = (t - int(t)) * 24.0
+def days_figure_title(cd, land_fall=0.0, new_time=False):
+    r"""Helper function that puts the time relative to landfall in title
 
-    title = current_data.plotaxes.title
-    plt.title('%s at day %3i, hour %2.1f' % (title, days, hours))
+    New version of title is available if *new_time = True*
+    """
+    if new_time:
+        if cd.t < land_fall:
+            sign = "-"
+        else:
+            sign = " "
+        minutes, seconds = divmod(abs(np.round(cd.t - land_fall)), 60)
+        hours, minutes = divmod(minutes, 60)
+        days, hours = divmod(hours, 24)
+        days = int(days)
+        hours = int(hours)
+        minutes = int(minutes)
+        if cd.t < 0:
+            sign = "-"
+        else:
+            sign = " "
+        title = cd.plotaxes.title
+        plt.title(f'{title} at t = {sign}{days:d}, {hours:02d}:{minutes:02d}')
+    else:
+        t = (cd.t - land_fall) / (60**2 * 24)
+        days = int(t)
+        hours = (t - int(t)) * 24.0
+
+        title = cd.plotaxes.title
+        plt.title('%s at day %3i, hour %2.1f' % (title, days, hours))
 
 
 def surge_afteraxes(current_data, track, land_fall=0.0, plot_direction=False,
