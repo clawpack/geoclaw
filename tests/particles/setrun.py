@@ -392,11 +392,6 @@ def setgeo(rundata):
     #   [fname]
     rundata.qinit_data.qinitfiles.append(['qinit.xyz'])
 
-    # == setfixedgrids.data values ==
-    fixedgrids = rundata.fixed_grid_data.fixedgrids
-    # for fixed grids append lines of the form
-    # [t1,t2,noutput,x1,x2,y1,y2,xpoints,ypoints,\
-    #  ioutarrivaltimes,ioutsurfacemax]
 
     return rundata
     # end of function setgeo
