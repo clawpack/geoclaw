@@ -47,9 +47,12 @@ c      dimension work(mwork)
       logical :: dump = .false.
       logical, intent (in) :: actualstep
       type(fgout_grid), pointer :: fgout
-      logical, allocatable :: fgout_interp_needed(:)
+      logical :: fgout_interp_needed(FGOUT_num_grids)
       real(kind=8) :: fgout_tnext
 c
+#ifdef WHERE_AM_I
+      write(*,*) "     starting stepgrid grid ",mptr 
+#endif
       FGOUT_tcfmax = -rinfinity
       level = node(nestlevel,mptr)
       
@@ -113,10 +116,8 @@ C       mwork1 = mwork - mused              !# remaining space (passed to step2)
 c
       tc0=time !# start of computational step
       tcf=tc0+dt !# end of computational step
-      
-c     Check if fgout interpolation needed before and after step:
 
-      allocate(fgout_interp_needed(FGOUT_num_grids))
+c     Check if fgout interpolation needed before and after step:
 
 !$OMP CRITICAL (FixedGrids)
 
@@ -310,7 +311,10 @@ c            write(*,545) i,j,(q(i,j,ivar),ivar=1,nvar)
          end do
          end do
       endif
-c
+
+#ifdef WHERE_AM_I
+      write(*,*) "     ending   stepgrid grid ",mptr 
+#endif
       return
       end
 

@@ -13,6 +13,9 @@ Plotting routines for storm surge simulations with GeoClaw
 
 from __future__ import absolute_import
 from __future__ import print_function
+
+import warnings
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -23,6 +26,7 @@ import clawpack.visclaw.colormaps as colormaps
 import clawpack.visclaw.gaugetools as gaugetools
 import clawpack.visclaw.geoplot as geoplot
 import clawpack.geoclaw.data as geodata
+# import clawpack.geoclaw.surge.storm
 
 # TODO:  Assign these based on data files
 bathy_index = 0
@@ -41,6 +45,9 @@ land_cmap = geoplot.land_colors
 
 surge_data = geodata.SurgeData()
 
+# ==============================
+#  Track Plotting Functionality
+# ==============================
 class track_data(object):
     """Read in storm track data from run output"""
 
@@ -67,8 +74,8 @@ class track_data(object):
 
             # Check to make sure that this fixed the problem
             if self._data.shape[0] < frame + 1:
-                print(" *** WARNING *** Could not find track data for ",
-                      "frame %s." % frame)
+                warnings.warn(f" *** WARNING *** Could not find track data",
+                               " for frame {frame}.")
                 return None, None, None
 
         return self._data[frame, 1:]
@@ -84,12 +91,16 @@ def gauge_locations(current_data, gaugenos='all'):
                                     yoffset=0.02)
 
 
-def gaugetopo(current_data):
-    q = current_data.q
-    h = q[0, :]
-    eta = q[3, :]
-    topo = eta - h
-    return topo
+def gauge_dry_regions(cd, dry_tolerance=1e-16):
+    """Masked array of zeros where gauge is dry."""
+    return np.ma.masked_where(np.abs(cd.gaugesoln.q[0, :]) > dry_tolerance,
+                              np.zeros(cd.gaugesoln.q[0, :].shape))
+
+
+def gauge_surface(cd, dry_tolerance=1e-16):
+    """Sea surface at gauge masked when dry."""
+    return np.ma.masked_where(np.abs(cd.gaugesoln.q[0, :]) < dry_tolerance,
+                              cd.gaugesoln.q[3, :])
 
 
 def plot_landfall_gauge(gauge, axes, landfall=0.0, style='b', kwargs={}):
@@ -97,6 +108,9 @@ def plot_landfall_gauge(gauge, axes, landfall=0.0, style='b', kwargs={}):
 
     This will transform the plot so that it is relative to the landfall value
     provided.
+
+    This can be done using `plotaxes.time_scale` instead so this function will
+    be deprecated and removed in a future release.
     """
     axes = plt.gca()
 
@@ -157,8 +171,15 @@ def pressure(cd):
     # The division by 100.0 is to convert from Pa to millibars
     return cd.aux[pressure_field, :, :] / 100.0
 
-# def category(Storm, cd):
-#     return cd.aux[Storm.category, :, :]
+
+def storm_radius(cd, track):
+    """Distance from center of storm"""
+    track_data = track.get_track(cd.frameno)
+
+    if track_data[0] is not None and track_data[1] is not None:
+        return np.sqrt((cd.x - track_data[0])**2 + (cd.y - track_data[1])**2)
+    else:
+        return None
 
 
 # ========================================================================
@@ -427,6 +448,15 @@ def add_bathy_contours(plotaxes, contour_levels=None, color='k'):
     plotitem.patchedges_show = 0
 
 
+def add_storm_radii(plotaxes, track, radii=[100e3], color='r'):
+    """Add radii to plots based on storm position"""
+    plotitem = plotaxes.new_plotitem(name="storm radius", 
+                                     plot_type="2d_contour")
+    plotitem.plot_var = lambda cd: storm_radius(cd, track)
+    plotitem.contour_levels = radii
+    plotitem.contour_colors = color
+
+
 # ===== Storm related plotting =======
 def sec2days(seconds):
     """Converst seconds to days."""
@@ -492,19 +522,21 @@ Easily plot the track and intensity of a storm using a mapping package.
 #  Returns axes
 #  Storm with category plotting function
 # ========================================================================
-def add_track(Storm, axes, plot_package=None, category_color=None, legend_loc='best', 
+
+
+def add_track(Storm, axes, plot_package=None, category_color=None, legend_loc='best',
               intensity=False, categorization="NHC", limits=None, track_color='red'):
 
     if category_color is None:
-            category_color = {5: 'red',
-                              4: 'orange',
-                              3: 'yellow',
-                              2: 'blue', # edit color
-                              1: 'violet',
-                              0: 'black',
-                             -1: 'gray'}
+        category_color = {5: 'red',
+                          4: 'orange',
+                          3: 'yellow',
+                          2: 'blue',  # edit color
+                          1: 'violet',
+                          0: 'black',
+                          -1: 'gray'}
     category = Storm.category(categorization=categorization)
-            
+
     # make it if intensity = true
 
     # basic plotting
@@ -520,51 +552,54 @@ def add_track(Storm, axes, plot_package=None, category_color=None, legend_loc='b
     axes.set_xlabel("Longitude")
     axes.set_ylabel("Latitude")
 
-
-
     categories_legend = []
 
-    if intensity and categorization is "NHC": 
+    if intensity and categorization == "NHC":
         categories_legend = []
-            # plotitem = plotaxes.new_plotitem(name='category', plot_type='1d_plot')
+        # plotitem = plotaxes.new_plotitem(name='category', plot_type='1d_plot')
 
         if (-1 in category):
-            negativeone = mlines.Line2D([], [], color=category_color[-1], marker='s', ls='', label="Tropical Depression")
+            negativeone = mlines.Line2D(
+                [], [], color=category_color[-1], marker='s', ls='', label="Tropical Depression")
             categories_legend.append(negativeone)
 
         if (0 in category):
-            zero = mlines.Line2D([], [], color=category_color[0], marker='s', ls='', label="Tropical Storn")
+            zero = mlines.Line2D(
+                [], [], color=category_color[0], marker='s', ls='', label="Tropical Storn")
             categories_legend.append(zero)
 
         if (1 in category):
-            one = mlines.Line2D([], [], color=category_color[1], marker='s', ls='', label="Category 1")
+            one = mlines.Line2D([], [], color=category_color[1],
+                                marker='s', ls='', label="Category 1")
             categories_legend.append(one)
 
         if (2 in category):
-            two = mlines.Line2D([], [], color=category_color[2], marker='s', ls='', label="Category 2")
+            two = mlines.Line2D([], [], color=category_color[2],
+                                marker='s', ls='', label="Category 2")
             categories_legend.append(two)
 
         if (3 in category):
-            three = mlines.Line2D([], [], color=category_color[3], marker='s', ls='', label="Category 3")
+            three = mlines.Line2D(
+                [], [], color=category_color[3], marker='s', ls='', label="Category 3")
             categories_legend.append(three)
 
         if (4 in category):
-            four = mlines.Line2D([], [], color=category_color[4], marker='s', ls='', label="Category 4")
+            four = mlines.Line2D(
+                [], [], color=category_color[4], marker='s', ls='', label="Category 4")
             categories_legend.append(four)
 
         if (5 in category):
-            five = mlines.Line2D([], [], color=category_color[5], marker='s', ls='', label="Category 5")
+            five = mlines.Line2D(
+                [], [], color=category_color[5], marker='s', ls='', label="Category 5")
             categories_legend.append(five)
 
         plt.legend(handles=categories_legend, loc=legend_loc)
-    
+
     # if bounds is not None:
     #     plotitem.pcolor_cmin = bounds[0]
     #     plotitem.pcolor_cmax = bounds[1]
 
     return axes
-
-
 
     # if plot_type == 'pcolor' or plot_type == 'imshow':
     #     plotitem = plotaxes.new_plotitem(name='wind', plot_type='2d_pcolor')

@@ -153,8 +153,7 @@ contains
                     write(GEO_PARM_UNIT,*) '   ',topofname(i)
                     write(GEO_PARM_UNIT,*) '  itopotype = ', itopotype(i)
                     if (abs(itopotype(i)) == 1) then
-                        print *, 'WARNING: topotype 1 has been deprecated'
-                        print *, 'converting to topotype > 1 is encouraged'
+                        print *, 'converting to topotype > 1 might reduce file size'
                         print *, 'python tools for converting files are provided'
                     endif
                     call read_topo_header(topofname(i),itopotype(i),mxtopo(i), &
@@ -440,7 +439,7 @@ contains
         integer(kind=8) :: i, j, mtot
 
         ! NetCDF Support
-        character(len=10) :: direction, x_dim_name, x_var_name, y_dim_name, &
+        character(len=64) :: direction, x_dim_name, x_var_name, y_dim_name, &
             y_var_name, z_var_name, var_name
         ! character(len=1) :: axis_string
         real(kind=8), allocatable :: nc_buffer(:, :), xlocs(:), ylocs(:)
@@ -745,8 +744,8 @@ contains
         logical, allocatable :: x_in_dom(:),y_in_dom(:)
         integer(kind=4) :: dim_ids(2), num_dims, var_type, num_vars, num_dims_tot
         integer(kind=4), allocatable :: var_ids(:)
-        character(len=10) :: var_name, x_var_name, y_var_name, z_var_name
-        character(len=10) :: x_dim_name, y_dim_name
+        character(len=64) :: var_name, x_var_name, y_var_name, z_var_name
+        character(len=64) :: x_dim_name, y_dim_name
         integer(kind=4) :: x_var_id, y_var_id, z_var_id, x_dim_id, y_dim_id
 
         verbose = .false.

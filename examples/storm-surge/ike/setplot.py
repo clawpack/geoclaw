@@ -155,38 +155,23 @@ def setplot(plotdata=None):
     plotfigure.show = True
     plotfigure.clf_each_gauge = True
 
-    # Set up for axes in this figure:
     plotaxes = plotfigure.new_plotaxes()
-    plotaxes.xlimits = [-2, 1]
-    # plotaxes.xlabel = "Days from landfall"
-    # plotaxes.ylabel = "Surface (m)"
-    plotaxes.ylimits = [-1, 5]
-    plotaxes.title = 'Surface'
-
-    def gauge_afteraxes(cd):
-
-        axes = plt.gca()
-        surgeplot.plot_landfall_gauge(cd.gaugesoln, axes)
-
-        # Fix up plot - in particular fix time labels
-        axes.set_title('Station %s' % cd.gaugeno)
-        axes.set_xlabel('Days relative to landfall')
-        axes.set_ylabel('Surface (m)')
-        axes.set_xlim([-2, 1])
-        axes.set_ylim([-1, 5])
-        axes.set_xticks([-2, -1, 0, 1])
-        axes.set_xticklabels([r"$-2$", r"$-1$", r"$0$", r"$1$"])
-        axes.grid(True)
-    plotaxes.afteraxes = gauge_afteraxes
-
-    # Plot surface as blue curve:
+    plotaxes.time_scale = 1 / (24 * 60**2)
+    plotaxes.grid = True
+    plotaxes.xlimits = 'auto'
+    plotaxes.ylimits = 'auto'
+    plotaxes.title = "Surface"
+    plotaxes.ylabel = "Surface (m)"
+    plotaxes.time_label = "Days relative to landfall"
+    
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    # plotitem.plot_var = 3
-    # plotitem.plotstyle = 'b-'
-
-    #
+    plotitem.plot_var = surgeplot.gauge_surface
+    # Plot red area if gauge is dry
+    plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
+    plotitem.plot_var = surgeplot.gauge_dry_regions
+    plotitem.kwargs = {"color":'lightcoral', "linewidth":5}
+    
     #  Gauge Location Plot
-    #
     def gauge_location_afteraxes(cd):
         plt.subplots_adjust(left=0.12, bottom=0.06, right=0.97, top=0.97)
         surge_afteraxes(cd)

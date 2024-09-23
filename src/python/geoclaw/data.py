@@ -9,13 +9,14 @@ Classes representing parameters for GeoClaw runs
  - GeoClawData
  - RefinementData
  - TopographyData
- - FixedGridData
+ - FGoutData
  - FGmaxData
  - DTopoData
  - QinitData
  - SurgeData
  - MultilayerData
  - FrictionData 
+ - BoussData
  - GridData1D
  - BoussData1D
 
@@ -60,7 +61,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('ambient_pressure', 101.3e3) # Nominal atmos pressure
         self.add_attribute('earth_radius',Rearth)
         self.add_attribute('coordinate_system',1)
-        self.add_attribute('sphere_source',0)  # should set to 1 by default?
+        self.add_attribute('sphere_source',1)  # New starting in v5.10.0
         self.add_attribute('coriolis_forcing',True)
         self.add_attribute('theta_0',45.0)
         self.add_attribute('friction_forcing',True)
@@ -545,17 +546,19 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                                'SLOSH': 4,
                                'rankine': 5,
                                'modified-rankine': 6,
-                               'DeMaria': 7
+                               'DeMaria': 7,
+                               'willoughby': 9,
                               }
-    storm_spec_not_implemented = ['CLE']
+    storm_spec_not_implemented = ['CLE', 'willoughby']
 
     def __init__(self):
-        super(SurgeData,self).__init__()
+        super(SurgeData, self).__init__()
 
         # Source term controls
-        self.add_attribute('wind_forcing',False)
-        self.add_attribute('drag_law',1)
-        self.add_attribute('pressure_forcing',False)
+        self.add_attribute('wind_forcing', False)
+        self.add_attribute('drag_law', 1)
+        self.add_attribute('pressure_forcing', False)
+        self.add_attribute('rotation_override', 0)
 
         # Algorithm parameters - Indexing is python based
         self.add_attribute("wind_index", 4)
@@ -563,8 +566,8 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("display_landfall_time", False)
 
         # AMR parameters
-        self.add_attribute('wind_refine',[20.0,40.0,60.0])
-        self.add_attribute('R_refine',[60.0e3,40e3,20e3])
+        self.add_attribute('wind_refine', [20.0,40.0,60.0])
+        self.add_attribute('R_refine', [60.0e3,40e3,20e3])
 
         # Storm parameters
         self.add_attribute('storm_type', None)  # Backwards compatibility
@@ -572,7 +575,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("storm_file", None) # File(s) containing data
 
 
-    def write(self,out_file='surge.data',data_source="setrun.py"):
+    def write(self, out_file='surge.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
 
         # print "Creating data file %s" % out_file
@@ -582,6 +585,19 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.data_write('drag_law', description='(Type of drag law to use)')
         self.data_write('pressure_forcing',
                         description="(Pressure source term used)")
+        if isinstance(self.rotation_override, str):
+            if self.rotation_override.lower() == "normal":
+                self.rotation_override = 0
+            elif "n" in self.rotation_override.lower():
+                self.rotation_override = 1
+            elif "s" in self.rotation_override.lower():
+                self.rotation_override = 2
+            else:
+                raise ValueError("Unknown rotation_override specification.")
+        else:
+            self.rotation_override = int(self.rotation_override)
+        self.data_write('rotation_override', 
+                        description="(Override storm rotation)")
         self.data_write()
 
         self.data_write("wind_index", value=self.wind_index + 1,
@@ -747,6 +763,40 @@ class MultilayerData(clawpack.clawutil.data.ClawData):
 
 
 
+class BoussData(clawpack.clawutil.data.ClawData):
+    r"""
+     data object for Boussinesq info in 2D geoclaw
+
+    """
+    def __init__(self):
+        super(BoussData,self).__init__()
+
+        self.add_attribute('bouss_equations',2)
+        self.add_attribute('bouss_min_level', 1)
+        self.add_attribute('bouss_max_level', 10)
+        self.add_attribute('bouss_min_depth', 10.)
+        self.add_attribute('bouss_solver', 3)
+        self.add_attribute('bouss_tstart', 0.)
+
+    def write(self,out_file='bouss.data',data_source='setrun.py'):
+
+        self.open_data_file(out_file,data_source)
+        self.data_write('bouss_equations', description='0=SWE, 1=MS, 2=SGN')
+        self.data_write('bouss_min_level',
+                        description='coarsest level to apply bouss')
+        self.data_write('bouss_max_level',
+                        description='finest level to apply bouss')
+        self.data_write('bouss_min_depth',
+                        description='depth to switch to SWE')
+        self.data_write('bouss_solver', description='1=GMRES, 2=Pardiso, 3=PETSc')
+        self.data_write('bouss_tstart', description='time to switch from SWE')
+
+        self.close_data_file()
+
+
+# ==================================
+# data objects for 1d_classic code
+# ==================================
 
 
 #  Gauge data object removed, version from amrclaw works in 1d
