@@ -341,9 +341,12 @@ class FGoutGrid(object):
         # Note output_format will be reset by read_fgout_grids_data:
         self.output_format = output_format
 
-        self.q_out_vars = [1,2,3,4]  # list of which components to print
-                                          # default: h,hu,hv,eta (5=topo)
-        self.nqout = None # number of vars to print out
+        # list of which components to print:
+        try:
+            # default: h,hu,hv,eta as in previous versions of GeoClaw
+            self.q_out_vars = [1,2,3,self.qmap['eta']]
+        except:
+            self.q_out_vars = [1,2,3]  # if qmap['eta'] not defined
 
         self.drytol = 1e-3          # used for computing u,v from hu,hv
 
