@@ -47,6 +47,28 @@ module data_storm_module
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
 
 contains
+    ! ==========================================================================
+    !  set_storm(storm_data_path, storm, storm_spec_type, log_unit)
+    !    Initializes the storm type for an Oceanweather, Inc type data derived 
+    !    storm and calls subroutines based on input filetype ie (nc or ascii)
+    ! ==========================================================================
+    subroutine set_storm(storm_data_path, storm, storm_spec_type, log_unit)
+        implicit none
+        character(len=*), optional :: storm_data_path
+        type(data_storm_type), intent(inout) :: storm
+        integer, intent(in) :: storm_spec_type, log_unit
+
+        if (-3 <= storm_spec_type .and. storm_spec_type < 0) then
+            select case(storm_spec_type)
+            case(-2) ! netcdf
+                call set_netcdf_storm(storm_data_path, storm, storm_spec_type, &
+                                  log_unit)
+            case(-3) ! ascii fixed width
+                call set_data_storm(storm_data_path, storm, storm_spec_type, &
+                                    log_unit)
+            end select
+        end if
+    end subroutine set_storm
 
     ! ==========================================================================
     !  set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
