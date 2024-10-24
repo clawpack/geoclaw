@@ -38,7 +38,6 @@ module data_storm_module
         ! Time steps from wind/pressure files in seconds
         integer, allocatable :: time(:)
 
-
     end type data_storm_type
 
     integer, private :: last_storm_index
@@ -50,7 +49,7 @@ module data_storm_module
 contains
 
     ! Setup routine for data type storms
-    subroutine set_storm(storm_data_path, storm, storm_spec_type, log_unit)
+    subroutine set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
         use netcdf
         use amr_module, only: t0, rinfinity
         implicit none
@@ -152,7 +151,7 @@ contains
 
             module_setup = .true.
         end if
-    end subroutine set_storm
+    end subroutine set_netcdf_storm
 
 
     ! ==========================================================================
