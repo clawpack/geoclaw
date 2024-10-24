@@ -360,7 +360,7 @@ contains
         ! Read second header from file
         read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,' & 
                     't69, i4,i2,i2,i2, i2)') &
-             ilat, ilon, dx, dy, swlat, swlon, yr, mo, da, hr, minute
+             my, mx, dx, dy, swlat, swlon, yr, mo, da, hr, minute
         close(iunit)
 
     end subroutine read_headers       
@@ -391,11 +391,11 @@ contains
         read(iunit, *) 
         read(iunit, *)
         ! Skip the wind velocity matrices first u then v
-        do i = 1, (ilon * ilat / 8)
+        do i = 1, (mx * my / 8)
             read(iunit, *) ! Skip first matrix
         end do
         read(iunit, *) ! Skip line separating matrices
-        do j = 1, (ilon * ilat / 8)
+        do j = 1, (mx * my / 8)
             read(iunit, *) ! Skip second matrix
         end do
         read (iunit, *) ! Skip line after 2nd matrix
@@ -445,22 +445,22 @@ contains
                 + (da * ((60**2)*24)) + (hr * (60*60)) + (min * 60)) - start_time
             storm%time(n) = current_timestep
             
-            read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,ilon),j=1,ilat)
-            read(wunit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,ilon),j=1,ilat)
+            read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
+            read(wunit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,mx),j=1,my)
             
         end do
         
         do n = 1, num_casts
             read(punit, *) ! Skip header line since we have it from above
-            read(punit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,ilon),j=1,ilat)
+            read(punit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,mx),j=1,my)
             ! Multiply each pressure value by 100 to convert from Pa to hPa
             storm%pressure(:,:,n) = storm%pressure(:,:,n) * 100.0
         end do
         
-        do i = 1, ilat
+        do i = 1, my
             storm%latitude(i) = swlat + i * dy
         end do
-        do j = 1, ilon
+        do j = 1, mx
             storm%longitude(j) = swlon + j * dx
         end do
         
