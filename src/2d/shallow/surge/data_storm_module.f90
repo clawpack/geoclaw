@@ -48,7 +48,11 @@ module data_storm_module
 
 contains
 
-    ! Setup routine for data type storms
+    ! ==========================================================================
+    !  set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
+    !    Initializes the storm type for an Oceanweather, Inc type data derived 
+    !    storm that is saved as a netcdf format
+    ! ==========================================================================
     subroutine set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
         use netcdf
         use amr_module, only: t0, rinfinity
@@ -153,6 +157,89 @@ contains
         end if
     end subroutine set_netcdf_storm
 
+    ! ==========================================================================
+    !  set_data_storm(storm_data_path, storm, storm_spec_type, log_unit)
+    !    Initializes the storm type for an Oceanweather, Inc type data derived 
+    !    storm that is saved as a fixed width fortran format
+    ! ==========================================================================
+    subroutine set_data_storm(storm_data_path, storm, storm_spec_type, log_unit)
+        use amr_module, only: t0, rinfinity
+        implicit none
+
+        ! Subroutine I/O
+        character(len=*), optional :: storm_data_path
+        character(len=(len(storm_data_path(1)))) :: WIND_FILE, PRESSURE_FILE
+        type(data_storm_type), intent(inout) :: storm
+        integer, intent(in) :: storm_spec_type, log_unit
+
+        ! Local Storage
+        ! Set up for dimension info, dims are lat/lon/time
+        integer :: start_time, end_time, mt
+        integer :: mx, my, yr, mo, da, hr, minute
+        real(kind=8) :: swlat, swlon, dx, dy
+        real(kind=8), allocatable :: uu(:,:,:), vv(:,:,:), speed(:,:,:)
+        real(kind=8), allocatable :: pressure(:,:,:), lat(:), lon(:), time(:)
+        integer :: wunit=7, punit=8
+        WIND_FILE = storm_data_path(1)
+        PRESSURE_FILE = storm_data_path(2)
+
+        ! Set up for variable info, variables are pressure, lat, lon, time
+        integer :: nvars, var_type, var_id
+        character (len=13) :: var_name
+
+        if (.not. module_setup) then
+
+            ! Open data file
+            print *, 'Reading storm data file ', storm_data_path
+
+            ! Load headers for setting up the rest of the data
+            call read_headers(WIND_FILE, start_time, end_time, my, mx, swlat, &
+                              swlon, dx, dy, yr, mo, da, hr, minute)
+
+            ! Determine array sizes from the file
+            call get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
+                                 my, mx, start_time, end_time)
+            
+            ! allocate arrays in storm object
+            allocate(storm%pressure(mx, my, mt))
+            allocate(storm%wind_u(mx, my, mt))
+            allocate(storm%wind_v(mx, my, mt))
+            allocate(storm%longitude(mx))
+            allocate(storm%latitude(my))
+            allocate(storm%time(mt))
+            ! Set up lat/lon lengths in storm object for use in linear interpolation of time
+            storm%mx = mx
+            storm%my = my
+
+            ! Number of time steps in data
+            storm%num_casts = mt
+
+            ! Fill out variable data/info
+            call fill_data_arrays(WIND_FILE, PRESSURE_FILE, start_time, mt, &
+                                  my, mx, swlat, swlon, dx, dy, storm)
+        end if
+
+        ! Make sure first time step in setrun is inside the times in the data
+        if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
+            print *, 'Start time', t0, " is outside of the tracking"
+            print *, 'tolerance range with the track start'
+            print *, storm%time(1), '.'
+            stop
+        end if
+
+        last_storm_index = 2
+        last_storm_index = storm_index(t0, storm)
+        if (last_storm_index == -1) then
+            print *, 'Forecast not found for time ', t0, '.'
+            stop
+        end if
+
+        ! Write out a surge file after discussing the data with kyle
+        if (.not. module_setup) then
+
+            module_setup = .true.
+        end if
+    end subroutine set_data_storm
 
     ! ==========================================================================
     !  storm_location(t,storm)
@@ -215,6 +302,147 @@ contains
         stop "HWRF data input is not yet implemented!"
 
     end subroutine set_HWRF_fields
+
+    ! ==========================================================================
+    ! read_headers() Opens fixed width format file and reads the header
+    ! for use in parsing the data structure
+    ! ==========================================================================
+    subroutine read_headers(WIND_FILE, start_time, end_time, my, mx, &
+                            swlat, swlon, dx, dy, yr, mo, da, hr, minute)
+        implicit none
+        character(len=*), intent(in) :: WIND_FILE
+
+        ! Output arguments, time in seconds
+        integer, intent(out) :: start_time, end_time, my, mx
+        integer, intent(out) :: yr, mo, da, hr, minute
+        real(kind=8), intent(out) :: swlat, swlon, dx, dy
+
+        ! Local Storage
+        integer, parameter :: iunit=9
+        integer :: start_yr, start_mo, start_da, start_hr, start_min
+        integer :: end_yr, end_mo, end_da, end_hr, end_min
+
+        ! Read in start and end dates of file from first header line
+        open(iunit, file=WIND_FILE, status='old', action='read')
+        read(iunit, "(t56, i4, i2, i2, i2, t71, i4, i2, i2, i2)") &
+                    start_yr, start_mo, start_da, start_hr, end_yr, end_mo, &
+                    end_da, end_hr
+
+                    start_time = (start_yr * ((60**2)*24*365) + (start_mo * &
+                    ((60**2)*24*30)) + (start_da * ((60**2)*24)) &
+                    + (start_hr * (60**2)))
+
+        end_time = ((end_yr * ((60**2)*24*365) + (end_mo * ((60**2)*24*30)) &
+                    + (end_da * ((60**2)*24)) + (end_hr) * (60**2)))
+        
+        ! Read second header from file
+        read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,' & 
+                    't69, i4,i2,i2,i2, i2)') &
+             ilat, ilon, dx, dy, swlat, swlon, yr, mo, da, hr, minute
+        close(iunit)
+
+    end subroutine read_headers       
+    
+    ! ==========================================================================
+    ! get_array_sizes() Reads the 2nd header data from the datafile and 
+    ! saves the array sizes for allocation inside the data_storm_type
+    ! ==========================================================================
+    subroutine get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
+                               my, mx, start_time, end_time)
+        implicit none
+        ! Input arguments
+        integer, intent(in) :: yr, mo, da, hr, minute
+        integer, intent(in) :: my, mx, start_time, end_time
+        character(len=*), intent(in) :: WIND_FILE
+
+        ! Output argument
+        integer(kind=8), intent(out) :: mt
+
+        ! Local storage
+        integer :: iunit = 8
+        integer :: yr2, mo2, da2, hr2, min2
+        integer :: total_time, time1, time2, i, j, dt
+        
+        open(iunit, file=WIND_FILE, status='old', action='read')
+        
+        ! Read time data from first two headers/timestep
+        read(iunit, *) 
+        read(iunit, *)
+        ! Skip the wind velocity matrices first u then v
+        do i = 1, (ilon * ilat / 8)
+            read(iunit, *) ! Skip first matrix
+        end do
+        read(iunit, *) ! Skip line separating matrices
+        do j = 1, (ilon * ilat / 8)
+            read(iunit, *) ! Skip second matrix
+        end do
+        read (iunit, *) ! Skip line after 2nd matrix
+      
+        ! Read time data from second header/timestep
+
+        read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, min2
+        close(iunit)
+        total_time =  end_time - start_time
+        time2 = (yr2 * (60*60*24*365) + ( mo2 * (60*60*24*30)) + (da2 * (60*60*24)) &
+                    + (hr2 * (60*60)) + (min2 * 60))
+        time1 = (yr * (60*60*24*365) + (mo * (60*60*24*30)) + (da * (60*60*24)) &
+                    + (hr * (60*60)) + (min * 60))
+        dt = time2 - time1 ! Time change in seconds
+        num_casts = (total_time/dt) + 1 ! total number of timesteps
+    end subroutine get_array_sizes
+    
+    ! ==========================================================================
+    ! fill_data_arrays() reads the data files and fills out the storm object
+    ! and it's dataarrays
+    ! ==========================================================================
+    subroutine fill_data_arrays(WIND_FILE, PRESSURE_FILE, start_time, mt, my, &
+                                mx, swlat, swlon, dx, dy, storm)
+        ! Read in the data file and parse the arrays to be passed to other calculations
+        implicit none
+        ! Input arguments
+        type(data_storm_type) :: storm
+        character(len=*), intent(in) :: WIND_FILE, PRESSURE_FILE
+        integer(kind=8), intent(in) :: mt, my, mx, start_time
+        real(kind=8), intent(in) :: swlat, swlon, dx, dy
+        
+        ! Local storage
+        integer :: num_lat, num_lon, i, j, n, current_timestep
+        integer :: yr, mo, da, hr, min
+        integer :: wunit = 7, punit = 8
+        open(wunit, file=WIND_FILE, status='old', action='read')
+        open(punit, file=PRESSURE_FILE, status='old', action='read')
+        ! Skip file headers
+        read(wunit, *)
+        read(punit, *)
+        allocate(storm%time(mt))
+        do n = 1, num_casts
+            
+            read(wunit, '(t69, i4,i2,i2,i2, i2)') yr, mo, da, hr, min
+            
+            current_timestep = (yr * ((60**2)*24*365) + ( mo * ((60**2)*24*30)) &
+                + (da * ((60**2)*24)) + (hr * (60*60)) + (min * 60)) - start_time
+            storm%time(n) = current_timestep
+            
+            read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,ilon),j=1,ilat)
+            read(wunit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,ilon),j=1,ilat)
+            
+        end do
+        
+        do n = 1, num_casts
+            read(punit, *) ! Skip header line since we have it from above
+            read(punit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,ilon),j=1,ilat)
+            ! Multiply each pressure value by 100 to convert from Pa to hPa
+            storm%pressure(:,:,n) = storm%pressure(:,:,n) * 100.0
+        end do
+        
+        do i = 1, ilat
+            storm%latitude(i) = swlat + i * dy
+        end do
+        do j = 1, ilon
+            storm%longitude(j) = swlon + j * dx
+        end do
+        
+    end subroutine fill_data_arrays
 
     ! ==========================================================================
     ! get_dim_info() pulls dim names and lengths from the nc file
