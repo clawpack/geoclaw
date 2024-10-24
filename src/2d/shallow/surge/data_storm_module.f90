@@ -408,9 +408,9 @@ contains
         time2 = (yr2 * (60*60*24*365) + ( mo2 * (60*60*24*30)) + (da2 * (60*60*24)) &
                     + (hr2 * (60*60)) + (min2 * 60))
         time1 = (yr * (60*60*24*365) + (mo * (60*60*24*30)) + (da * (60*60*24)) &
-                    + (hr * (60*60)) + (min * 60))
+                    + (hr * (60*60)) + (minute * 60))
         dt = time2 - time1 ! Time change in seconds
-        num_casts = (total_time/dt) + 1 ! total number of timesteps
+        mt = (total_time/dt) + 1 ! total number of timesteps
     end subroutine get_array_sizes
     
     ! ==========================================================================
@@ -429,7 +429,7 @@ contains
         
         ! Local storage
         integer :: num_lat, num_lon, i, j, n, current_timestep
-        integer :: yr, mo, da, hr, min
+        integer :: yr, mo, da, hr, minute
         integer :: wunit = 7, punit = 8
         open(wunit, file=WIND_FILE, status='old', action='read')
         open(punit, file=PRESSURE_FILE, status='old', action='read')
@@ -437,12 +437,12 @@ contains
         read(wunit, *)
         read(punit, *)
         allocate(storm%time(mt))
-        do n = 1, num_casts
+        do n = 1, mt
             
-            read(wunit, '(t69, i4,i2,i2,i2, i2)') yr, mo, da, hr, min
+            read(wunit, '(t69, i4,i2,i2,i2, i2)') yr, mo, da, hr, minute
             
             current_timestep = (yr * ((60**2)*24*365) + ( mo * ((60**2)*24*30)) &
-                + (da * ((60**2)*24)) + (hr * (60*60)) + (min * 60)) - start_time
+                + (da * ((60**2)*24)) + (hr * (60*60)) + (minute * 60)) - start_time
             storm%time(n) = current_timestep
             
             read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
@@ -450,7 +450,7 @@ contains
             
         end do
         
-        do n = 1, num_casts
+        do n = 1, mt
             read(punit, *) ! Skip header line since we have it from above
             read(punit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,mx),j=1,my)
             ! Multiply each pressure value by 100 to convert from Pa to hPa
