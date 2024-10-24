@@ -35,13 +35,9 @@ module data_storm_module
         ! Wind field latitude/longitude arrays
         real(kind=8), allocatable :: latitude(:)
         real(kind=8), allocatable :: longitude(:)
-        real(kind=8), allocatable :: radius(:)
-        real(kind=8), allocatable :: mwr(:)
         ! Time steps from wind/pressure files in seconds
         integer, allocatable :: time(:)
 
-        ! eye location based on gradient of velocity field in lon/lat
-        real(kind=8), allocatable :: eye_loc(:,:)
 
     end type data_storm_type
 
