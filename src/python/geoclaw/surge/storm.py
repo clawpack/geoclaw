@@ -1164,14 +1164,33 @@ class Storm(object):
     # ================
     #  Track Plotting
     # ================
-    def plot(self, ax, radius=None, t_range=None, coordinate_system=2, track_style='ko--',
-             categorization="NHC", fill_alpha=0.25, fill_color='red'):
-        """TO DO:  Write doc-string"""
+    def plot(self, ax, t_range=None, categorization=None,
+                       cat_colors={}, plot_swath=False, radius=None, 
+                       coordinate_system=2, fill_alpha=0.25, fill_color='red',
+                       **kwargs):
+        """Plot this storm's track in the given axes object
+
+        :Input:
+         - *ax* (matplotlib.pyplot.axes) Axes to plot into.
+         - *t_range* (list) Time range to plot the track for.  If None then use
+            entire range.  Default is None.
+         - *categorization* (str) Type of categorization to be used.  This is 
+            used to map to the keys in the cat_colors dictionary.  Default is 
+            None and will cause no categorization to occur.
+         - *cat_colors* (dict) Color mapping between numeric categorization and
+            colors to be plotted for the track.
+         - *plot_swath* (bool) Plot a swath around the track using one of the 
+            methods determined by what radius information is provided.  Default 
+            is False.
+         - *radius* (None or float or numpy.ndarray)
+         - *coordinate_system* (int)
+         - *fill_alpha* (float)
+         - *fill_color* (color)
+         - *kwargs* All additional keyword arguments are passed to the plotting
+            command for the track.
+        """
 
         import matplotlib.pyplot as plt
-
-        if isinstance(track_style, str):
-            style = track_style
 
         # Extract information for plotting the track/swath
         t = self.t
@@ -1184,84 +1203,86 @@ class Storm(object):
             t = t.compressed()
 
         # Plot track
-        if isinstance(track_style, str):
+        if categorization is None:
             # Plot the track as a simple line with the given style
-            ax.plot(x, y, track_style)
-        elif isinstance(track_style, dict):
+            ax.plot(x, y, **kwargs)
+        else:
             if self.max_wind_speed is None:
                 raise ValueError("Maximum wind speed not available so "
                                  "plotting catgories is not available.")
 
             # Plot the track using the colors provided in the dictionary
-            cat_color_defaults = {5: 'red', 4: 'yellow', 3: 'orange', 2: 'green',
-                                  1: 'blue', 0: 'gray', -1: 'lightgray'}
-            colors = [track_style.get(category, cat_color_defaults[category])
+            cat_color_defaults = {5: 'red', 4: 'yellow', 3: 'orange', 
+                                  2: 'green', 1: 'blue', 0: 'gray', 
+                                  -1: 'lightgray'}
+            colors = [cat_colors.get(category, cat_color_defaults[category])
                       for category in self.category(categorization=categorization)]
+            # Remove color from kwargs if they were given
+            kwargs.pop('color', None)
             for i in range(t.shape[0] - 1):
-                ax.plot(x[i:i+2], y[i:i+2], color=colors[i], marker="o")
-
-        else:
-            raise ValueError("The `track_style` should be a string or dict.")
+                ax.plot(x[i:i+2], y[i:i+2], color=colors[i], **kwargs)
 
         # Plot swath
-        if (isinstance(radius, float) or isinstance(radius, np.ndarray)
-                or radius is None):
+        if plot_swath:
+            if (isinstance(radius, float) or isinstance(radius, np.ndarray)
+                    or radius is None):
 
-            if radius is None:
-                # Default behavior
-                if self.storm_radius is None:
-                    raise ValueError("Cannot use storm radius for plotting "
-                                     "the swath as the data is not available.")
+                if radius is None:
+                    # Default behavior
+                    if self.storm_radius is None:
+                        raise ValueError("Cannot use storm radius for plotting "
+                                         "the swath as the data is not available.")
+                    else:
+                        if coordinate_system == 1:
+                            _radius = self.storm_radius
+                        elif coordinate_system == 2:
+                            _radius = units.convert(self.storm_radius,
+                                                    'm', 'lat-long')
+                        else:
+                            raise ValueError(f"Unknown coordinate system "
+                                             f"{coordinate_system} provided.")
+
+                elif isinstance(radius, float):
+                    # Only one value for the radius was given, replicate
+                    _radius = np.ones(self.t.shape) * radius
+                elif isinstance(radius, np.ndarray):
+                    # The array passed is the array to use
+                    _radius = radius
                 else:
-                    if coordinate_system == 1:
-                        _radius = self.storm_radius
-                    elif coordinate_system == 2:
-                        _radius = units.convert(self.storm_radius,
-                                                'm', 'lat-long')
-                    else:
-                        raise ValueError(f"Unknown coordinate system "
-                                         f"{coordinate_system} provided.")
+                    raise ValueError("Invalid input argument for radius.  Should "
+                                     "be a float or None")
 
-            elif isinstance(radius, float):
-                # Only one value for the radius was given, replicate
-                _radius = np.ones(self.t.shape) * radius
-            elif isinstance(radius, np.ndarray):
-                # The array passed is the array to use
-                _radius = radius
-            else:
-                raise ValueError("Invalid input argument for radius.  Should "
-                                 "be a float or None")
+                # Draw first and last points
+                ax.add_patch(plt.Circle(
+                    (x[0], y[0]), _radius[0], color=fill_color))
+                if t.shape[0] > 1:
+                    ax.add_patch(plt.Circle((x[-1], y[-1]), _radius[-1],
+                                            color=fill_color))
 
-            # Draw first and last points
-            ax.add_patch(plt.Circle(
-                (x[0], y[0]), _radius[0], color=fill_color))
-            if t.shape[0] > 1:
-                ax.add_patch(plt.Circle((x[-1], y[-1]), _radius[-1],
-                                        color=fill_color))
+                # Draw path around inner points
+                if t.shape[0] > 2:
+                    for i in range(t.shape[0] - 1):
+                        p = np.array([(x[i], y[i]), (x[i + 1], y[i + 1])])
+                        v = p[1] - p[0]
+                        if abs(v[1]) > 1e-16:
+                            n = np.array([1, -v[0] / v[1]], dtype=float)
+                        elif abs(v[0]) > 1e-16:
+                            n = np.array([-v[1] / v[0], 1], dtype=float)
+                        else:
+                            continue
+                            # raise Exception("Zero-vector given")
+                        n /= np.linalg.norm(n)
+                        n *= _radius[i]
 
-            # Draw path around inner points
-            if t.shape[0] > 2:
-                for i in range(t.shape[0] - 1):
-                    p = np.array([(x[i], y[i]), (x[i + 1], y[i + 1])])
-                    v = p[1] - p[0]
-                    if abs(v[1]) > 1e-16:
-                        n = np.array([1, -v[0] / v[1]], dtype=float)
-                    elif abs(v[0]) > 1e-16:
-                        n = np.array([-v[1] / v[0], 1], dtype=float)
-                    else:
-                        raise Exception("Zero-vector given")
-                    n /= np.linalg.norm(n)
-                    n *= _radius[i]
-
-                    ax.fill((p[0, 0] + n[0], p[0, 0] - n[0],
-                             p[1, 0] - n[0],
-                             p[1, 0] + n[0]),
-                            (p[0, 1] + n[1], p[0, 1] - n[1],
-                             p[1, 1] - n[1],
-                             p[1, 1] + n[1]),
-                            facecolor=fill_color, alpha=fill_alpha)
-                    ax.add_patch(plt.Circle((p[1][0], p[1, 1]), _radius[i],
-                                            color=fill_color, alpha=fill_alpha))
+                        ax.fill((p[0, 0] + n[0], p[0, 0] - n[0],
+                                 p[1, 0] - n[0],
+                                 p[1, 0] + n[0]),
+                                (p[0, 1] + n[1], p[0, 1] - n[1],
+                                 p[1, 1] - n[1],
+                                 p[1, 1] + n[1]),
+                                facecolor=fill_color, alpha=fill_alpha)
+                        ax.add_patch(plt.Circle((p[1][0], p[1, 1]), _radius[i],
+                                                color=fill_color, alpha=fill_alpha))
 
     # =========================================================================
     # Other Useful Routines
