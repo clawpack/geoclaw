@@ -129,6 +129,9 @@ contains
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
         character(len=200) :: storm_file_path, line
+        ! For wind and pressure files
+        character(len=200) :: storm_file_path1, storm_file_path2
+        character(len=200) :: storm_files(2)
 
         if (.not.module_setup) then
 
@@ -194,7 +197,21 @@ contains
 
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
-            read(unit, *) storm_file_path
+            if (-3<storm_specification_type .and. storm_specification_type <0) then
+
+                select case(storm_specification_type)
+                case(-1)
+                    read(unit, *) storm_file_path
+                case(-2)
+                    read(unit, *) storm_file_path
+                case(-3)
+                    read(unit, *) storm_file_path1
+                    read(unit, *) storm_file_path2
+                    storm_files = (storm_file_path1, storm_file_path2)
+                end select
+            else 
+                read(unit, *) storm_file_path
+            end if
 
             close(unit)
 
@@ -244,13 +261,18 @@ contains
                 select case(storm_specification_type)
                     case(-1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
+                        call set_data_storm(storm_file_path, data_storm, &
+                                    storm_specification_type, log_unit)
                     case(-2) ! netcdf owi data
                         set_data_fields => set_owi_fields
+                        call set_data_storm(storm_file_path, data_storm, &
+                                    storm_specification_type, log_unit)
                     case(-3) ! fixed width owi data
                         set_data_fields => set_owi_fields
-                end select
-                call set_data_storm(storm_file_path, data_storm, &
+                        call set_data_storm(storm_files, data_storm, &
                                     storm_specification_type, log_unit)
+                end select
+                
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
                             storm_specification_type, "not available."

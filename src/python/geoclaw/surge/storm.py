@@ -29,7 +29,8 @@ workflow in a `setrun.py` file would do the following:
     - JMA (reading only)
     - IMD (planned)
     - tcvitals (reading only)
-    - OWI (data-derived)
+    - OWI_netcdf (data-derived)
+    - OWI_ascii (data-derived)
 """
 
 import warnings
