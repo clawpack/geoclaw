@@ -239,12 +239,14 @@ contains
             end if
 
             ! Storm will be set based on a gridded set of data
-            if (-2 <= storm_specification_type .and.                    &
+            if (-3 <= storm_specification_type .and.                    &
                       storm_specification_type < 0) then
                 select case(storm_specification_type)
                     case(-1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
-                    case(-2) ! owi data
+                    case(-2) ! netcdf owi data
+                        set_data_fields => set_owi_fields
+                    case(-3) ! fixed width owi data
                         set_data_fields => set_owi_fields
                 end select
                 call set_data_storm(storm_file_path, data_storm, &

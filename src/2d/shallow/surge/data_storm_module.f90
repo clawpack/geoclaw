@@ -189,7 +189,7 @@ contains
         implicit none
 
         ! Subroutine I/O
-        character(len=*), optional :: storm_data_path
+        character(len=*), intent(in), dimension(2) :: storm_data_path
         character(len=(len(storm_data_path(1)))) :: WIND_FILE, PRESSURE_FILE
         type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
@@ -199,15 +199,13 @@ contains
         integer :: start_time, end_time, mt
         integer :: mx, my, yr, mo, da, hr, minute
         real(kind=8) :: swlat, swlon, dx, dy
-        real(kind=8), allocatable :: uu(:,:,:), vv(:,:,:), speed(:,:,:)
-        real(kind=8), allocatable :: pressure(:,:,:), lat(:), lon(:), time(:)
         integer :: wunit=7, punit=8
-        WIND_FILE = storm_data_path(1)
-        PRESSURE_FILE = storm_data_path(2)
-
+        
         ! Set up for variable info, variables are pressure, lat, lon, time
         integer :: nvars, var_type, var_id
         character (len=13) :: var_name
+        WIND_FILE = storm_data_path(1)
+        PRESSURE_FILE = storm_data_path(2)
 
         if (.not. module_setup) then
 
@@ -358,8 +356,7 @@ contains
                     + (end_da * ((60**2)*24)) + (end_hr) * (60**2)))
         
         ! Read second header from file
-        read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,' & 
-                    't69, i4,i2,i2,i2, i2)') &
+        read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,t69, i4,i2,i2,i2, i2)') &
              my, mx, dx, dy, swlat, swlon, yr, mo, da, hr, minute
         close(iunit)
 
@@ -378,7 +375,7 @@ contains
         character(len=*), intent(in) :: WIND_FILE
 
         ! Output argument
-        integer(kind=8), intent(out) :: mt
+        integer, intent(out) :: mt
 
         ! Local storage
         integer :: iunit = 8
@@ -424,7 +421,7 @@ contains
         ! Input arguments
         type(data_storm_type) :: storm
         character(len=*), intent(in) :: WIND_FILE, PRESSURE_FILE
-        integer(kind=8), intent(in) :: mt, my, mx, start_time
+        integer, intent(in) :: mt, my, mx, start_time
         real(kind=8), intent(in) :: swlat, swlon, dx, dy
         
         ! Local storage

@@ -42,7 +42,6 @@ import numpy as np
 import pandas as pd
 
 import clawpack.geoclaw.units as units
-from clawpack.geoclaw.surge import data_storms
 
 # =============================================================================
 #  Common acronyms across formats
