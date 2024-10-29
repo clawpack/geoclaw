@@ -129,10 +129,7 @@ contains
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
         character(len=200) :: storm_file_path, line
-        ! For wind and pressure files
-        character(len=200) :: storm_file_path1, storm_file_path2
-        character(len=200), dimension(2) :: storm_files
-
+        
         if (.not.module_setup) then
 
             ! Open file
