@@ -13,6 +13,7 @@ output_format = 'binary'
 
 # Instantiate object for reading fgout frames:
 fgout_grid = fgout_tools.FGoutGrid(fgno, outdir, output_format)
+fgout_grid.read_fgout_grids_data()
 
 # Plot one frame of fgout data 
 fgframe = 20
