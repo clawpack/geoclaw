@@ -735,7 +735,6 @@ class Topography(object):
                         else:
                             if z_var is None:
                                 z_var = key
-
                     if x_var is None or y_var is None or z_var is None:
                         err_string = "".join(
                                       ("Could not automatically determine ",
@@ -746,11 +745,17 @@ class Topography(object):
                                        " the *nc_params* dictionary."))
                         raise IOError(err_string)
 
-
-                    self._x = nc_file.variables[x_var][::stride[0]]
-                    self._y = nc_file.variables[y_var][::stride[1]]
-                    self._Z = nc_file.variables[z_var][::stride[0], 
-                                                       ::stride[1]]
+                    try:
+                        self._x = nc_file.variables[x_var][::stride[0]]
+                        self._y = nc_file.variables[y_var][::stride[1]]
+                        self._Z = nc_file.variables[z_var][::stride[0], 
+                                                           ::stride[1]]
+                    except ValueError as e:
+                        print("Unable to read in variables.  Check variable mappings.")
+                        print(f"  x = '{x_var}'")
+                        print(f"  y = '{y_var}'")
+                        print(f"  z = '{z_var}'")
+                        raise e
 
                 if mask:
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
