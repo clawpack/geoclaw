@@ -1164,7 +1164,7 @@ class Storm(object):
     # ================
     #  Track Plotting
     # ================
-    def plot(self, ax, t_range=None, categorization=None,
+    def plot(self, ax, *args, t_range=None, categorization=None,
                        cat_colors={}, plot_swath=False, radius=None, 
                        coordinate_system=2, fill_alpha=0.25, fill_color='red',
                        **kwargs):
@@ -1205,7 +1205,7 @@ class Storm(object):
         # Plot track
         if categorization is None:
             # Plot the track as a simple line with the given style
-            ax.plot(x, y, **kwargs)
+            ax.plot(x, y, *args, **kwargs)
         else:
             if self.max_wind_speed is None:
                 raise ValueError("Maximum wind speed not available so "
