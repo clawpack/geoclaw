@@ -931,7 +931,7 @@ class Topography(object):
                 raise e
 
             data = gdal.Open(self.path)
-            # z = data.GetRasterBand(1).ReadAsArray()
+            z = data.GetRasterBand(1).ReadAsArray()
             transform = data.GetGeoTransform()
             x_origin = transform[0]
             y_origin = transform[3]
@@ -940,9 +940,9 @@ class Topography(object):
 
             # self._Z = numpy.flipud(z)
             self._x = numpy.linspace(x_origin, 
-                               x_origin + (z.shape[0] - 1) * dx, z.shape[0])
+                                x_origin + (z.shape[0] - 1) * dx, z.shape[0])
             self._y = numpy.linspace(y_origin - (z.shape[0] - 1) * dy, 
-                               y_origin, z.shape[1])
+                                y_origin, z.shape[1])
 
         else:
             raise IOError("Cannot read header for topo_type %s" % self.topo_type)
