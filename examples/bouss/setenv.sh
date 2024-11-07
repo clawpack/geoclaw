@@ -22,7 +22,7 @@ export PETSC_ARCH=arch-darwin-c-opt  # NEED TO FIX!
 
 # You may want to use a different version of petscMPIoptions
 # This setting uses the version in this directory:
-export PETSC_OPTIONS="-options_file $PWD/petscMPIoptions"
+export PETSC_OPTIONS="-options_file $CLAW/geoclaw/examples/bouss/petscMPIoptions"
 
 export OMP_NUM_THREADS=6
 export BOUSS_MPI_PROCS=6
@@ -38,4 +38,3 @@ export CLAW_MPIEXEC=mpiexec
 # e.g. mpif90 if that is defined in your shell, or gfortran *might* work.
 # This will over-rule any FC environment variable.
 export CLAW_MPIFC=mpif90
-
