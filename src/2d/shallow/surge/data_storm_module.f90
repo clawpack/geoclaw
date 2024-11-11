@@ -76,7 +76,9 @@ contains
     !    storm that is saved as a netcdf format
     ! ==========================================================================
     subroutine set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
-        use netcdf
+#ifdef NETCDF
+    use netcdf
+#endif
         use amr_module, only: t0, rinfinity
         implicit none
 
@@ -99,7 +101,7 @@ contains
 
         ! Netcdf file id and counter for looping
         integer :: nc_fid, n
-
+#ifdef NETCDF
         if (.not. module_setup) then
 
             ! Open data file
@@ -156,7 +158,7 @@ contains
         ! Close file to stop corrupting the netcdf files
         call check_netcdf_error(nf90_close(nc_fid))
         end if
-
+#endif
         ! Make sure first time step in setrun is inside the times in the data
         if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
             print *, 'Start time', t0, " is outside of the tracking"
@@ -189,36 +191,49 @@ contains
         implicit none
 
         ! Subroutine I/O
-        character(len=*), intent(in), dimension(2) :: storm_data_path
-        character(len=(len(storm_data_path(1)))) :: WIND_FILE, PRESSURE_FILE
+        character(len=*), intent(in) :: storm_data_path
+        character(len=(len(storm_data_path))) :: WIND_FILE, PRESSURE_FILE
         type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
 
         ! Local Storage
         ! Set up for dimension info, dims are lat/lon/time
-        integer :: start_time, end_time, mt
+        integer :: initial_time, mt
         integer :: mx, my, yr, mo, da, hr, minute
         real(kind=8) :: swlat, swlon, dx, dy
-        integer :: wunit=7, punit=8
-        
+        integer :: wunit=7, punit=8, ext_pos
+        character(len=3) :: wind_ext='WIN', pres_ext='PRE', file_ext
+        logical :: file_exists
         ! Set up for variable info, variables are pressure, lat, lon, time
         integer :: nvars, var_type, var_id
         character (len=13) :: var_name
-        WIND_FILE = storm_data_path(1)
-        PRESSURE_FILE = storm_data_path(2)
-
+        
         if (.not. module_setup) then
+            ext_pos = scan(trim(storm_data_path), ".", BACK=.true.)
+            file_ext = Upper(storm_data_path(ext_pos+1:len_trim(storm_data_path)))
+           
+            if (ANY((/'WIN', 'WND'/) == file_ext)) then
+                WIND_FILE = storm_data_path
+                PRESSURE_FILE = storm_data_path(1:ext_pos)//'PRE'
+            else if (file_ext == 'PRE') then
+                PRESSURE_FILE = storm_data_path
+                WIND_FILE = storm_data_path(1:ext_pos)//'WIN'
+                inquire(file=trim(WIND_FILE), exist=file_exists)
+                if (.NOT. file_exists) then
+                    WIND_FILE = storm_data_path(1:ext_pos)//'WND'
+                end if
+            end if
 
             ! Open data file
-            print *, 'Reading storm data file ', storm_data_path
+            print *, 'Reading storm data file ', storm_data_path, WIND_FILE, PRESSURE_FILE
 
             ! Load headers for setting up the rest of the data
-            call read_headers(WIND_FILE, start_time, end_time, my, mx, swlat, &
-                              swlon, dx, dy, yr, mo, da, hr, minute)
+            call initialize_storm_data(WIND_FILE, my, mx, mt, swlat, &
+                              swlon, dy, dx, initial_time)
 
-            ! Determine array sizes from the file
-            call get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
-                                 my, mx, start_time, end_time)
+            ! ! Determine array sizes from the file
+            ! call get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
+            !                      my, mx, total_time)
             
             ! allocate arrays in storm object
             allocate(storm%pressure(mx, my, mt))
@@ -235,8 +250,8 @@ contains
             storm%num_casts = mt
 
             ! Fill out variable data/info
-            call fill_data_arrays(WIND_FILE, PRESSURE_FILE, start_time, mt, &
-                                  my, mx, swlat, swlon, dx, dy, storm)
+            call fill_data_arrays(WIND_FILE, PRESSURE_FILE, my, mx, mt, swlat, swlon,&
+                                 dy, dx, storm, initial_time)
         end if
 
         ! Make sure first time step in setrun is inside the times in the data
@@ -327,125 +342,213 @@ contains
     ! read_headers() Opens fixed width format file and reads the header
     ! for use in parsing the data structure
     ! ==========================================================================
-    subroutine read_headers(WIND_FILE, start_time, end_time, my, mx, &
-                            swlat, swlon, dx, dy, yr, mo, da, hr, minute)
+    subroutine initialize_storm_data(WIND_FILE, my, mx, mt, swlat, swlon, dy, &
+                                     dx,  initial_time)
         implicit none
         character(len=*), intent(in) :: WIND_FILE
 
         ! Output arguments, time in seconds
-        integer, intent(out) :: start_time, end_time, my, mx
-        integer, intent(out) :: yr, mo, da, hr, minute
+        integer, intent(out) ::  my, mx, mt
         real(kind=8), intent(out) :: swlat, swlon, dx, dy
 
         ! Local Storage
         integer, parameter :: iunit=9
-        integer :: start_yr, start_mo, start_da, start_hr, start_min
+        integer :: start_yr, start_mo, start_da, start_hr, start_min, dt
         integer :: end_yr, end_mo, end_da, end_hr, end_min
+        integer :: yr1, mo1, da1, hr1, minute1, total_time, initial_time, final_time
+        integer :: yr2, mo2, da2, hr2, minute2, timestep2, timestep1
+        integer :: i, j
 
         ! Read in start and end dates of file from first header line
         open(iunit, file=WIND_FILE, status='old', action='read')
+       
         read(iunit, "(t56, i4, i2, i2, i2, t71, i4, i2, i2, i2)") &
                     start_yr, start_mo, start_da, start_hr, end_yr, end_mo, &
                     end_da, end_hr
-
-                    start_time = (start_yr * ((60**2)*24*365) + (start_mo * &
-                    ((60**2)*24*30)) + (start_da * ((60**2)*24)) &
-                    + (start_hr * (60**2)))
-
-        end_time = ((end_yr * ((60**2)*24*365) + (end_mo * ((60**2)*24*30)) &
-                    + (end_da * ((60**2)*24)) + (end_hr) * (60**2)))
+        initial_time = seconds_from_epoch(start_yr, start_mo, start_da, start_hr, 00)
+        final_time = seconds_from_epoch(end_yr, end_mo, end_da, end_hr, 00)
+        total_time = final_time - initial_time
         
-        ! Read second header from file
+        ! Read second header from file to obtain array sizes and first timestep
         read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,t69, i4,i2,i2,i2, i2)') &
-             my, mx, dx, dy, swlat, swlon, yr, mo, da, hr, minute
+             my, mx, dx, dy, swlat, swlon, yr1, mo1, da1, hr1, minute1
+
+        ! Skip the wind velocity matrices first u then v
+        print *, "Skipping first matrix (u)..."
+        do i = 1, (mx * my / 8)
+            read(iunit, *) ! Skip first matrix
+        end do
+        print *, "First matrix (u) skipped."
+        if (mod(mx * my,8) /= 0) then
+            print *, "Reading line after 1st matrix..."
+            read(iunit, *) 
+        else
+            print *, 'proceeding to reading the matrix'
+        end if
+        print *, "Skipping second matrix (v)..."
+        do j = 1, (mx * my / 8)
+            read(iunit, *) ! Skip second matrix
+        end do
+        print *, "Second matrix (v) skipped."
+        if (mod(mx * my,8) /= 0) then
+            print *, "Reading line after 2nd matrix..."
+            
+        else
+            print *, 'proceeding to reading the header'
+        end if
+        read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, minute2
         close(iunit)
 
-    end subroutine read_headers       
+        timestep1 = seconds_from_epoch(yr1, mo1, da1, hr1, minute1)
+        timestep2 = seconds_from_epoch(yr2, mo2, da2, hr2, minute2)
+
+        dt = timestep2 - timestep1
+        mt = (total_time/dt) + 1
+
+
+    end subroutine initialize_storm_data       
     
     ! ==========================================================================
     ! get_array_sizes() Reads the 2nd header data from the datafile and 
     ! saves the array sizes for allocation inside the data_storm_type
     ! ==========================================================================
-    subroutine get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
-                               my, mx, start_time, end_time)
-        implicit none
-        ! Input arguments
-        integer, intent(in) :: yr, mo, da, hr, minute
-        integer, intent(in) :: my, mx, start_time, end_time
-        character(len=*), intent(in) :: WIND_FILE
+    ! subroutine get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
+    !                            my, mx, total_time)
+    !     implicit none
+    !     ! Input arguments
+    !     integer, intent(in) :: yr, mo, da, hr, minute
+    !     integer, intent(in) :: my, mx, total_time
+    !     character(len=*), intent(in) :: WIND_FILE
 
-        ! Output argument
-        integer, intent(out) :: mt
+    !     ! Output argument
+    !     integer, intent(out) :: mt
 
-        ! Local storage
-        integer :: iunit = 8
-        integer :: yr2, mo2, da2, hr2, min2
-        integer :: total_time, time1, time2, i, j, dt
+    !     ! Local storage
+    !     integer :: iunit = 8
+    !     integer :: yr2, mo2, da2, hr2, min2
+    !     integer :: time1, time2, i, j, dt
+    !     integer, dimension(8) :: values
+
+    !     ! Error Handling
+    !     integer :: ios
+    !     character(len=100) :: line_after_2nd_matrix
+    !     open(iunit, file=WIND_FILE, status='old', action='read', iostat=ios)
+    !     if (ios /= 0) then
+    !         print *, "Error opening file:", ios
+    !         stop
+    !     end if
+    !     print *, "File opened successfully."
+
+    !     ! Read time data from first two headers/timestep
+    !     print *, "Reading first header..."
+    !     read(iunit, *) 
+    !     print *, "First header read."
+
+    !     print *, "Reading second header..."
+    !     read(iunit, *)
+    !     print *, "Second header read."
+
+    !     ! Skip the wind velocity matrices first u then v
+    !     print *, "Skipping first matrix (u)..."
+    !     do i = 1, (mx * my / 8)
+    !         read(iunit, *) ! Skip first matrix
+    !     end do
+    !     print *, "First matrix (u) skipped."
+    !     if (mod(mx * my,8) /= 0) then
+    !         print *, "Reading line after 1st matrix..."
+    !         read(iunit, *) 
+    !     else
+    !         print *, 'proceeding to reading the matrix'
+    !     end if
+    !     ! print *, "Reading line separating matrices..."
+    !     ! read(iunit, *) ! Skip line separating matrices
+    !     ! print *, "Line separating matrices read."
+
+    !     print *, "Skipping second matrix (v)..."
+    !     do j = 1, (mx * my / 8)
+    !         read(iunit, *) ! Skip second matrix
+    !     end do
+    !     print *, "Second matrix (v) skipped."
+    !     if (mod(mx * my,8) /= 0) then
+    !         print *, "Reading line after 2nd matrix..."
+    !         read(iunit, *) line_after_2nd_matrix
+    !         print *, "Line after 2nd matrix:", line_after_2nd_matrix
+    !     else
+    !         print *, 'proceeding to reading the header'
+    !     end if
+
+    !     ! Read time data from second header/timestep
+    !     print *, "ABOUT TO READ 1st HEADER"
+    !     ! read(iunit, *) line_after_2nd_matrix
+    !     read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, min2
+    !     ! print *, "Second header/timestep read: ", line_after_2nd_matrix
+    !     !++++++++++++ WHY NOT JUST CALCULATE THE NUMBER OF DAYS BETWEEN TIME STEPS AND THEN DIVIDE BY HOURS?????+++++++++++++++
+    !     close(iunit)
+    !     print *, "File closed."
+
+    !     ! open(iunit, file=WIND_FILE, status='old', action='read', iostat=ios)
         
-        open(iunit, file=WIND_FILE, status='old', action='read')
-        
-        ! Read time data from first two headers/timestep
-        read(iunit, *) 
-        read(iunit, *)
-        ! Skip the wind velocity matrices first u then v
-        do i = 1, (mx * my / 8)
-            read(iunit, *) ! Skip first matrix
-        end do
-        read(iunit, *) ! Skip line separating matrices
-        do j = 1, (mx * my / 8)
-            read(iunit, *) ! Skip second matrix
-        end do
-        read (iunit, *) ! Skip line after 2nd matrix
+    !     ! ! Read time data from first two headers/timestep
+    !     ! read(iunit, *) 
+    !     ! read(iunit, *)
+    !     ! ! Skip the wind velocity matrices first u then v
+    !     ! do i = 1, (mx * my / 8)
+    !     !     read(iunit, *) ! Skip first matrix
+    !     ! end do
+    !     ! read(iunit, *) ! Skip line separating matrices
+    !     ! do j = 1, (mx * my / 8)
+    !     !     read(iunit, *) ! Skip second matrix
+    !     ! end do
+    !     ! read (iunit, *) ! Skip line after 2nd matrix
       
-        ! Read time data from second header/timestep
+    !     ! ! Read time data from second header/timestep
+    !     !  print *, 'ABOUT TO READ 1st HEADER'
+    !     ! read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, min2
+    !     ! close(iunit)
+       
 
-        read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, min2
-        close(iunit)
-        total_time =  end_time - start_time
-        time2 = (yr2 * (60*60*24*365) + ( mo2 * (60*60*24*30)) + (da2 * (60*60*24)) &
-                    + (hr2 * (60*60)) + (min2 * 60))
-        time1 = (yr * (60*60*24*365) + (mo * (60*60*24*30)) + (da * (60*60*24)) &
-                    + (hr * (60*60)) + (minute * 60))
-        dt = time2 - time1 ! Time change in seconds
-        mt = (total_time/dt) + 1 ! total number of timesteps
-    end subroutine get_array_sizes
+    !     dt =  parse_dates(yr, mo, da, hr, minute, yr2, mo2, da2, hr2, min2)
+    !     print *, 'DT and TOTAL TIME', dt, total_time
+    !     mt = (total_time/dt) + 1 ! total number of timesteps
+    ! end subroutine get_array_sizes
     
     ! ==========================================================================
     ! fill_data_arrays() reads the data files and fills out the storm object
     ! and it's dataarrays
     ! ==========================================================================
-    subroutine fill_data_arrays(WIND_FILE, PRESSURE_FILE, start_time, mt, my, &
-                                mx, swlat, swlon, dx, dy, storm)
+    subroutine fill_data_arrays(WIND_FILE, PRESSURE_FILE, my, mx, mt, swlat, swlon,  &
+                                dy, dx, storm,  initial_time)
         ! Read in the data file and parse the arrays to be passed to other calculations
         implicit none
         ! Input arguments
         type(data_storm_type) :: storm
         character(len=*), intent(in) :: WIND_FILE, PRESSURE_FILE
-        integer, intent(in) :: mt, my, mx, start_time
+        integer, intent(in) :: mt, my, mx, initial_time 
         real(kind=8), intent(in) :: swlat, swlon, dx, dy
         
         ! Local storage
         integer :: num_lat, num_lon, i, j, n, current_timestep
         integer :: yr, mo, da, hr, minute
-        integer :: wunit = 7, punit = 8
+        integer :: wunit = 700, punit = 800
         open(wunit, file=WIND_FILE, status='old', action='read')
         open(punit, file=PRESSURE_FILE, status='old', action='read')
         ! Skip file headers
         read(wunit, *)
         read(punit, *)
-        allocate(storm%time(mt))
+        ! allocate(storm%time(mt))
         do n = 1, mt
             
             read(wunit, '(t69, i4,i2,i2,i2, i2)') yr, mo, da, hr, minute
             
-            current_timestep = (yr * ((60**2)*24*365) + ( mo * ((60**2)*24*30)) &
-                + (da * ((60**2)*24)) + (hr * (60*60)) + (minute * 60)) - start_time
+            current_timestep = seconds_from_epoch(yr, mo, da, hr, minute) - initial_time
+            print *, '##### Current time ####',n, current_timestep
             storm%time(n) = current_timestep
             
             read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
             read(wunit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,mx),j=1,my)
             
         end do
+        print *, 'Finished WIND, starting PRESSURE'
         
         do n = 1, mt
             read(punit, *) ! Skip header line since we have it from above
@@ -461,6 +564,7 @@ contains
             storm%longitude(j) = swlon + j * dx
         end do
         
+        
     end subroutine fill_data_arrays
 
     ! ==========================================================================
@@ -470,14 +574,16 @@ contains
 
     subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &
         y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
-        use netcdf
+#ifdef NETCDF
+    use netcdf
+#endif
         implicit none
         integer, intent(in) :: nc_file, ndims
         integer, intent(out) :: x_dim_id, y_dim_id, mx, my, t_dim_id, mt
         character (len = *), intent(out) :: x_dim_name, y_dim_name, t_dim_name
         integer :: m_tmp, n
         character(20) :: dim_name_tmp
-
+#ifdef NETCDF
         ! get indices to start at for reading netcdf within domain
         do n=1, ndims
             call check_netcdf_error(nf90_inquire_dimension(nc_file, &
@@ -496,6 +602,7 @@ contains
                 t_dim_id = n
             end if
         end do
+#endif
     end subroutine get_dim_info
 
     ! ==========================================================================
@@ -584,7 +691,6 @@ contains
 
         ! wind and pressure arrays for current time step
         real(kind=8) :: wind_tu(storm%mx,storm%my), wind_tv(storm%mx, storm%my), pressure_t(storm%mx,storm%my)
-
         ! get the wind and pressure arrays for the current timestep
         call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
         ! Loop over every point in the patch and fill in the data
@@ -738,20 +844,43 @@ contains
     end subroutine find_nearest
 
     subroutine check_netcdf_error(ios)
-
-        use netcdf
-
+#ifdef NETCDF
+    use netcdf
+#endif
         implicit none
 
         integer, intent(in) :: ios
-
+#ifdef NETCDF
         if (ios /= NF90_NOERR) then
             print *, "NetCDF IO error: ", ios
             print *, trim(nf90_strerror(ios))
             stop
         end if
-
+#endif
     end subroutine check_netcdf_error
+    
+    function seconds_from_epoch(year, month, day, hour, minute) result(seconds)
+        integer, intent(in) :: year, month, day, hour, minute
+        integer, dimension(12) :: days_in_month=[31, 28, 31, 30, 31, &
+                                                 30, 31, 31, 30, 31, 30, 31]
+        integer :: seconds, leap_days, total_days
+        
+        total_days = (year - 1970) * 365
+
+        leap_days = (year - 1968)/4 - (year - 1900)/4 + (year - 1600)/400
+
+        total_days = total_days + leap_days
+        if (mod(year, 4) == 0 .and. (mod(year,100) /= 0 &
+            .or. mod(year, 400) == 0).and.month >2) THEN
+                total_days = total_days + 1
+        endif
+        total_days = total_days + sum(days_in_month(1:month-1)) + day
+
+        seconds = (total_days*86400) + (hour*3600) + (minute*60)
+       
+       
+    end function seconds_from_epoch
+    
 
     function Upper(s1)  RESULT (s2)
     CHARACTER(*)       :: s1
