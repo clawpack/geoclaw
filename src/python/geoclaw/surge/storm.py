@@ -1164,9 +1164,15 @@ class Storm(object):
     # ================
     #  Track Plotting
     # ================
-    def plot(self, ax, radius=None, t_range=None, coordinate_system=2, track_style='ko--',
-             categorization="NHC", fill_alpha=0.25, fill_color='red'):
-        """TO DO:  Write doc-string"""
+    def plot(self, ax, t_range=None, coordinate_system=2, 
+                       track_style='ko--', categorization="NHC", 
+                       radius=None, fill_alpha=0.25, fill_color='red'):
+        """TO DO:  Write doc-string
+
+        Quick notes:
+         - *radius = None* will not plot a swath
+         - *track_style = {}* will plot categories for the track
+         """
 
         import matplotlib.pyplot as plt
 
@@ -1198,17 +1204,15 @@ class Storm(object):
             colors = [track_style.get(category, cat_color_defaults[category])
                       for category in self.category(categorization=categorization)]
             for i in range(t.shape[0] - 1):
-                ax.plot(x[i:i+2], y[i:i+2], color=colors[i], marker="o")
+                ax.plot(x[i:i+2], y[i:i+2], color=colors[i])
 
         else:
             raise ValueError("The `track_style` should be a string or dict.")
 
         # Plot swath
-        if (isinstance(radius, float) or isinstance(radius, np.ndarray)
-                or radius is None):
-
-            if radius is None:
-                # Default behavior
+        if radius is not None:
+            # Any string as of right now will trigger this
+            if isinstance(radius, str):
                 if self.storm_radius is None:
                     raise ValueError("Cannot use storm radius for plotting "
                                      "the swath as the data is not available.")
@@ -1265,7 +1269,6 @@ class Storm(object):
 
     # =========================================================================
     # Other Useful Routines
-
     def category(self, categorization="NHC", cat_names=False):
         r"""Categorizes storm based on relevant storm data
 
@@ -1318,9 +1321,7 @@ class Storm(object):
                        12: "Hurricane"}
 
         elif categorization.upper() == "NHC":
-            # TODO:  Change these to m/s (knots are how these are defined).
-            # Definitely not in the correct format now
-            # TODO:  Add TD and TS designations
+            # NHC uses knots
             speeds = units.convert(self.max_wind_speed, "m/s", "knots")
             category = (np.zeros(speeds.shape) +
                         (speeds < 30) * -1 +
