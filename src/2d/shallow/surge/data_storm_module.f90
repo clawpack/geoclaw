@@ -792,29 +792,32 @@ contains
             value = interp_array(storm%mx, storm%my)
         ! if x is to the west of the boundary but y is inside
         elseif (x < minval(storm%longitude)) then
-            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
             value = interp_array (xidx_low, yidx_low)
         ! if x is to the east of the boundary but y is inside
         elseif (x > maxval(storm%longitude)) then
-            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
             value = interp_array(xidx_low, yidx_low)
         ! if y is south of the boundary but x is inside
         elseif (y < minval(storm%latitude)) then
-            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
             value = interp_array(xidx_low, yidx_low)
         ! if y is north of the boundary but x is inside
         elseif (y > maxval(storm%latitude)) then
-            call find_nearest(x, y, llon, llat, storm, xidx_low, yidx_low)
+            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
             value = interp_array(xidx_low, yidx_low)
         ! x and y both inside boundary
         else
-            call find_nearest(x - storm_dx, y - storm_dy, llon, llat, storm, xidx_low, yidx_low)
-            call find_nearest(x + storm_dx, y + storm_dy, ulon, ulat, storm, xidx_high, yidx_high)
+            find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
             ! Find the values at the corners
             q11 = interp_array(xidx_low, yidx_low)
             q12 = interp_array(xidx_low, yidx_high)
             q21 = interp_array(xidx_high, yidx_low)
             q22 = interp_array(xidx_high, yidx_high)
+            ulon = storm%longitude(xidx_high)
+            ulat = storm%latitude(yidx_high)
+            llon = storm%longitude(xidx_low)
+            llat = storm%longitude(yidx_low)
 
             ! Calculate the value at the center of the box using bilinear interpolation
             value = (q11 * (ulon - x) * (ulat -y) + &
@@ -829,18 +832,25 @@ contains
     ! find_nearest() finds nearest value to x and y for interpolation points
     ! Finds the nearest actual point to the patch values using minimum distance
     ! ==========================================================================
-    pure subroutine find_nearest(x, y, lon, lat, storm, xidx, yidx)
+    pure subroutine find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
         implicit none
         ! Subroutine I/O
         type(data_storm_type), intent(in) :: storm
         real(kind=8), intent(in) :: x, y
-        real(kind=8), intent(out) :: lon, lat
-        integer, intent(out) :: xidx, yidx
+        integer, intent(out) :: xidx_low, yidx_low, xidx_high, yidx_high
+        ! Find teh index of the largest longitude lss than or equal to x
+        xidx_low = maxloc(storm%longitude <= x, dim=1)
+        xidx_high = xidx_low + 1
+        if (xidx_high > size(storm%longitude)) xidx_high = xidx_low ! edge case
 
-        xidx = minloc(abs(storm%longitude - x), dim=1)
-        yidx = minloc(abs(storm%latitude - y), dim=1)
-        lon = storm%longitude(xidx)
-        lat = storm%latitude(yidx)
+        ! find the index of the largest latitude less than or equal to y
+        yidx_low = maxloc(storm%latitude <= y, dim=1)
+        yidx_high = yidx_low + 1
+        if (yidx_high > size(storm%latitude)) yidx_high = yidx_low
+        ! xidx = minloc(abs(storm%longitude - x), dim=1)
+        ! yidx = minloc(abs(storm%latitude - y), dim=1)
+        ! lon = storm%longitude(xidx)
+        ! lat = storm%latitude(yidx)
     end subroutine find_nearest
 
     subroutine check_netcdf_error(ios)
