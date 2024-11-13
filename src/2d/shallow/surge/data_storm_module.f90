@@ -808,7 +808,7 @@ contains
             value = interp_array(xidx_low, yidx_low)
         ! x and y both inside boundary
         else
-            find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
+            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
             ! Find the values at the corners
             q11 = interp_array(xidx_low, yidx_low)
             q12 = interp_array(xidx_low, yidx_high)
@@ -838,19 +838,29 @@ contains
         type(data_storm_type), intent(in) :: storm
         real(kind=8), intent(in) :: x, y
         integer, intent(out) :: xidx_low, yidx_low, xidx_high, yidx_high
-        ! Find teh index of the largest longitude lss than or equal to x
-        xidx_low = maxloc(storm%longitude <= x, dim=1)
-        xidx_high = xidx_low + 1
-        if (xidx_high > size(storm%longitude)) xidx_high = xidx_low ! edge case
 
-        ! find the index of the largest latitude less than or equal to y
-        yidx_low = maxloc(storm%latitude <= y, dim=1)
-        yidx_high = yidx_low + 1
-        if (yidx_high > size(storm%latitude)) yidx_high = yidx_low
-        ! xidx = minloc(abs(storm%longitude - x), dim=1)
-        ! yidx = minloc(abs(storm%latitude - y), dim=1)
-        ! lon = storm%longitude(xidx)
-        ! lat = storm%latitude(yidx)
+        ! Local storage
+        integer :: i
+
+        ! Find xidx_low: the largest index in storm%longitude where the value is <= x
+        do i = 1, size(storm%longitude) - 1
+            if (storm%longitude(i) <= x .and. storm%longitude(i+1) > x) then
+                xidx_low = i
+                exit
+            end if
+        end do
+
+        ! Find yidx_low: the largest index in storm%latitude where the value is <= y
+        do i = 1, size(storm%latitude) - 1
+            if (storm%latitude(i) <= y .and. storm%latitude(i+1) > y) then
+                yidx_low = i
+                exit
+            end if
+        end do
+        
+        ! Set highs to the next index or stay at the boundary
+        xidx_high = min(xidx_low + 1, size(storm%longitude))
+        yidx_high = min(yidx_low + 1, size(storm%latitude))
     end subroutine find_nearest
 
     subroutine check_netcdf_error(ios)
