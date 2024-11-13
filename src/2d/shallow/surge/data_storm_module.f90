@@ -784,28 +784,48 @@ contains
         storm_dx = storm%longitude(2) - storm%longitude(1)
         storm_dy = storm%latitude(2) - storm%latitude(1)
 
+        ! Add a edge case handling that reflects the boundary
+        if (x < minval(storm%longitude) .or. x > maxval(storm%longitude) .or. &
+            y < minval(storm%latitude) .or. y < maxval(storm%latitude)) then
+                if (x < minval(storm%longitude)) then
+                    xidx_low = 1
+                    xidx_high = 1
+                elseif (x > maxval(storm%longitude)) then
+                    xidx_low = size(storm%longitude)
+                    xidx_high = size(storm%longitude)
+                endif
+                if (y < minval(storm%latitude)) then
+                    yidx_low = 1
+                    yidx_high = 1
+                elseif (y< maxval(storm%latitude)) then
+                    yidx_low = size(storm%latitude)
+                    yidx_high = size(storm%latitude)
+                endif
+
+                value = interp_array(xidx_low, yidx_low)
+
         ! Duplicate the boundary at the bottom corner
-        if (x < minval(storm%longitude) .and. y < maxval(storm%latitude)) then
-            value = interp_array(1, 1)
-        ! Duplicate the boundary at the top corner
-        elseif (x > maxval(storm%longitude) .and. y > maxval(storm%latitude)) then
-            value = interp_array(storm%mx, storm%my)
-        ! if x is to the west of the boundary but y is inside
-        elseif (x < minval(storm%longitude)) then
-            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-            value = interp_array (xidx_low, yidx_low)
-        ! if x is to the east of the boundary but y is inside
-        elseif (x > maxval(storm%longitude)) then
-            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-            value = interp_array(xidx_low, yidx_low)
-        ! if y is south of the boundary but x is inside
-        elseif (y < minval(storm%latitude)) then
-            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-            value = interp_array(xidx_low, yidx_low)
-        ! if y is north of the boundary but x is inside
-        elseif (y > maxval(storm%latitude)) then
-            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-            value = interp_array(xidx_low, yidx_low)
+        ! if (x < minval(storm%longitude) .and. y < maxval(storm%latitude)) then
+        !     value = interp_array(1, 1)
+        ! ! Duplicate the boundary at the top corner
+        ! elseif (x > maxval(storm%longitude) .and. y > maxval(storm%latitude)) then
+        !     value = interp_array(storm%mx, storm%my)
+        ! ! if x is to the west of the boundary but y is inside
+        ! elseif (x < minval(storm%longitude)) then
+        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
+        !     value = interp_array (xidx_low, yidx_low)
+        ! ! if x is to the east of the boundary but y is inside
+        ! elseif (x > maxval(storm%longitude)) then
+        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
+        !     value = interp_array(xidx_low, yidx_low)
+        ! ! if y is south of the boundary but x is inside
+        ! elseif (y < minval(storm%latitude)) then
+        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
+        !     value = interp_array(xidx_low, yidx_low)
+        ! ! if y is north of the boundary but x is inside
+        ! elseif (y > maxval(storm%latitude)) then
+        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
+        !     value = interp_array(xidx_low, yidx_low)
         ! x and y both inside boundary
         else
             call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
