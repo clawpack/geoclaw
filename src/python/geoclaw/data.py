@@ -9,7 +9,7 @@ Classes representing parameters for GeoClaw runs
  - GeoClawData
  - RefinementData
  - TopographyData
- - FixedGridData
+ - FGoutData
  - FGmaxData
  - DTopoData
  - QinitData

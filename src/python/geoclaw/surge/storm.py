@@ -1169,7 +1169,7 @@ class Storm(object):
                        coordinate_system=2, fill_alpha=0.25, fill_color='red',
                        **kwargs):
         """Plot this storm's track in the given axes object
-
+        
         :Input:
          - *ax* (matplotlib.pyplot.axes) Axes to plot into.
          - *t_range* (list) Time range to plot the track for.  If None then use
@@ -1286,7 +1286,6 @@ class Storm(object):
 
     # =========================================================================
     # Other Useful Routines
-
     def category(self, categorization="NHC", cat_names=False):
         r"""Categorizes storm based on relevant storm data
 
@@ -1339,9 +1338,7 @@ class Storm(object):
                        12: "Hurricane"}
 
         elif categorization.upper() == "NHC":
-            # TODO:  Change these to m/s (knots are how these are defined).
-            # Definitely not in the correct format now
-            # TODO:  Add TD and TS designations
+            # NHC uses knots
             speeds = units.convert(self.max_wind_speed, "m/s", "knots")
             category = (np.zeros(speeds.shape) +
                         (speeds < 30) * -1 +
