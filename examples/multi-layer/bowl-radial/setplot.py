@@ -74,15 +74,15 @@ def setplot(plotdata=None):
         # bathy_ref_lines(current_data)
         gauge_locations(current_data)
         
-    def contour_afteraxes(current_data):
-        # gauge_locations(current_data)
-        # m_to_km_labels()
-        plt.hold(True)
-        pos = -80.0 * (23e3 / 180) + 500e3 - 5e3
-        plt.plot([pos,pos],[-300e3,300e3],'b',[pos-5e3,pos-5e3],[-300e3,300e3],'y')
-        plt.hold(False)
-        wind_contours(current_data)
-        bathy_ref_lines(current_data)
+    # def contour_afteraxes(current_data):
+    #     # gauge_locations(current_data)
+    #     # m_to_km_labels()
+    #     plt.hold(True)
+    #     pos = -80.0 * (23e3 / 180) + 500e3 - 5e3
+    #     plt.plot([pos,pos],[-300e3,300e3],'b',[pos-5e3,pos-5e3],[-300e3,300e3],'y')
+    #     plt.hold(False)
+    #     wind_contours(current_data)
+    #     bathy_ref_lines(current_data)
         
     def profile_afteraxes(current_data):
         pass
@@ -258,23 +258,6 @@ def setplot(plotdata=None):
         
     plotitem.plot_var = gaugetopo
     plotitem.plotstyle = 'g-'
-
-    def add_zeroline(current_data):
-        from pylab import plot, legend, xticks, floor, axis, xlabel
-        t = current_data.t 
-        gaugeno = current_data.gaugeno
-
-        if gaugeno == 32412:
-            try:
-                plot(TG32412[:,0], TG32412[:,1], 'r')
-                legend(['GeoClaw','Obs'],loc='lower right')
-            except: pass
-            axis((0,t.max(),-0.3,0.3))
-
-        plot(t, 0*t, 'k')
-        n = int(floor(t.max()/3600.) + 2)
-        xticks([3600*i for i in range(n)], ['%i' % i for i in range(n)])
-        xlabel('time (hours)')
 
 
     #-----------------------------------------
