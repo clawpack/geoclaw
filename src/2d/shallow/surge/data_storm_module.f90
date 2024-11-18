@@ -708,7 +708,6 @@ contains
         end do
     end subroutine set_owi_fields
 
-
     ! ==========================================================================
     ! get_storm_time()
     ! Calculates the wind and pressure fields for the current time step
@@ -760,8 +759,7 @@ contains
         end if
 
     end subroutine get_storm_time
-
-
+       
     ! ==========================================================================
     ! interp_array_data() Obtains wind and pressure data for each patch
     ! Uses bilinear interpolation to get the data
@@ -777,16 +775,24 @@ contains
         ! Local storage
         real(kind=8) :: q11, q12, q21, q22
         real(kind=8) :: llon, llat, ulon, ulat
-        real(kind=8) :: storm_dx, storm_dy ! initial wind field dx and dy
+        real(kind=8) :: storm_dx, storm_dy, weight_x, weight_y, gradient_x, gradient_y ! initial wind field dx and dy
         integer :: xidx_low, xidx_high, yidx_low, yidx_high
 
         ! Get the data resolution
         storm_dx = storm%longitude(2) - storm%longitude(1)
         storm_dy = storm%latitude(2) - storm%latitude(1)
 
+        
+
         ! Add a edge case handling that reflects the boundary
         if (x < minval(storm%longitude) .or. x > maxval(storm%longitude) .or. &
-            y < minval(storm%latitude) .or. y < maxval(storm%latitude)) then
+            y < minval(storm%latitude) .or. y > maxval(storm%latitude)) then
+                ! Set safe defaults in case of out-of-bounds
+                xidx_low = 1
+                xidx_high = 1
+                yidx_low = 1
+                yidx_high = 1
+
                 if (x < minval(storm%longitude)) then
                     xidx_low = 1
                     xidx_high = 1
@@ -797,13 +803,15 @@ contains
                 if (y < minval(storm%latitude)) then
                     yidx_low = 1
                     yidx_high = 1
-                elseif (y< maxval(storm%latitude)) then
+                elseif (y > maxval(storm%latitude)) then
                     yidx_low = size(storm%latitude)
                     yidx_high = size(storm%latitude)
                 endif
 
                 value = interp_array(xidx_low, yidx_low)
+                
 
+                
         ! Duplicate the boundary at the bottom corner
         ! if (x < minval(storm%longitude) .and. y < maxval(storm%latitude)) then
         !     value = interp_array(1, 1)
@@ -838,14 +846,21 @@ contains
             ulat = storm%latitude(yidx_high)
             llon = storm%longitude(xidx_low)
             llat = storm%longitude(yidx_low)
-
+            gradient_x = abs(interp_array(xidx_high, yidx_low) - interp_array(xidx_low, yidx_low))
+            gradient_y = abs(interp_array(xidx_low, yidx_high) - interp_array(xidx_low, yidx_low))
+            weight_x = 1.0 / (1.0 +gradient_x)
+            weight_y = 1.0 / (1.0 + gradient_y)
             ! Calculate the value at the center of the box using bilinear interpolation
-            value = (q11 * (ulon - x) * (ulat -y) + &
-                     q21 * (x - llon) * (ulat - y) + &
-                     q12 * (ulon - x) * (y - llat) + &
-                     q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
+            ! value = (q11 * (ulon - x) * (ulat -y) + &
+            !          q21 * (x - llon) * (ulat - y) + &
+            !          q12 * (ulon - x) * (y - llat) + &
+            !          q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
+            value = (q11 * weight_x * weight_y + q21 * (1.0 - weight_x) * weight_y + &
+                    q12 * weight_x * (1.0 - weight_y) + q22 * (1.0 - weight_x) * (1.0 - weight_y)) / &
+                    (weight_x * weight_y + (1.0 - weight_x) * weight_y + &
+                    weight_x * (1.0 - weight_y) + (1.0 - weight_x) * (1.0 - weight_y))
         end if
-
+        
     end subroutine interp_array_data
 
     ! ==========================================================================
