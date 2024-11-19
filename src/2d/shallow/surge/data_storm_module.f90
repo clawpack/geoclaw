@@ -775,7 +775,7 @@ contains
         ! Local storage
         real(kind=8) :: q11, q12, q21, q22
         real(kind=8) :: llon, llat, ulon, ulat
-        real(kind=8) :: storm_dx, storm_dy, weight_x, weight_y, gradient_x, gradient_y ! initial wind field dx and dy
+        real(kind=8) :: storm_dx, storm_dy, ! initial wind field dx and dy
         integer :: xidx_low, xidx_high, yidx_low, yidx_high
 
         ! Get the data resolution
@@ -809,56 +809,22 @@ contains
                 endif
 
                 value = interp_array(xidx_low, yidx_low)
-                
-
-                
-        ! Duplicate the boundary at the bottom corner
-        ! if (x < minval(storm%longitude) .and. y < maxval(storm%latitude)) then
-        !     value = interp_array(1, 1)
-        ! ! Duplicate the boundary at the top corner
-        ! elseif (x > maxval(storm%longitude) .and. y > maxval(storm%latitude)) then
-        !     value = interp_array(storm%mx, storm%my)
-        ! ! if x is to the west of the boundary but y is inside
-        ! elseif (x < minval(storm%longitude)) then
-        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-        !     value = interp_array (xidx_low, yidx_low)
-        ! ! if x is to the east of the boundary but y is inside
-        ! elseif (x > maxval(storm%longitude)) then
-        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-        !     value = interp_array(xidx_low, yidx_low)
-        ! ! if y is south of the boundary but x is inside
-        ! elseif (y < minval(storm%latitude)) then
-        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-        !     value = interp_array(xidx_low, yidx_low)
-        ! ! if y is north of the boundary but x is inside
-        ! elseif (y > maxval(storm%latitude)) then
-        !     call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
-        !     value = interp_array(xidx_low, yidx_low)
-        ! x and y both inside boundary
+        
         else
-            call find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
+            call find_nearest(storm, x - storm_dx, y - storm_dy, llon, llat,  xidx_low, yidx_low)
+            call find_nearest(storm, x + storm_dx, y + storm_dy, ulon, ulat,  xidx_high, yidx_high)
             ! Find the values at the corners
             q11 = interp_array(xidx_low, yidx_low)
             q12 = interp_array(xidx_low, yidx_high)
             q21 = interp_array(xidx_high, yidx_low)
             q22 = interp_array(xidx_high, yidx_high)
-            ulon = storm%longitude(xidx_high)
-            ulat = storm%latitude(yidx_high)
-            llon = storm%longitude(xidx_low)
-            llat = storm%longitude(yidx_low)
-            gradient_x = abs(interp_array(xidx_high, yidx_low) - interp_array(xidx_low, yidx_low))
-            gradient_y = abs(interp_array(xidx_low, yidx_high) - interp_array(xidx_low, yidx_low))
-            weight_x = 1.0 / (1.0 +gradient_x)
-            weight_y = 1.0 / (1.0 + gradient_y)
+                        
             ! Calculate the value at the center of the box using bilinear interpolation
-            ! value = (q11 * (ulon - x) * (ulat -y) + &
-            !          q21 * (x - llon) * (ulat - y) + &
-            !          q12 * (ulon - x) * (y - llat) + &
-            !          q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
-            value = (q11 * weight_x * weight_y + q21 * (1.0 - weight_x) * weight_y + &
-                    q12 * weight_x * (1.0 - weight_y) + q22 * (1.0 - weight_x) * (1.0 - weight_y)) / &
-                    (weight_x * weight_y + (1.0 - weight_x) * weight_y + &
-                    weight_x * (1.0 - weight_y) + (1.0 - weight_x) * (1.0 - weight_y))
+            value = (q11 * (ulon - x) * (ulat - y) + &
+                     q21 * (x - llon) * (ulat - y) + &
+                     q12 * (ulon - x) * (y - llat) + &
+                     q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
+            
         end if
         
     end subroutine interp_array_data
@@ -867,37 +833,25 @@ contains
     ! find_nearest() finds nearest value to x and y for interpolation points
     ! Finds the nearest actual point to the patch values using minimum distance
     ! ==========================================================================
-    pure subroutine find_nearest(x, y, storm, xidx_low, xidx_high, yidx_low, yidx_high)
+    pure subroutine find_nearest(storm, x, y, lon, lat,  xidx, yidx)
         implicit none
         ! Subroutine I/O
         type(data_storm_type), intent(in) :: storm
         real(kind=8), intent(in) :: x, y
-        integer, intent(out) :: xidx_low, yidx_low, xidx_high, yidx_high
+        real(kind=8), intent(out) :: lon, lat
+        integer, intent(out) :: xidx, yidx
 
-        ! Local storage
-        integer :: i
-
-        ! Find xidx_low: the largest index in storm%longitude where the value is <= x
-        do i = 1, size(storm%longitude) - 1
-            if (storm%longitude(i) <= x .and. storm%longitude(i+1) > x) then
-                xidx_low = i
-                exit
-            end if
-        end do
-
-        ! Find yidx_low: the largest index in storm%latitude where the value is <= y
-        do i = 1, size(storm%latitude) - 1
-            if (storm%latitude(i) <= y .and. storm%latitude(i+1) > y) then
-                yidx_low = i
-                exit
-            end if
-        end do
-        
-        ! Set highs to the next index or stay at the boundary
-        xidx_high = min(xidx_low + 1, size(storm%longitude))
-        yidx_high = min(yidx_low + 1, size(storm%latitude))
+        xidx = minloc(abs(storm%longitude - x), dim=1)
+        yidx = minloc(abs(storm%latitude - y), dim=1)
+        lon = storm%longitude(xidx)
+        lat = storm%latitude(yidx)
     end subroutine find_nearest
 
+
+   ! ==========================================================================
+   ! Check for netcdf file errors when loading data, only active if the
+   ! NETCDF FFLAGS are in the Makefile
+   ! ==========================================================================
     subroutine check_netcdf_error(ios)
 #ifdef NETCDF
     use netcdf
@@ -913,7 +867,11 @@ contains
         end if
 #endif
     end subroutine check_netcdf_error
-    
+
+    ! ==========================================================================
+    ! seconds_from_epoch() Calculates seconds from 1970 from a datetime
+    ! Returns the total seconds from the epoch includes leap years and days
+    ! ==========================================================================
     function seconds_from_epoch(year, month, day, hour, minute) result(seconds)
         integer, intent(in) :: year, month, day, hour, minute
         integer, dimension(12) :: days_in_month=[31, 28, 31, 30, 31, &
@@ -937,6 +895,10 @@ contains
     end function seconds_from_epoch
     
 
+   ! ==========================================================================
+   ! function Upper() Returns the Upper case characater in response to input
+   ! character
+   ! ==========================================================================
     function Upper(s1)  RESULT (s2)
     CHARACTER(*)       :: s1
     CHARACTER(LEN(s1)) :: s2
@@ -950,6 +912,7 @@ contains
            s2(i:i) = ch
         END DO
     END function Upper
+
 end module data_storm_module
 
 
