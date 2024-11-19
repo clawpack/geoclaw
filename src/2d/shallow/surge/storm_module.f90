@@ -434,6 +434,7 @@ contains
         else if (storm_specification_type == -1) then
             location = data_location(t, data_storm)
         else if (storm_specification_type == -2) then
+        else if (storm_specification_type == -3) then
         else
             stop "Something may be wrong."
         end if
