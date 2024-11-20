@@ -50,21 +50,22 @@ contains
     ! ==========================================================================
     !  set_storm(storm_data_path, storm, storm_spec_type, log_unit)
     !    Initializes the storm type for an Oceanweather, Inc type data derived 
-    !    storm and calls subroutines based on input filetype ie (nc or ascii)
+    !    storm and calls subroutines based on input filetype  (nc or ascii)
     ! ==========================================================================
     subroutine set_storm(storm_data_path, storm, storm_spec_type, log_unit)
         implicit none
         character(len=*), optional :: storm_data_path
         type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
-
+        ! if storm_spec = -3 == ascii
+        ! if storm_spec = -2 == netcdf
         if (-3 <= storm_spec_type .and. storm_spec_type < 0) then
             select case(storm_spec_type)
             case(-2) ! netcdf
                 call set_netcdf_storm(storm_data_path, storm, storm_spec_type, &
                                   log_unit)
             case(-3) ! ascii fixed width
-                call set_data_storm(storm_data_path, storm, storm_spec_type, &
+                call set_ascii_storm(storm_data_path, storm, storm_spec_type, &
                                     log_unit)
             end select
         end if
@@ -182,59 +183,59 @@ contains
     end subroutine set_netcdf_storm
 
     ! ==========================================================================
-    !  set_data_storm(storm_data_path, storm, storm_spec_type, log_unit)
+    !  set_ascii_storm(storm_data_path, storm, storm_spec_type, log_unit)
     !    Initializes the storm type for an Oceanweather, Inc type data derived 
     !    storm that is saved as a fixed width fortran format
     ! ==========================================================================
-    subroutine set_data_storm(storm_data_path, storm, storm_spec_type, log_unit)
+    subroutine set_ascii_storm(storm_data_path, storm, storm_spec_type, log_unit)
         use amr_module, only: t0, rinfinity
         implicit none
 
         ! Subroutine I/O
         character(len=*), intent(in) :: storm_data_path
-        character(len=(len(storm_data_path))) :: WIND_FILE, PRESSURE_FILE
-        type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
+        type(data_storm_type), intent(inout) :: storm
+        character(len=256) :: wind_file, pressure_file, regional_wind_file, regional_pressure_file
 
         ! Local Storage
         ! Set up for dimension info, dims are lat/lon/time
-        integer :: initial_time, mt
-        integer :: mx, my, yr, mo, da, hr, minute
         real(kind=8) :: swlat, swlon, dx, dy
-        integer :: wunit=7, punit=8, ext_pos
-        character(len=3) :: wind_ext='WIN', pres_ext='PRE', file_ext
-        logical :: file_exists
-        ! Set up for variable info, variables are pressure, lat, lon, time
-        integer :: nvars, var_type, var_id
-        character (len=13) :: var_name
+        integer :: my, mx, mt
+        integer :: yr, mo, da, hr, minute, seconds_from_landfall
+        integer :: iunit=10
+        integer :: has_regional_data 
         
         if (.not. module_setup) then
-            ext_pos = scan(trim(storm_data_path), ".", BACK=.true.)
-            file_ext = Upper(storm_data_path(ext_pos+1:len_trim(storm_data_path)))
-           
-            if (ANY((/'WIN', 'WND'/) == file_ext)) then
-                WIND_FILE = storm_data_path
-                PRESSURE_FILE = storm_data_path(1:ext_pos)//'PRE'
-            else if (file_ext == 'PRE') then
-                PRESSURE_FILE = storm_data_path
-                WIND_FILE = storm_data_path(1:ext_pos)//'WIN'
-                inquire(file=trim(WIND_FILE), exist=file_exists)
-                if (.NOT. file_exists) then
-                    WIND_FILE = storm_data_path(1:ext_pos)//'WND'
-                end if
+            ! Open storm control file to get landfall date and 
+            ! wind and pressure file names
+            call opendatafile(iunit, storm_data_path)
+            ! Read the landfall date/time into memory
+            read(iunit, '(i4i2i2i2i2)') yr, mo, da, hr, minute
+            ! Read the wind and pressure file absolute paths
+            read(iunit, *) wind_file
+            read(iunit, *) pressure_file
+            ! Check for flag that there are regional forcing grids
+            ! To be developed further later 11/15/2024 CRJ
+            read(iunit, '(i2)') has_regional_data
+
+            select case(has_regional_data)
+                case(0)
+                    close(iunit)
+                case(1)
+                    read(iunit, *) regional_wind_file
+                    read(iunit, *) regional_pressure_file
+                    close(iunit)
+                case default
+                    stop ' *** ERROR *** No storm forcing selection chosen'
+            end select
+            ! Calculate the number of seconds from Jan 1, 1970 for the landfall datetime
+            seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
+
             end if
 
-            ! Open data file
-            print *, 'Reading storm data file ', storm_data_path, WIND_FILE, PRESSURE_FILE
-
             ! Load headers for setting up the rest of the data
-            call initialize_storm_data(WIND_FILE, my, mx, mt, swlat, &
-                              swlon, dy, dx, initial_time)
+            call initialize_storm_data(wind_file, my, mx, mt, swlat, swlon, dy, dx)
 
-            ! ! Determine array sizes from the file
-            ! call get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
-            !                      my, mx, total_time)
-            
             ! allocate arrays in storm object
             allocate(storm%pressure(mx, my, mt))
             allocate(storm%wind_u(mx, my, mt))
@@ -242,6 +243,7 @@ contains
             allocate(storm%longitude(mx))
             allocate(storm%latitude(my))
             allocate(storm%time(mt))
+
             ! Set up lat/lon lengths in storm object for use in linear interpolation of time
             storm%mx = mx
             storm%my = my
@@ -250,9 +252,9 @@ contains
             storm%num_casts = mt
 
             ! Fill out variable data/info
-            call fill_data_arrays(WIND_FILE, PRESSURE_FILE, my, mx, mt, swlat, swlon,&
-                                 dy, dx, storm, initial_time)
-        end if
+            call fill_data_arrays(wind_file, pressure_file, my, mx, mt, swlat, swlon,&
+                                 dy, dx, storm, seconds_from_landfall)
+       
 
         ! Make sure first time step in setrun is inside the times in the data
         if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
@@ -274,7 +276,7 @@ contains
 
             module_setup = .true.
         end if
-    end subroutine set_data_storm
+    end subroutine set_ascii_storm
 
     ! ==========================================================================
     !  storm_location(t,storm)
@@ -342,15 +344,14 @@ contains
     ! read_headers() Opens fixed width format file and reads the header
     ! for use in parsing the data structure
     ! ==========================================================================
-    subroutine initialize_storm_data(WIND_FILE, my, mx, mt, swlat, swlon, dy, &
-                                     dx,  initial_time)
+    subroutine initialize_storm_data(wind_file, my, mx, mt, swlat, swlon, dy, dx)
         implicit none
-        character(len=*), intent(in) :: WIND_FILE
-
-        ! Output arguments, time in seconds
-        integer, intent(out) ::  my, mx, mt
+        ! Subroutine I/O
+        character(len=*), intent(in) :: wind_file
+        ! Output arguments
         real(kind=8), intent(out) :: swlat, swlon, dx, dy
-
+        integer, intent(out) ::  my, mx, mt
+        
         ! Local Storage
         integer, parameter :: iunit=9
         integer :: start_yr, start_mo, start_da, start_hr, start_min, dt
@@ -360,43 +361,39 @@ contains
         integer :: i, j
 
         ! Read in start and end dates of file from first header line
-        open(iunit, file=WIND_FILE, status='old', action='read')
+        open(iunit, file=wind_file, status='old', action='read')
        
         read(iunit, "(t56, i4, i2, i2, i2, t71, i4, i2, i2, i2)") &
                     start_yr, start_mo, start_da, start_hr, end_yr, end_mo, &
                     end_da, end_hr
+        ! Calculate the start and final times as seconds from Jan 1,1970 
         initial_time = seconds_from_epoch(start_yr, start_mo, start_da, start_hr, 00)
         final_time = seconds_from_epoch(end_yr, end_mo, end_da, end_hr, 00)
+        ! Total number of time in seconds of the dataset
         total_time = final_time - initial_time
         
         ! Read second header from file to obtain array sizes and first timestep
         read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,t69, i4,i2,i2,i2, i2)') &
              my, mx, dx, dy, swlat, swlon, yr1, mo1, da1, hr1, minute1
 
-        ! Skip the wind velocity matrices first u then v
-        print *, "Skipping first matrix (u)..."
+        ! Calculate the dt by skipping the wind velocity matrices
         do i = 1, (mx * my / 8)
-            read(iunit, *) ! Skip first matrix
+            read(iunit, *) ! Skip u velocity
         end do
-        print *, "First matrix (u) skipped."
         if (mod(mx * my,8) /= 0) then
-            print *, "Reading line after 1st matrix..."
             read(iunit, *) 
         else
-            print *, 'proceeding to reading the matrix'
         end if
-        print *, "Skipping second matrix (v)..."
+        ! Skip second set of velocity data
         do j = 1, (mx * my / 8)
-            read(iunit, *) ! Skip second matrix
+            read(iunit, *) ! Skip v velocity
         end do
-        print *, "Second matrix (v) skipped."
         if (mod(mx * my,8) /= 0) then
-            print *, "Reading line after 2nd matrix..."
-            
+           read(iunit, *)
         else
-            print *, 'proceeding to reading the header'
+            read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, minute2
         end if
-        read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, minute2
+        
         close(iunit)
 
         timestep1 = seconds_from_epoch(yr1, mo1, da1, hr1, minute1)
@@ -406,157 +403,53 @@ contains
         mt = (total_time/dt) + 1
 
 
-    end subroutine initialize_storm_data       
-    
-    ! ==========================================================================
-    ! get_array_sizes() Reads the 2nd header data from the datafile and 
-    ! saves the array sizes for allocation inside the data_storm_type
-    ! ==========================================================================
-    ! subroutine get_array_sizes(WIND_FILE, mt, yr, mo, da, hr, minute, &
-    !                            my, mx, total_time)
-    !     implicit none
-    !     ! Input arguments
-    !     integer, intent(in) :: yr, mo, da, hr, minute
-    !     integer, intent(in) :: my, mx, total_time
-    !     character(len=*), intent(in) :: WIND_FILE
-
-    !     ! Output argument
-    !     integer, intent(out) :: mt
-
-    !     ! Local storage
-    !     integer :: iunit = 8
-    !     integer :: yr2, mo2, da2, hr2, min2
-    !     integer :: time1, time2, i, j, dt
-    !     integer, dimension(8) :: values
-
-    !     ! Error Handling
-    !     integer :: ios
-    !     character(len=100) :: line_after_2nd_matrix
-    !     open(iunit, file=WIND_FILE, status='old', action='read', iostat=ios)
-    !     if (ios /= 0) then
-    !         print *, "Error opening file:", ios
-    !         stop
-    !     end if
-    !     print *, "File opened successfully."
-
-    !     ! Read time data from first two headers/timestep
-    !     print *, "Reading first header..."
-    !     read(iunit, *) 
-    !     print *, "First header read."
-
-    !     print *, "Reading second header..."
-    !     read(iunit, *)
-    !     print *, "Second header read."
-
-    !     ! Skip the wind velocity matrices first u then v
-    !     print *, "Skipping first matrix (u)..."
-    !     do i = 1, (mx * my / 8)
-    !         read(iunit, *) ! Skip first matrix
-    !     end do
-    !     print *, "First matrix (u) skipped."
-    !     if (mod(mx * my,8) /= 0) then
-    !         print *, "Reading line after 1st matrix..."
-    !         read(iunit, *) 
-    !     else
-    !         print *, 'proceeding to reading the matrix'
-    !     end if
-    !     ! print *, "Reading line separating matrices..."
-    !     ! read(iunit, *) ! Skip line separating matrices
-    !     ! print *, "Line separating matrices read."
-
-    !     print *, "Skipping second matrix (v)..."
-    !     do j = 1, (mx * my / 8)
-    !         read(iunit, *) ! Skip second matrix
-    !     end do
-    !     print *, "Second matrix (v) skipped."
-    !     if (mod(mx * my,8) /= 0) then
-    !         print *, "Reading line after 2nd matrix..."
-    !         read(iunit, *) line_after_2nd_matrix
-    !         print *, "Line after 2nd matrix:", line_after_2nd_matrix
-    !     else
-    !         print *, 'proceeding to reading the header'
-    !     end if
-
-    !     ! Read time data from second header/timestep
-    !     print *, "ABOUT TO READ 1st HEADER"
-    !     ! read(iunit, *) line_after_2nd_matrix
-    !     read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, min2
-    !     ! print *, "Second header/timestep read: ", line_after_2nd_matrix
-    !     !++++++++++++ WHY NOT JUST CALCULATE THE NUMBER OF DAYS BETWEEN TIME STEPS AND THEN DIVIDE BY HOURS?????+++++++++++++++
-    !     close(iunit)
-    !     print *, "File closed."
-
-    !     ! open(iunit, file=WIND_FILE, status='old', action='read', iostat=ios)
-        
-    !     ! ! Read time data from first two headers/timestep
-    !     ! read(iunit, *) 
-    !     ! read(iunit, *)
-    !     ! ! Skip the wind velocity matrices first u then v
-    !     ! do i = 1, (mx * my / 8)
-    !     !     read(iunit, *) ! Skip first matrix
-    !     ! end do
-    !     ! read(iunit, *) ! Skip line separating matrices
-    !     ! do j = 1, (mx * my / 8)
-    !     !     read(iunit, *) ! Skip second matrix
-    !     ! end do
-    !     ! read (iunit, *) ! Skip line after 2nd matrix
-      
-    !     ! ! Read time data from second header/timestep
-    !     !  print *, 'ABOUT TO READ 1st HEADER'
-    !     ! read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, min2
-    !     ! close(iunit)
-       
-
-    !     dt =  parse_dates(yr, mo, da, hr, minute, yr2, mo2, da2, hr2, min2)
-    !     print *, 'DT and TOTAL TIME', dt, total_time
-    !     mt = (total_time/dt) + 1 ! total number of timesteps
-    ! end subroutine get_array_sizes
+    end subroutine initialize_storm_data  
     
     ! ==========================================================================
     ! fill_data_arrays() reads the data files and fills out the storm object
     ! and it's dataarrays
     ! ==========================================================================
-    subroutine fill_data_arrays(WIND_FILE, PRESSURE_FILE, my, mx, mt, swlat, swlon,  &
-                                dy, dx, storm,  initial_time)
+    subroutine fill_data_arrays(wind_file, pressure_file, my, mx, mt, swlat, swlon,  &
+                                dy, dx, storm, seconds_from_landfall)
         ! Read in the data file and parse the arrays to be passed to other calculations
         implicit none
         ! Input arguments
         type(data_storm_type) :: storm
-        character(len=*), intent(in) :: WIND_FILE, PRESSURE_FILE
-        integer, intent(in) :: mt, my, mx, initial_time 
+        character(len=*), intent(in) :: wind_file, pressure_file
+        integer, intent(in) :: my, mx, mt, seconds_from_landfall 
         real(kind=8), intent(in) :: swlat, swlon, dx, dy
         
         ! Local storage
         integer :: num_lat, num_lon, i, j, n, current_timestep
         integer :: yr, mo, da, hr, minute
         integer :: wunit = 700, punit = 800
-        open(wunit, file=WIND_FILE, status='old', action='read')
-        open(punit, file=PRESSURE_FILE, status='old', action='read')
+
+        ! Open both storm forcing files
+        open(wunit, file=wind_file, status='old', action='read')
+        open(punit, file=pressure_file, status='old', action='read')
+
         ! Skip file headers
         read(wunit, *)
         read(punit, *)
-        ! allocate(storm%time(mt))
+        ! Loop over all timesteps 
         do n = 1, mt
-            
+            ! Read each time from the next array
             read(wunit, '(t69, i4,i2,i2,i2, i2)') yr, mo, da, hr, minute
-            
-            current_timestep = seconds_from_epoch(yr, mo, da, hr, minute) - initial_time
-            print *, '##### Current time ####',n, current_timestep
+            ! Calculate the current timestep in seconds from landfall
+            current_timestep = seconds_from_epoch(yr, mo, da, hr, minute) - seconds_from_landfall
             storm%time(n) = current_timestep
-            
+            !
             read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
             read(wunit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,mx),j=1,my)
-            
-        end do
-        print *, 'Finished WIND, starting PRESSURE'
-        
-        do n = 1, mt
             read(punit, *) ! Skip header line since we have it from above
-            read(punit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,mx),j=1,my)
+            
+            read(punit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,mx),j=1,my) 
             ! Multiply each pressure value by 100 to convert from Pa to hPa
             storm%pressure(:,:,n) = storm%pressure(:,:,n) * 100.0
         end do
-        
+        close(wunit)
+        close(punit)
+        ! Calculate lat/lon from SW corner and resolution
         do i = 1, my
             storm%latitude(i) = swlat + i * dy
         end do
@@ -775,7 +668,7 @@ contains
         ! Local storage
         real(kind=8) :: q11, q12, q21, q22
         real(kind=8) :: llon, llat, ulon, ulat
-        real(kind=8) :: storm_dx, storm_dy, ! initial wind field dx and dy
+        real(kind=8) :: storm_dx, storm_dy ! initial wind field dx and dy
         integer :: xidx_low, xidx_high, yidx_low, yidx_high
 
         ! Get the data resolution
