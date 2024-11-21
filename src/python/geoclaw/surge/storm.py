@@ -1622,7 +1622,7 @@ class DataDerivedStorms(object):
         self.pressure = [] # Placeholder for pressure data
         self.wind_speed = [] # Placeholder for wind speed
 
-    def parse_data(self):
+    def parse_data(self,landfall_time):
         
         import numpy as np
         """
@@ -1637,7 +1637,7 @@ class DataDerivedStorms(object):
         :return: None
         """
         # Extract time and coordinate arrays
-        self.t = data_storms.time_steps(self.wind_data)
+        self.t = data_storms.time_steps(self.wind_data, landfall_time)
         self.lat, self.lon = data_storms.get_coordinate_arrays(self.wind_data[0])
 
         # Iterate over all data, each index = an individual time step

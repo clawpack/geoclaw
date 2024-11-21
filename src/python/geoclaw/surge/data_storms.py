@@ -73,7 +73,7 @@ def read_oceanweather(path, file_ext):
 
     return all_data
 
-def time_steps(data):
+def time_steps(data, landfall_time):
     """
     Calculate the timesteps for geoclaw in seconds given the start and end
     times in the header of the wind and pre files. Returns an array of time steps
@@ -85,12 +85,13 @@ def time_steps(data):
     time_array = []
     total_time = data[-1].DT - data[0].DT
     num_steps = int(round((total_time / len(data)).total_seconds() / 60))
+    t0 = datetime.strptime(landfall_time, '%Y-%m-%dT%H:%M:%S')
     for idx, d in enumerate(data):
         if not t0:
             t0 = d.DT
         t = d.DT
-        seconds_from_start = (t - t0).total_seconds()
-        time_array.append(seconds_from_start)
+        seconds_from_landfall = (t - t0).total_seconds()
+        time_array.append(seconds_from_landfall)
     return time_array
 
 
