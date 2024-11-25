@@ -163,7 +163,7 @@ contains
                 case(2)
                     rotation => S_rotation
                 case default
-                    stop " *** ERROR *** Roation override invalid."
+                    stop " *** ERROR *** Rotation override invalid."
             end select
             read(unit,*)
 
