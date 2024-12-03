@@ -4,6 +4,6 @@
 ## Must include absolute path to the wind and pressure files ##
 
 201208290000                          =: landfall_date    # Date of landfall for the storm
-"clawpack/geoclaw/examples/storm-surge/isaac_ascii_data/isaac.WIN"                           =: wind_field       # path to wind forcing file
-'clawpack/geoclaw/examples/storm-surge/isaac_ascii_data/isaac.PRE'                           =: pressure_field   # path to pressure forcing file
+"clawpack/geoclaw/scratch/isaac.WIN"                           =: wind_field       # path to wind forcing file
+'clawpack/geoclaw/scratch/isaac.PRE'                           =: pressure_field   # path to pressure forcing file
 0                                     =: regional_forcing # 0 for only basin forcing, 1 for regional 

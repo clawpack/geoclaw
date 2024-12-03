@@ -204,8 +204,10 @@ contains
         integer :: yr, mo, da, hr, minute, seconds_from_landfall
         integer :: iunit=10
         integer :: has_regional_data 
+        character(len=20) :: homedir
         
         if (.not. module_setup) then
+            call get_environment_variable("HOME", homedir)
             ! Open storm control file to get landfall date and 
             ! wind and pressure file names
             call opendatafile(iunit, storm_data_path)
@@ -214,6 +216,8 @@ contains
             ! Read the wind and pressure file absolute paths
             read(iunit, *) wind_file
             read(iunit, *) pressure_file
+            wind_file = trim(adjustl(homedir)) // '/' // wind_file
+            pressure_file = trim(adjustl(homedir)) // '/' // pressure_file
             ! Check for flag that there are regional forcing grids
             ! To be developed further later 11/15/2024 CRJ
             read(iunit, '(i2)') has_regional_data
