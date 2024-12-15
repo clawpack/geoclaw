@@ -375,10 +375,10 @@ class FGmaxGrid(object):
         elif indexing == 'ij':
             reshape_order = 'F'
         else:
-            raise InputError("*** indexing must by 'xy' or 'ij'")
+            raise ValueError("*** indexing must by 'xy' or 'ij'")
             
         if self.point_style is None:
-            raise InputError("*** point_style is not set, need to read input?")
+            raise ValueError("*** point_style is not set, need to read input?")
         point_style = self.point_style
 
         if fgno is not None:
