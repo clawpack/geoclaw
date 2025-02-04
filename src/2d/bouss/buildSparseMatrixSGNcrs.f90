@@ -71,12 +71,12 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
     ! for ghost cells, so those 12 entires need to be sorted.
     ! The order for u starting from rowPtr index:
     !   0         1          2         3        4        5     6       7 
-    ! u_i-1,j-1  v_i,j-1  v_i+1,j-1  u_i-1,j  v_i-1,j  u_ij  v_ij   u_i+1,j
+    ! v_i-1,j-1  v_i,j-1  v_i+1,j-1  u_i-1,j  v_i-1,j  u_ij  v_ij   u_i+1,j
     !  8          9         10          11
     ! v_i+1,j  v_i-1,j+1, v_i,j+1, v_i+1,j+1
     ! The order for v starting from rowPtr+12 index:
     !   12        13         14        15      16        17    18      19
-    ! u_i-1,j-1  u_i,j-1  v_i,j-1  u_i+1,j-1  u_i-1,j  v_ij   u_i+1,j
+    ! u_i-1,j-1  u_i,j-1  v_i,j-1  u_i+1,j-1  u_i-1,j  u_ij   v_ij   u_i+1,j
     !  20         21        22          23
     ! u_i-1,j+1  u_i,j+1, v_i,j+1, u_i+1,j+1
 
