@@ -49,8 +49,8 @@ module bouss_module
        integer :: numColsTot
 
        ! for CRS format
-       integer, allocatable, dimension(:) :: rowPtr, cols
-       real(kind=8), allocatable, dimension(:) :: vals 
+       integer, pointer :: rowPtr(:), cols(:)
+       real(kind=8), pointer :: vals(:)
 
        ! intfCountc are the # equations (cells)  added for you as a coarse grid
        ! these are the equations under a fine grid on the first interior cells
@@ -166,7 +166,7 @@ contains
         crs = .true.
     endif
 
-    ! crs = .false.  ! uncomment this line to force CRS with SGN for testing
+    !crs = .false.  ! uncomment this line to force CRS with SGN for testing
 
     !------------------------------------------
     if (rest) then

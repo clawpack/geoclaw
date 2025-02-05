@@ -1,18 +1,19 @@
-c
-c -----------------------------------------------------------
-c
+
       subroutine regrid  (nvar,lbase,cut,naux,start_time)
-c
+
       use amr_module
       use bouss_module
+#include <petsc/finclude/petscsys.h>
+      use petscsys
       implicit double precision (a-h,o-z)
       integer newnumgrids(maxlv)
       integer(kind=8) :: clock_start2, clock_finish, clock_rate
       type(matrix_patchIndex), pointer :: mi
       type(matrix_levInfo),  pointer :: minfo
+      PetscErrorCode ierr
 
-c
-c :::::::::::::::::::::::::::: REGRID :::::::::::::::::::::::::::::::
+!
+! :::::::::::::::::::::::::::: REGRID :::::::::::::::::::::::::::::::
 
 !> Flag points on each grid with a level > = lbase.
 !! cluster them, and fit new subgrids around the clusters.
@@ -21,19 +22,19 @@ c :::::::::::::::::::::::::::: REGRID :::::::::::::::::::::::::::::::
 !! information to the error grid before clustering. (project)
 !! order of grid examination - all grids at the same level, then
 !! do the next coarser level.
-c
-c input parameters:
-c     lbase  = highest level that stays fixed during regridding
-c     cutoff = criteria for measuring goodness of rect. fit.
+!
+! input parameters:
+!     lbase  = highest level that stays fixed during regridding
+!     cutoff = criteria for measuring goodness of rect. fit.
 
-c local variables:
-c     lcheck = the level being examined.
-c     lfnew  = finest grid to be. will replace lfine.
+! local variables:
+!     lcheck = the level being examined.
+!     lfnew  = finest grid to be. will replace lfine.
 
-c global
-c    mstart  = start of very coarsest grids.
-c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-c
+! global
+!    mstart  = start of very coarsest grids.
+! :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+!
       lcheck    = min0(lfine,mxnest-1)
       lfnew     = lbase
       do  i   = 1, mxnest
@@ -41,21 +42,21 @@ c
         newstl(i) = 0
       end do
       time      = rnode(timemult, lstart(lbase))
-c
+!
  20   if (lcheck .lt. lbase) go to 50
           call grdfit(lbase,lcheck,nvar,naux,cut,time,start_time)
           if (newstl(lcheck+1) .eq. 0) go to 40
           lfnew = max0(lcheck + 1,lfnew)
  40       continue
           lcheck = lcheck - 1
-c
+!
       go to 20
  50   continue
-c
-c  end of level loop
-c
-c  remaining tasks left in regridding:
-c  1.  count number of new grids at each level  
+!
+!  end of level loop
+!
+!  remaining tasks left in regridding:
+!  1.  count number of new grids at each level  
       maxnumnewgrids = 0   ! max over all levels. needed for dimensioning
       do lev = lbase+1,lfnew 
           ngridcount = 0
@@ -68,22 +69,22 @@ c  1.  count number of new grids at each level
  55       newnumgrids(lev) = ngridcount
           maxnumnewgrids = max(maxnumnewgrids,ngridcount)
       end do
-c
-c  2. interpolate storage for the new grids.  the starting pointers
-c  for each level are in newstl. also reclaim some space before new
-c  allocations.
+!
+!  2. interpolate storage for the new grids.  the starting pointers
+!  for each level are in newstl. also reclaim some space before new
+!  allocations.
       call system_clock(clock_start2,clock_rate)
       call gfixup(lbase,lfnew,nvar,naux,newnumgrids,maxnumnewgrids)
       call system_clock(clock_finish,clock_rate)
       timeGrdfit2 = timeGrdfit2 + clock_finish - clock_start2
-c
-c  3. merge data structures (newstl and lstart )
-c  finish storage allocation, reclaim space, etc. set up boundary
-c  flux conservation arrays
-c
+!
+!  3. merge data structures (newstl and lstart )
+!  finish storage allocation, reclaim space, etc. set up boundary
+!  flux conservation arrays
+!
 
-c     get rid of old bouss storage
-      if (max(lbase+1,minLevelBouss) .le. maxLevelBouss .and.
+!     get rid of old bouss storage
+      if (max(lbase+1,minLevelBouss) .le. maxLevelBouss .and.           &
      &     ibouss .gt. 0) then  ! need to redo bouss stuff
         do lev = max(lbase+1,minLevelBouss), maxLevelBouss
           minfo => matrix_info_allLevs(lev)
@@ -93,12 +94,14 @@ c     get rid of old bouss storage
                deallocate(mi%mindex)
                deallocate(mi%isBouss)
             end do
-            deallocate(minfo%matrix_indices) ! get rid of old one 
+            deallocate(minfo%matrix_indices) ! get rid of old one
             ! also deallocate matrix since new one will have diff size
             if (.not. crs) then ! COO triplet format
-             deallocate(minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa)
-            else  ! CRS format
-             deallocate(minfo%rowPtr, minfo%cols, minfo%vals)
+              deallocate(minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa)
+            else                  ! CRS format
+              PetscCallA(PetscShmgetDeallocateArrayInt(minfo%rowPtr, ierr))
+              PetscCallA(PetscShmgetDeallocateArrayInt(minfo%cols, ierr))
+              PetscCallA(PetscShmgetDeallocateArrayScalar(minfo%vals, ierr))
             endif
             minfo%numBoussGrids = 0  ! reset for new counting
             minfo%numBoussCells = 0  ! reset for new counting
@@ -125,7 +128,7 @@ c     get rid of old bouss storage
          newGrids(lbase+1:maxlv) = .true.
       endif
 
-c     set deepest bathy for each grid
+!     set deepest bathy for each grid
       if (lbase .lt. maxLevelBouss .and. ibouss.gt.0) then ! set up new bouss stuff
         do lev = lbase+1, lfine
            minfo => matrix_info_allLevs(lev)
@@ -159,19 +162,19 @@ c     set deepest bathy for each grid
         end do
 #endif
       endif
-c
-c  reset numgrids per level, needed for omp parallelization.
-c  note that grids may have disappeared, so next loop resets to 0
-c  if there are no grids from lfine+1 to mxnest
-c
+!
+!  reset numgrids per level, needed for omp parallelization.
+!  note that grids may have disappeared, so next loop resets to 0
+!  if there are no grids from lfine+1 to mxnest
+!
       do 72 levnew = lbase+1, mxnest
         mptr = lstart(levnew)
         ngridcount = 0
         ncells = 0
         do while (mptr .gt. 0)
            ngridcount = ngridcount + 1
-           ncells = ncells + (node(ndihi,mptr)-node(ndilo,mptr)+1)
-     .                     * (node(ndjhi,mptr)-node(ndjlo,mptr)+1)
+           ncells = ncells + (node(ndihi,mptr)-node(ndilo,mptr)+1)       &
+     &                     * (node(ndjhi,mptr)-node(ndjlo,mptr)+1)
            mptr = node(levelptr, mptr)
          end do
          if (ngridcount .ne. newnumgrids(levnew)) then
@@ -182,8 +185,8 @@ c
          numcells(levnew) = ncells
          avenumgrids(levnew) = avenumgrids(levnew) + ngridcount
          iregridcount(levnew) = iregridcount(levnew) + 1
-c        sort grids to first ones are the most work. this helps load
-c        balancing, but doesn't help locality
+!        sort grids to first ones are the most work. this helps load
+!        balancing, but doesn't help locality
          !commented out enxt line because now already sorted in prepnewgrids above
          ! changed 9/25/23 by mjb for better grid placement in filval par for loop 
          if (ngridcount .gt. 1) call arrangeGrids(levnew,ngridcount)
@@ -191,7 +194,7 @@ c        balancing, but doesn't help locality
          if (verbosity_regrid .ge. levnew) then
            write(*,100) ngridcount,ncells,levnew
            write(outunit,100) ngridcount,ncells,levnew
- 100       format("there are ",i6," grids with ",i10,
+ 100       format("there are ",i6," grids with ",i10,                    &
      &            " cells at level ", i3)
          endif
 72     continue
@@ -200,14 +203,14 @@ c        balancing, but doesn't help locality
         call prepf(level+1,nvar,naux)
         call prepc(level,nvar)
  60   continue
-c
-c      set up array of grids instead of recomputing at each step
+!
+!      set up array of grids instead of recomputing at each step
        call makeGridList(lbase)
        do levnew = lbase+1, lfine
           call makeBndryList(levnew)   ! does one level at a time
        end do
-c
-c     set up for Bouss matrices
+!
+!     set up for Bouss matrices
       if (ibouss .gt. 0) then ! 0 is SWE, otherwise setup for bouss
          do lev = lbase+1,lfine
            if (lev.le. maxLevelBouss .and. lev .ge. minLevelBouss)then
@@ -216,12 +219,12 @@ c     set up for Bouss matrices
            endif
          end do
       endif
-c
+!
       return
       end
-c
-c -------------------------------------------------------------------
-c
+!
+! -------------------------------------------------------------------
+!
 !> Sort all grids at level **level**. 
 !! Put the most expensive grid in **lstart(level)** 
 !! Cost is measured by number of cells.
@@ -229,33 +232,33 @@ c
 !! decreases from list head to list tail
 
       subroutine arrangeGrids(level, numg)
-c
+!
       use amr_module
       implicit double precision (a-h,o-z)
       integer listgrids(numg), cost(numg), index(numg), prevptr
-c
-c   slow sort for now, putting most expensive grids first on lstart list
-c   measure cost by number of cells
-c
+!
+!   slow sort for now, putting most expensive grids first on lstart list
+!   measure cost by number of cells
+!
        mptr = lstart(level)
        do i = 1, numg
          listgrids(i) = mptr
-         cost(i) =  (node(ndihi,mptr)-node(ndilo,mptr)+3) *
-     1              (node(ndjhi,mptr)-node(ndjlo,mptr)+2)
+         cost(i) =  (node(ndihi,mptr)-node(ndilo,mptr)+3) *              &
+     &              (node(ndjhi,mptr)-node(ndjlo,mptr)+2)
          index(i) = i
          mptr = node(levelptr, mptr)
        end do
-c
-c        write(*,*)" before sorting"
-c       write(*,*) index
-c
+!
+!        write(*,*)" before sorting"
+!       write(*,*) index
+!
        call  qsorti(index, numg, cost)
 
-c       write(*,*)"after sorting"
-c       write(*,*) index
+!       write(*,*)"after sorting"
+!       write(*,*) index
 
-c qsort returns in ascending order, repack in descending order
-c grids can stay in place, just their levelptrs need to change
+! qsort returns in ascending order, repack in descending order
+! grids can stay in place, just their levelptrs need to change
        lstart(level) = listgrids(index(numg))  ! last grid is most expensive
        prevptr = listgrids(index(numg))
        do i = 1, numg-1             
