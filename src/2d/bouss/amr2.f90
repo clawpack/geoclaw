@@ -161,8 +161,8 @@ program amr2
 
 #ifdef HAVE_PETSC
     !   needs to be very first line in main
-    PetscCallA(PetscOptionsSetValue(PETSC_NULL_OPTIONS,'-mpi_linear_solver_server','',ierr))
-    PetscCallA(PetscOptionsSetValue(PETSC_NULL_OPTIONS,'-mpi_linear_solver_server_view','',ierr))
+    !PetscCallA(PetscOptionsSetValue(PETSC_NULL_OPTIONS,'-mpi_linear_solver_server','',ierr))
+    !PetscCallA(PetscOptionsSetValue(PETSC_NULL_OPTIONS,'-mpi_linear_solver_server_view','',ierr))
     PetscCallA(PetscInitialize(ierr))
 #endif
     timing_unit = 48
@@ -601,7 +601,7 @@ program amr2
         time = t0
         nstart = 0
     endif
-    call PetscViewerASCIIStdoutSetFileUnit(outunit,ierr)
+    !call PetscViewerASCIIStdoutSetFileUnit(outunit,ierr)
 
     write(parmunit,*) ' '
     write(parmunit,*) '--------------------------------------------'

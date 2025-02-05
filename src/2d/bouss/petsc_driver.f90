@@ -147,7 +147,9 @@ subroutine petsc_driver(solution,rhs,levelBouss,numBoussCells,time,topo_finalize
       !call MatView(Jr(levelBouss),PETSC_VIEWER_BINARY_SELF,ierr)
 
 
+      !call KSPSetUp(ksp(levelBouss),ierr)
       call KSPSolve(ksp(levelBouss),rhs,solution,ierr)
+      CHKERRA(ierr)
       call KSPGetIterationNumber(ksp(levelBouss), itnum,ierr)
       CHKERRA(ierr)
       itcount(levelBouss) = itcount(levelBouss)+ itnum
