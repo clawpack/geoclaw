@@ -408,8 +408,8 @@ def setgeo(rundata):
 
     # Storm parameters - Parameterized storm (Holland 1980)
     data.storm_specification_type = 'owi_ascii'  # (type -3)
-    data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
-                                         'isaac.info'))
+    data.storm_pres_file = 'isaac.PRE'
+    data.storm_wind_file = 'isaac.WIN'
 
     # Convert ATCF data to GeoClaw format
     #clawutil.data.get_remote_file(
