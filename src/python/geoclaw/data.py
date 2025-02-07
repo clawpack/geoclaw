@@ -574,7 +574,8 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute('storm_type', None)  # Backwards compatibility
         self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
         self.add_attribute("storm_file", None) # File(s) containing data
-
+        self.add_attribute('storm_wind_file', None) #File(s) containing storm wind fields
+        self.add_attribute('storm_pres_file', None) #File(s) containing storm pressure fields
 
     def write(self, out_file='surge.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
@@ -648,6 +649,9 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             else:
                 raise ValueError("Unknown storm specification type %s"
                                  % self.storm_specification_type)
+        elif: self.storm_specification_type in [-3, -2]:
+            self.data_write('storm_pres_file', description="(Path to storm pressure data)")
+            self.data_write('storm_wind_file', description="(Path to storm wind data)")
         else:
             self.data_write("storm_specification_type",
                             description="(Storm specification)")
