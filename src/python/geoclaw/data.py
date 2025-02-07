@@ -655,7 +655,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         else:
             self.data_write("storm_specification_type",
                             description="(Storm specification)")
-        self.data_write("storm_file", description='(Path to storm data)')
+            self.data_write("storm_file", description='(Path to storm data)')
 
         self.close_data_file()
 
