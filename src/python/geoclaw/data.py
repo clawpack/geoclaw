@@ -649,7 +649,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             else:
                 raise ValueError("Unknown storm specification type %s"
                                  % self.storm_specification_type)
-        elif: self.storm_specification_type in [-3, -2]:
+        elif self.storm_specification_type in [-3, -2]:
             self.data_write('storm_pres_file', description="(Path to storm pressure data)")
             self.data_write('storm_wind_file', description="(Path to storm wind data)")
         else:
