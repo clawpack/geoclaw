@@ -141,7 +141,6 @@ contains
                 ! note that for lagrangian gauges, the x,y values read here 
                 ! might be overwritten if this is a restart
                 gauges(i)%buffer_index = 1
-                gauges(i)%last_time = gauges(i)%t_start
                 ! keep track of last position for lagrangian gauges,
                 ! initialize here in case checkpoint happens before 
                 ! ever writing this gauge:
@@ -163,6 +162,13 @@ contains
             read(UNIT, *)
             read(UNIT, *)
             read(UNIT, *) (gauges(i)%gtype, i=1, num_gauges)
+
+            do i=1,num_gauges
+                ! initialize last_time so that first gauge output will be
+                ! at time gauges(i)%t_start regardless of min_time_increment:
+                gauges(i)%last_time = gauges(i)%t_start - 1.d0 &
+                                      - gauges(i)%min_time_increment
+            enddo
 
             ! Read in q fields
             read(UNIT, *)
