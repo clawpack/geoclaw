@@ -199,8 +199,6 @@ contains
             read(unit, *) ! empty space for storm_spec_type in character format
             if (storm_specification_type == -3) then
                 read(unit, *) landfall_time
-
-                print *, 'LANDFALL  ', landfall_time
                 read(unit, *) num_storm_files
                 if (num_storm_files == 2) then
                     read(unit, *) wind_file_path
@@ -210,7 +208,10 @@ contains
                 else
                    print *, 'Multiple wind/pressure files not yet implemented'
                 end if         
-            else
+        else if (storm_specification_type == -2) then
+                read(unit, *) storm_file_path
+               storm_files_array = [storm_file_path] 
+           else
                 read(unit, *) storm_file_path
            end if
 

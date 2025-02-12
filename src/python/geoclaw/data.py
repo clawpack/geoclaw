@@ -650,7 +650,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             else:
                 raise ValueError("Unknown storm specification type %s"
                                  % self.storm_specification_type)
-        if self.storm_specification_type in [-3, -2, 'owi_ascii', 'owi_netcdf']:
+        if self.storm_specification_type in [-3, 'owi_ascii']:
             self.data_write("storm_specification_type",
                    description="(Storm specification)")
             self.data_write('landfall_time', description="(Date of Storm's Landfall)")
