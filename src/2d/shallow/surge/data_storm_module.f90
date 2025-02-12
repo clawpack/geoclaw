@@ -211,19 +211,7 @@ contains
         if (.not. module_setup) then
                 wind_file = storm_data_path(1)
                 pressure_file = storm_data_path(2)
-                !# call get_environment_variable("HOME", homedir)
-                !# ! Open storm control file to get landfall date and 
-                !# ! wind and pressure file names
-                !# call opendatafile(iunit, storm_data_path)
-                !# ! Read the landfall date/time into memory
-                print *, '!!!!!    ', landfall_time
                 read(landfall_time, '(i4i2i2i2i2)') yr, mo, da, hr, minute
-                print *, '!!!!!!', yr, mo, da, hr, minute, landfall_time
-                !# ! Read the wind and pressure file absolute paths
-                ! read(iunit, *) wind_file
-                !# read(iunit, *) pressure_file
-                !wind_file = trim( wind_file)
-                !# pressure_file = trim(adjustl(homedir)) // '/' // pressure_file
             ! Check for flag that there are regional forcing grids
             ! To be developed further later 11/15/2024 CRJ
             if (size(storm_data_path) > 2) then
