@@ -1,36 +1,32 @@
 Clawpack Git Status 
-Diffs can be found in /Users/rjl/clawpack_src/clawpack_master/geoclaw/tests/storm_surge/regression_data/claw_git_diffs.txt
+Diffs can be found in /home/catherinej/clawpack/geoclaw/tests/storm_surge/regression_data/claw_git_diffs.txt
 
-Fri, 23 Oct 2020 16:06:35 PDT
-$CLAW = /Users/rjl/clawpack_src/clawpack_master
+Tue, 03 Dec 2024 15:00:27 EST
+$CLAW = /home/catherinej/clawpack
 $FC = gfortran
 
 
 ===========
 clawpack
 ===========
-/Users/rjl/clawpack_src/clawpack_master/
+/home/catherinej/clawpack/
 
 --- last commit ---
-be2b38d (HEAD -> master, origin/master, origin/HEAD) Merge pull request #189 from clawpack/no_version_repetition
+285b7de (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #257 from rjleveque/v5.11.0rc
 
 --- branch and status ---
 ## master...origin/master
- M amrclaw
- M classic
  M geoclaw
- M pyclaw
  M riemann
- M visclaw
 
 
 ===========
 classic
 ===========
-/Users/rjl/clawpack_src/clawpack_master/classic
+/home/catherinej/clawpack/classic
 
 --- last commit ---
-13f06a2 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #88 from rjleveque/travis_noPy2
+5f178e4 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #90 from rjleveque/pytest
 
 --- branch and status ---
 ## master...origin/master
@@ -39,10 +35,10 @@ classic
 ===========
 amrclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/amrclaw
+/home/catherinej/clawpack/amrclaw
 
 --- last commit ---
-6da6e17 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #266 from rjleveque/region_tools_ixy
+2d9d076 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #296 from mandli/add-ci-action
 
 --- branch and status ---
 ## master...origin/master
@@ -51,10 +47,10 @@ amrclaw
 ===========
 clawutil
 ===========
-/Users/rjl/clawpack_src/clawpack_master/clawutil
+/home/catherinej/clawpack/clawutil
 
 --- last commit ---
-116ffb7 (HEAD -> master, tag: v5.7.1, origin/master, origin/HEAD) Merge pull request #151 from rjleveque/b4run
+1ee5f67 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #173 from rjleveque/idiff_threshold
 
 --- branch and status ---
 ## master...origin/master
@@ -63,10 +59,10 @@ clawutil
 ===========
 pyclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/pyclaw
+/home/catherinej/clawpack/pyclaw
 
 --- last commit ---
-41e15d8 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #650 from kbarnhart/barnhark/fix_vtk_docstring_formatting
+a16a6095 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #724 from carlosmunozmoncayo/additionalchanges
 
 --- branch and status ---
 ## master...origin/master
@@ -75,10 +71,10 @@ pyclaw
 ===========
 visclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/visclaw
+/home/catherinej/clawpack/visclaw
 
 --- last commit ---
-b03b0d4 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #280 from rjleveque/mapc2p_exists
+1fc821c (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #306 from rjleveque/default_linewidths
 
 --- branch and status ---
 ## master...origin/master
@@ -87,24 +83,25 @@ b03b0d4 (HEAD -> master, origin/master, origin/HEAD) Merge pull request #280 fro
 ===========
 riemann
 ===========
-/Users/rjl/clawpack_src/clawpack_master/riemann
+/home/catherinej/clawpack/riemann
 
 --- last commit ---
-e326696 (HEAD -> rpt2_geoclaw) refactor rpt2_geoclaw.f, cleaned up and modified behavior
+95a03ca (HEAD -> master, origin/master, origin/HEAD) Add missing ~/Documents/src/clawpack/riemann from fluctuation loop (#177)
 
 --- branch and status ---
-## rpt2_geoclaw
+## master...origin/master
 
 
 ===========
 geoclaw
 ===========
-/Users/rjl/clawpack_src/clawpack_master/geoclaw
+/home/catherinej/clawpack/geoclaw
 
 --- last commit ---
-13ff68f (HEAD -> rpt2_regression_data) Merge branch 'master' into rpt2_regression_data
+e1a05dae (HEAD -> OWI_integration, cjeffr/OWI_integration) made isaac.info generic for other users
 
 --- branch and status ---
-## rpt2_regression_data
+## OWI_integration...cjeffr/OWI_integration
  M tests/storm_surge/regression_data/claw_git_status.txt
  M tests/storm_surge/regression_data/gauge00001.txt
+ M tests/storm_surge/setrun.py

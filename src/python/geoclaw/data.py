@@ -536,8 +536,10 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     r"""Data object describing storm surge related parameters"""
 
     # Provide some mapping between model names and integers
-    storm_spec_dict_mapping = {"HWRF":-1,
+    storm_spec_dict_mapping = {"HWRF": -1,
                                None: 0,
+                               'owi_netcdf': -2,
+                               'owi_ascii': -3,
                                'holland80': 1,
                                'holland08': 8,
                                'holland10': 2,
@@ -572,8 +574,10 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute('storm_type', None)  # Backwards compatibility
         self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
         self.add_attribute("storm_file", None) # File(s) containing data
-
-
+        self.add_attribute('storm_wind_file', None) #File(s) containing storm wind fields
+        self.add_attribute('storm_pres_file', None) #File(s) containing storm pressure fields
+        self.add_attribute('landfall_time', None) # Landfall time for data_storm files
+        self.add_attribute('num_storm_files', 2) # Default for data storm objects
     def write(self, out_file='surge.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
 
@@ -646,10 +650,17 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             else:
                 raise ValueError("Unknown storm specification type %s"
                                  % self.storm_specification_type)
+        if self.storm_specification_type in [-3, 'owi_ascii']:
+            self.data_write("storm_specification_type",
+                   description="(Storm specification)")
+            self.data_write('landfall_time', description="(Date of Storm's Landfall)")
+            self.data_write('num_storm_files', description="(Number of Storm Wind/Pressure files)")
+            self.data_write('storm_wind_file', description="(Path to storm wind data)")
+            self.data_write('storm_pres_file', description="(Path to storm pressure data)")
         else:
             self.data_write("storm_specification_type",
                             description="(Storm specification)")
-        self.data_write("storm_file", description='(Path to storm data)')
+            self.data_write("storm_file", description='(Path to storm data)')
 
         self.close_data_file()
 
