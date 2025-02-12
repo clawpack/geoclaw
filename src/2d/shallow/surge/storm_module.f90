@@ -128,8 +128,10 @@ contains
         ! Locals
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
-        character(len=200) :: storm_file_path, line
-        
+        character(len=200) :: storm_file_path, line, wind_file_path, pressure_file_path
+        integer :: num_storm_files
+        character(len=200), allocatable, dimension(:) :: storm_files_array
+
         if (.not.module_setup) then
 
             ! Open file
@@ -194,8 +196,19 @@ contains
 
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
-            read(unit, *) storm_file_path
-            
+            if (storm_specification_type == -3) then
+                read(unit, *) num_storm_files
+                if (num_storm_files == 2) then
+                    read(unit, *) wind_file_path
+                    read(unit, *) pressure_file_path
+                    allocate storm_file_array(num_storm_files)
+                    storm_file_array = (wind_file_path, pressure_file_path)
+                else
+                   print *, 'Multiple wind/pressure files not yet implemented'
+                end if         
+            else
+                read(unit, *) storm_file_path
+           end if
 
             close(unit)
 
@@ -250,7 +263,7 @@ contains
                     case(-3) ! fixed width owi data
                         set_data_fields => set_owi_fields
                 end select
-            call set_data_storm(storm_file_path, data_storm, &
+            call set_data_storm(storm_file_array, data_storm, &
                                 storm_specification_type, log_unit)  
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
