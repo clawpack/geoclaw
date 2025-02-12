@@ -131,7 +131,7 @@ contains
         character(len=200) :: storm_file_path, line, wind_file_path, pressure_file_path
         integer :: num_storm_files
         character(len=200), allocatable, dimension(:) :: storm_files_array
-
+        character(len=12) :: landfall_time
         if (.not.module_setup) then
 
             ! Open file
@@ -196,13 +196,17 @@ contains
 
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
+            read(unit, *) ! empty space for storm_spec_type in character format
             if (storm_specification_type == -3) then
+                read(unit, *) landfall_time
+
+                print *, 'LANDFALL  ', landfall_time
                 read(unit, *) num_storm_files
                 if (num_storm_files == 2) then
                     read(unit, *) wind_file_path
                     read(unit, *) pressure_file_path
-                    allocate storm_file_array(num_storm_files)
-                    storm_file_array = (wind_file_path, pressure_file_path)
+                    allocate(storm_files_array(num_storm_files))
+                    storm_files_array = [wind_file_path, pressure_file_path]
                 else
                    print *, 'Multiple wind/pressure files not yet implemented'
                 end if         
@@ -263,8 +267,8 @@ contains
                     case(-3) ! fixed width owi data
                         set_data_fields => set_owi_fields
                 end select
-            call set_data_storm(storm_file_array, data_storm, &
-                                storm_specification_type, log_unit)  
+            call set_data_storm(storm_files_array, data_storm, &
+                                storm_specification_type, landfall_time, log_unit)  
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
                             storm_specification_type, "not available."
