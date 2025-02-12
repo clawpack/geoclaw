@@ -54,7 +54,7 @@ contains
     ! ==========================================================================
     subroutine set_storm(storm_data_path, storm, storm_spec_type, log_unit)
         implicit none
-        character(len=*), optional :: storm_data_path
+        character(len=*), dimension(:) :: storm_data_path
         type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
         ! if storm_spec = -3 == ascii
@@ -62,7 +62,7 @@ contains
         if (-3 <= storm_spec_type .and. storm_spec_type < 0) then
             select case(storm_spec_type)
             case(-2) ! netcdf
-                call set_netcdf_storm(storm_data_path, storm, storm_spec_type, &
+                call set_netcdf_storm(storm_data_pathi(1), storm, storm_spec_type, &
                                   log_unit)
             case(-3) ! ascii fixed width
                 call set_ascii_storm(storm_data_path, storm, storm_spec_type, &
@@ -192,7 +192,7 @@ contains
         implicit none
 
         ! Subroutine I/O
-        character(len=*), intent(in) :: storm_data_path
+        character(len=*), dimension(:), intent(in) :: storm_data_path
         integer, intent(in) :: storm_spec_type, log_unit
         type(data_storm_type), intent(inout) :: storm
         character(len=256) :: wind_file, pressure_file, regional_wind_file, regional_pressure_file
@@ -207,20 +207,24 @@ contains
         character(len=20) :: homedir
         
         if (.not. module_setup) then
-            call get_environment_variable("HOME", homedir)
-            ! Open storm control file to get landfall date and 
-            ! wind and pressure file names
-            call opendatafile(iunit, storm_data_path)
-            ! Read the landfall date/time into memory
-            read(iunit, '(i4i2i2i2i2)') yr, mo, da, hr, minute
-            ! Read the wind and pressure file absolute paths
-            read(iunit, *) wind_file
-            read(iunit, *) pressure_file
-            wind_file = trim(adjustl(homedir)) // '/' // wind_file
-            pressure_file = trim(adjustl(homedir)) // '/' // pressure_file
+                wind_file = storm_data_path(1)
+                pressure_file = storm_data_path(2)
+                !# call get_environment_variable("HOME", homedir)
+                !# ! Open storm control file to get landfall date and 
+                !# ! wind and pressure file names
+                !# call opendatafile(iunit, storm_data_path)
+                !# ! Read the landfall date/time into memory
+                !# read(iunit, '(i4i2i2i2i2)') yr, mo, da, hr, minute
+                !# ! Read the wind and pressure file absolute paths
+                !# read(iunit, *) wind_file
+                !# read(iunit, *) pressure_file
+                !# wind_file = trim(adjustl(homedir)) // '/' // wind_file
+                !# pressure_file = trim(adjustl(homedir)) // '/' // pressure_file
             ! Check for flag that there are regional forcing grids
             ! To be developed further later 11/15/2024 CRJ
-            read(iunit, '(i2)') has_regional_data
+            if (size(storm_data_path) > 2) then
+                    has_regional_data = 1
+            ! read(iunit, '(i2)') has_regional_data
 
             select case(has_regional_data)
                 case(0)
