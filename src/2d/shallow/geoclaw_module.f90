@@ -44,7 +44,8 @@ module geoclaw_module
     real(kind=8) :: friction_depth
     
     ! Method parameters    
-    real(kind=8) :: dry_tolerance
+    real(kind=8) :: dry_tolerance  ! smaller depths set to zero in places
+    real(kind=8) :: speed_limit    ! larger water speeds limited to this value
 
 contains
 
@@ -67,7 +68,7 @@ contains
         ! Locals
         integer, parameter :: unit = 127
 
-        integer :: i
+        integer :: i, iostat
         character(len=128) :: line
 
         if (.not.module_setup) then
@@ -116,6 +117,14 @@ contains
             endif
             read(unit,*)
             read(unit,*) dry_tolerance
+
+            read(unit,*,iostat=iostat) speed_limit
+            if (iostat .ne. 0) then
+                ! speed_limit only set in version > 5.11.0
+                ! if newer GeoClaw run with older geoclaw.data then use:
+                speed_limit = rinfinity
+                print *, '*** no speed_limit set'
+            endif
             
             close(unit)
 
