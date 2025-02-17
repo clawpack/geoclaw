@@ -72,6 +72,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dry_tolerance',1e-3)
         self.add_attribute('friction_depth',1.0e6)
         self.add_attribute('sea_level',0.0)
+        self.add_attribute('speed_limit',50.)
 
 
     def write(self,data_source='setrun.py', out_file='geoclaw.data'):
@@ -111,6 +112,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write()
 
         self.data_write('dry_tolerance')
+        self.data_write('speed_limit')
 
         self.close_data_file()
 
