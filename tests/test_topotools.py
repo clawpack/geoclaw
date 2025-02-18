@@ -4,17 +4,10 @@ import os
 import sys
 import tempfile
 import shutil
-
-try:
-    # For Python 3.0 and later
-    from urllib.error import URLError
-except ImportError:
-    # Fall back to Python 2's urllib2
-    from urllib2 import URLError
+import pytest
+import urllib.error
 
 import numpy
-
-import nose
 
 import clawpack.geoclaw.topotools as topotools
 import clawpack.clawutil.data
@@ -200,9 +193,9 @@ def test_netcdf():
 
     try:
         # Fetch comparison data
-        url = "".join(('https://raw.githubusercontent.com/rjleveque/geoclaw/',
-                       '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/',
-                       'geoclaw/tests/kahului_sample_1s.tt2'))
+        url = ('https://raw.githubusercontent.com/rjleveque/geoclaw/' +
+               '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/' +
+               'geoclaw/tests/kahului_sample_1s.tt2')
         clawpack.clawutil.data.get_remote_file(url, output_dir=temp_path,
                                                     force=True)
         
@@ -233,13 +226,14 @@ def test_netcdf():
         raise e
 
     except ImportError as e:
-        raise nose.SkipTest("Skipping test since NetCDF support not found.")
+        pytest.skip("Skipping test since NetCDF support not found.")
 
     except RuntimeError as e:
-        raise nose.SkipTest("NetCDF topography test skipped due to " +
-                            "runtime failure.")
-    except URLError:
-        raise nose.SkipTest("Could not fetch remote file, skipping test.")
+        pytest.skip("NetCDF topography test skipped due to " +
+                             "runtime failure.")
+
+    except urllib.error.URLError:
+        pytest.skip("Could not fetch remote file, skipping test.")
     
     finally:
         shutil.rmtree(temp_path)
@@ -251,8 +245,8 @@ def test_get_remote_file():
     temp_path = tempfile.mkdtemp()
     try:
 
-        url = "".join(('https://raw.githubusercontent.com/rjleveque/geoclaw/',
-                       '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/',
+        url = "".join(('https://raw.githubusercontent.com/rjleveque/geoclaw/' +
+                       '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/' +
                        'geoclaw/tests/kahului_sample_1s.tt2'))
         clawpack.clawutil.data.get_remote_file(url, output_dir=temp_path,
             force=True)
@@ -269,8 +263,8 @@ def test_get_remote_file():
         shutil.copy(local_path, os.path.join(os.getcwd(), "remote_file.tt2"))
         raise e
 
-    except URLError:
-        raise nose.SkipTest("Could not fetch remote file, skipping test.")
+    except urllib.error.URLError:
+        pytest.skip("Could not fetch remote file, skipping test.")
 
     finally:
         shutil.rmtree(temp_path)
@@ -278,10 +272,8 @@ def test_get_remote_file():
 
 def test_unstructured_topo(save=False, plot=False):
 
-    try:
-        import scipy
-    except:
-        raise nose.SkipTest("Skipping test since scipy not found")
+    scipy = pytest.importorskip('scipy', 
+                                reason="Skipping test since scipy not found")
 
     # Create random test data
     def func(x, y):
@@ -340,10 +332,13 @@ def plot_topo_bowl_hill():
     Note that center of bowl should be at (0,0).
     """
 
-    try:
-        import matplotlib
-    except ImportError:
-        raise nose.SkipTest("Skipping test since matplotlib not found.")
+    matplotlib = pytest.importorskip('matplotlib', 
+                            reason="Skipping test since matplotlib not found.")
+
+    # try:
+    #     import matplotlib
+    # except ImportError:
+    #     raise nose.SkipTest("Skipping test since matplotlib not found.")
 
     matplotlib.use("Agg")  # use image backend -- needed for Travis tests
     import matplotlib.pyplot as plt
@@ -357,14 +352,12 @@ def plot_topo_bowl_hill():
     topo.plot()
     fname = "bowl_hill.png"
     plt.savefig(fname)
-    print("Created ",fname)
 
     topo2 = topo.crop([0.5, 1.5, 0., 2.])
     topo2.plot()
     plt.title("Cropped topography")
     fname = "bowl_hill_crop.png"
     plt.savefig(fname)
-    print("Created ",fname)
 
 
 def plot_kahului():
@@ -377,10 +370,8 @@ def plot_kahului():
     illustrate how to do a contour data of the data directly.
     """
 
-    try:
-        import matplotlib
-    except ImportError:
-        raise nose.SkipTest("Skipping test since matplotlib not found.")
+    matplotlib = pytest.importorskip('matplotlib', 
+                            reason="Skipping test since matplotlib not found.")
 
     matplotlib.use("Agg")  # use image backend -- needed for Travis tests
     import matplotlib.pyplot as plt
@@ -393,7 +384,6 @@ def plot_kahului():
     plt.title("Kahului Harbor at 1 second resolution")
     fname = "kahului_imshow.png"
     plt.savefig(fname)
-    print("Created ",fname)
 
     assert K.Z.shape == (46, 65), "*** K.Z is wrong shape"
     assert numpy.allclose(K.Z[:3,:3], \
@@ -422,7 +412,6 @@ def plot_kahului():
               fontsize=12)
     fname = "kahului_contour.png"
     plt.savefig(fname)
-    print("Created ",fname)
 
 
 if __name__ == "__main__":
@@ -442,5 +431,3 @@ if __name__ == "__main__":
         test_get_remote_file()
         test_unstructured_topo()
         test_netcdf()
-
-        print("All tests passed.")
