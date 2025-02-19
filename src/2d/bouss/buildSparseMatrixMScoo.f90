@@ -11,7 +11,7 @@ subroutine buildSparseMatrixMScoo(rhs,nvar,naux,levelBouss,numBoussCells)
     integer, intent(in) :: nvar, naux, levelBouss, numBoussCells
     
     !! pass in numBoussCells for this level so can dimension this array
-    real(kind=8) :: rhs(0:2*numBoussCells) 
+    real(kind=8) :: rhs(2*numBoussCells) 
     
     type(matrix_patchIndex), pointer :: mi
     type(matrix_levInfo),  pointer :: minfo

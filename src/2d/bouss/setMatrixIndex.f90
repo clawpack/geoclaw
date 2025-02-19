@@ -5,6 +5,8 @@
 
       use amr_module
       use bouss_module
+#include <petsc/finclude/petscsys.h>
+      use petscsys
       implicit none
 
       integer, intent(in) :: levelBouss
@@ -16,6 +18,8 @@
       type(matrix_levInfo),  pointer :: minfo
       integer bndNum, imax,imin,jmax,jmin,icount,nextSpot,max_matrix_nelt
       integer ixlo,ixhi,jxlo,jxhi,imlo,imhi,jmlo,jmhi,mtest,nbtest
+      PetscErrorCode ierr
+      PetscInt zero
 
 !
 !     traverse grids in this exact order, after arrangeGrids has been called
@@ -30,6 +34,7 @@
 !         cells at edges of grid  that still have a -1 in their stencil 
 !         will be treated as SWE points.
 !
+      zero = 0
       minfo => matrix_info_allLevs(levelBouss)
 
       k = 0  ! keep running total of number of unknowns in matrix system 
@@ -81,10 +86,14 @@
                      minfo%matrix_ja(max_matrix_nelt),     &
                      minfo%matrix_sa(max_matrix_nelt))
           else  ! CRS format
-            allocate(minfo%cols(0:max_matrix_nelt),        &
-                     minfo%vals(0:max_matrix_nelt),        &
-                     minfo%rowPtr(0:2*minfo%numBoussCells))
-          endif
+!            allocate(minfo%cols(0:max_matrix_nelt),        &
+!                     minfo%vals(0:max_matrix_nelt),        &
+!                     minfo%rowPtr(0:2*minfo%numBoussCells))
+            PetscCallA(PetscShmgetAllocateArrayInt(zero, 2*minfo%numBoussCells + 1, minfo%rowPtr, ierr))
+            PetscCallA(PetscShmgetAllocateArrayInt(zero, max_matrix_nelt, minfo%cols, ierr))
+            PetscCallA(PetscShmgetAllocateArrayScalar(zero, max_matrix_nelt, minfo%vals, ierr))
+            CHKMEMQ;
+         endif
       endif
 
 !     loop again to set boundary values from other grids

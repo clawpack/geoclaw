@@ -127,18 +127,18 @@ program amr2
 
     ! Local variables
     integer :: i, iaux, mw, level
-    integer :: ierr
+    integer :: ierr ! error flag for PETSc calls
     integer :: ndim, nvar, naux, mcapa1, mindim, dimensional_split
     integer :: nstart, nsteps, nv1, nx, ny, lentotsave, num_gauge_SAVE
     integer :: omp_get_max_threads, maxthreads
     real(kind=8) :: time, ratmet, cut, dtinit, dt_max
-    logical :: vtime, rest, output_t0    
+    logical :: vtime, rest, output_t0
 
     ! Timing variables
     integer(kind=8) :: clock_start, clock_finish, clock_rate, ttotal, count_max
     real(kind=8) :: ttotalcpu
     integer(kind=8) :: tick_clock_finish
-    integer, parameter :: timing_unit = 48
+    integer :: timing_unit = 0
     character(len=512) :: timing_line, timing_substr
     character(len=*), parameter :: timing_base_name = "timing."
     character(len=*), parameter :: timing_header_format =                      &
@@ -160,10 +160,12 @@ program amr2
     character(len=*), parameter :: parmfile = 'fort.parameters'
 
 #ifdef HAVE_PETSC
-!   needs to be very first line in main
-      call PetscInitialize(ierr)
-      CHKERRA(ierr);
+    !   needs to be very first line in main
+    !PetscCallA(PetscOptionsSetValue(PETSC_NULL_OPTIONS,'-mpi_linear_solver_server','',ierr))
+    !PetscCallA(PetscOptionsSetValue(PETSC_NULL_OPTIONS,'-mpi_linear_solver_server_view','',ierr))
+    PetscCallA(PetscInitialize(ierr))
 #endif
+    timing_unit = 48
 
     ! Open parameter and debug files
     open(dbugunit,file=dbugfile,status='unknown',form='formatted')
@@ -599,7 +601,7 @@ program amr2
         time = t0
         nstart = 0
     endif
-
+    !call PetscViewerASCIIStdoutSetFileUnit(outunit,ierr)
 
     write(parmunit,*) ' '
     write(parmunit,*) '--------------------------------------------'
@@ -860,7 +862,6 @@ program amr2
     write(*,format_string)
     write(*,*)
     write(timing_unit,*)
-    close(timing_unit)
 
     if (isolver.eq. 2) then
 !     if (countIterRef == 0) then
@@ -928,12 +929,16 @@ program amr2
 
     write(outunit,"(//,' ------  end of AMRCLAW integration --------  ')")
 
-    ! Close output and debug files.
-    close(outunit)
+    ! Close debug file.
     close(dbugunit)
+    close(outunit)
 
 #ifdef HAVE_PETSC
-      call PetscFinalize(ierr)
+    call PetscViewerASCIIStdoutSetFileUnit(timing_unit,ierr)
+    call PetscFinalize(ierr)
 #endif
 
-end program amr2
+    if (timing_unit .gt. 0) then
+       close(timing_unit)
+    endif
+    end program amr2
