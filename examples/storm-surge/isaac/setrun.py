@@ -408,7 +408,7 @@ def setgeo(rundata):
 
     # Storm parameters - Parameterized storm (Holland 1980)
     # data.storm_specification_type = 'holland80'  # (type 1)
-    data.storm_specification_type = 'owi'
+    data.storm_specification_type = 'OWI'
     data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
                                          'isaac.storm'))
     if data.storm_specification_type == "holland80":
@@ -435,8 +435,17 @@ def setgeo(rundata):
     elif data.storm_specification_type == "OWI":
 
         isaac = Storm()
+        isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+        isaac.regional_forcing_type = 0
+        isaac.data_file_format = 'ascii'
+        # Wind field
+        isaac.file_paths.append("isaac.WIN")
+        # Pressure field
+        isaac.file_paths.append("isaac.PRE")
 
         isaac.write(data.storm_file, file_format='OWI')
+    else:
+        raise ValueError("Invalid storm specification type.")
 
     # =======================
     #  Set Variable Friction

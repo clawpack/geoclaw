@@ -534,14 +534,14 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     r"""Data object describing storm surge related parameters"""
 
     # Provide some mapping between model names and integers
-    storm_spec_dict_mapping = {'OWI': -2,
-                               "HWRF": -1,
+    storm_spec_dict_mapping = {'owi': -2,
+                               "hwrf": -1,
                                None: 0,
                                'holland80': 1,
                                'holland08': 8,
                                'holland10': 2,
-                               'CLE': 3,
-                               'SLOSH': 4,
+                               'cle': 3,
+                               'slosh': 4,
                                'rankine': 5,
                                'modified-rankine': 6,
                                'DeMaria': 7,
@@ -632,16 +632,18 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         # Turn value into integer descriptor
         if isinstance(self.storm_specification_type, int):
             spec_type = self.storm_specification_type
-        else:
-            # Attempt to map object to int
-            if self.storm_specification_type in self.storm_spec_dict_mapping.keys():
-                spec_type = self.storm_spec_dict_mapping[self.storm_specification_type]
+        elif isinstance(self.storm_specification_type, str):
+            if self.storm_specification_type.lower() in self.storm_spec_dict_mapping.keys():
+                spec_type = self.storm_spec_dict_mapping[self.storm_specification_type.lower()]
             else:
-                raise TypeError(f"Unknown storm specification type",
-                                f" {self.storm_specification_type} provided.")
+                raise TypeError(f"Unknown storm specification type" +
+                                f" '{self.storm_specification_type}' provided.")
+        else:
+            raise TypeError(f"Unknown storm specification type" +
+                            f" '{self.storm_specification_type}' provided.")
         # Check to see if spec type is in supported formats
         if spec_type in self.storm_spec_not_implemented:
-            raise NotImplementedError(f"{spec_type} has not been implemented.")
+            raise NotImplementedError(f"'{spec_type}' has not been implemented.")
         # Write out values
         self.data_write(name="storm_specification_type", value=spec_type,
                         description="(Storm specification)")

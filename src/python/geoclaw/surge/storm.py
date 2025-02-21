@@ -100,7 +100,6 @@ hurdat_special_entries = {"L": "landfall",
                           "G": "genesis",
                           "T": "additional track point"}
 
-
 # Warning for formats that have yet to have a default way to determine crticial
 # radii from the input data
 missing_data_warning_str = """*** Cannot yet automatically determine the
@@ -181,8 +180,12 @@ class Storm(object):
                           "jma": ["JMA", "http://www.jma.go.jp/jma/jma-eng/jma-center/rsmc-hp-pub-eg/Besttracks/e_format_bst.html"],
                           "imd": ["IMD", "http://www.rsmcnewdelhi.imd.gov.in/index.php"],
                           "tcvitals": ["TC-Vitals", "http://www.emc.ncep.noaa.gov/mmb/data_processing/tcvitals_description.htm"],
-                          "HWRF": ["HWRF", None],
-                          "OWI": ['OWI', "http://www.oceanweather.com"]}
+                          "hwrf": ["HWRF", None],
+                          "owi": ['OWI', "http://www.oceanweather.com"]}
+
+    # OWI file formats
+    _data_file_format_mapping = {'ascii': 1, 'netcdf': 2}
+
 
     def __init__(self, path=None, file_format="ATCF", **kwargs):
         r"""Storm Initiatlization Routine
@@ -195,7 +198,7 @@ class Storm(object):
         self.time_offset = None
         # File paths of either the original file that was read in for modeled
         # storms or a list of files to be pointed to for data driven storms
-        self.file_paths = None
+        self.file_paths = []
 
         # Model parameters stored directly in the storm file
         self.t = None
@@ -209,6 +212,7 @@ class Storm(object):
         # Parameters for data driven storms (e.g. HWRF or OWI)
         # Each format will have a variety of files to be read in and parameters
         # valid for its format
+        self.data_file_format = None
         self.regional_forcing_type = None
 
         # Storm descriptions - not all formats provide these
@@ -903,7 +907,7 @@ class Storm(object):
         # Add original file path
         self.file_paths = [path]
 
-    def read_HWRF(self, path, verbose=False):
+    def read_hwrf(self, path, verbose=False):
         r"""Read in HWRF information file
 
         :Input:
@@ -914,7 +918,7 @@ class Storm(object):
         raise NotImplementedError("HWRF reading of the information file is ",
                                   " not implemented.")
 
-    def read_OWI(self, path, verbose=False):
+    def read_owi(self, path, verbose=False):
         r"""Read in OWI information file
 
         Reads in file that provides information about the forcing for an OWI
@@ -935,8 +939,11 @@ class Storm(object):
                 self.time_offset = float(time)
 
             data_file.readline()
+            self.data_file_format = int(data_file.reaadline())
+            data_file.readline()
             self.regional_forcing_type = int(data_file.readline())
             data_file.readline()
+            self.file_paths = []
             self.file_paths.append(data_file.readline().strip())
             data_file.readline()
             self.file_paths.append(data_file.readline().strip())
@@ -1234,7 +1241,7 @@ class Storm(object):
                                    "implemented yet but is planned for a ",
                                    "future release."))
 
-    def write_HWRF(self, path, verbose=False):
+    def write_hwrf(self, path, verbose=False):
         r"""Write out an TCVITALS formatted storm file
 
         :Input:
@@ -1245,7 +1252,7 @@ class Storm(object):
         raise NotImplementedError("HWRF formatted info files cannot be ",
                                   "written out yet.")
 
-    def write_OWI(self, path, verbose=False):
+    def write_owi(self, path, verbose=False):
         r"""Write out an OWI information formatted storm file
 
         :Input:
@@ -1256,15 +1263,29 @@ class Storm(object):
         try:
             with open(path, "w") as data_file:
                 # Write header
-                data_file.write("OWI Formatted")
+                data_file.write("# OWI Formatted\n")
                 if isinstance(self.time_offset, datetime.datetime):
                     data_file.write(f"{self.time_offset.isoformat()}\n\n")
                 else:
                     data_file.write(f"{str(self.time_offset)}\n\n")
 
                 # Write out data for this data type
-                data_file.write("# Regional forcing type")
-                data_file.write(f"{self.regional_forcing_type}")
+                data_file.write("# File Format\n")
+                # Map to int file format
+                if isinstance(self.data_file_format, int):
+                    file_format = self.data_file_format
+                elif isinstance(self.data_file_format, str):
+                    if self.data_file_format.lower() in self._data_file_format_mapping.keys():
+                        file_format = self._data_file_format_mapping[self.data_file_format.lower()]
+                    else:
+                        raise TypeError(f"Unknown storm data file format type" +
+                                        f" '{self.data_file_format}' provided.")
+                else:
+                    raise TypeError(f"Unknown storm data file format type" +
+                                    f" '{self.data_file_format}' provided.")
+                data_file.write(f"{file_format}\n")
+                data_file.write("# Regional forcing type\n")
+                data_file.write(f"{self.regional_forcing_type}\n")
                 data_file.write("# Wind field file\n")
                 data_file.write(f"{self.file_paths[0]}\n")
                 data_file.write("# Pressure field file\n")
