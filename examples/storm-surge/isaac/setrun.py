@@ -407,28 +407,36 @@ def setgeo(rundata):
     data.R_refine = [60.0e3, 40e3, 20e3]
 
     # Storm parameters - Parameterized storm (Holland 1980)
-    data.storm_specification_type = 'holland80'  # (type 1)
+    # data.storm_specification_type = 'holland80'  # (type 1)
+    data.storm_specification_type = 'owi'
     data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
                                          'isaac.storm'))
+    if data.storm_specification_type == "holland80":
 
-    # Convert ATCF data to GeoClaw format
-    clawutil.data.get_remote_file(
-                   "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-    atcf_path = os.path.join(scratch_dir, "bal092012.dat")
-    # Note that the get_remote_file function does not support gzip files which
-    # are not also tar files.  The following code handles this
-    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
-            open(atcf_path, 'w') as atcf_unzipped_file:
-        atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
+        # Convert ATCF data to GeoClaw format
+        clawutil.data.get_remote_file(
+                       "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
+        atcf_path = os.path.join(scratch_dir, "bal092012.dat")
+        # Note that the get_remote_file function does not support gzip files which
+        # are not also tar files.  The following code handles this
+        with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+                open(atcf_path, 'w') as atcf_unzipped_file:
+            atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
 
-    # Uncomment/comment out to use the old version of the Ike storm file
-    isaac = Storm(path=atcf_path, file_format="ATCF")
+        # Uncomment/comment out to use the old version of the Ike storm file
+        isaac = Storm(path=atcf_path, file_format="ATCF")
 
-    # Calculate landfall time - Need to specify as the file above does not
-    # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
-    isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+        # Calculate landfall time - Need to specify as the file above does not
+        # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
+        isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
 
-    isaac.write(data.storm_file, file_format='geoclaw')
+        isaac.write(data.storm_file, file_format='geoclaw')
+
+    elif data.storm_specification_type == "OWI":
+
+        isaac = Storm()
+
+        isaac.write(data.storm_file, file_format='OWI')
 
     # =======================
     #  Set Variable Friction
@@ -442,12 +450,12 @@ def setgeo(rundata):
     # Entire domain
     data.friction_regions.append([rundata.clawdata.lower,
                                   rundata.clawdata.upper,
-                                  [np.infty, 0.0, -np.infty],
+                                  [np.inf, 0.0, -np.inf],
                                   [0.030, 0.022]])
 
     # La-Tex Shelf
     data.friction_regions.append([(-98, 25.25), (-90, 30),
-                                  [np.infty, -10.0, -200.0, -np.infty],
+                                  [np.inf, -10.0, -200.0, -np.inf],
                                   [0.030, 0.012, 0.022]])
 
     return rundata
