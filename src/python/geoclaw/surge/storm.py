@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+2#!/usr/bin/env python
 
 r"""
 Module defines a class and routines for managing storm best-track type input and
@@ -29,15 +29,15 @@ workflow in a `setrun.py` file would do the following:
     - JMA (reading only)
     - IMD (planned)
     - tcvitals (reading only)
-    - OWI_netcdf (data-derived)
-    - OWI_ascii (data-derived)
+    - HWRF (data-derived)
+    - OWI (data-derived)
 """
 
-import warnings
 import sys
 import os
 import argparse
 import datetime
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -180,7 +180,9 @@ class Storm(object):
                           "ibtracs": ["IBTrACS", "https://www.ncdc.noaa.gov/ibtracs/index.php?name=ib-v4-access"],
                           "jma": ["JMA", "http://www.jma.go.jp/jma/jma-eng/jma-center/rsmc-hp-pub-eg/Besttracks/e_format_bst.html"],
                           "imd": ["IMD", "http://www.rsmcnewdelhi.imd.gov.in/index.php"],
-                          "tcvitals": ["TC-Vitals", "http://www.emc.ncep.noaa.gov/mmb/data_processing/tcvitals_description.htm"]}
+                          "tcvitals": ["TC-Vitals", "http://www.emc.ncep.noaa.gov/mmb/data_processing/tcvitals_description.htm"],
+                          "HWRF": ["HWRF", None],
+                          "OWI": ['OWI', "http://www.oceanweather.com"]}
 
     def __init__(self, path=None, file_format="ATCF", **kwargs):
         r"""Storm Initiatlization Routine
@@ -188,14 +190,26 @@ class Storm(object):
         See :class:`Storm` for more info.
         """
 
-        self.t = None
+        # Time offsets are usually set to landfall but could be any time point
+        # and are not required
         self.time_offset = None
+        # File paths of either the original file that was read in for modeled
+        # storms or a list of files to be pointed to for data driven storms
+        self.file_paths = None
+
+        # Model parameters stored directly in the storm file
+        self.t = None
         self.eye_location = None
         self.max_wind_speed = None
         self.max_wind_radius = None
         self.central_pressure = None
         self.storm_radius = None
         self.wind_speeds = None
+
+        # Parameters for data driven storms (e.g. HWRF or OWI)
+        # Each format will have a variety of files to be read in and parameters
+        # valid for its format
+        self.regional_forcing_type = None
 
         # Storm descriptions - not all formats provide these
         self.name = None                    # Possibly a list of a storm's names
@@ -212,7 +226,9 @@ class Storm(object):
     def __str__(self):
         r""""""
         output = f"Name: {self.name}\n"
-        if isinstance(self.t[0], datetime.datetime):
+        if self.t is None and self.time_offset is not None:
+            output += f"Time offset: {self.time_offset}"
+        elif isinstance(self.t[0], datetime.datetime):
             output += f"Dates: {self.t[0].isoformat()}"
             output += f" - {self.t[-1].isoformat()}"
         else:
@@ -306,6 +322,8 @@ class Storm(object):
         self.max_wind_radius = data[:, 4]
         self.central_pressure = data[:, 5]
         self.storm_radius = data[:, 6]
+
+        self.file_paths = [path]
 
     def read_atcf(self, path, verbose=False):
         r"""Read in a ATCF formatted storm file
@@ -425,6 +443,9 @@ class Storm(object):
         self.wind_speeds[:, 1] = units.convert(
             self.wind_speeds[:, 1], 'nmi', 'm')
 
+        # Add original file path
+        self.file_paths = [path]
+
     def read_hurdat(self, path, verbose=False):
         r"""Read in HURDAT formatted storm file
 
@@ -512,6 +533,9 @@ class Storm(object):
             warnings.warn(missing_data_warning_str)
             self.max_wind_radius[i] = -1
             self.storm_radius[i] = -1
+        
+        # Add original file path
+        self.file_paths = [path]
 
     def read_ibtracs(self, path, sid=None, storm_name=None, year=None, start_date=None,
                      agency_pref=['wmo',
@@ -723,6 +747,9 @@ class Storm(object):
             if (self.max_wind_radius.max()) == -1 or (self.storm_radius.max() == -1):
                 warnings.warn(missing_data_warning_str)
 
+        # Add original file path
+        self.file_paths = [path]
+
     def read_jma(self, path, verbose=False):
         r"""Read in JMA formatted storm file
 
@@ -790,6 +817,9 @@ class Storm(object):
             warnings.warn(missing_data_warning_str)
             self.max_wind_radius[i] = -1
             self.storm_radius[i] = -1
+
+        # Add original file path
+        self.file_paths = [path]
 
     def read_imd(self, path, verbose=False):
         r"""Extract relevant hurricane data from IMD file
@@ -869,6 +899,47 @@ class Storm(object):
                 float(data[9]), 'mbar', 'Pa')
             self.max_wind_radius[i] = units.convert(float(data[13]), 'km', 'm')
             self.storm_radius[i] = units.convert(float(data[11]), 'km', 'm')
+
+        # Add original file path
+        self.file_paths = [path]
+
+    def read_HWRF(self, path, verbose=False):
+        r"""Read in HWRF information file
+
+        :Input:
+         - *path* (string) Path to the file to be read.
+         - *verbose* (bool) Output more info regarding reading.
+        """
+
+        raise NotImplementedError("HWRF reading of the information file is ",
+                                  " not implemented.")
+
+    def read_OWI(self, path, verbose=False):
+        r"""Read in OWI information file
+
+        Reads in file that provides information about the forcing for an OWI
+        produced wind and pressure field as well as the paths to those files.
+
+        :Input:
+         - *path* (string) Path to the file to be read.
+         - *verbose* (bool) Output more info regarding reading.
+        """
+
+        with open(path, "r") as data_file:
+            format_string = data_file.readline().strip()
+            time = data_file.readline()[:19]
+            try:
+                self.time_offset = datetime.datetime.strptime(
+                    time, '%Y-%m-%dT%H:%M:%S')
+            except ValueError:
+                self.time_offset = float(time)
+
+            data_file.readline()
+            self.regional_forcing_type = int(data_file.readline())
+            data_file.readline()
+            self.file_paths.append(data_file.readline().strip())
+            data_file.readline()
+            self.file_paths.append(data_file.readline().strip())
 
     # =========================================================================
     # Write Routines
@@ -1162,6 +1233,49 @@ class Storm(object):
         raise NotImplementedError(("Writing in TCVITALS files is not",
                                    "implemented yet but is planned for a ",
                                    "future release."))
+
+    def write_HWRF(self, path, verbose=False):
+        r"""Write out an TCVITALS formatted storm file
+
+        :Input:
+         - *path* (string) Path to the file to be written.
+         - *verbose* (bool) Print out additional information when writing.
+         """
+        
+        raise NotImplementedError("HWRF formatted info files cannot be ",
+                                  "written out yet.")
+
+    def write_OWI(self, path, verbose=False):
+        r"""Write out an OWI information formatted storm file
+
+        :Input:
+         - *path* (string) Path to the file to be written.
+         - *verbose* (bool) Print out additional information when writing.
+         """
+
+        try:
+            with open(path, "w") as data_file:
+                # Write header
+                data_file.write("OWI Formatted")
+                if isinstance(self.time_offset, datetime.datetime):
+                    data_file.write(f"{self.time_offset.isoformat()}\n\n")
+                else:
+                    data_file.write(f"{str(self.time_offset)}\n\n")
+
+                # Write out data for this data type
+                data_file.write("# Regional forcing type")
+                data_file.write(f"{self.regional_forcing_type}")
+                data_file.write("# Wind field file\n")
+                data_file.write(f"{self.file_paths[0]}\n")
+                data_file.write("# Pressure field file\n")
+                data_file.write(f"{self.file_paths[1]}\n")
+
+        except Exception as e:
+            # If an exception occurs clean up a partially generated file
+            if os.path.exists(path):
+                os.remove(path)
+            raise e
+
 
     # ================
     #  Track Plotting
