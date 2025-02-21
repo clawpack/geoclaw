@@ -130,8 +130,7 @@ contains
         integer :: i, drag_law, rotation_override
         character(len=200) :: storm_file_path, line, wind_file_path, pressure_file_path
         integer :: num_storm_files
-        character(len=200), allocatable, dimension(:) :: storm_files_array
-        character(len=12) :: landfall_time
+        ! character(len=12) :: landfall_time
         if (.not.module_setup) then
 
             ! Open file
@@ -196,24 +195,7 @@ contains
 
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
-            read(unit, *) ! empty space for storm_spec_type in character format
-            if (storm_specification_type == -3) then
-                read(unit, *) landfall_time
-                read(unit, *) num_storm_files
-                if (num_storm_files == 2) then
-                    read(unit, *) wind_file_path
-                    read(unit, *) pressure_file_path
-                    allocate(storm_files_array(num_storm_files))
-                    storm_files_array = [wind_file_path, pressure_file_path]
-                else
-                   print *, 'Multiple wind/pressure files not yet implemented'
-                end if         
-        else if (storm_specification_type == -2) then
-                read(unit, *) storm_file_path
-               storm_files_array = [storm_file_path] 
-           else
-                read(unit, *) storm_file_path
-           end if
+            read(unit, *) storm_file_path
 
             close(unit)
 
@@ -228,9 +210,7 @@ contains
             write(log_unit, *) "  file = ", storm_file_path
 
             ! Use parameterized storm model
-            if (0 < storm_specification_type .and.              &
-                    storm_specification_type <= 3               &
-                .or. storm_specification_type == 8) then
+            if (0 < storm_specification_type) then
                 select case(storm_specification_type)
                     case(1) ! Holland 1980 model
                         set_model_fields => set_holland_1980_fields
@@ -244,37 +224,29 @@ contains
                         set_model_fields => set_SLOSH_fields
                     case(5) ! rankine model
                         set_model_fields => set_rankine_fields
-                    case(6) ! modified_ankine model
+                    case(6) ! modified rankine model
                         set_model_fields => set_modified_rankine_fields
                     case(7) ! deMaria model
                         set_model_fields => set_deMaria_fields
+                    case default
+                        print *, "Storm specification model type ",              &
+                                    storm_specification_type, "not available."
+                        stop
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
-            else if (storm_specification_type > 0) then
-                print *, "Storm specification model type ",                &
-                            storm_specification_type, "not available."
-                stop
-            end if
-
-            ! Storm will be set based on a gridded set of data
-            if (-3 <= storm_specification_type .and.                    &
-                      storm_specification_type < 0) then
-                select case(storm_specification_type)
-                    case(-1) ! HWRF Data
-                        set_data_fields => set_HWRF_fields
-                    case(-2) ! netcdf owi data
-                        set_data_fields => set_owi_fields
-                    case(-3) ! fixed width owi data
-                        set_data_fields => set_owi_fields
-                end select
-            call set_data_storm(storm_files_array, data_storm, &
-                                storm_specification_type, landfall_time, log_unit)  
             else if (storm_specification_type < 0) then
-                print *, "Storm specification data type ",               &
-                            storm_specification_type, "not available."
-                stop
-
+                select case(storm_specification_type)
+                    case(-1) ! HWRF
+                        set_data_fields => set_HWRF_fields
+                    case(-2) ! OWI
+                        set_data_fields => set_OWI_fields
+                    case default
+                        print *, "Storm specification data type ",               &
+                                    storm_specification_type, "not available."
+                end select
+                call set_data_storm(storm_file_path, data_storm, &
+                                    storm_specification_type, log_unit) 
             end if
 
             close(log_unit)
