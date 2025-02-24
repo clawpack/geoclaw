@@ -139,6 +139,7 @@ contains
                                    storm%central_pressure(i), &
                                    storm%radius(i)
             enddo
+            close(data_file)
 
             ! Calculate storm speed
             allocate(storm%velocity(2, storm%num_casts))
