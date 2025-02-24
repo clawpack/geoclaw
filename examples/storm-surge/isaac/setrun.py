@@ -436,14 +436,19 @@ def setgeo(rundata):
 
         isaac = Storm()
         isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
-        isaac.regional_forcing_type = 0
-        isaac.data_file_format = 'ascii'
-        # Wind field
-        isaac.file_paths.append("isaac.WIN")
-        # Pressure field
-        isaac.file_paths.append("isaac.PRE")
+
+        # ASCII
+        isaac.data_file_format = 'NWS12'
+        isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.PRE"))
+        isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.WIN"))
+
+        # NetCDF file
+        # isaac.data_file_format = "NWS13"
+        # isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.nc"))
 
         isaac.write(data.storm_file, file_format='OWI')
+
+
     else:
         raise ValueError("Invalid storm specification type.")
 
