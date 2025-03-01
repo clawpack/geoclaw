@@ -113,6 +113,7 @@ contains
         use model_storm_module, only: set_rankine_fields
         use model_storm_module, only: set_modified_rankine_fields
         use model_storm_module, only: set_deMaria_fields
+        use model_storm_module, only: set_willoughby_fields
 
         ! use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
@@ -228,6 +229,8 @@ contains
                         set_model_fields => set_modified_rankine_fields
                     case(7) ! deMaria model
                         set_model_fields => set_deMaria_fields
+                    case(9) ! Willoughby model
+                        set_model_fields => set_willoughby_fields
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
