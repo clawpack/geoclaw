@@ -211,7 +211,8 @@ contains
             ! Use parameterized storm model
             if (0 < storm_specification_type .and.              &
                     storm_specification_type <= 3               &
-                .or. storm_specification_type == 8) then
+                .or. storm_specification_type == 8              &
+                .or. storm_specification_type == 9) then
                 select case(storm_specification_type)
                     case(1) ! Holland 1980 model
                         set_model_fields => set_holland_1980_fields
