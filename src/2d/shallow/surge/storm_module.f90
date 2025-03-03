@@ -113,6 +113,7 @@ contains
         use model_storm_module, only: set_rankine_fields
         use model_storm_module, only: set_modified_rankine_fields
         use model_storm_module, only: set_deMaria_fields
+        use model_storm_module, only: set_willoughby_fields
 
         ! use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
@@ -210,7 +211,8 @@ contains
             ! Use parameterized storm model
             if (0 < storm_specification_type .and.              &
                     storm_specification_type <= 3               &
-                .or. storm_specification_type == 8) then
+                .or. storm_specification_type == 8              &
+                .or. storm_specification_type == 9) then
                 select case(storm_specification_type)
                     case(1) ! Holland 1980 model
                         set_model_fields => set_holland_1980_fields
@@ -228,6 +230,8 @@ contains
                         set_model_fields => set_modified_rankine_fields
                     case(7) ! deMaria model
                         set_model_fields => set_deMaria_fields
+                    case(9) ! Willoughby model
+                        set_model_fields => set_willoughby_fields
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
