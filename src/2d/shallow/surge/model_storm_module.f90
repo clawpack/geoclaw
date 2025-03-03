@@ -1518,7 +1518,7 @@ contains
 
     ! ==========================================================================
     !  Use the Willoughby 2006 model to set the wind field, using H80 for pressure
-    !  Original paper https://journals.ametsoc.org/mwr/article/134/4/1102/67551
+    !  Original paper https://doi.org/10.1175/MWR3106.1
     ! ==========================================================================
     subroutine set_willoughby_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
