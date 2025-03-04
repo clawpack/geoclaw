@@ -80,7 +80,7 @@ module storm_module
             implicit none
             integer, intent(in) :: maux, mbc, mx, my
             real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-            type(data_storm_type), intent(in out) :: storm
+            type(data_storm_type), intent(inout) :: storm
             integer, intent(in) :: wind_index, pressure_index
             real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
         end subroutine set_data_fields_def
@@ -115,8 +115,9 @@ contains
         use model_storm_module, only: set_deMaria_fields
         use model_storm_module, only: set_willoughby_fields
 
-        ! use data_storm_module, only: set_data_storm => set_storm
+        use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
+        use data_storm_module, only: set_owi_fields
 
         use utility_module, only: get_value_count
 
@@ -128,8 +129,10 @@ contains
         ! Locals
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
-        character(len=200) :: storm_file_path, line
-
+        character(len=200) :: storm_file_path, line, wind_file_path, pressure_file_path
+        integer :: num_storm_files
+        character(len=200), allocatable, dimension(:) :: storm_files_array
+        character(len=12) :: landfall_time
         if (.not.module_setup) then
 
             ! Open file
@@ -193,8 +196,25 @@ contains
             read(unit,*)
 
             ! Storm Setup
-            read(unit, "(i1)") storm_specification_type
-            read(unit, *) storm_file_path
+            read(unit, "(i2)") storm_specification_type
+            read(unit, *) ! empty space for storm_spec_type in character format
+            if (storm_specification_type == -3) then
+                read(unit, *) landfall_time
+                read(unit, *) num_storm_files
+                if (num_storm_files == 2) then
+                    read(unit, *) wind_file_path
+                    read(unit, *) pressure_file_path
+                    allocate(storm_files_array(num_storm_files))
+                    storm_files_array = [wind_file_path, pressure_file_path]
+                else
+                   print *, 'Multiple wind/pressure files not yet implemented'
+                end if         
+        else if (storm_specification_type == -2) then
+                read(unit, *) storm_file_path
+               storm_files_array = [storm_file_path] 
+           else
+                read(unit, *) storm_file_path
+           end if
 
             close(unit)
 
@@ -242,16 +262,23 @@ contains
             end if
 
             ! Storm will be set based on a gridded set of data
-            if (-1 <= storm_specification_type .and.                    &
+            if (-3 <= storm_specification_type .and.                    &
                       storm_specification_type < 0) then
                 select case(storm_specification_type)
-                    case(1) ! HWRF Data
+                    case(-1) ! HWRF Data
                         set_data_fields => set_HWRF_fields
+                    case(-2) ! netcdf owi data
+                        set_data_fields => set_owi_fields
+                    case(-3) ! fixed width owi data
+                        set_data_fields => set_owi_fields
                 end select
+            call set_data_storm(storm_files_array, data_storm, &
+                                storm_specification_type, landfall_time, log_unit)  
             else if (storm_specification_type < 0) then
                 print *, "Storm specification data type ",               &
                             storm_specification_type, "not available."
                 stop
+
             end if
 
             close(log_unit)
@@ -426,8 +453,10 @@ contains
             location = [rinfinity,rinfinity]
         else if (storm_specification_type > 0) then
             location = model_location(t, model_storm)
-        else if (storm_specification_type < 0) then
+        else if (storm_specification_type == -1) then
             location = data_location(t, data_storm)
+        else if (storm_specification_type == -2) then
+        else if (storm_specification_type == -3) then
         else
             stop "Something may be wrong."
         end if
@@ -447,8 +476,9 @@ contains
 
         if (storm_specification_type > 0) then
             theta = model_direction(t, model_storm)
-        else if (storm_specification_type < 0) then
+        else if (storm_specification_type == -1) then
             theta = data_direction(t, data_storm)
+        else if (storm_specification_type == -2) then
         else
             theta = rinfinity
         end if
@@ -464,7 +494,7 @@ contains
         ! Input arguments
         integer, intent(in) :: maux, mbc, mx, my
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-        real(kind=8), intent(in out) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
+        real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
 
         if (storm_specification_type > 0) then
             call set_model_fields(maux,mbc,mx,my, &

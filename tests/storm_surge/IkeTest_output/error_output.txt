@@ -1,0 +1,158 @@
+Errors from Test IkeTest
+Started 2024/11/25-17:36.49
+================================================================================
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/stepgrid.f:206:72:
+
+  206 |           do 50 i=mbc+1,mitot-mbc
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 50 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/stepgrid.f:207:72:
+
+  207 |           do 50 m=1,nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 50 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/stepgrid.f:217:72:
+
+  217 |           do 51 i=mbc+1,mitot-mbc
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 51 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/stepgrid.f:218:72:
+
+  218 |           do 51 m=1,nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 51 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/stepgrid.f:270:72:
+
+  270 |             do 830 j = mbc+1, mjtot-1
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 830 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/stepgrid.f:273:72:
+
+  273 |                do 830 m = 2, meqn
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 830 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/flux2fw.f:170:72:
+
+  170 |          do 50 i=1,mx+1
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 50 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/flux2fw.f:193:72:
+
+  193 |          do 120 m=1,meqn
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 120 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/flux2fw.f:214:72:
+
+  214 |              do 150 m=1,meqn
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 150 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/flux2fw.f:232:72:
+
+  232 |          do 160 m=1,meqn
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 160 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/flux2fw.f:249:72:
+
+  249 |           do 180 m=1,meqn
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 180 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:99:72:
+
+   99 |        do 10 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 10 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:114:72:
+
+  114 |          do 25 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 25 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:115:72:
+
+  115 |  25         qr(ivar,lind) = qc1d(ivar,index)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 25 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:173:72:
+
+  173 |         do 210 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 210 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:195:72:
+
+  195 |          do 225 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 225 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:196:72:
+
+  196 |  225         ql(ivar,lind+1) = qc1d(ivar,index)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 225 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:244:72:
+
+  244 |         do 310 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 310 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:266:72:
+
+  266 |          do 325 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 325 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:267:72:
+
+  267 |  325         ql(ivar,lind+1) = qc1d(ivar,index)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 325 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:317:72:
+
+  317 |         do 410 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 410 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:332:72:
+
+  332 |          do 425 ivar = 1, nvar
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 425 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/qad.f:333:72:
+
+  333 |  425         qr(ivar,lind) = qc1d(ivar,index)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 425 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/upbnd.f:38:72:
+
+   38 |       do 10 i=1,mitot
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 10 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/tick.f:164:72:
+
+  164 |  13         possk(i) = possk(i-1) / kratio(i-1)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 13 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/tick.f:265:72:
+
+  265 |  80          icheck(i) = 0
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 80 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/tick.f:267:72:
+
+  267 |  81          tlevel(i) = tlevel(lbase)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 81 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/tick.f:486:72:
+
+  486 |  120         possk(i) = possk(i-1) / kratio(i-1)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 120 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/setgrd.f:55:72:
+
+   55 |  20             rvoll(level) = 0.d0
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 20 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/advanc.f:213:72:
+
+  213 |  10            alloc(locold + i - 1) = alloc(locnew + i - 1)
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: DO termination statement which is not END DO or CONTINUE with label 10 at (1)
+/home/catherinej/clawpack/geoclaw/src/2d/shallow/auxcoarsen.f:25:72:
+
+   25 |          do 20 i = 1, mi2tot
+      |                                                                        1
+Warning: Fortran 2018 deleted feature: Shared DO termination label 20 at (1)

@@ -19,7 +19,7 @@ _plots/
 *.xyz
 scratch/*
 !scratch/README.txt
-
+*.nc
 # log files
 *.log
 
