@@ -26,7 +26,7 @@ module data_storm_module
         integer :: num_regions
 
         ! Landfall in string - parsed for times by not used directly
-        character(len=10) :: landfall
+        character(len=19) :: landfall
 
         ! size of latitude and longitude arrays
         integer :: mx, my
@@ -111,17 +111,19 @@ contains
         integer, intent(in) :: storm_spec_type, log_unit
 
         ! Locals
-        integer :: file_format, num_regions, io_status
-        integer :: year, month, day, hour, minute, second
+        integer :: file_format, io_status
         integer :: mx, my, mt
         integer, parameter :: data_unit = 10
+        integer, parameter :: OWI_unit = 156
 
         ! ASCII / NWS12
-        integer :: i
-        real(kind=8) :: swlat, swlon, dx, dy
+        character(len=*), parameter :: header_format = "(t56,i4,i2,i2,i2,t71,i4,i2,i2,i2)"
+        character(len=*), parameter :: full_info_format = "(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0,t58,f8.0,t69,i4,i2,i2,i2,i2)"
+        character(len=*), parameter :: time_info_format = "(t69,i4,i2,i2,i2,i2)"
+        integer :: i, time(5, 2), dt, total_time, sec_from_landfall
+        real(kind=8) :: sw_lon, sw_lat, dx, dy
         character(len=256), allocatable :: wind_files(:), pressure_files(:)
         
-
         ! NetCDF / NWS13
         ! Set up for dimension info, dims are lat/lon/time
         character(len=256) :: path
@@ -150,28 +152,47 @@ contains
             read(data_unit, "(i2)") file_format
             read(data_unit, '(i2)') storm%num_regions
             read(data_unit, "(a)") storm%landfall
-            read(storm%landfall, '(I4,1X,I2,1X,I2,1X,I2,1X,I2,1X,I2)') year, month, day, hour, minute, second
             read(data_unit, *)
             read(data_unit, *)
 
             write(log_unit, "('Format = ',i1)") file_format
-            write(log_unit, "('Num files = ',i2)") num_regions
+            write(log_unit, "('Num regions = ',i2)") storm%num_regions
 
             ! Read in data from appropriate file format
             ! ASCII / NWS12
             if (file_format == 1) then
-                allocate(wind_files(num_regions), pressure_files(num_regions))
-                do i=1, num_regions
+                allocate(wind_files(storm%num_regions), pressure_files(storm%num_regions))
+                do i=1, storm%num_regions
                     read(data_unit, "(a)") pressure_files(i)
                     read(data_unit, "(a)") wind_files(i)
                 end do
                 close(data_unit)
+
+                if (storm%num_regions > 1) then
+                    print *, "More than 1 regions is not implemented."
+                    stop
+                end if
+
+                ! Read pressure file for array size info
+                open(OWI_unit, file=pressure_files(1), status='old', action='read')
+                read(OWI_unit, header_format) time(:4, 1), time(:4, 2)
+                total_time = seconds_from_epoch(time(:4, 2)) - seconds_from_epoch(time(:4, 1))
+                read(OWI_unit, full_info_format) mx, my, dx, dy, sw_lat, sw_lon, time(:, 1)
+                ! Would need to multiply by 2 if using the wind file
+                ! do i=1, (mx * my / 8 + merge(0, 1, mod(mx * my, 8) == 0)) * merge(1, 2, type == 1)
+                do i=1, (mx * my / 8 + merge(0, 1, mod(mx * my, 8) == 0))
+                    read(OWI_unit, *)
+                end do
+                read(OWI_unit, time_info_format) time(:4, 2)
+                close(OWI_unit)
                 
-                ! Additional parsing
-                ! seconds_from_landfall = seconds_from_epoch(year, month, day, hour, minute)
-                
-                ! Load headers for setting up the rest of the data
-                call initialize_storm_data(data_unit, my, mx, mt, swlat, swlon, dy, dx)
+                dt = seconds_from_epoch(time(:, 2)) - seconds_from_epoch(time(:, 1))
+                mt = (total_time / dt) + 1
+
+                ! Log what was read
+                write(log_unit, *) "Storm header info:"
+                write(log_unit, *) mx, my, mt
+                write(log_unit, *) sw_lon, sw_lat, dx, dy
 
                 ! allocate arrays in storm object
                 allocate(storm%pressure(mx, my, mt))
@@ -181,7 +202,32 @@ contains
                 allocate(storm%latitude(my))
                 allocate(storm%time(mt))
 
-                close(data_unit)
+                ! Set up lat/lon lengths in storm object for use in linear interpolation of time
+                storm%mx = mx
+                storm%my = my
+
+                ! Number of time steps in data
+                storm%num_casts = mt
+
+                ! Fill out variable data/info
+                read(storm%landfall, '(i4,1x,i2,1x,i2,1x,i2,1x,i2)') time(:, 1)
+                call fill_data_arrays(wind_files(1), pressure_files(1), my, mx, mt, sw_lat, sw_lon,&
+                                       dy, dx, storm, seconds_from_epoch(time(:, 1)))
+       
+                ! Make sure first time step in setrun is inside the times in the data
+                if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
+                    print *, 'Start time', t0, " is outside of the tracking"
+                    print *, 'tolerance range with the track start'
+                    print *, storm%time(1), '.'
+                    stop
+                end if
+
+                last_storm_index = 2
+                last_storm_index = storm_index(t0, storm)
+                if (last_storm_index == -1) then
+                    print *, 'Forecast not found for time ', t0, '.'
+                    stop
+                end if
 
             ! NetCDF / NWS13
             else if (file_format == 2) then
@@ -240,8 +286,8 @@ contains
                 ! Close file to stop corrupting the netcdf files
                 call check_netcdf_error(nf90_close(nc_fid))
 #else
-            print *, "Build does not include support for NetCDF needed for NetCDF/NWS13 OWI format."
-            stop
+                print *, "Build does not include support for NetCDF needed for NetCDF/NWS13 OWI format."
+                stop
 #endif
             end if
 
@@ -408,73 +454,6 @@ contains
         stop "HWRF data input is not yet implemented!"
 
     end subroutine set_HWRF_fields
-
-    ! ==========================================================================
-    ! read_header() Opens file at path and reads header information
-    ! ==========================================================================
-    subroutine read_header(path, my, mx, mt, swlat, swlon, dy, dx)
-        
-        implicit none
-        
-        ! Subroutine I/O
-        character(len=*), intent(in) :: path
-
-        ! Output arguments
-        real(kind=8), intent(out) :: swlat, swlon, dx, dy
-        integer, intent(out) ::  my, mx, mt
-        
-        ! Local Storage
-        integer :: start_yr, start_mo, start_da, start_hr, start_min, dt
-        integer :: end_yr, end_mo, end_da, end_hr, end_min
-        integer :: yr1, mo1, da1, hr1, minute1, total_time, initial_time, final_time
-        integer :: yr2, mo2, da2, hr2, minute2
-        integer :: i, j
-        integer, parameter :: iunit = 654
-
-        ! Read in start and end dates of file from first header line
-        open(iunit, file=path, status='old', action='read')
-       
-        read(iunit, "(t56, i4, i2, i2, i2, t71, i4, i2, i2, i2)") &
-                    start_yr, start_mo, start_da, start_hr, end_yr, end_mo, &
-                    end_da, end_hr
-
-        ! Calculate the start and final times as seconds from Jan 1,1970 
-        initial_time = seconds_from_epoch(start_yr, start_mo, start_da, start_hr, 00)
-        final_time = seconds_from_epoch(end_yr, end_mo, end_da, end_hr, 00)
-        ! Total number of time in seconds of the dataset
-        total_time = final_time - initial_time
-        
-        ! Read second header from file to obtain array sizes and first timestep
-        read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,t69, i4,i2,i2,i2, i2)') &
-             my, mx, dx, dy, swlat, swlon, yr1, mo1, da1, hr1, minute1
-
-        ! Calculate the dt by skipping the wind velocity matrices
-        do i = 1, (mx * my / 8)
-            read(iunit, *) ! Skip u velocity
-        end do
-        if (mod(mx * my,8) /= 0) then
-            read(iunit, *) 
-        end if
-        ! Skip second set of velocity data
-        do j = 1, (mx * my / 8)
-            read(iunit, *) ! Skip v velocity
-        end do
-        if (mod(mx * my,8) /= 0) then
-           read(iunit, *)
-        else
-            read(iunit, '(t69, i4,i2,i2,i2, i2)') year, month, day, hour, minute
-            t2 = seconds_from_epoch(year, month, day, hour, minute)
-        end if
-        
-        close(iunit)
-
-        dt = t2 - t1
-        mt = (total_time/dt) + 1
-
-        ! Log what was read
-        write(log_unit, "(a)") "Dump data"
-
-    end subroutine read_header  
     
     ! ==========================================================================
     ! fill_data_arrays() reads the data files and fills out the storm object
@@ -492,7 +471,7 @@ contains
         
         ! Local storage
         integer :: num_lat, num_lon, i, j, n, current_timestep
-        integer :: yr, mo, da, hr, minute
+        integer :: time(5)
         integer :: wunit = 700, punit = 800
 
         ! Open both storm forcing files
@@ -505,9 +484,9 @@ contains
         ! Loop over all timesteps 
         do n = 1, mt
             ! Read each time from the next array
-            read(wunit, '(t69, i4,i2,i2,i2, i2)') yr, mo, da, hr, minute
+            read(wunit, '(t69, i4,i2,i2,i2,i2)') time
             ! Calculate the current timestep in seconds from landfall
-            current_timestep = seconds_from_epoch(yr, mo, da, hr, minute) - seconds_from_landfall
+            current_timestep = seconds_from_epoch(time) - seconds_from_landfall
             storm%time(n) = current_timestep
             !
             read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
@@ -572,6 +551,8 @@ contains
     ! ==========================================================================
     !  storm_index(t,storm)
     !    Finds the index of the next storm data point
+    !    This duplicates model_storm_module:storm_index with a change to the use
+    !    of only the time variable rather than track
     ! ==========================================================================
     integer pure function storm_index(t, storm) result(index)
 
@@ -706,7 +687,7 @@ contains
             endif
         endif
         if (i == storm%num_casts + 1) then
-            i = i -1
+            i = i - 1
             wind_tu = storm%wind_u(:,:,i)
             wind_tv = storm%wind_v(:,:,i)
             pressure_t = storm%pressure(:,:,i)
@@ -835,26 +816,25 @@ contains
     ! seconds_from_epoch() Calculates seconds from 1970 from a datetime
     ! Returns the total seconds from the epoch includes leap years and days
     ! ==========================================================================
-    function seconds_from_epoch(year, month, day, hour, minute) result(seconds)
-        integer, intent(in) :: year, month, day, hour, minute
-        integer, dimension(12) :: days_in_month=[31, 28, 31, 30, 31, &
-                                                 30, 31, 31, 30, 31, 30, 31]
-        integer :: seconds, leap_days, total_days
-        
-        total_days = (year - 1970) * 365
+    pure function seconds_from_epoch(time) result(seconds)
+        implicit none
 
-        leap_days = (year - 1968)/4 - (year - 1900)/4 + (year - 1600)/400
+        integer, intent(in) :: time(:) ! year, month, day, hour, minutes (optional)
+        integer :: seconds
+        integer, parameter, dimension(12) :: days_in_month=[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        integer :: leap_days, days, minutes
 
-        total_days = total_days + leap_days
-        if (mod(year, 4) == 0 .and. (mod(year,100) /= 0 &
-            .or. mod(year, 400) == 0).and.month >2) THEN
-                total_days = total_days + 1
+        days = (time(1) - 1970) * 365
+        leap_days = (time(1) - 1968)/4 - (time(1) - 1900)/4 + (time(1) - 1600)/400
+        days = days + leap_days
+        if (mod(time(1), 4) == 0 .and. (mod(time(1),100) /= 0 &
+            .or. mod(time(1), 400) == 0).and.time(2) >2) THEN
+                days = days + 1
         endif
-        total_days = total_days + sum(days_in_month(1:month-1)) + day
+        days = days + sum(days_in_month(1:time(2)-1)) + time(3)
+        minutes = merge(0, time(size(time)), size(time) == 4)
+        seconds = (days*86400) + (time(4)*3600) + (minutes*60)
 
-        seconds = (total_days*86400) + (hour*3600) + (minute*60)
-       
-       
     end function seconds_from_epoch
     
 
@@ -862,19 +842,20 @@ contains
    ! function Upper() Returns the Upper case characater in response to input
    ! character
    ! ==========================================================================
-    function Upper(s1)  RESULT (s2)
-    CHARACTER(*)       :: s1
-    CHARACTER(LEN(s1)) :: s2
-    CHARACTER          :: ch
-    INTEGER,PARAMETER  :: DUC = ICHAR('A') - ICHAR('a')
-    INTEGER            :: i
+    function upper(s1) result (s2)
+        implicit none
+        character(*) :: s1
+        character(len(s1)) :: s2
+        character :: ch
+        integer, parameter :: duc = ichar('A') - ichar('a')
+        integer :: i
 
-        DO i = 1,LEN(s1)
+        do i = 1,len(s1)
            ch = s1(i:i)
-           IF (ch >= 'a'.AND.ch <= 'z') ch = CHAR(ICHAR(ch)+DUC)
+           if (ch >= 'a'.and.ch <= 'z') ch = char(ichar(ch)+duc)
            s2(i:i) = ch
-        END DO
-    END function Upper
+        end do
+    end function upper
 
 end module data_storm_module
 
