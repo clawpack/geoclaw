@@ -1518,7 +1518,7 @@ contains
 
     ! ==========================================================================
     !  Use the Willoughby 2006 model to set the wind field, using H80 for pressure
-    !  Original paper https://journals.ametsoc.org/mwr/article/134/4/1102/67551
+    !  Original paper https://doi.org/10.1175/MWR3106.1
     ! ==========================================================================
     subroutine set_willoughby_fields(maux, mbc, mx, my, xlower, ylower,    &
                                        dx, dy, t, aux, wind_index,           &
@@ -1564,10 +1564,10 @@ contains
 
         ! Get willoughby coeffs
         ! (See Section 4)
-        n = 2.134d0 + 0.0077d0*mod_mws - 0.4522d0*log(mwr) - 0.0038*abs(sloc(2))
+        n = 2.134d0 + 0.0077d0*mod_mws - 0.4522d0*log(mwr/1.d3) - 0.0038*abs(sloc(2))
         X1 = (317.1d0 - 2.026d0*mod_mws + 1.915d0*abs(sloc(2))) * 1.d3
         X2 = 25.d3
-        A = max(0.5913d0 + 0.0029d0*mod_mws - 0.1361*log(mwr) - 0.0042d0*abs(sloc(2)), &
+        A = max(0.5913d0 + 0.0029d0*mod_mws - 0.1361*log(mwr/1.d3) - 0.0042d0*abs(sloc(2)), &
                 0.d0)
 
         ! Set fields
@@ -1591,7 +1591,7 @@ contains
                     wind = mod_mws * ( (1-A) * exp(-(r-mwr)/X1) + A * exp(-(r-mwr)/X2) )
                 else
                     xi = (r - 0.9d0*mwr)/(0.2d0*mwr)
-                    W = 126.d0*xi**5 + 420.d0*xi**6 + 540.d0*xi**7 - 315.d0*xi**8 + &
+                    W = 126.d0*xi**5 - 420.d0*xi**6 + 540.d0*xi**7 - 315.d0*xi**8 + &
                         70.d0*xi**9
                     wind = mod_mws * (r / mwr)**n * (1-W) + &
                             mod_mws * &

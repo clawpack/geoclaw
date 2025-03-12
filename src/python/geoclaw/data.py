@@ -550,7 +550,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                                'DeMaria': 7,
                                'willoughby': 9,
                               }
-    storm_spec_not_implemented = ['CLE', 'willoughby']
+    storm_spec_not_implemented = ['CLE']
 
     def __init__(self):
         super(SurgeData, self).__init__()
