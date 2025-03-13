@@ -1360,7 +1360,10 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
          ! only using coarsest topo grid -- compute directly...
          call intersection(indicator,area,xmlo,xmhi, &
              ymlo,ymhi, x1,x2,y1,y2, &
-             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
+             xlowtopo(mfid)-dxtopo(mfid), &
+             xhitopo(mfid)+dxtopo(mfid), &
+             ylowtopo(mfid)-dytopo(mfid), &
+             yhitopo(mfid)+dytopo(mfid))
 
     else
         ! recursive call to compute area using one fewer topo grids:
@@ -1369,8 +1372,10 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
         ! region of intersection of cell with new topo grid:
         call intersection(indicator,area_m,x1m,x2m, &
              y1m,y2m, x1,x2,y1,y2, &
-             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
-
+             xlowtopo(mfid)-dxtopo(mfid), &
+             xhitopo(mfid)+dxtopo(mfid), &
+             ylowtopo(mfid)-dytopo(mfid), &
+             yhitopo(mfid)+dytopo(mfid))
         
         if (area_m > 0) then
         
