@@ -434,6 +434,8 @@ def setgeo(rundata):
 
     elif data.storm_specification_type == "OWI":
 
+        # :TODO: Write out OWI format files
+
         isaac = Storm()
         isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
 

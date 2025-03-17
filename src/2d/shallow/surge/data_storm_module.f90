@@ -36,7 +36,7 @@ module data_storm_module
         real(kind=8), allocatable :: wind_u(:,:,:)
         real(kind=8), allocatable :: wind_v(:,:,:)
 
-        ! Wind field latitude/longitude arrays
+        ! Storm Field latitude/longitude arrays
         real(kind=8), allocatable :: latitude(:)
         real(kind=8), allocatable :: longitude(:)
         ! Time steps from wind/pressure files in seconds
@@ -211,8 +211,10 @@ contains
 
                 ! Fill out variable data/info
                 read(storm%landfall, '(i4,1x,i2,1x,i2,1x,i2,1x,i2)') time(:, 1)
-                call fill_data_arrays(wind_files(1), pressure_files(1), my, mx, mt, sw_lat, sw_lon,&
-                                       dy, dx, storm, seconds_from_epoch(time(:, 1)))
+                ! call fill_data_arrays(wind_files(1), pressure_files(1), my, mx, mt, sw_lat, sw_lon,&
+                !                        dy, dx, storm, seconds_from_epoch(time(:, 1)))
+                call fill_data_arrays(wind_files(1), pressure_files(1), mx ,my , mt, sw_lat, sw_lon,&
+                                       dx, dy, storm, seconds_from_epoch(time(:, 1)))
        
                 ! Make sure first time step in setrun is inside the times in the data
                 if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
@@ -295,104 +297,6 @@ contains
 
     end subroutine set_OWI_storm
 
-!     ! ==========================================================================
-!     !  set_ascii_storm(storm_data_path, storm, storm_spec_type, log_unit)
-!     !    Initializes the storm type for an Oceanweather, Inc type data derived 
-!     !    storm that is saved as a fixed width fortran format
-!     ! ==========================================================================
-!     subroutine set_ascii_storm(storm_data_path, storm, storm_spec_type, landfall_time, log_unit)
-!         use amr_module, only: t0, rinfinity
-!         implicit none
-
-!         ! Subroutine I/O
-!         character(len=*), dimension(:), intent(in) :: storm_data_path
-!         character(len=*), intent(in) :: landfall_time
-!         integer, intent(in) :: storm_spec_type, log_unit
-!         type(data_storm_type), intent(inout) :: storm
-!         character(len=256) :: wind_file, pressure_file, regional_wind_file, regional_pressure_file
-
-!         ! Local Storage
-!         ! Set up for dimension info, dims are lat/lon/time
-!         real(kind=8) :: swlat, swlon, dx, dy
-!         integer :: my, mx, mt
-!         integer :: yr, mo, da, hr, minute, seconds_from_landfall
-!         integer :: iunit=10
-!         integer :: has_regional_data 
-!         character(len=20) :: homedir
-        
-!         if (.not. module_setup) then
-!                 wind_file = storm_data_path(1)
-!                 pressure_file = storm_data_path(2)
-!                 read(landfall_time, '(i4i2i2i2i2)') yr, mo, da, hr, minute
-!             ! Check for flag that there are regional forcing grids
-!             ! To be developed further later 11/15/2024 CRJ
-!             if (size(storm_data_path) > 2) then
-!                 has_regional_data = 1
-!             ! read(iunit, '(i2)') has_regional_data
-!             else 
-!                 has_regional_data = 0
-!             end if      
-            
-!             select case(has_regional_data)
-!                 case(0)
-!                     close(iunit)
-!                 case(1)
-!                     read(iunit, *) regional_wind_file
-!                     read(iunit, *) regional_pressure_file
-!                     close(iunit)
-!                 case default
-!                     stop ' *** ERROR *** No storm forcing selection chosen'
-!             end select
-!             ! Calculate the number of seconds from Jan 1, 1970 for the landfall datetime
-!             seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
-
-!             end if
-
-!             ! Load headers for setting up the rest of the data
-!             call initialize_storm_data(wind_file, my, mx, mt, swlat, swlon, dy, dx)
-
-!             ! allocate arrays in storm object
-!             allocate(storm%pressure(mx, my, mt))
-!             allocate(storm%wind_u(mx, my, mt))
-!             allocate(storm%wind_v(mx, my, mt))
-!             allocate(storm%longitude(mx))
-!             allocate(storm%latitude(my))
-!             allocate(storm%time(mt))
-
-!             ! Set up lat/lon lengths in storm object for use in linear interpolation of time
-!             storm%mx = mx
-!             storm%my = my
-
-!             ! Number of time steps in data
-!             storm%num_casts = mt
-
-!             ! Fill out variable data/info
-!             call fill_data_arrays(wind_file, pressure_file, my, mx, mt, swlat, swlon,&
-!                                  dy, dx, storm, seconds_from_landfall)
-       
-
-!         ! Make sure first time step in setrun is inside the times in the data
-!         if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
-!             print *, 'Start time', t0, " is outside of the tracking"
-!             print *, 'tolerance range with the track start'
-!             print *, storm%time(1), '.'
-!             stop
-!         end if
-
-!         last_storm_index = 2
-!         last_storm_index = storm_index(t0, storm)
-!         if (last_storm_index == -1) then
-!             print *, 'Forecast not found for time ', t0, '.'
-!             stop
-!         end if
-
-!         ! Write out a surge file after discussing the data with kyle
-!         if (.not. module_setup) then
-
-!             module_setup = .true.
-!         end if
-!     end subroutine set_ascii_storm
-
     ! ==========================================================================
     !  storm_location(t,storm)
     !    Interpolate location of hurricane in the current time interval
@@ -459,15 +363,15 @@ contains
     ! fill_data_arrays() reads the data files and fills out the storm object
     ! and it's dataarrays
     ! ==========================================================================
-    subroutine fill_data_arrays(wind_file, pressure_file, my, mx, mt, swlat, swlon,  &
-                                dy, dx, storm, seconds_from_landfall)
+    subroutine fill_data_arrays(wind_file, pressure_file, mx, my, mt, swlat, swlon,  &
+                                dx, dy, storm, seconds_from_landfall)
         ! Read in the data file and parse the arrays to be passed to other calculations
         implicit none
         ! Input arguments
         type(data_storm_type) :: storm
         character(len=*), intent(in) :: wind_file, pressure_file
         integer, intent(in) :: my, mx, mt, seconds_from_landfall 
-        real(kind=8), intent(in) :: swlat, swlon, dx, dy
+        real(kind=8), intent(in) :: sw_lat, sw_lon, dx, dy
         
         ! Local storage
         integer :: num_lat, num_lon, i, j, n, current_timestep
@@ -501,10 +405,10 @@ contains
         close(punit)
         ! Calculate lat/lon from SW corner and resolution
         do i = 1, my
-            storm%latitude(i) = swlat + i * dy
+            storm%latitude(i) = sw_lat + i * dy
         end do
         do j = 1, mx
-            storm%longitude(j) = swlon + j * dx
+            storm%longitude(j) = sw_lon + j * dx
         end do
         
         
