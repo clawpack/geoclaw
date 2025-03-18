@@ -236,6 +236,18 @@ def extract_velocity(h, hu, DRY_TOL=1e-8):
     return u
 
 
+def extract_vorticity(delta, u, v):
+    """Computes the vorticity given the velocities u and v
+
+    The boundaries are left as zero, but one-sided differences could be used
+    to compute there.
+    """
+    omega = np.zeros(u.shape)
+    omega[1:-1, 1:-1] += (v[2:,1:-1] - v[:-2,1:-1]) / (2.0 * delta[0])
+    omega[1:-1, 1:-1] -= (u[1:-1,2:] - u[1:-1,:-2]) / (2.0 * delta[1])
+    return omega
+
+
 def eta(cd):
     return extract_eta(cd.q[0, :, :], cd.q[3, :, :])
 
@@ -251,8 +263,12 @@ def water_v(cd):
 def water_speed(current_data):
     u = water_u(current_data)
     v = water_v(current_data)
-
     return np.sqrt(u**2+v**2)
+
+
+def water_vorticity(cd):
+    delta = [cd.x[1, 0] - cd.x[0, 0], cd.y[0, 1] - cd.y[0, 0]]
+    return extract_vorticity(delta, water_u(cd), water_v(cd))
 
 
 # ========================================================================
@@ -317,6 +333,8 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
         plotitem.amr_celledges_show = [0] * 10
         plotitem.amr_patchedges_show = [1, 1, 1, 1, 0, 0, 0]
         plotitem.amr_contour_colors = 'k'
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_speed(plotaxes, plot_type='pcolor', bounds=None,  contours=None,
@@ -374,6 +392,33 @@ def add_speed(plotaxes, plot_type='pcolor', bounds=None,  contours=None,
         plotitem.amr_celledges_show = [0] * 10
         plotitem.amr_patchedges_show = [1, 1, 1, 1, 1, 0, 0]
         plotitem.amr_contour_colors = 'k'
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
+
+
+def add_vorticity(plotaxes, plot_type="pcolor", bounds=None, contours=None, shrink=1.0):
+    """Add vorticity plot to plotaxes"""
+
+    vorticity_cmap = plt.get_cmap('PRGn')
+
+    if plot_type == 'pcolor' or plot_type == 'imshow':
+        plotitem = plotaxes.new_plotitem(name='surface', plot_type='2d_pcolor')
+        plotitem.plot_var = water_vorticity
+
+        if bounds is not None:
+            if bounds[0] == 0.0:
+                plotitem.pcolor_cmap = plt.get_cmap('OrRd')
+            else:
+                plotitem.pcolor_cmap = vorticity_cmap
+            plotitem.pcolor_cmin = bounds[0]
+            plotitem.pcolor_cmax = bounds[1]
+        plotitem.add_colorbar = True
+        plotitem.colorbar_shrink = shrink
+        plotitem.colorbar_label = "Vorticity (1/s)"
+        plotitem.amr_celledges_show = [0] * 10
+        plotitem.amr_patchedges_show = [1, 1, 1, 0, 0, 0, 0]
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_friction(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
@@ -393,6 +438,8 @@ def add_friction(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
         plotitem.colorbar_label = "Manning's-$n$ Coefficient"
         plotitem.amr_celledges_show = [0] * 10
         plotitem.amr_patchedges_show = [0] * 10
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_wind(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
@@ -417,6 +464,8 @@ def add_wind(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
         plotitem.contour_nlevels = len(surge_data.wind_refine)
         plotitem.countour_min = surge_data.wind_refine[0]
         plotitem.patchedges_show = 1
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_pressure(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
@@ -436,8 +485,8 @@ def add_pressure(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
         plotitem.colorbar_label = "Pressure (mbar)"
         plotitem.amr_celledges_show = [0] * 10
         plotitem.amr_patchedges_show = [1, 1, 1, 1, 1, 0, 0]
-    elif plot_type == 'contour':
-        pass
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_land(plotaxes, plot_type='pcolor', bounds=[0, 50]):
@@ -464,6 +513,8 @@ def add_land(plotaxes, plot_type='pcolor', bounds=[0, 50]):
         plotitem.amr_patch_bgcolor = ['#ffeeee', '#eeeeff', '#eeffee']
         plotitem.celledges_show = 0
         plotitem.patchedges_show = 0
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_bathy_contours(plotaxes, contour_levels=None, color='k'):
