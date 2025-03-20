@@ -141,7 +141,8 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        if (minfo%numColsTot .gt. 0 .or. minfo%matrix_nelt .gt. 0) then
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
-          call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,topo_finalized)
+          call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,     &
+                           topo_finalized,minfo%matrix_nelt)
           call system_clock(clock_finishLinSolve,clock_rate)
           call cpu_time(cpu_finishLinSolve)
           !write(89,*)" level ",levelBouss,"  rhs   soln"
@@ -156,6 +157,12 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        endif
 #endif
     
+    endif
+
+    !  DEBUGGING: have soln, and matrix. Multiply and check diff with rhs
+    if (.not. crs) then ! matvec not yet implemented for crs
+       call testSoln(2*numBoussCells,soln,rhs,minfo%matrix_nelt,minfo%matrix_ia,   &
+                  minfo%matrix_ja,minfo%matrix_sa)
     endif
 
     !================   Step 5  Update solution  =======================

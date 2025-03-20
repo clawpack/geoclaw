@@ -68,7 +68,7 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
     ! the unknown are still order in 0 based order: cell k_ij is u eq<> 2*(kij-1) v<>2*k_ij-1
     ! to get columns to be sorted, indices assigned as follows interior
     ! cell puts columns in order that comes out right. This doesnot hold
-    ! for ghost cells, so those 12 entires need to be sorted.
+    ! for ghost cells, so those 12 entries need to be sorted.
     ! The order for u starting from rowPtr index:
     !   0         1          2         3        4        5     6       7 
     ! v_i-1,j-1  v_i,j-1  v_i+1,j-1  u_i-1,j  v_i-1,j  u_ij  v_ij   u_i+1,j
