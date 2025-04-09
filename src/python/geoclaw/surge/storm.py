@@ -1,4 +1,4 @@
-2#!/usr/bin/env python
+#!/usr/bin/env python
 
 r"""
 Module defines a class and routines for managing storm best-track type input and

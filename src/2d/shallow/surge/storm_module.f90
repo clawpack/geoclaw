@@ -129,7 +129,8 @@ contains
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
         character(len=200) :: storm_file_path, line, wind_file_path, pressure_file_path
-        integer :: num_storm_files
+        ! integer :: num_storm_files
+        ! character(len=200), allocatable, dimension(:) :: storm_files_array
         ! character(len=12) :: landfall_time
         if (.not.module_setup) then
 
@@ -196,6 +197,24 @@ contains
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
             read(unit, *) storm_file_path
+            ! read(unit, *) ! empty space for storm_spec_type in character format
+            ! if (storm_specification_type == -3) then
+            !     read(unit, *) landfall_time
+            !     read(unit, *) num_storm_files
+            !     if (num_storm_files == 2) then
+            !         read(unit, *) wind_file_path
+            !         read(unit, *) pressure_file_path
+            !         allocate(storm_files_array(num_storm_files))
+            !         storm_files_array = [wind_file_path, pressure_file_path]
+            !     else
+            !        print *, 'Multiple wind/pressure files not yet implemented'
+            !     end if         
+            ! else if (storm_specification_type == -2) then
+            !     read(unit, *) storm_file_path
+            !    storm_files_array = [storm_file_path] 
+            ! else
+            !     read(unit, *) storm_file_path
+            ! end if
 
             close(unit)
 
