@@ -329,8 +329,6 @@ class Storm(object):
         self.central_pressure = data[:, 5]
         self.storm_radius = data[:, 6]
 
-        self.file_paths = [path]
-
     def read_atcf(self, path, verbose=False):
         r"""Read in a ATCF formatted storm file
 
@@ -449,9 +447,6 @@ class Storm(object):
         self.wind_speeds[:, 1] = units.convert(
             self.wind_speeds[:, 1], 'nmi', 'm')
 
-        # Add original file path
-        self.file_paths = [path]
-
     def read_hurdat(self, path, verbose=False):
         r"""Read in HURDAT formatted storm file
 
@@ -539,9 +534,6 @@ class Storm(object):
             warnings.warn(missing_data_warning_str)
             self.max_wind_radius[i] = -1
             self.storm_radius[i] = -1
-        
-        # Add original file path
-        self.file_paths = [path]
 
     def read_ibtracs(self, path, sid=None, storm_name=None, year=None, start_date=None,
                      agency_pref=['wmo',
@@ -753,9 +745,6 @@ class Storm(object):
             if (self.max_wind_radius.max()) == -1 or (self.storm_radius.max() == -1):
                 warnings.warn(missing_data_warning_str)
 
-        # Add original file path
-        self.file_paths = [path]
-
     def read_jma(self, path, verbose=False):
         r"""Read in JMA formatted storm file
 
@@ -823,9 +812,6 @@ class Storm(object):
             warnings.warn(missing_data_warning_str)
             self.max_wind_radius[i] = -1
             self.storm_radius[i] = -1
-
-        # Add original file path
-        self.file_paths = [path]
 
     def read_imd(self, path, verbose=False):
         r"""Extract relevant hurricane data from IMD file
@@ -905,9 +891,6 @@ class Storm(object):
                 float(data[9]), 'mbar', 'Pa')
             self.max_wind_radius[i] = units.convert(float(data[13]), 'km', 'm')
             self.storm_radius[i] = units.convert(float(data[11]), 'km', 'm')
-
-        # Add original file path
-        self.file_paths = [path]
 
     def read_hwrf(self, path, verbose=False):
         r"""Read in HWRF information file
@@ -1294,32 +1277,38 @@ class Storm(object):
                 else:
                     raise TypeError(f"Unknown storm data file format type" +
                                     f" '{self.data_file_format}' provided.")
-                data_file.write(f"{str(file_format).ljust(20)} # File format\n")
-                # :TODO: Modify number of regions to be indpendent of file_paths
-                if file_format ==  1:
-                    if len(self.file_paths)%2 != 0:
-                        raise ValueError("The number of files should be even, " + 
-                                         "one for pressure and wind, for each " +
-                                         "resolution provided.")
-                elif file_format == 2:
-                    if len(self.file_paths) != 1:
-                        raise ValueError(f"Expected 1 file for format " + 
-                                         f"{file_format} rather than " +
-                                         f"{len(self.file_paths)}")
-                data_file.write(f"{str(int(len(self.file_paths) / 2)).ljust(20)}" + 
-                                 " # Number of regions\n")
+
+                # Write out data
+                # Time offset
                 if isinstance(self.time_offset, datetime.datetime):
                     data_file.write(f"{self.time_offset.isoformat().ljust(20)}" +
                                      " # Time Offset\n")
                 else:
                     raise ValueError("Time offset must be a datetime object.")
+
+                # File format
+                data_file.write(f"{str(file_format).ljust(20)} # File format\n")
                 data_file.write("\n")
-                data_file.write(f"# Data Paths\n")
-                if file_format == 1:
+
+                # File format specific values
+                data_file.write(f"# Data Information\n")
+                if file_format ==  1:
+                    # :TODO: Modify number of regions to be indpendent of file_paths
+                    if len(self.file_paths)%2 != 0:
+                        raise ValueError("The number of files should be even, " + 
+                                         "one for pressure and wind, for each " +
+                                         "resolution provided.")
+                    num_regions = int(len(self.file_paths) / 2)
+                    data_file.write(f"{str(num_regions).ljust(20)}" + 
+                                     " # Number of regions\n")
                     for n in range(int(len(self.file_paths) / 2)):
                         data_file.write(f"{self.file_paths[n * 2].ljust(20)}\n")
                         data_file.write(f"{self.file_paths[n * 2 + 1].ljust(20)}\n")
                 elif file_format == 2:
+                    if len(self.file_paths) != 1:
+                        raise ValueError(f"Expected 1 file for format " + 
+                                         f"{file_format} rather than " +
+                                         f"{len(self.file_paths)}")
                     data_file.write(f"{self.file_paths[0]}\n")
 
         except Exception as e:
