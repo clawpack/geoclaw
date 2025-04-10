@@ -7,9 +7,6 @@ that will be read in by the Fortran code.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-
 import os
 import datetime
 import shutil
@@ -411,45 +408,41 @@ def setgeo(rundata):
     data.storm_specification_type = 'OWI'
     data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
                                          'isaac.storm'))
+    # Convert ATCF data to GeoClaw format
+    clawutil.data.get_remote_file(
+                   "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
+    atcf_path = os.path.join(scratch_dir, "bal092012.dat")
+    # Note that the get_remote_file function does not support gzip files which
+    # are not also tar files.  The following code handles this
+    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+            open(atcf_path, 'w') as atcf_unzipped_file:
+        atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
+
+    # Uncomment/comment out to use the old version of the Ike storm file
+    isaac = Storm(path=atcf_path, file_format="ATCF")
+
+    # Calculate landfall time - Need to specify as the file above does not
+    # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
+    isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+
     if data.storm_specification_type == "holland80":
-
-        # Convert ATCF data to GeoClaw format
-        clawutil.data.get_remote_file(
-                       "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-        atcf_path = os.path.join(scratch_dir, "bal092012.dat")
-        # Note that the get_remote_file function does not support gzip files which
-        # are not also tar files.  The following code handles this
-        with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
-                open(atcf_path, 'w') as atcf_unzipped_file:
-            atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
-
-        # Uncomment/comment out to use the old version of the Ike storm file
-        isaac = Storm(path=atcf_path, file_format="ATCF")
-
-        # Calculate landfall time - Need to specify as the file above does not
-        # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
-        isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
-
         isaac.write(data.storm_file, file_format='geoclaw')
 
     elif data.storm_specification_type == "OWI":
 
-        # :TODO: Write out OWI format files
-
-        isaac = Storm()
-        isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+        # :TODO: write out Isaac fields into appropriate file format, currently
+        # we are just storing the files as is
 
         # ASCII
-        isaac.data_file_format = 'NWS12'
-        isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.PRE"))
-        isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.WIN"))
+        # isaac.data_file_format = 'NWS12'
+        # isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.PRE"))
+        # isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.WIN"))
 
         # NetCDF file
-        # isaac.data_file_format = "NWS13"
-        # isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.nc"))
+        isaac.data_file_format = "NWS13"
+        isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.nc"))
 
         isaac.write(data.storm_file, file_format='OWI')
-
 
     else:
         raise ValueError("Invalid storm specification type.")

@@ -128,9 +128,22 @@ contains
         integer :: mx, my, mt
         real(kind=8) :: swlat, swlon, dx, dy
 
+        ! Local Storage
+        ! Set up for dimension info, dims are lat/lon/time
+        integer :: num_dims, x_dim_id, y_dim_id, t_dim_id, dim_ids(3)
+        character (len=10) :: x_dim_name, y_dim_name, t_dim_name
+
+        ! Set up for variable info, variables are pressure, lat, lon, time
+        integer :: nvars, var_type, var_id
+        character (len=13) :: var_name
+
+        ! Netcdf file id and counter for looping
+        integer :: nc_fid, n
+        character(len=256) :: nc_path
+
         if (.not. module_setup) then
             ! Open data file
-            print *,'Reading storm date file ', storm_data_path
+            print *,'Reading storm data file ', storm_data_path
             open(unit=data_unit, file=storm_data_path, status='old',        &
                  action='read', iostat=io_status)
             if (io_status /= 0) then
@@ -139,17 +152,17 @@ contains
             endif
 
             read(data_unit, *) ! Comment line
-            read(data_unit, "(i2)") file_format
-            read(data_unit, '(i2)') storm%num_regions
             read(data_unit, "(a)") storm%landfall
+            read(data_unit, "(i2)") file_format
             read(data_unit, *)
             read(data_unit, *)
-
+            write(log_unit, "('Landfall = ',a)") storm%landfall
             write(log_unit, "('Format = ',i1)") file_format
-            write(log_unit, "('Num regions = ',i2)") storm%num_regions
 
             ! ASCII / NWS12 input files
             if (file_format == 1) then
+                read(data_unit, '(i2)') storm%num_regions
+                write(log_unit, "('Num regions = ',i2)") storm%num_regions
                 if (storm%num_regions > 1) then
                     print *, "More than 1 regions is not implemented."
                     stop
@@ -187,30 +200,94 @@ contains
                 storm%num_casts = mt
 
                 ! Fill out variable data/info
+                print *, "Reading wind file ", wind_files(1)
+                print *, "Reading pressure file ", pressure_files(1)
                 call fill_data_arrays(wind_files(1), pressure_files(1), my, mx, mt, swlat, swlon, &
                                      dy, dx, storm, seconds_from_landfall)
 
-                ! Make sure first time step in setrun is inside the times in the data
-                if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
-                    print *, 'Start time', t0, " is outside of the tracking"
-                    print *, 'tolerance range with the track start'
-                    print *, storm%time(1), '.'
-                    stop
-                end if
-
-                last_storm_index = 2
-                last_storm_index = storm_index(t0, storm)
-                if (last_storm_index == -1) then
-                    print *, 'Forecast not found for time ', t0, '.'
-                    stop
-                end if
-
             ! NetCDf / NWS13 input file
             else if (file_format == 2) then    
-                print *, "NetCDF / NWS13 files not implemented yet."
+#ifdef NETCDF
+                ! Read rest of data file and close
+                read(data_unit, "(a)") nc_path
+                close(data_unit)
+
+                ! Open file and get file ID
+                print *, nc_path
+                print *, "Reading storm NetCDF file ", nc_path
+                call check_netcdf_error(nf90_open(nc_path, nf90_nowrite, nc_fid))
+                ! Read number of dimensions and variables in nc file
+                call check_netcdf_error(nf90_inquire(nc_fid, num_dims, nvars)) 
+
+                ! Get the dimension names and sizes from the file
+                call get_dim_info(nc_fid, num_dims, x_dim_id, x_dim_name, mx, &
+                y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)    
+
+                ! allocate arrays in storm object
+                allocate(storm%pressure(mx, my, mt))
+                allocate(storm%wind_u(mx, my, mt))
+                allocate(storm%wind_v(mx, my, mt))
+                allocate(storm%longitude(mx))
+                allocate(storm%latitude(my))
+                allocate(storm%time(mt))
+                ! Set up lat/lon lengths in storm object for use in linear interpolation of time
+                storm%mx = mx
+                storm%my = my
+
+                ! Number of time steps in data
+                storm%num_casts = mt
+                
+                ! Fill out variable data/info
+                do n = 1, nvars
+                    ! read file for one variable and parse the data in storm object
+                    call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
+                    if ('PRESSURE' == Upper(var_name)) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
+                    elseif(ANY((/'LON      ','LONGITUDE'/) == Upper(var_name))) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%longitude))
+                    elseif(ANY((/'LAT     ', 'LATITUDE'/) == Upper(var_name))) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%latitude))
+                    elseif(ANY((/'TIME', 'T   '/) == Upper(var_name))) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%time))
+                    elseif(ANY((/'U     ', 'WIND_U', 'UU    '/) == Upper(var_name))) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_u))
+                    elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == Upper(var_name))) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
+                    end if
+                end do
+
+                ! Close file to stop corrupting the netcdf files
+                call check_netcdf_error(nf90_close(nc_fid))
+#else
+                print *, "GeoClaw was not compiled with NetCDF support needed for"
+                print *, "OWI NetCDF support."
                 stop
+#endif                
             else
                 print *, "Invalid file format ", file_format,"."
+                stop
+            end if
+
+            ! Make sure first time step in setrun is inside the times in the data
+            print *, t0
+            print *, storm%time(1)
+            if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
+                print *, 'Start time', t0, " is outside of the tracking"
+                print *, 'tolerance range with the track start'
+                print *, storm%time(1), '.'
+                stop
+            end if
+
+            last_storm_index = 2
+            last_storm_index = storm_index(t0, storm)
+            if (last_storm_index == -1) then
+                print *, 'Forecast not found for time ', t0, '.'
                 stop
             end if
 
