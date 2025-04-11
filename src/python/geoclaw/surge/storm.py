@@ -34,10 +34,11 @@ workflow in a `setrun.py` file would do the following:
 """
 
 import sys
-import os
+# import os
 import argparse
 import datetime
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -139,9 +140,9 @@ class Storm(object):
     *TODO:*  Add description of unit handling
 
     :Attributes:
-     - *t* (list(float) or list(datetime.datetiem)) Contains the time at which
+     - *t* (list(float) or list(np.datetiem64)) Contains the time at which
        each entry of the other arrays are at.  These are expected to
-       be *datetime* objects. Note that when written some formats require
+       be *datetime64* objects. Note that when written some formats require
        a *time_offset* to be set.
      - *eye_location* (ndarray(:, :)) location of the eye of the storm. Default
        units are in signed decimal longitude and latitude.
@@ -153,7 +154,7 @@ class Storm(object):
        are Pascals.
      - *storm_radius* (ndarray(:)) Radius of storm, often defined as the last
        closed iso-bar of pressure.  Default units are meters.
-     - *time_offset* (datetime.datetime) A date time that as an offset for the
+     - *time_offset* (np.datetiem64) A date time that as an offset for the
        simulation time.  This will default to the beginning of the first of
        the year that the first time point is found in.
      - *wind_speeds* (ndarray(:, :)) Wind speeds defined in every record, such
@@ -230,7 +231,7 @@ class Storm(object):
         output = f"Name: {self.name}\n"
         if self.t is None and self.time_offset is not None:
             output += f"Time offset: {self.time_offset}\n"
-        elif isinstance(self.t[0], datetime.datetime):
+        elif isinstance(self.t[0], np.datetiem64):
             output += f"Dates: {self.t[0].isoformat()}"
             output += f" - {self.t[-1].isoformat()}\n"
         else:
@@ -299,16 +300,15 @@ class Storm(object):
         """
 
         # Attempt to get name from file if is follows the convention name.storm
-        if ".storm" in os.path.splitext(path):
-            self.name = os.path.splitext(os.path.basename(path))[0]
+        if path.suffix == ".storm":
+            self.name = path.name
 
         # Read header
         with open(path, 'r') as data_file:
             num_casts = int(data_file.readline())
             time = data_file.readline()[:19]
             try:
-                self.time_offset = datetime.datetime.strptime(
-                    time, '%Y-%m-%dT%H:%M:%S')
+                self.time_offset = np.datetime64(time)
             except ValueError:
                 self.time_offset = float(time)
         # Read rest of data
@@ -316,9 +316,9 @@ class Storm(object):
         num_forecasts = data.shape[0]
         self.eye_location = np.empty((num_forecasts, 2))
         assert(num_casts == num_forecasts)
-        if isinstance(self.time_offset, datetime.datetime):
+        if isinstance(self.time_offset, np.datetime64):
             self.t = np.array([self.time_offset
-                               + datetime.timedelta(seconds=data[i, 0])
+                               + np.timedelta64(data[i, 0], "s")
                                for i in range(num_forecasts)])
         else:
             self.t = data[:, 0]
@@ -371,8 +371,8 @@ class Storm(object):
             "USERDEFINE5", "userdata5",
         ],
             converters={
-                "YYYYMMDDHH": lambda d: datetime.datetime(
-                    int(d[1:5]), int(d[5:7]), int(d[7:9]), int(d[9:11])),
+                "YYYYMMDDHH": lambda d: np.datetime64(
+                        f"{d[1:5]}-{d[5:7]}-{d[7:9]}T{d[9:11]}"),
                 "TAU": lambda d: datetime.timedelta(hours=int(d)),
                 "LAT": lambda d: (-.1 if d[-1] == "S" else .1) * int(d.strip("NS ")),
                 "LON": lambda d: (-.1 if d[-1] == "W" else .1) * int(d.strip("WE ")),
@@ -422,7 +422,8 @@ class Storm(object):
         df = df.dropna(how="any", subset=["LAT", "LON"])
 
         # Create time
-        self.t = list(df.index.to_pydatetime())
+        # self.t = list(df.index.to_pydatetime())
+        self.t = df.index
 
         # Classification, note that this is not the category of the storm
         self.classification = df["TY"].to_numpy()
@@ -483,7 +484,7 @@ class Storm(object):
         num_lines = len(data_block)
 
         # Parse data block
-        self.t = []
+        self.t = np.empty(num_lines, dtype=np.datetime64)
         self.event = np.empty(num_lines, dtype=str)
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
@@ -498,11 +499,11 @@ class Storm(object):
             data = [value.strip() for value in line.split(",")]
 
             # Create time
-            self.t.append(datetime.datetime(int(data[0][:4]),
-                                            int(data[0][4:6]),
-                                            int(data[0][6:8]),
-                                            int(data[1][:2]),
-                                            int(data[1][2:])))
+            self.t[i] = np.datetime64(f"{data[0][:4]}"      + 
+                                      f"-{data[0][4:6]}"    + 
+                                      f"-{data[0][6:8]}"    + 
+                                      f"T{data[1][:2]}"     + 
+                                      f":{data[1][2:]}")
 
             # If an event is occuring record it.  If landfall then use as an
             # offset.   Note that if there are multiple landfalls the last one
@@ -571,7 +572,7 @@ class Storm(object):
              *year* must not be None.
          - *year* (int, optional) year of storm of interest.
              Either *sid* OR *storm_name* and *year* must not be None.
-         - *start_date* (:py:class:`datetime.datetime`, optional) If storm is not
+         - *start_date* (np.datetime64, optional) If storm is not
              named, will find closest unnamed storm to this start date. Only
              used for unnamed storms when specifying *storm_name* and *year*
              does not uniquely identify storm.
@@ -708,11 +709,7 @@ class Storm(object):
             self.ID = ds.sid.astype(str).item()
 
             # convert datetime64 to datetime.datetime
-            self.t = []
-            for d in ds.time:
-                t = d.dt
-                self.t.append(datetime.datetime(t.year, t.month,
-                                                t.day, t.hour, t.minute, t.second))
+            self.t = ds.time
 
             # events
             self.event = ds.usa_record.values.astype(str)
@@ -776,7 +773,7 @@ class Storm(object):
         assert(num_lines == len(data_block))
 
         # Parse data block
-        self.t = []
+        self.t = np.empty(num_lines, dtype=np.datetime64)
         self.event = np.empty(num_lines, dtype=str)
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
@@ -790,10 +787,10 @@ class Storm(object):
             data = [value.strip() for value in line.split()]
 
             # Create time
-            self.t.append(datetime.datetime(int(data[0][:2]),
-                                            int(data[0][2:4]),
-                                            int(data[0][4:6]),
-                                            int(data[0][6:])))
+            self.t[i] = np.datetime64(f"{data[0][:2]}"      + 
+                                      f"-{data[0][2:4]}"    + 
+                                      f"-{data[0][4:6]}"    + 
+                                      f"T{data[0][6:]}")
 
             # Classification, note that this is not the category of the storm
             self.classification[i] = int(data[1])
@@ -851,7 +848,7 @@ class Storm(object):
         #  max_wind_radius  - convert from km to m - 1000.0
         #  Central_pressure - convert from mbar to Pa - 100.0
         #  Radius of last isobar contour - convert from km to m - 1000.0
-        self.t = []
+        self.t = np.empty(num_lines, dtype=np.datetime64)
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
         self.max_wind_speed = np.empty(num_lines)
@@ -870,10 +867,10 @@ class Storm(object):
                 self.ID = int(data[1][:2])
 
             # Create time
-            self.t.append(datetime.datetime(int(data[3][0:4]),
-                                            int(data[3][4:6]),
-                                            int(data[3][6:]),
-                                            int(data[4][:2])))
+            self.t[i] = np.datetime64(f"{data[0][:2]}"      + 
+                                      f"-{data[0][2:4]}"    + 
+                                      f"-{data[0][4:6]}"    + 
+                                      f"T{data[0][6:]}")
 
             # Parse eye location - longitude/latitude order
             if data[5][-1] == 'N':
@@ -914,24 +911,18 @@ class Storm(object):
          - *verbose* (bool) Output more info regarding reading.
         """
 
-        with open(path, "r") as data_file:
+        with path.open() as data_file:
             data_file.readline()
+            self.time_offset = np.datetime64(data_file.readline()[:19])
             self.data_file_format = int(
                                 data_file.readline().partition("#")[0].rstrip())
-            num_regions = int(data_file.readline().partition("#")[0].rstrip())
-            time = data_file.readline()[:19]
-            try:
-                self.time_offset = datetime.datetime.strptime(
-                    time, '%Y-%m-%dT%H:%M:%S')
-            except ValueError:
-                self.time_offset = float(time)
             data_file.readline()
             data_file.readline()
             self.file_paths = []
             if self.data_file_format == 1:
-                # for n in range(num_resolutions):
+                num_regions = int(data_file.readline().partition("#")[0].rstrip())
                 for line in data_file:
-                    self.file_paths.append(line.partition("#")[0].rstrip())
+                    self.file_paths.append(Path(line.partition("#")[0].rstrip()))
                 # Check to make sure we have the right number of files
                 if len(self.file_paths)%2 != 0:
                     raise ValueError(f"Found {len(self.file_paths)} files " + 
@@ -942,7 +933,7 @@ class Storm(object):
                                      f"{num_regions}.")
             elif self.data_file_format == 2:
                 self.file_paths.append(
-                                data_file.readline().partition("#")[0].rstrip())
+                          Path(data_file.readline().partition("#")[0].rstrip()))
 
 
     # =========================================================================
@@ -1073,7 +1064,8 @@ class Storm(object):
                 # Write header
                 data_file.write(f"{num_casts}\n")
                 if isinstance(self.time_offset, datetime.datetime):
-                    data_file.write(f"{self.time_offset.isoformat()}\n\n")
+                    data_file.write(f"{np.datetime_as_string(self.time_offset, 
+                                                             unit="s")}\n\n")
                 else:
                     data_file.write(f"{str(self.time_offset)}\n\n")
 
@@ -1261,7 +1253,7 @@ class Storm(object):
                                      'netcdf': 2, 'nws13': 2}
 
         try:
-            with open(path, "w") as data_file:
+            with path.open('w') as data_file:
                 # Write header
                 data_file.write("# OWI Data Decription - NWS12 and NWS13\n")
                 if isinstance(self.data_file_format, int):
@@ -1280,11 +1272,12 @@ class Storm(object):
 
                 # Write out data
                 # Time offset
-                if isinstance(self.time_offset, datetime.datetime):
-                    data_file.write(f"{self.time_offset.isoformat().ljust(20)}" +
-                                     " # Time Offset\n")
+                self.time_offset = np.datetime64(self.time_offset)
+                if isinstance(self.time_offset, np.datetime64):
+                    t = np.datetime_as_string(self.time_offset, unit="s")
+                    data_file.write(f"{t.ljust(20)} # Time Offset\n")
                 else:
-                    raise ValueError("Time offset must be a datetime object.")
+                    raise ValueError("Time offset must be a datetime64 object.")
 
                 # File format
                 data_file.write(f"{str(file_format).ljust(20)} # File format\n")
@@ -1302,8 +1295,8 @@ class Storm(object):
                     data_file.write(f"{str(num_regions).ljust(20)}" + 
                                      " # Number of regions\n")
                     for n in range(int(len(self.file_paths) / 2)):
-                        data_file.write(f"{self.file_paths[n * 2].ljust(20)}\n")
-                        data_file.write(f"{self.file_paths[n * 2 + 1].ljust(20)}\n")
+                        data_file.write(f"{str(self.file_paths[n * 2]).ljust(20)}\n")
+                        data_file.write(f"{str(self.file_paths[n * 2 + 1]).ljust(20)}\n")
                 elif file_format == 2:
                     if len(self.file_paths) != 1:
                         raise ValueError(f"Expected 1 file for format " + 
@@ -1312,9 +1305,8 @@ class Storm(object):
                     data_file.write(f"{self.file_paths[0]}\n")
 
         except Exception as e:
-            # If an exception occurs clean up a partially generated file
-            if os.path.exists(path):
-                os.remove(path)
+            # If an exception occurs clean up a partially generated file            
+            Path.unlink(path, missing_ok=True)
             raise e
 
 
@@ -1597,7 +1589,7 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
     *storm_radius_fill* when calling *write_geoclaw*.
 
     :Input:
-    - *t* (:py:class:`datetime.datetime`) the time corresponding to
+    - *t* (np.datetime64) the time corresponding to
         a missing value of *max_wind_radius* or *storm_radius*
     - *storm_targ* (:py:class:`clawpack.geoclaw.storm.Storm`) storm
         that has missing values you want to fill
@@ -1743,7 +1735,7 @@ class DataDerivedStorms(object):
     into a netcdf file for reading with the data_storm_module.f90
 
       :Attributes:
-     - *t* (list(datetime.datetiem)) Contains the time at which each entry of
+     - *t* (list(np.datetime64)) Contains the time at which each entry of
        the other arrays are at.  These are expected to be *datetime* objects.
        Note that when written some formats require a *time_offset* to be set.
      - *wind_speed* (ndarray(:, :)) Wind speeds defined in every record, such
