@@ -112,20 +112,23 @@ contains
         ! Locals
         integer :: file_format, io_status
         integer, parameter :: data_unit = 10
-        ! integer, parameter :: OWI_unit = 156
+        ! integer, parameter :: OWI_unit = 156s
+
+        ! Locals
+        integer :: i, time(6, 2), dt, total_time, seconds_from_landfall
+        integer :: mt, mx, my
 
         ! ASCII / NWS12
+        character(len=*), parameter :: ISO_time_Format = "(i4,1x,i2,1x,i2,1x,i2,1x,i2,1x,i2)"
         ! character(len=*), parameter :: header_format = "(t56,i4,i2,i2,i2,t71,i4,i2,i2,i2)"
         ! character(len=*), parameter :: full_info_format = "(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0,t58,f8.0,t69,i4,i2,i2,i2,i2)"
         ! character(len=*), parameter :: time_info_format = "(t69,i4,i2,i2,i2,i2)"
-        ! integer :: i, time(5, 2), dt, total_time, sec_from_landfall
         ! real(kind=8) :: sw_lon, sw_lat, dx, dy
         character(len=256), allocatable :: wind_files(:), pressure_files(:)
 
         ! Temp conversion
-        integer :: i
-        integer :: yr, mo, da, hr, minute, seconds, seconds_from_landfall
-        integer :: mx, my, mt
+        ! integer :: yr, mo, da, hr, minute, seconds
+        
         real(kind=8) :: swlat, swlon, dx, dy
 
         ! Local Storage
@@ -178,8 +181,9 @@ contains
                 close(data_unit)
 
                 ! Calculate number of seconds from epoch
-                read(storm%landfall, "(i4,1x,i2,1x,i2,1x,i2,1x,i2,1x,i2)") yr, mo, da, hr, minute, seconds
-                seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
+                read(storm%landfall, ISO_time_format) time(:, 1)
+                seconds_from_landfall = seconds_from_epoch(time(1:5, 1))
+                ! seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
 
                 ! Load headers for setting up the rest of the data
                 call initialize_storm_data(wind_files(1), my, mx, mt, swlat, swlon, dy, dx)
@@ -435,7 +439,7 @@ contains
         if (.not. module_setup) then
                 wind_file = storm_data_path(1)
                 pressure_file = storm_data_path(2)
-                read(landfall_time, '(i4i2i2i2i2)') yr, mo, da, hr, minute
+                read(landfall_time, '(i4,i2,i2,i2,i2)') yr, mo, da, hr, minute
             ! Check for flag that there are regional forcing grids
             ! To be developed further later 11/15/2024 CRJ
             if (size(storm_data_path) > 2) then
@@ -456,7 +460,8 @@ contains
                     stop ' *** ERROR *** No storm forcing selection chosen'
             end select
             ! Calculate the number of seconds from Jan 1, 1970 for the landfall datetime
-            seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
+            seconds_from_landfall = seconds_from_epoch([yr, mo, da, hr, minute])
+            ! seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
 
             end if
 
@@ -594,8 +599,10 @@ contains
                     start_yr, start_mo, start_da, start_hr, end_yr, end_mo, &
                     end_da, end_hr
         ! Calculate the start and final times as seconds from Jan 1,1970 
-        initial_time = seconds_from_epoch(start_yr, start_mo, start_da, start_hr, 00)
-        final_time = seconds_from_epoch(end_yr, end_mo, end_da, end_hr, 00)
+        initial_time = seconds_from_epoch([start_yr, start_mo, start_da, start_hr])
+        ! initial_time = seconds_from_epoch(start_yr, start_mo, start_da, start_hr, 00)
+        final_time = seconds_from_epoch([end_yr, end_mo, end_da, end_hr])
+        ! final_time = seconds_from_epoch(end_yr, end_mo, end_da, end_hr, 00)
         ! Total number of time in seconds of the dataset
         total_time = final_time - initial_time
         
@@ -623,8 +630,10 @@ contains
         
         close(iunit)
 
-        timestep1 = seconds_from_epoch(yr1, mo1, da1, hr1, minute1)
-        timestep2 = seconds_from_epoch(yr2, mo2, da2, hr2, minute2)
+        timestep1 = seconds_from_epoch([yr1, mo1, da1, hr1, minute1])
+        ! timestep1 = seconds_from_epoch(yr1, mo1, da1, hr1, minute1)
+        timestep2 = seconds_from_epoch([yr2, mo2, da2, hr2, minute2])
+        ! timestep2 = seconds_from_epoch(yr2, mo2, da2, hr2, minute2)
 
         dt = timestep2 - timestep1
         mt = (total_time/dt) + 1
@@ -663,7 +672,7 @@ contains
             ! Read each time from the next array
             read(wunit, '(t69, i4,i2,i2,i2, i2)') yr, mo, da, hr, minute
             ! Calculate the current timestep in seconds from landfall
-            current_timestep = seconds_from_epoch(yr, mo, da, hr, minute) - seconds_from_landfall
+            current_timestep = seconds_from_epoch([yr, mo, da, hr, minute]) - seconds_from_landfall
             storm%time(n) = current_timestep
             !
             read(wunit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
@@ -994,26 +1003,52 @@ contains
     ! seconds_from_epoch() Calculates seconds from 1970 from a datetime
     ! Returns the total seconds from the epoch includes leap years and days
     ! ==========================================================================
-    function seconds_from_epoch(year, month, day, hour, minute) result(seconds)
-        integer, intent(in) :: year, month, day, hour, minute
-        integer, dimension(12) :: days_in_month=[31, 28, 31, 30, 31, &
-                                                 30, 31, 31, 30, 31, 30, 31]
-        integer :: seconds, leap_days, total_days
+    ! function seconds_from_epoch(year, month, day, hour, minute) result(seconds)
+    !     integer, intent(in) :: year, month, day, hour, minute
+    !     integer, dimension(12) :: days_in_month=[31, 28, 31, 30, 31, &
+    !                                              30, 31, 31, 30, 31, 30, 31]
+    !     integer :: seconds, leap_days, total_days
         
-        total_days = (year - 1970) * 365
+    !     total_days = (year - 1970) * 365
 
-        leap_days = (year - 1968)/4 - (year - 1900)/4 + (year - 1600)/400
+    !     leap_days = (year - 1968)/4 - (year - 1900)/4 + (year - 1600)/400
 
-        total_days = total_days + leap_days
-        if (mod(year, 4) == 0 .and. (mod(year,100) /= 0 &
-            .or. mod(year, 400) == 0).and.month >2) THEN
-                total_days = total_days + 1
+    !     total_days = total_days + leap_days
+    !     if (mod(year, 4) == 0 .and. (mod(year,100) /= 0 &
+    !         .or. mod(year, 400) == 0).and.month >2) THEN
+    !             total_days = total_days + 1
+    !     endif
+    !     total_days = total_days + sum(days_in_month(1:month-1)) + day
+
+    !     seconds = (total_days*86400) + (hour*3600) + (minute*60)
+       
+       
+    ! end function seconds_from_epoch
+    ! ==========================================================================
+    ! seconds_from_epoch() Calculates seconds from 1970 from a datetime
+    ! Returns the total seconds from the epoch includes leap years and days
+    ! ==========================================================================
+    pure function seconds_from_epoch(time) result(seconds)
+        implicit none
+
+        integer, intent(in) :: time(:) ! year, month, day, hour, minutes (optional)
+        integer :: seconds
+        integer, parameter, dimension(12) :: days_in_month=[31, 28, 31, 30, &
+                                                            31, 30, 31, 31, &
+                                                            30, 31, 30, 31]
+        integer :: leap_days, days, minutes
+
+        days = (time(1) - 1970) * 365
+        leap_days = (time(1) - 1968)/4 - (time(1) - 1900)/4 + (time(1) - 1600)/400
+        days = days + leap_days
+        if (mod(time(1), 4) == 0 .and. (mod(time(1),100) /= 0 &
+            .or. mod(time(1), 400) == 0).and.time(2) >2) THEN
+                days = days + 1
         endif
-        total_days = total_days + sum(days_in_month(1:month-1)) + day
+        days = days + sum(days_in_month(1:time(2)-1)) + time(3)
+        minutes = merge(0, time(size(time)), size(time) == 4)
+        seconds = (days*86400) + (time(4)*3600) + (minutes*60)
 
-        seconds = (total_days*86400) + (hour*3600) + (minute*60)
-       
-       
     end function seconds_from_epoch
     
 

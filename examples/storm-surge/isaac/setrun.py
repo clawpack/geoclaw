@@ -11,6 +11,7 @@ import os
 import datetime
 import shutil
 import gzip
+from pathlib import Path
 
 import numpy as np
 
@@ -25,8 +26,7 @@ def seconds2days(seconds):
     return seconds / (60.0**2 * 24.0)
 
 # Scratch directory for storing topo and dtopo files:
-scratch_dir = os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
-
+scratch_dir = (Path(os.environ["CLAW"]) / "geoclaw" / "scratch").resolve()
 
 # ------------------------------
 def setrun(claw_pkg='geoclaw'):
@@ -378,7 +378,7 @@ def setgeo(rundata):
     # the smaller domains
     clawutil.data.get_remote_file(
            "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2")
-    topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
+    topo_path = scratch_dir / 'gulf_caribbean.tt3'
     topo_data.topofiles.append([3, topo_path])
 
     # == fgout grids ==
@@ -406,15 +406,15 @@ def setgeo(rundata):
     # Storm parameters - Parameterized storm (Holland 1980)
     # data.storm_specification_type = 'holland80'  # (type 1)
     data.storm_specification_type = 'OWI'
-    data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
-                                         'isaac.storm'))
+    data.storm_file = (Path() / 'isaac.storm').resolve()
+
     # Convert ATCF data to GeoClaw format
     clawutil.data.get_remote_file(
                    "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-    atcf_path = os.path.join(scratch_dir, "bal092012.dat")
+    atcf_path = scratch_dir / "bal092012.dat"
     # Note that the get_remote_file function does not support gzip files which
     # are not also tar files.  The following code handles this
-    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+    with gzip.open(atcf_path.with_suffix(".dat.gz"), 'rb') as atcf_file,    \
             open(atcf_path, 'w') as atcf_unzipped_file:
         atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
 
@@ -434,13 +434,13 @@ def setgeo(rundata):
         # we are just storing the files as is
 
         # ASCII
-        # isaac.data_file_format = 'NWS12'
-        # isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.PRE"))
-        # isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.WIN"))
+        isaac.data_file_format = 'NWS12'
+        isaac.file_paths.append((Path() / "isaac.PRE").resolve())
+        isaac.file_paths.append((Path() / "isaac.WIN").resolve())
 
         # NetCDF file
-        isaac.data_file_format = "NWS13"
-        isaac.file_paths.append(os.path.join(os.getcwd(), "isaac.nc"))
+        # isaac.data_file_format = "NWS13"
+        # isaac.file_paths.append(Path() / "isaac.nc")
 
         isaac.write(data.storm_file, file_format='OWI')
 
