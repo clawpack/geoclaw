@@ -183,10 +183,9 @@ contains
                 ! Calculate number of seconds from epoch
                 read(storm%landfall, ISO_time_format) time(:, 1)
                 seconds_from_landfall = seconds_from_epoch(time(1:5, 1))
-                ! seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
 
                 ! Load headers for setting up the rest of the data
-                call initialize_storm_data(wind_files(1), my, mx, mt, swlat, swlon, dy, dx)
+                call initialize_storm_data(pressure_files(1), my, mx, mt, swlat, swlon, dy, dx)
 
                 ! allocate arrays in storm object
                 allocate(storm%pressure(mx, my, mt))
@@ -301,216 +300,6 @@ contains
     end subroutine set_OWI_storm
 
     ! ==========================================================================
-    !  set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
-    !    Initializes the storm type for an Oceanweather, Inc type data derived 
-    !    storm that is saved as a netcdf format
-    ! ==========================================================================
-    subroutine set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
-#ifdef NETCDF
-    use netcdf
-#endif
-        use amr_module, only: t0, rinfinity
-        implicit none
-
-        ! Subroutine I/O
-        character(len=*), optional :: storm_data_path
-        type(data_storm_type), intent(inout) :: storm
-        integer, intent(in) :: storm_spec_type, log_unit
-
-        ! Local Storage
-        ! Set up for dimension info, dims are lat/lon/time
-        integer :: num_dims, x_dim_id, y_dim_id, t_dim_id, dim_ids(3)
-        character (len=10) :: x_dim_name, y_dim_name, t_dim_name
-
-        ! Length of dims, mx, my, mt
-        integer :: mx, my, mt
-
-        ! Set up for variable info, variables are pressure, lat, lon, time
-        integer :: nvars, var_type, var_id
-        character (len=13) :: var_name
-
-        ! Netcdf file id and counter for looping
-        integer :: nc_fid, n
-#ifdef NETCDF
-        if (.not. module_setup) then
-
-            ! Open data file
-            print *, 'Reading storm data file ', storm_data_path
-
-            ! Open file and get file ID
-            call check_netcdf_error(nf90_open(storm_data_path, nf90_nowrite, nc_fid))
-            ! Read number of dimensions and variables in nc file
-            call check_netcdf_error(nf90_inquire(nc_fid, num_dims, nvars))
-
-            ! Get the dimension names and sizes from the file
-            call get_dim_info(nc_fid, num_dims, x_dim_id, x_dim_name, mx, &
-            y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)
-
-            ! allocate arrays in storm object
-            allocate(storm%pressure(mx, my, mt))
-            allocate(storm%wind_u(mx, my, mt))
-            allocate(storm%wind_v(mx, my, mt))
-            allocate(storm%longitude(mx))
-            allocate(storm%latitude(my))
-            allocate(storm%time(mt))
-            ! Set up lat/lon lengths in storm object for use in linear interpolation of time
-            storm%mx = mx
-            storm%my = my
-
-            ! Number of time steps in data
-            storm%num_casts = mt
-
-            ! Fill out variable data/info
-            do n = 1, nvars
-                ! read file for one variable and parse the data in storm object
-                call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
-                if ('PRESSURE' == Upper(var_name)) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
-                elseif(ANY((/'LON      ','LONGITUDE'/) == Upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%longitude))
-                elseif(ANY((/'LAT     ', 'LATITUDE'/) == Upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%latitude))
-                elseif(ANY((/'TIME', 'T   '/) == Upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%time))
-                elseif(ANY((/'U     ', 'WIND_U', 'UU    '/) == Upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_u))
-                elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == Upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
-                end if
-            end do
-
-        ! Close file to stop corrupting the netcdf files
-        call check_netcdf_error(nf90_close(nc_fid))
-        end if
-#endif
-        ! Make sure first time step in setrun is inside the times in the data
-        if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
-            print *, 'Start time', t0, " is outside of the tracking"
-            print *, 'tolerance range with the track start'
-            print *, storm%time(1), '.'
-            stop
-        end if
-
-        last_storm_index = 2
-        last_storm_index = storm_index(t0, storm)
-        if (last_storm_index == -1) then
-            print *, 'Forecast not found for time ', t0, '.'
-            stop
-        end if
-
-        ! Write out a surge file after discussing the data with kyle
-        if (.not. module_setup) then
-
-            module_setup = .true.
-        end if
-    end subroutine set_netcdf_storm
-
-    ! ==========================================================================
-    !  set_ascii_storm(storm_data_path, storm, storm_spec_type, log_unit)
-    !    Initializes the storm type for an Oceanweather, Inc type data derived 
-    !    storm that is saved as a fixed width fortran format
-    ! ==========================================================================
-    subroutine set_ascii_storm(storm_data_path, storm, storm_spec_type, landfall_time, log_unit)
-        use amr_module, only: t0, rinfinity
-        implicit none
-
-        ! Subroutine I/O
-        character(len=*), dimension(:), intent(in) :: storm_data_path
-        character(len=*), intent(in) :: landfall_time
-        integer, intent(in) :: storm_spec_type, log_unit
-        type(data_storm_type), intent(inout) :: storm
-        character(len=256) :: wind_file, pressure_file, regional_wind_file, regional_pressure_file
-
-        ! Local Storage
-        ! Set up for dimension info, dims are lat/lon/time
-        real(kind=8) :: swlat, swlon, dx, dy
-        integer :: my, mx, mt
-        integer :: yr, mo, da, hr, minute, seconds_from_landfall
-        integer :: iunit=10
-        integer :: has_regional_data 
-        character(len=20) :: homedir
-        
-        if (.not. module_setup) then
-                wind_file = storm_data_path(1)
-                pressure_file = storm_data_path(2)
-                read(landfall_time, '(i4,i2,i2,i2,i2)') yr, mo, da, hr, minute
-            ! Check for flag that there are regional forcing grids
-            ! To be developed further later 11/15/2024 CRJ
-            if (size(storm_data_path) > 2) then
-                has_regional_data = 1
-            ! read(iunit, '(i2)') has_regional_data
-            else 
-                has_regional_data = 0
-            end if      
-            
-            select case(has_regional_data)
-                case(0)
-                    close(iunit)
-                case(1)
-                    read(iunit, *) regional_wind_file
-                    read(iunit, *) regional_pressure_file
-                    close(iunit)
-                case default
-                    stop ' *** ERROR *** No storm forcing selection chosen'
-            end select
-            ! Calculate the number of seconds from Jan 1, 1970 for the landfall datetime
-            seconds_from_landfall = seconds_from_epoch([yr, mo, da, hr, minute])
-            ! seconds_from_landfall = seconds_from_epoch(yr, mo, da, hr, minute)
-
-            end if
-
-            ! Load headers for setting up the rest of the data
-            call initialize_storm_data(wind_file, my, mx, mt, swlat, swlon, dy, dx)
-
-            ! allocate arrays in storm object
-            allocate(storm%pressure(mx, my, mt))
-            allocate(storm%wind_u(mx, my, mt))
-            allocate(storm%wind_v(mx, my, mt))
-            allocate(storm%longitude(mx))
-            allocate(storm%latitude(my))
-            allocate(storm%time(mt))
-
-            ! Set up lat/lon lengths in storm object for use in linear interpolation of time
-            storm%mx = mx
-            storm%my = my
-
-            ! Number of time steps in data
-            storm%num_casts = mt
-
-            ! Fill out variable data/info
-            call fill_data_arrays(wind_file, pressure_file, my, mx, mt, swlat, swlon,&
-                                 dy, dx, storm, seconds_from_landfall)
-       
-
-        ! Make sure first time step in setrun is inside the times in the data
-        if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
-            print *, 'Start time', t0, " is outside of the tracking"
-            print *, 'tolerance range with the track start'
-            print *, storm%time(1), '.'
-            stop
-        end if
-
-        last_storm_index = 2
-        last_storm_index = storm_index(t0, storm)
-        if (last_storm_index == -1) then
-            print *, 'Forecast not found for time ', t0, '.'
-            stop
-        end if
-
-        ! Write out a surge file after discussing the data with kyle
-        if (.not. module_setup) then
-
-            module_setup = .true.
-        end if
-    end subroutine set_ascii_storm
-
-    ! ==========================================================================
     !  storm_location(t,storm)
     !    Interpolate location of hurricane in the current time interval
     ! ==========================================================================
@@ -525,7 +314,7 @@ contains
         ! Output
         real(kind=8) :: location(2)
 
-        stop "Data-derived storm are not yet implemented!"
+        stop "Storm location for data stroms is not supported."
 
     end function storm_location
 
@@ -541,7 +330,7 @@ contains
         real(kind=8), intent(in) :: t
         type(data_storm_type), intent(in) :: storm
 
-        stop "Data-derived storm are not yet implemented!"
+        stop "Storm direction for data stroms is not supported."
 
     end function storm_direction
 
@@ -576,68 +365,47 @@ contains
     ! read_headers() Opens fixed width format file and reads the header
     ! for use in parsing the data structure
     ! ==========================================================================
-    subroutine initialize_storm_data(wind_file, my, mx, mt, swlat, swlon, dy, dx)
+    subroutine initialize_storm_data(pressure_file, my, mx, mt, swlat, swlon, dy, dx)
         implicit none
+
         ! Subroutine I/O
-        character(len=*), intent(in) :: wind_file
+        character(len=*), intent(in) :: pressure_file
+
         ! Output arguments
         real(kind=8), intent(out) :: swlat, swlon, dx, dy
-        integer, intent(out) ::  my, mx, mt
+        integer, intent(out) ::  mx, my, mt
         
-        ! Local Storage
-        integer, parameter :: iunit=9
-        integer :: start_yr, start_mo, start_da, start_hr, start_min, dt
-        integer :: end_yr, end_mo, end_da, end_hr, end_min
-        integer :: yr1, mo1, da1, hr1, minute1, total_time, initial_time, final_time
-        integer :: yr2, mo2, da2, hr2, minute2, timestep2, timestep1
-        integer :: i, j
+        ! Format strings
+        character(len=*), parameter :: header_format = "(t56,i4,i2,i2,i2,t71,i4,i2,i2,i2)"
+        character(len=*), parameter :: full_info_format = "(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0,t58,f8.0,t69,i4,i2,i2,i2,i2)"
+        character(len=*), parameter :: time_info_format = "(t69,i4,i2,i2,i2,i2)"
+        
+        ! Local
+        integer, parameter :: OWI_unit = 156
+        integer :: i, time(5, 2), total_time, dt
+
 
         ! Read in start and end dates of file from first header line
-        open(iunit, file=wind_file, status='old', action='read')
+        open(OWI_unit, file=pressure_file, status='old', action='read')
        
-        read(iunit, "(t56, i4, i2, i2, i2, t71, i4, i2, i2, i2)") &
-                    start_yr, start_mo, start_da, start_hr, end_yr, end_mo, &
-                    end_da, end_hr
-        ! Calculate the start and final times as seconds from Jan 1,1970 
-        initial_time = seconds_from_epoch([start_yr, start_mo, start_da, start_hr])
-        ! initial_time = seconds_from_epoch(start_yr, start_mo, start_da, start_hr, 00)
-        final_time = seconds_from_epoch([end_yr, end_mo, end_da, end_hr])
-        ! final_time = seconds_from_epoch(end_yr, end_mo, end_da, end_hr, 00)
         ! Total number of time in seconds of the dataset
-        total_time = final_time - initial_time
+        read(OWI_unit, header_format) time(1:4, 1), time(1:4, 2) 
+        total_time =   seconds_from_epoch(time(1:4, 2))           &
+                     - seconds_from_epoch(time(1:4, 1))
         
         ! Read second header from file to obtain array sizes and first timestep
-        read(iunit, '(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0, t58, f8.0,t69, i4,i2,i2,i2, i2)') &
-             my, mx, dx, dy, swlat, swlon, yr1, mo1, da1, hr1, minute1
+        read(OWI_unit, full_info_format) my, mx, dx, dy, swlat, swlon, time(:, 1)
 
-        ! Calculate the dt by skipping the wind velocity matrices
-        do i = 1, (mx * my / 8)
-            read(iunit, *) ! Skip u velocity
+        ! ! Would need to multiply by 2 if using the wind file
+        do i=1, (mx * my / 8 + merge(0, 1, mod(mx * my, 8) == 0))
+            read(OWI_unit, *)
         end do
-        if (mod(mx * my,8) /= 0) then
-            read(iunit, *) 
-        else
-        end if
-        ! Skip second set of velocity data
-        do j = 1, (mx * my / 8)
-            read(iunit, *) ! Skip v velocity
-        end do
-        if (mod(mx * my,8) /= 0) then
-           read(iunit, *)
-        else
-            read(iunit, '(t69, i4,i2,i2,i2, i2)') yr2, mo2, da2, hr2, minute2
-        end if
+        read(OWI_unit, time_info_format) time(:, 2)
         
-        close(iunit)
+        close(OWI_unit)
 
-        timestep1 = seconds_from_epoch([yr1, mo1, da1, hr1, minute1])
-        ! timestep1 = seconds_from_epoch(yr1, mo1, da1, hr1, minute1)
-        timestep2 = seconds_from_epoch([yr2, mo2, da2, hr2, minute2])
-        ! timestep2 = seconds_from_epoch(yr2, mo2, da2, hr2, minute2)
-
-        dt = timestep2 - timestep1
-        mt = (total_time/dt) + 1
-
+        dt = seconds_from_epoch(time(:, 2)) - seconds_from_epoch(time(:, 1))
+        mt = (total_time / dt) + 1
 
     end subroutine initialize_storm_data  
     
