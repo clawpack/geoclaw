@@ -434,13 +434,13 @@ def setgeo(rundata):
         # we are just storing the files as is
 
         # ASCII
-        isaac.data_file_format = 'NWS12'
-        isaac.file_paths.append((Path() / "isaac.PRE").resolve())
-        isaac.file_paths.append((Path() / "isaac.WIN").resolve())
+        # isaac.data_file_format = 'NWS12'
+        # isaac.file_paths.append((Path() / "isaac.PRE").resolve())
+        # isaac.file_paths.append((Path() / "isaac.WIN").resolve())
 
         # NetCDF file
-        # isaac.data_file_format = "NWS13"
-        # isaac.file_paths.append(Path() / "isaac.nc")
+        isaac.data_file_format = "NWS13"
+        isaac.file_paths.append((Path() / "isaac.nc").resolve())
 
         isaac.write(data.storm_file, file_format='OWI')
 
