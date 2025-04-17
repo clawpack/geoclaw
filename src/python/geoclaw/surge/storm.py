@@ -286,6 +286,8 @@ class Storm(object):
         if file_format.lower() not in self._supported_formats.keys():
             raise ValueError("File format %s not available." % file_format)
 
+        if isinstance(path, str):
+            path = Path(path)
         getattr(self, 'read_%s' % file_format.lower())(path, **kwargs)
 
     def read_geoclaw(self, path, verbose=False):

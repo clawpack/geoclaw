@@ -8,6 +8,7 @@ from pathlib import Path
 import os
 import gzip
 import unittest
+import pytest
 
 import numpy as np
 
@@ -15,27 +16,48 @@ import clawpack.geoclaw.test as test
 import clawpack.clawutil as clawutil
 from clawpack.geoclaw.surge.storm import Storm
 
+days2seconds = lambda t: t * 60.0**2 * 24.0
+
 # Look in scratch directory for storm file
 scratch_dir = Path(os.environ['CLAW']) / 'geoclaw' / 'scratch'
 
 # os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
 
-class IsaacStormSurgeTest(test.GeoClawRegressionTest):
+@pytest.mark.parametrize("data_file_format", 
+                         ['geoclaw', 'owi_ascii', 'owi_netcdf'])
+def test_isaac_formats(data_file_format):
+    test = IsaacStormSurgeRun(file_format=data_file_format)
+    try:
+        test.setUp()
+        test.runTest(save=True)
+    finally:
+        test.tearDown()
+
+# :TODO: Restructure this to use pytest.mark.parameterize
+
+
+class IsaacStormSurgeRun(test.GeoClawRegressionTest):
     r"""Regression test for Hurrican Isaac storm surge"""
 
     def __init__(self, methodName="runTest", file_format="geoclaw"):
 
-        super(IsaacStormSurgeTest, self).__init__(methodName=methodName)
+        super(IsaacStormSurgeRun, self).__init__(methodName=methodName)
 
         if file_format.lower() not in ["geoclaw", "owi_ascii", "owi_netcdf"]:
             raise ValueError(f"Invalid test file fromat {self.file_format}.")
         self.file_format = file_format
+
+    def setUp(self):
 
 
     def runTest(self, save=False):
 
         # Write out data files
         self.load_rundata()
+
+        self.rundata.clawdata.t0 = days2seconds(-3)
+        self.rundata.clawdata.tfinal = days2seconds(1)
+
         surge_data = self.rundata.surge_data
 
         # Reload all of storm specific stuff
@@ -63,15 +85,13 @@ class IsaacStormSurgeTest(test.GeoClawRegressionTest):
         elif self.file_format.lower == "owi_ascii":
             surge_data.storm_specification_type = 'OWI'
             isaac.data_file_format = 'NWS12'
-            isaac.file_paths.append(Path.cwd() / "isaac.PRE")
-            isaac.file_paths.append(Path.cwd() / "isaac.WIN")
-            # isaac.file_paths.append(self.test_path / "isaac.PRE")
-            # isaac.file_paths.append(self.test_path / "isaac.WIN")
+            isaac.file_paths = [Path.cwd() / "isaac.PRE",
+                                Path.cwd() / "isaac.WIN"]
             isaac.write(data.storm_file, file_format='OWI')
         elif self.file_format.lower == "owi_netcdf":
             surge_data.storm_specification_type = 'OWI'
             isaac.data_file_format = "NWS13"
-            # isaac.file_paths.append(self.test_path / "isaac.nc")
+            isaac.file_paths = [self.test_path / "isaac.nc"]
             isaac.write(data.storm_file, file_format='OWI')
 
         self.write_rundata_objects()
@@ -91,7 +111,7 @@ if __name__=="__main__":
     if len(sys.argv) > 1:
         if bool(sys.argv[1]):
             # Fake the setup and save out output
-            test = IsaacStormSurgeTest()
+            test = IsaacStormSurgeRun()
             try:
                 test.setUp()
                 test.runTest(save=True)

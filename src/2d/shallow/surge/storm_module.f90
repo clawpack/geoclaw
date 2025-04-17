@@ -197,24 +197,6 @@ contains
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
             read(unit, *) storm_file_path
-            ! read(unit, *) ! empty space for storm_spec_type in character format
-            ! if (storm_specification_type == -3) then
-            !     read(unit, *) landfall_time
-            !     read(unit, *) num_storm_files
-            !     if (num_storm_files == 2) then
-            !         read(unit, *) wind_file_path
-            !         read(unit, *) pressure_file_path
-            !         allocate(storm_files_array(num_storm_files))
-            !         storm_files_array = [wind_file_path, pressure_file_path]
-            !     else
-            !        print *, 'Multiple wind/pressure files not yet implemented'
-            !     end if         
-            ! else if (storm_specification_type == -2) then
-            !     read(unit, *) storm_file_path
-            !    storm_files_array = [storm_file_path] 
-            ! else
-            !     read(unit, *) storm_file_path
-            ! end if
 
             close(unit)
 
@@ -436,16 +418,15 @@ contains
         ! Output
         real(kind=8) :: location(2)
 
-        if (storm_specification_type == 0) then
-            location = [rinfinity,rinfinity]
-        else if (storm_specification_type > 0) then
+        
+        if (storm_specification_type > 0) then
             location = model_location(t, model_storm)
-        else if (storm_specification_type == -1) then
-            location = data_location(t, data_storm)
-        else if (storm_specification_type == -2) then
-        else if (storm_specification_type == -3) then
+        ! else if (storm_specification_type < 0) then
+            ! Location of data storms is not supported
+            ! location = data_location(t, data_storm)
+            ! location = [rinfinity, rinfinity]
         else
-            stop "Something may be wrong."
+            location = [rinfinity, rinfinity]
         end if
 
     end function storm_location
@@ -463,9 +444,9 @@ contains
 
         if (storm_specification_type > 0) then
             theta = model_direction(t, model_storm)
-        else if (storm_specification_type == -1) then
-            theta = data_direction(t, data_storm)
-        else if (storm_specification_type == -2) then
+        ! else if (storm_specification_type < 0) then
+            ! Direction of data storms is not supported
+            ! theta = data_direction(t, data_storm)
         else
             theta = rinfinity
         end if

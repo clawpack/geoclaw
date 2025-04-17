@@ -20,7 +20,8 @@ SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
-FFLAGS += -DNETCDF -I/opt/homebrew/include -L/opt/homebrew/lib -lnetcdff -O2 -fopenmp #--g -fbacktrace -fbounds-check#-O0 -W -Wall -fbounds-check -fcheck=all -pedantic-errors -Wunderflow -fbacktrace -ffpe-trap=invalid,zero,overflow -g
+# If using NetCDF reading use these flags
+FFLAGS += -DNETCDF -I/opt/homebrew/include -L/opt/homebrew/lib -lnetcdff
 LFLAGS += $(FFLAGS) 
 
 # ---------------------------------
