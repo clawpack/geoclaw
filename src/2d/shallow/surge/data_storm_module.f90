@@ -384,7 +384,7 @@ contains
     end subroutine read_OWI_ASCII_header  
     
     ! ==========================================================================
-    ! fill_data_arrays() reads the data files and fills out the storm object
+    ! read_OWI_ASCII() reads the data files and fills out the storm object
     ! and it's dataarrays
     ! ==========================================================================
     subroutine read_OWI_ASCII(wind_file, pressure_file, mx, my, mt,         &

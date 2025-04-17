@@ -404,8 +404,8 @@ def setgeo(rundata):
     data.R_refine = [60.0e3, 40e3, 20e3]
 
     # Storm parameters - Parameterized storm (Holland 1980)
-    # data.storm_specification_type = 'holland80'  # (type 1)
-    data.storm_specification_type = 'OWI'
+    data.storm_specification_type = 'holland80'  # (type 1)
+    # data.storm_specification_type = 'OWI'
     data.storm_file = (Path() / 'isaac.storm').resolve()
 
     # Convert ATCF data to GeoClaw format
@@ -423,7 +423,7 @@ def setgeo(rundata):
 
     # Calculate landfall time - Need to specify as the file above does not
     # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
-    isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+    isaac.time_offset = np.datetime64("2012-08-29T00:00")
 
     if data.storm_specification_type == "holland80":
         isaac.write(data.storm_file, file_format='geoclaw')

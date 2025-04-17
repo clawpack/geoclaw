@@ -1077,8 +1077,7 @@ class Storm(object):
 
         except Exception as e:
             # If an exception occurs clean up a partially generated file
-            if os.path.exists(path):
-                os.remove(path)
+            Path.unlink(path, missing_ok=True)
             raise e
 
     def write_atcf(self, path, verbose=False):
@@ -1114,8 +1113,7 @@ class Storm(object):
                                              "\n")))
         except Exception as e:
             # Remove possiblly partially generated file if not successful
-            if os.path.exists(path):
-                os.remove(path)
+            Path.unlink(path, missing_ok=True)
             raise e
 
     def write_hurdat(self, path, verbose=False):
@@ -1169,8 +1167,7 @@ class Storm(object):
                         "\n")))
         except Exception as e:
             # Remove possiblly partially generated file if not successful
-            if os.path.exists(path):
-                os.remove(path)
+            Path.unlink(path, missing_ok=True)
             raise e
 
     def write_jma(self, path, verbose=False):
@@ -1205,8 +1202,7 @@ class Storm(object):
                                              "\n")))
         except Exception as e:
             # Remove possiblly partially generated file if not successful
-            if os.path.exists(path):
-                os.remove(path)
+            Path.unlink(path, missing_ok=True)
             raise e
 
     def write_imd(self, path, verbose=False):
