@@ -32,6 +32,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
     real(kind=8), dimension(0:nx+1,0:ny+1) :: Bxx, Byy, Bx, By, Bxy
     real(kind=8), dimension(0:nx+1,0:ny+1) :: phi, eta, w
     real(kind=8) :: etax, etay, hx,hy, wx,wy
+    real(kind=8) :: xlow, ylow, x, y
+    integer :: ii,jj,kd
 
     integer :: nD
     integer :: k, k_ij, k_imj, k_ipj, k_ijm, k_ijp 
@@ -79,6 +81,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
     !write(*,*)"Start of buildSparseMatrixSGNcoo for grid ",mptr
     mitot = nx + 2*nghost
     mjtot = ny + 2*nghost
+    xlow = rnode(cornxlo,mptr)
+    ylow = rnode(cornylo,mptr)
     !call symcheck2(q,mitot,mjtot)
 
 
@@ -88,10 +92,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
     ! Set up matrix A and RHS by looping over all Bouss patches:
 
        if (debug) then
-         write(19,*)"Level ",levelBouss," grid ",mptr," at start of buildSparseMatrixSGNcoo"
+         write(49,*)"Level ",levelBouss," grid ",mptr," at start of buildSparseMatrixSGNcoo"
          do j = 1-nghost, ny+nghost
          do i = 1-nghost, nx+nghost
-           write(19,900)i,j,(q(m,i,j),m=1,nvar)
+           write(49,900)i+nghost,j+nghost,(q(m,i,j),m=1,nvar)
  900       format(2i5,5e15.7)
          end do
          end do
@@ -559,8 +563,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_ipjp > -1) then
                     ja = k_ipjp + nD
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                 else if ((.not. yhi_db .or. j .lt. ny) .and.    &
+                          (.not. xhi_db .or. i .lt. nx)) then
                     hvc = q(5,i+1,j+1)
                     rhs(k_ij) = rhs(k_ij) - sa*hvc
                 else if (k_ijp > -1) then
@@ -570,6 +576,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                     ! at top boundary, use cell to right instead, 
                     ja = k_ipj + nD
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
+                else if (xhi_db .and. i .eq. nx .and. .not. yhi_db) then
+                    ja = k_ij + nD
                 else
                     ! top-right corner
                     ja = k_ij + nD
@@ -590,8 +598,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_ipjm > -1) then
                     ja = k_ipjm + nD            
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                else if ((.not. ylo_db .or. j>1) .and.            &
+                         (.not. xhi_db .or. i .lt. nx)) then
                     hvc = q(5,i+1,j-1)
                     rhs(k_ij) = rhs(k_ij) - sa*hvc   
                 else if (k_ijm > -1) then
@@ -601,6 +611,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                     ! at bottom boundary, use cell to right instead,
                     ja = k_ipj + nD
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
+                else if (xhi_db .and. i.eq.nx .and. .not. ylo_db) then
+                    ja = k_ij + nD
                 else
                     ! bottom-right corner
                     ja = k_ij + nD
@@ -621,8 +633,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_imjp > -1) then
                     ja = k_imjp + nD
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. yhi_db .or. j .lt. ny) .and. &
+                         (.not. xlo_db .or. i > 1)) then
                     hvc = q(5,i-1,j+1)
                     rhs(k_ij) = rhs(k_ij) - sa*hvc
                 else if (k_ijp > -1) then
@@ -632,6 +646,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                     ! at top domain boundary, use cell to left instead,
                     ja = k_imj + nD
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
+                else if (xlo_db .and. i .eq. 1 .and. .not. yhi_db) then
+                    ja = k_ij + nD
                 else
                     ! top-left corner
                     ja = k_ij + nD
@@ -652,8 +668,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_imjm > -1) then
                     ja = k_imjm + nD
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
+                !         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. ylo_db .or. j>1) .and.      &
+                         (.not. xlo_db .or. i>1)) then
                     hvc = q(5,i-1,j-1)
                     rhs(k_ij) = rhs(k_ij) - sa*hvc
                 else if (k_ijm > -1) then
@@ -663,6 +681,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                     ! at bottom boundary, use cell to left instead,
                     ja = k_imj + nD
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
+                else if (xlo_db .and. i .eq. 1 .and. .not. ylo_db) then
+                   ja = k_ij + nD
                 else
                     ! bottom-left corner
                     ja = k_ij + nD
@@ -791,8 +811,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_ipjp > -1) then
                     ja = k_ipjp
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                else if ((.not. yhi_db .or. j.lt.ny) .and. &
+                         (.not. xhi_db .or. i.lt.nx)) then
                     huc = q(4,i+1,j+1)
                     rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
                 else if (k_ijp > -1) then
@@ -802,6 +824,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 else if (k_ipj > -1) then
                     ! at top boundary, use cell to right instead,
                     ja = k_ipj
+                else if (yhi_db .and. j .eq. ny .and. .not. xhi_db) then
+                    ja = k_ij
                 else
                     ! top-right corner
                     ja = k_ij ! FIXED BUG
@@ -822,8 +846,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_ipjm > -1) then
                     ja = k_ipjm
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                else if ((.not. ylo_db .or. j>1) .and. &
+                         (.not. xhi_db .or. i .lt. nx)) then
                     huc = q(4,i+1,j-1)
                     rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
                 else if (k_ijm > -1) then
@@ -833,6 +859,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 else if (k_ipj > -1) then
                     ! at bottom boundary, use cell to right instead,
                     ja = k_ipj
+                else if (ylo_db .and. j .eq. 1 .and. .not. xhi_db) then
+                    ja = k_ij
                 else
                     ! bottom-right corner
                     ja = k_ij ! FIXED BUG
@@ -854,8 +882,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_imjp > -1) then
                     ja = k_imjp
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. yhi_db .or. j .lt. ny) .and. &
+                         (.not. xlo_db .or. i>1)) then
                     huc = q(4,i-1,j+1)
                     rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
                 else if (k_ijp > -1) then
@@ -865,6 +895,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 else if (k_imj > -1) then
                     ! at top boundary, use cell to left instead,
                     ja = k_imj
+                else if (yhi_db .and. j.eq.ny .and. .not. xlo_db) then
+                    ja = k_ij
                 else
                     ! top-left corner
                     ja = k_ij !FIXED BUG
@@ -885,8 +917,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ja = -1
                 if (k_imjm > -1) then
                     ja = k_imjm
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
+                !         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. ylo_db .or. j>1) .and. &
+                         (.not. xlo_db .or. i>1)) then
                     huc = q(4,i-1,j-1)
                     rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
                 else if (k_ijm > -1) then
@@ -896,6 +930,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 else if (k_imj > -1) then
                     ! at bottom boundary, use cell to left instead,
                     ja = k_imj
+                else if (ylo_db .and. j .eq. 1 .and. .not. xlo_db) then
+                    ja = k_ij
                 else
                     ! bottom-left corner
                     ja = k_ij !FIXED BUG
@@ -944,55 +980,47 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 write(44,998) nelt,nelt-neltSt
  998                format("                               ending with nelt ",i6,"   used ",i5)
               endif
-
-
-              if (0 .eq. 1 .or. debug) then
-                 allzero = .true.
-                 do n = nelt_ij, nelt
-                    if (minfo_matrix_sa(n) .ne. 0.d0) then
-                       allzero = .false.
-                       exit
-                    endif
-                 end do
-                 if (allzero) then
-                    write(*,*)" row ",k_ij," all zeroes"
-                 endif
-
-              endif
                      
-              ! put initial guess for k_ij and k_ij+nD respective in soln array
-             !if (levelBouss .lt. mxnest) then
-             !  ! initial guess when doUpdate is true is previous soln
-             !  ! when doUpdate was false, but values needed for finer
-             !  ! grid interface conditions
-             !  soln(k_ij) = qold(4,i,j) 
-             !  soln(k_ij+nD) = qold(5,i,j)
-             !else
-             !  soln(k_ij) = 0.d0
-             !  soln(k_ij+nD) = 0.d0 
-             !endif
-
-             !matrix_rhs1_max = max(matrix_rhs1_max, abs(rhs(k_ij)))
-             !matrix_rhs2_max = max(matrix_rhs2_max, abs(rhs(k_ij+nD)))
-
             enddo
         enddo
 
-        if (debug) then ! dump matrix to look for singularity 
+        if (debug .and. .false.) then ! dump matrix to look for singularity 
            write(88,*)" level ",levelBouss
            do k = neltBegin+1, nelt
               write(88,103) minfo_matrix_ia(k),minfo_matrix_ja(k),minfo_matrix_sa(k)
  103          format(2i8,e16.7)
            end do
            !close(88)
-           write(89,*)" level ",levelBouss
-           do k = 1,2*numBoussCells
-              write(89,104) k,rhs(k)
+           !write(89,*)" level ",levelBouss
+           !do k = 1,2*numBoussCells
+           !   write(89,104) k,rhs(k)
  104          format(i5,e16.7)
-           end do
-           !close(89)
-           !stop
+           !end do
+           !!close(89)
+           !!stop
         endif
+
+        if (debug) then
+         if (mptr .eq. 1) then
+           write(88,*)" grid ",mptr," level ",levelBouss,"x,y,ia,ja,sa"
+           !do ii = 0, nx+1
+           !do jj = 0, ny+1
+           do ii = 1, nx
+           do jj = 1, ny
+                k = mi%mindex(ii,jj)
+                kd = k + nD
+                x = xlow + (ii-.5d0)*dx
+                y = ylow + (jj-.5d0)*dy
+                write(88,105) x,y,k,minfo_matrix_ia(k),minfo_matrix_ja(k),minfo_matrix_sa(k)
+                write(88,105) x,y,k+nD,minfo_matrix_ia(k+nD),minfo_matrix_ja(k+nD),minfo_matrix_sa(k+nD)
+ 105          format(2e15.7,3i8,e16.7)
+ 799          format(2i5,4e15.7)
+ 798          format(6e15.7,3i5)
+           end do
+           end do
+           endif
+        endif
+
         
     
     ! put back in struct. May have more grids following    

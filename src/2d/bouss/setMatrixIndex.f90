@@ -235,10 +235,10 @@
          endif  ! end periodic case
 
          if (debug) then
-            write(19,*)
-            write(19,*)"grid ",mptr
+            write(18,*)
+            write(18,*)"grid ",mptr
             do j = ny+1,0,-1
-               write(19,101)(mi%mindex(i,j),i=0,nx+1)
+               write(18,101)(mi%mindex(i,j),i=0,nx+1)
  101           format(300i7)
             end do
          endif

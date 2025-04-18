@@ -40,6 +40,9 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
     !Mat J
     !KSP ksp  ! linear solver ojbect
 
+#ifdef WHERE_AM_I
+    write(*,*)" starting petsc_driver"
+#endif
 
     minfo => matrix_info_allLevs(levelBouss)
 
@@ -195,6 +198,10 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
        CHKERRA(ierr)
        call VecDestroy(solution,ierr)
        CHKERRA(ierr)
+#endif
+
+#ifdef WHERE_AM_I
+    write(*,*)" ending   petsc_driver"
 #endif
 
 end subroutine petsc_driver
