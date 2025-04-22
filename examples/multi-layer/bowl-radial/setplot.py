@@ -259,22 +259,22 @@ def setplot(plotdata=None):
     plotitem.plot_var = gaugetopo
     plotitem.plotstyle = 'g-'
 
-    def add_zeroline(current_data):
-        from pylab import plot, legend, xticks, floor, axis, xlabel
-        t = current_data.t 
-        gaugeno = current_data.gaugeno
+    # def add_zeroline(current_data):
+    #     from pylab import plot, legend, xticks, floor, axis, xlabel
+    #     t = current_data.t 
+    #     gaugeno = current_data.gaugeno
 
-        if gaugeno == 32412:
-            try:
-                plot(TG32412[:,0], TG32412[:,1], 'r')
-                legend(['GeoClaw','Obs'],loc='lower right')
-            except: pass
-            axis((0,t.max(),-0.3,0.3))
+    #     if gaugeno == 32412:
+    #         try:
+    #             plot(TG32412[:,0], TG32412[:,1], 'r')
+    #             legend(['GeoClaw','Obs'],loc='lower right')
+    #         except: pass
+    #         axis((0,t.max(),-0.3,0.3))
 
-        plot(t, 0*t, 'k')
-        n = int(floor(t.max()/3600.) + 2)
-        xticks([3600*i for i in range(n)], ['%i' % i for i in range(n)])
-        xlabel('time (hours)')
+    #     plot(t, 0*t, 'k')
+    #     n = int(floor(t.max()/3600.) + 2)
+    #     xticks([3600*i for i in range(n)], ['%i' % i for i in range(n)])
+    #     xlabel('time (hours)')
 
 
     #-----------------------------------------
