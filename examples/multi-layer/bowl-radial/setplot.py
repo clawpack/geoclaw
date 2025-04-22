@@ -81,8 +81,8 @@ def setplot(plotdata=None):
         pos = -80.0 * (23e3 / 180) + 500e3 - 5e3
         plt.plot([pos,pos],[-300e3,300e3],'b',[pos-5e3,pos-5e3],[-300e3,300e3],'y')
         plt.hold(False)
-        wind_contours(current_data)
-        bathy_ref_lines(current_data)
+        # wind_contours(current_data)
+        # bathy_ref_lines(current_data)
         
     def profile_afteraxes(current_data):
         pass

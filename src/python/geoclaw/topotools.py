@@ -945,10 +945,11 @@ class Topography(object):
 
             # self._Z = numpy.flipud(z)
             self._x = numpy.linspace(x_origin, 
-                               x_origin + (z.shape[0] - 1) * dx, z.shape[0])
-            self._y = numpy.linspace(y_origin - (z.shape[0] - 1) * dy, 
-                               y_origin, z.shape[1])
-
+                                     x_origin + (self.z.shape[0] - 1) * dx, 
+                                     self.z.shape[0])
+            self._y = numpy.linspace(y_origin - (self.z.shape[0] - 1) * dy, 
+                                     y_origin, 
+                                     self.z.shape[1])
         else:
             raise IOError("Cannot read header for topo_type %s" % self.topo_type)
             

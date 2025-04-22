@@ -43,6 +43,7 @@ def check_geoclaw(paths, check_header=False):
     """
 
     if check_header:
+        data_file = [None, None]
         with open(paths[0], 'r') as data_file[0], open(paths[1], 'r') as data_file[1]:
             # Check for number of lines
             assert(int(data_file[0].readline()) == int(data_file[1].readline()))
