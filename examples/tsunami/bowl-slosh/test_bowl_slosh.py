@@ -45,9 +45,6 @@ class BowlSloshTest(test.GeoClawRegressionTest):
         self.rundata.gaugedata.gauges = []
         self.rundata.gaugedata.gauges.append([1, 0.5, 0.5, 0, 1e10])
 
-        self.rundata.refinement_data.deep_depth = 1e2
-        self.rundata.refinement_data.max_level_deep = 3
-
         # == fgmax.data values ==
         self.rundata.fgmax_data.num_fgmax_val = 2
         fgmax_grids = self.rundata.fgmax_data.fgmax_grids  # empty list to start
