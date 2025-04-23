@@ -20,7 +20,8 @@ SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
-FFLAGS += -DNETCDF -I/opt/homebrew/include -L/opt/homebrew/lib -lnetcdff -O2 -fopenmp #--g -fbacktrace -fbounds-check#-O0 -W -Wall -fbounds-check -fcheck=all -pedantic-errors -Wunderflow -fbacktrace -ffpe-trap=invalid,zero,overflow -g
+# If using NetCDF reading use these flags
+FFLAGS += -DNETCDF -I/opt/homebrew/include -L/opt/homebrew/lib -lnetcdff
 LFLAGS += $(FFLAGS) 
 
 # ---------------------------------
@@ -31,17 +32,15 @@ AMRLIB = $(CLAW)/amrclaw/src/2d
 GEOLIB = $(CLAW)/geoclaw/src/2d/shallow
 include $(GEOLIB)/Makefile.geoclaw
 
-NEWAMR = ../../new_fortran_amrclaw
-NEWGEO = ../../new_fortran_geoclaw
 # ---------------------------------------
 # package sources specifically to exclude
 # (i.e. if a custom replacement source 
 #  under a different name is provided)
 # ---------------------------------------
 
-EXCLUDE_MODULES = \
+EXCLUDE_MODULES = 
 
-EXCLUDE_SOURCES = \
+EXCLUDE_SOURCES = 
 
 # ----------------------------------------
 # List of custom sources for this program:
@@ -49,29 +48,15 @@ EXCLUDE_SOURCES = \
 
 RIEMANN = $(CLAW)/riemann/src
 
-MODULES = \
+MODULES =
 
 SOURCES = \
-  $(RIEMANN)/rpn2_geoclaw.f \
-  $(RIEMANN)/rpt2_geoclaw.f \
-  $(RIEMANN)/geoclaw_riemann_utils.f \
+	$(RIEMANN)/rpn2_geoclaw.f \
+	$(RIEMANN)/rpt2_geoclaw.f \
+	$(RIEMANN)/geoclaw_riemann_utils.f \
 
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
-# Construct the topography data
-.PHONY: input all fgmax_plots
 
-input:
-	python make_input_files.py
-
-fgmax_plots:
-	python process_fgmax.py
-
-all:
-	$(MAKE) .exe
-	$(MAKE) input
-	$(MAKE) output
-	$(MAKE) plots
-	$(MAKE) fgmax_plots
 ### DO NOT remove this line - make depends on it ###

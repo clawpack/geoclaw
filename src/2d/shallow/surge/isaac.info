@@ -1,8 +1,0 @@
-## Control file for OWI ascii wind and pressure data files ##
-## Edit Files to include all wind and pressure data per storm ##
-## Ensure data remains in the below format ##
-
-201208290000                          =: landfall_date    # Date of landfall for the storm
-'isaac.WIN'                           =: wind_field       # path to wind forcing file
-'isaac.PRE'                           =: pressure_field   # path to pressure forcing file
-0                                     =: regional_forcing # 0 for only basin forcing, 1 for regional 
