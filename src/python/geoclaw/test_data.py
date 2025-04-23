@@ -66,7 +66,3 @@ def test_read_FGmaxData(tmp_path):
         shutil.rmtree(path, ignore_errors=True)
         shutil.copytree(tmp_path, path)
         raise e
-
-
-if __name__ == "__main__":
-    test_read_FGmaxData()
