@@ -5,7 +5,7 @@ import os.path
 import shutil
 import tempfile
 
-from nose.tools import raises
+import pytest
 import numpy as np
 
 import clawpack.geoclaw.util as util
@@ -16,6 +16,8 @@ class TestFetchNoaaTideData:
     station = '1234567'
     begin_date = datetime.datetime(2000, 10, 30, 12, 0)
     end_date = datetime.datetime(2000, 10, 30, 12, 24)
+    # begin_date = np.datetime64("2000-10-30T12:00")
+    # end_date = np.datetime64("2000-10-30T12:24")
 
     water_level_url = '{}?product={}&station={}'.format(
         NOAA_API_URL, 'water_level', station)
@@ -90,36 +92,37 @@ class TestFetchNoaaTideData:
                              cache_dir=cache_dir)
         assert d == None, '*** expected d == None'
 
-    @raises(ValueError)
     def test_date_time_range_mismatch(self):
-        cache_dir = os.path.join(self.temp_dir,
-                                 self.test_date_time_range_mismatch.__name__)
 
-        # missing first two entries
-        water_level_response = \
-            ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
-             '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'
-             '2000-10-30 12:18,1.004,0.004,0,0,0,0,v\n'
-             '2000-10-30 12:24,1.005,0.005,0,0,0,0,v\n')
+        with pytest.raises(ValueError) as e_info:
+            cache_dir = os.path.join(self.temp_dir,
+                                     self.test_date_time_range_mismatch.__name__)
 
-        # missing last two entries
-        predictions_response = ('Date Time, Prediction\n'
-                                '2000-10-30 12:00,1.101\n'
-                                '2000-10-30 12:06,1.102\n'
-                                '2000-10-30 12:12,1.103\n')
+            # missing first two entries
+            water_level_response = \
+                ('Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality\n'
+                 '2000-10-30 12:12,1.003,0.003,0,0,0,0,v\n'
+                 '2000-10-30 12:18,1.004,0.004,0,0,0,0,v\n'
+                 '2000-10-30 12:24,1.005,0.005,0,0,0,0,v\n')
 
-        # monkey patch urllib to return mock data
-        def mock_read_response(url):
-            if 'product=water_level' in url:
-                return water_level_response
-            if 'product=predictions' in url:
-                return predictions_response
-            raise AssertionError
-        self._monkey_patch_urlopen(mock_read_response)
+            # missing last two entries
+            predictions_response = ('Date Time, Prediction\n'
+                                    '2000-10-30 12:00,1.101\n'
+                                    '2000-10-30 12:06,1.102\n'
+                                    '2000-10-30 12:12,1.103\n')
 
-        # should raise ValueError
-        fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
-                             cache_dir=cache_dir)
+            # monkey patch urllib to return mock data
+            def mock_read_response(url):
+                if 'product=water_level' in url:
+                    return water_level_response
+                if 'product=predictions' in url:
+                    return predictions_response
+                raise AssertionError
+            self._monkey_patch_urlopen(mock_read_response)
+
+            # should raise ValueError
+            fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
+                                 cache_dir=cache_dir)
 
     def test_missing_values(self):
         cache_dir = os.path.join(self.temp_dir,
