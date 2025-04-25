@@ -32,7 +32,7 @@ jobs:
         sudo apt-get install libnetcdf-dev libnetcdff-dev
         
         python -m pip install --upgrade pip
-        pip install flake8 meson-python ninja pytest numpy
+        pip install flake8 meson-python ninja pytest numpy pandas xarray
 
     - name: Checkout Clawpack
       uses: actions/checkout@v4.1.5
