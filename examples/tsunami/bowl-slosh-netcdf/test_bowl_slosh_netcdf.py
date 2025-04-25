@@ -6,24 +6,24 @@ To create new regression data use
     `python regression_tests.py True`
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-import os
+from pathlib import Path
 import sys
+import os
 import unittest
 import subprocess
 import tempfile
 import time
 
-import numpy
-import xarray as xr
-import nose
+import numpy as np
+import pytest
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
+from clawpack.clawutil import runclaw
 
 build_failure_str = ("NetCDF topography test skipped due to failure to build "
                      "test program.")
+
 class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
     r"""NetCDF regression test for GeoClaw based on the bowl-slosh example"""
@@ -35,9 +35,9 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
     def setUp(self):
 
-        self.temp_path = tempfile.mkdtemp()
+        self.temp_path = Path(tempfile.mkdtemp())
 
-        self.stdout = open(os.path.join(self.temp_path, "run_output.txt"), "w")
+        self.stdout = (self.temp_path / "run_output.txt").open('w')
         self.stdout.write("Output from Test %s\n" % self.__class__.__name__)
         # TODO - Should change this to use the time module's formatting
         # apparatus
@@ -52,7 +52,7 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         self.stdout.write(date)
         self.stdout.write(("="*80 + "\n"))
 
-        self.stderr = open(os.path.join(self.temp_path, "error_output.txt"), "w")
+        self.stderr = (self.temp_path / "error_output.txt").open('w')
         self.stderr.write("Errors from Test %s\n" % self.__class__.__name__)
         self.stderr.write(date)
         self.stderr.write(("="*80 + "\n"))
@@ -61,8 +61,8 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         self.stderr.flush()
 
         self.stdout.write("Paths:")
-        self.stdout.write("  %s" % self.temp_path)
-        self.stdout.write("  %s" % self.test_path)
+        self.stdout.write(f"  {self.temp_path}")
+        self.stdout.write(f"  {self.test_path}")
         self.stdout.flush()
 
         # Make topography
@@ -71,39 +71,29 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         z = lambda x,y: h0 * (x**2 + y**2) / a**2 - h0
 
         topo = topotools.Topography(topo_func=z)
-        topo.x = numpy.linspace(-3.1, 3.1, 310)
-        topo.y = numpy.linspace(-3.5,2.5, 300)
+        topo.x = np.linspace(-3.1, 3.1, 310)
+        topo.y = np.linspace(-3.5,2.5, 300)
 
-        try:
-            import netCDF4
-            this_path = os.path.join(self.temp_path, 'bowl.nc')
+        netCDF4 = pytest.importorskip("netCDF4")
 
-            # now mess with the order of the dimension IDs (lat, then lon)
-            with netCDF4.Dataset(this_path,'w') as out:
-                lat = out.createDimension('lat',len(topo.y))
-                lon = out.createDimension('lon',len(topo.x))
+        # now mess with the order of the dimension IDs (lat, then lon)
+        with netCDF4.Dataset(self.temp_path / 'bowl.nc','w') as out:
+            lat = out.createDimension('lat',len(topo.y))
+            lon = out.createDimension('lon',len(topo.x))
 
-                # create latitude first
-                latitudes = out.createVariable('lat','f8',("lat",))
-                longitudes = out.createVariable('lon','f8',("lon",))
-                elevations = out.createVariable('elevation','f8',("lat","lon"))
-                latitudes[:] = topo.y
-                longitudes[:] = topo.x
-                elevations[:] = topo.Z
+            # create latitude first
+            latitudes = out.createVariable('lat','f8',("lat",))
+            longitudes = out.createVariable('lon','f8',("lon",))
+            elevations = out.createVariable('elevation','f8',("lat","lon"))
+            latitudes[:] = topo.y
+            longitudes[:] = topo.x
+            elevations[:] = topo.Z
 
+        self.build_executable()
 
-        except ImportError:
-            # Assume that NetCDF is not installed and move on
-            raise nose.SkipTest(build_failure_str)
-
-        except RuntimeError as e:
-            print(e.message)
-            raise nose.SkipTest("NetCDF topography test skipped due to " +
-                                "runtime failure.")
-        else:
-            self.build_executable()
 
     def build_executable(self):
+        # Add step for checking for NetCDF compilation success before continuing
         try:
             self.stdout.write("Teting NetCDF output:\n")
             subprocess.check_call("cd %s ; make netcdf_test " % self.test_path,
@@ -111,22 +101,18 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
                                                                 stderr=self.stderr,
                                                                 shell=True)
         except subprocess.CalledProcessError:
-
             self.stdout.write(build_failure_str)
-            raise nose.SkipTest(build_failure_str)
+            pytest.skip(build_failure_str)
 
-        else:
-            # Force recompilation of topo_module to add NetCDF flags
-            mod_path = os.path.join(os.environ["CLAW"], "geoclaw", "src", "2d",
-                                    "shallow", "topo_module.mod")
-            obj_path = os.path.join(os.environ["CLAW"], "geoclaw", "src", "2d",
-                                    "shallow", "topo_module.o")
-            if os.path.exists(mod_path):
-                os.remove(mod_path)
-            if os.path.exists(obj_path):
-                os.remove(obj_path)
+        # Force recompilation of topo_module to add NetCDF flags
+        mod_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d", 
+                        "shallow", "topo_module.mod")
+        obj_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d",
+                        "shallow", "topo_module.o")
+        mod_path.unlink(missing_ok=True)
+        obj_path.unlink(missing_ok=True)
 
-            super(NetCDFBowlSloshTest, self).build_executable()
+        super(NetCDFBowlSloshTest, self).build_executable()
 
 
     def runTest(self, save=False, indices=(2, 3)):
@@ -136,6 +122,15 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
         # Write out data files
         self.load_rundata()
+
+        self.rundata.clawdata.lower[1] = -3.0
+
+        self.rundata.clawdata.num_output_times = 1
+        self.rundata.clawdata.tfinal = 0.5
+
+        self.rundata.gaugedata.gauges = []
+        self.rundata.gaugedata.gauges.append([1,0.5,0.5,0,1e10])
+
         self.write_rundata_objects()
 
         # Run code
@@ -144,6 +139,21 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         # Perform tests
         self.check_gauges(save=save, gauge_id=1, indices=(2, 3),
                           tolerance=1e-4)
+
+
+    def run_code(self):
+        r"""Run test code given an already compiled executable"""
+
+        runclaw.runclaw(xclawcmd=self.temp_path / self.executable_name,
+                        rundir=self.temp_path,
+                        outdir=self.temp_path,
+                        overwrite=True,
+                        restart=False,
+                        xclawout=self.stdout,
+                        xclawerr=self.stderr)
+        
+        self.stdout.flush()
+        self.stderr.flush()
 
 
     def tearDown(self):
