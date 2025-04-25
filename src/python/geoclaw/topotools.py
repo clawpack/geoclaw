@@ -1789,9 +1789,11 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     """
     
     from numpy import array
-    import netCDF4
+    
     if return_xarray:
         import xarray
+    else:
+        import netCDF4
 
     # check if path is a key in the remote_topo_urls dictionary:
     if path in remote_topo_urls.keys():
