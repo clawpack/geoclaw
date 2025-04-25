@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 from pathlib import Path
-import pytest
+import warnings
 
 import numpy as np
+import pytest
 
 import clawpack.geoclaw.topotools as topotools
 
@@ -21,7 +22,7 @@ def test_etopo1_topo(save=False, extent=[-125, -124, 48, 48.5]):
                                        coarsen=10, verbose=True)
     except (OSError, RuntimeError):
         warnings.warn('Could not read etopo1 data, check if thredds server up')
-        raise nose.SkipTest("Reading etopo1 failed, skipping test")
+        pytest.skip("Reading etopo1 failed, skipping test")
 
     path = test_data_path / 'etopo1_10min.asc'
     if save:
@@ -57,7 +58,7 @@ def test_etopo1_xarray(extent=[-125, -124, 48, 48.5]):
                                                       coarsen=10, verbose=True)
     except (OSError, RuntimeError):
         warnings.warn('Could not read etopo1 data, check if thredds server up')
-        raise nose.SkipTest("Reading etopo1 failed, skipping test")
+        pytest.skip("Reading etopo1 failed, skipping test")
 
     path = test_data_path / 'etopo1_10min.asc'
     topo10input = topotools.Topography()

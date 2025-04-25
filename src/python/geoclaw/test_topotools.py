@@ -4,11 +4,11 @@
 from pathlib import Path
 import sys
 import shutil
-import pytest
 from urllib.parse import urlparse
 from urllib.error import URLError
 
 import numpy as np
+import pytest
 
 import clawpack.geoclaw.topotools as topotools
 import clawpack.clawutil.data
@@ -118,9 +118,8 @@ def test_old_topotools(tmp_path):
     topo.x = np.linspace(xlower, xupper, nxpoints)
     topo.y = np.linspace(ylower, yupper, nypoints)
 
-    temp_path = tempfile.mkdtemp()
     try:
-        file_path = os.path.join(temp_path, "bowl_old.tt1")
+        file_path = tmp_path / "bowl_old.tt1"
         old_topotools.topo1writer(file_path, topo_bowl, xlower, xupper, ylower, 
                                   yupper, nxpoints, nypoints)
         X, Y, Z = old_topotools.topofile2griddata(file_path, topotype=1)
@@ -233,7 +232,7 @@ def test_get_remote_file(tmp_path):
                "Downloaded file does not match %s" % test_path
 
     except URLError:
-        raise nose.SkipTest("Could not fetch remote file, skipping test.")
+        pytest.skip("Could not fetch remote file, skipping test.")
 
     except Exception as e:
         # Copy output if something raised an exception not caught above
