@@ -7,13 +7,12 @@ to test, or
 to create new regression data for archiving.
 """
 
-from __future__ import absolute_import
-import os
+from pathlib import Path
 import sys
 import unittest
 import shutil
 
-import numpy
+import numpy as np
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
@@ -27,51 +26,50 @@ class DTopoTests(test.GeoClawRegressionTest):
 
         # Make topography
         h0 = 1000.0
-        topo_func = lambda x,y: -h0*(1 + 0.5 * numpy.cos(x - y))
+        topo_func = lambda x,y: -h0*(1 + 0.5 * np.cos(x - y))
         topo = topotools.Topography(topo_func=topo_func)
         topo.topo_type = 2
-        topo.x = numpy.linspace(-10.0, 10.0, 201)
-        topo.y = numpy.linspace(-10.0, 10.0, 201)
-        topo.write(os.path.join(self.temp_path, "topo1.topotype2"), \
+        topo.x = np.linspace(-10.0, 10.0, 201)
+        topo.y = np.linspace(-10.0, 10.0, 201)
+        topo.write(Path(self.temp_path) / "topo1.topotype2", \
                 topo_type=2, Z_format="%22.15e")
 
         h0 = 1000.0
-        topo_func = lambda x,y: -h0*(1. + numpy.exp(x+y))
+        topo_func = lambda x,y: -h0*(1. + np.exp(x+y))
         topo = topotools.Topography(topo_func=topo_func)
         topo.topo_type = 2
-        topo.x = numpy.linspace(-0.5, -0.3, 21)
-        topo.y = numpy.linspace(-0.1, 0.4, 51)
-        topo.write(os.path.join(self.temp_path, "topo2.topotype2"), \
+        topo.x = np.linspace(-0.5, -0.3, 21)
+        topo.y = np.linspace(-0.1, 0.4, 51)
+        topo.write(Path(self.temp_path) / "topo2.topotype2", \
                 topo_type=2, Z_format="%22.15e")
 
         # Make dtopography
-        subfault_path = os.path.join(self.test_path, "dtopo1.csv")
+        subfault_path = Path(self.test_path) / "dtopo1.csv"
         input_units = {'slip': 'm', 'depth': 'km', 'length': 'km', 'width': 'km'}
         fault = dtopotools.CSVFault()
         fault.read(subfault_path, input_units=input_units, 
                 coordinate_specification="top center")
         fault.rupture_type = 'dynamic'
-        times = numpy.linspace(0.0, 1.0, 25)
-        x = numpy.linspace(-0.4,0.6,151)
-        y = numpy.linspace(-0.4,0.4,121)
+        times = np.linspace(0.0, 1.0, 25)
+        x = np.linspace(-0.4,0.6,151)
+        y = np.linspace(-0.4,0.4,121)
         dtopo = fault.create_dtopography(x,y,times=times)
-        dtopo.write(os.path.join(self.temp_path, "dtopo1.tt3"), dtopo_type=3)
+        dtopo.write(Path(self.temp_path) / "dtopo1.tt3", dtopo_type=3)
 
-        subfault_path = os.path.join(self.test_path, "dtopo2.csv")
+        subfault_path = Path(self.test_path) / "dtopo2.csv"
         input_units = {'slip': 'm', 'depth': 'km', 'length': 'km', 'width': 'km'}
         fault = dtopotools.CSVFault()
         fault.read(subfault_path, input_units=input_units, 
                     coordinate_specification="top center")
         fault.rupture_type = 'dynamic'
-        times = numpy.linspace(0.5, 1.2, 25)
-        x = numpy.linspace(-0.9,0.1,201)
-        y = numpy.linspace(-0.4,0.4,161)
+        times = np.linspace(0.5, 1.2, 25)
+        x = np.linspace(-0.9,0.1,201)
+        y = np.linspace(-0.4,0.4,161)
         dtopo = fault.create_dtopography(x,y,times=times)
-        dtopo.write(os.path.join(self.temp_path, "dtopo2.tt3"), dtopo_type=3)
+        dtopo.write(Path(self.temp_path) / "dtopo2.tt3", dtopo_type=3)
 
         # copy existing file:
-        shutil.copy(os.path.join(self.test_path, "dtopo3.tt1"),
-                                 self.temp_path)
+        shutil.copy(Path(self.test_path) / "dtopo3.tt1", self.temp_path)
 
 
     def check_gauges(self, save=False, gauge_id=1, regression_gauge_id=1, 
@@ -106,10 +104,10 @@ class DTopoTests(test.GeoClawRegressionTest):
         gauge = gauges.GaugeSolution(gauge_id, path=self.temp_path)
 
         # Get regression comparison data
-        regression_data_path = os.path.join(self.test_path, "regression_data")
+        regression_data_path = Path(self.test_path) / "regression_data"
         if save:
             gauge_file_name = "gauge%s.txt" % str(regression_gauge_id).zfill(5)
-            shutil.copy(os.path.join(self.temp_path, gauge_file_name), 
+            shutil.copy(Path(self.temp_path) / gauge_file_name, 
                                                            regression_data_path)
             claw_git_status.make_git_status_file(outdir=regression_data_path)
 
@@ -119,7 +117,7 @@ class DTopoTests(test.GeoClawRegressionTest):
         # Compare data
         try:
             for n in indices:
-                numpy.testing.assert_allclose(gauge.q[n, :],
+                np.testing.assert_allclose(gauge.q[n, :],
                                               regression_gauge.q[n, :], 
                                               rtol=rtol, atol=atol, 
                                               verbose=False)
@@ -129,7 +127,7 @@ class DTopoTests(test.GeoClawRegressionTest):
             err_msg = "\n".join((err_msg, "  failures in fields:"))
             failure_indices = []
             for n in indices:
-                if ~numpy.allclose(gauge.q[n, :], regression_gauge.q[n, :], 
+                if not np.allclose(gauge.q[n, :], regression_gauge.q[n, :], 
                                                           rtol=rtol, atol=atol):
                     failure_indices.append(str(n))
             index_str = ", ".join(failure_indices)
@@ -159,10 +157,8 @@ class DTopoTests(test.GeoClawRegressionTest):
         # Perform tests
         self.check_gauges(save=save, gauge_id=1, regression_gauge_id=1,
                           indices=(2, 3))
-        print('gauge 1 ascii agrees')
         self.check_gauges(save=save, gauge_id=2, regression_gauge_id=1,
                           indices=(2, 3), rtol=1e-6, atol=1e-6)
-        print('gauge 2 binary agrees')
 
         # If we have gotten here then we do not need to copy the run results
         self.success = True
