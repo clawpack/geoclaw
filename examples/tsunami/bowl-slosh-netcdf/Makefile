@@ -60,7 +60,7 @@ SOURCES = \
 include $(CLAWMAKE)
 
 # Construct the topography data
-.PHONY: topo all netcdf_test
+.PHONY: topo all netcdf_test netcdf_clean netcdf_clobber
 topo:
 	$(CLAW_PYTHON) maketopo.py
 
@@ -72,8 +72,15 @@ all:
 netcdf_test: netcdf_test.f90
 	$(FC) netcdf_test.f90 $(FFLAGS) $(LFLAGS) -o netcdf_test
 
-clobber::
+netcdf_clobber:
 	-rm -f  netcdf_test.o 
 
-clean::
+netcdf_clean:
 	-rm -f netcdf_test
+
+# Requires :: syntax in Makefile.common to work
+# clobber::
+# 	-rm -f  netcdf_test.o 
+
+# clean::
+# 	-rm -f netcdf_test

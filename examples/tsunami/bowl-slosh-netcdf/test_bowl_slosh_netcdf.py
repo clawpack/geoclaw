@@ -96,19 +96,22 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         # Add step for checking for NetCDF compilation success before continuing
         try:
             self.stdout.write("Teting NetCDF output:\n")
-            subprocess.check_call("cd %s ; make netcdf_test " % self.test_path,
-                                                                stdout=self.stdout,
-                                                                stderr=self.stderr,
-                                                                shell=True)
+            subprocess.check_call(f"cd {self.test_path} ; make netcdf_test ",
+                                        stdout=self.stdout,
+                                        stderr=self.stderr,
+                                        shell=True)
+            (Path(self.test_path) / "netcdf_test").rename(
+                                            self.temp_path / "netcdf_test")
+
         except subprocess.CalledProcessError:
             self.stdout.write(build_failure_str)
             pytest.skip(build_failure_str)
 
         # Force recompilation of topo_module to add NetCDF flags
-        mod_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d", 
-                        "shallow", "topo_module.mod")
-        obj_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d",
-                        "shallow", "topo_module.o")
+        mod_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d", "shallow", 
+                        "topo_module.mod")
+        obj_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d", "shallow", 
+                        "topo_module.o")
         mod_path.unlink(missing_ok=True)
         obj_path.unlink(missing_ok=True)
 
@@ -140,6 +143,8 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
         self.check_gauges(save=save, gauge_id=1, indices=(2, 3),
                           tolerance=1e-4)
 
+        self.success = True
+
 
     def run_code(self):
         r"""Run test code given an already compiled executable"""
@@ -164,15 +169,13 @@ class NetCDFBowlSloshTest(test.GeoClawRegressionTest):
 
         """
 
-        # Force recompilation of topo_module to add NetCDF flags
-        mod_path = os.path.join(os.environ["CLAW"], "geoclaw", "src", "2d",
-                                "shallow", "topo_module.mod")
-        obj_path = os.path.join(os.environ["CLAW"], "geoclaw", "src", "2d",
-                                "shallow", "topo_module.o")
-        if os.path.exists(mod_path):
-            os.remove(mod_path)
-        if os.path.exists(obj_path):
-            os.remove(obj_path)
+        # Force recompilation of topo_module to possibly remove NetCDF flags
+        mod_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d", "shallow", 
+                        "topo_module.mod")
+        obj_path = Path(os.environ["CLAW"], "geoclaw", "src", "2d", "shallow", 
+                        "topo_module.o")
+        mod_path.unlink(missing_ok=True)
+        obj_path.unlink(missing_ok=True)
 
         super(NetCDFBowlSloshTest, self).tearDown()
 
