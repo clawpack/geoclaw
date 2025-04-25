@@ -51,7 +51,6 @@ def test_etopo1_xarray(extent=[-125, -124, 48, 48.5]):
     """Test xarray topography support"""
 
     xarray = pytest.importorskip("xarray")
-    # netCDF4 = pytest.importorskip("netCDF4")
         
     try:
         topo10, topo10_xarray = topotools.read_netcdf('etopo1', extent=extent, 

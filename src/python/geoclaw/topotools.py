@@ -32,7 +32,7 @@ topography (bathymetry) files.
 
 import os
 
-import numpy
+import numpy as np
 
 import clawpack.geoclaw.util as util
 import clawpack.clawutil.data
@@ -128,7 +128,7 @@ def topo1writer (outfile,topo,xlower,xupper,ylower,yupper,nxpoints,nypoints):
     Function topo1writer will write out the topofiles by evaluating the
     function topo on the grid specified by the other parameters.
 
-    Assumes topo can be called on arrays X,Y produced by numpy.meshgrid.
+    Assumes topo can be called on arrays X,Y produced by np.meshgrid.
 
     Output file is of "topotype1," which we use to refer to a file with
     (x,y,z) values on each line, progressing from upper left corner across
@@ -136,8 +136,8 @@ def topo1writer (outfile,topo,xlower,xupper,ylower,yupper,nxpoints,nypoints):
     """
     topography = Topography(topo_func=topo)
 
-    topography.x = numpy.linspace(xlower,xupper,nxpoints)
-    topography.y = numpy.linspace(ylower,yupper,nypoints)
+    topography.x = np.linspace(xlower,xupper,nxpoints)
+    topography.y = np.linspace(ylower,yupper,nypoints)
     
     topography.write(outfile, topo_type=1)
 
@@ -153,8 +153,8 @@ def topo2writer (outfile,topo,xlower,xupper,ylower,yupper,nxpoints,nypoints, \
 
     topography = Topography(topo_func=topo)
 
-    topography.x = numpy.linspace(xlower,xupper,nxpoints)
-    topography.y = numpy.linspace(ylower,yupper,nypoints)
+    topography.x = np.linspace(xlower,xupper,nxpoints)
+    topography.y = np.linspace(ylower,yupper,nypoints)
 
     topography.write(outfile, topo_type=2)
 
@@ -170,8 +170,8 @@ def topo3writer (outfile,topo,xlower,xupper,ylower,yupper,nxpoints,nypoints, \
 
     topography = Topography(topo_func=topo)
 
-    topography.x = numpy.linspace(xlower,xupper,nxpoints)
-    topography.y = numpy.linspace(ylower,yupper,nypoints)
+    topography.x = np.linspace(xlower,xupper,nxpoints)
+    topography.y = np.linspace(ylower,yupper,nypoints)
 
     topography.write(outfile, topo_type=3)
 
@@ -334,7 +334,7 @@ class Topography(object):
     def X(self, value):
         self._extent = None
         self._X = value
-        self._x = numpy.nan
+        self._x = np.nan
     @X.deleter
     def X(self):
         del self._X
@@ -363,7 +363,7 @@ class Topography(object):
     def Y(self, value):
         self._extent = None
         self._Y = value
-        self._y = numpy.nan
+        self._y = np.nan
     @Y.deleter
     def Y(self):
         del self._Y
@@ -372,8 +372,8 @@ class Topography(object):
     def extent(self):
         r"""Extent of the topography."""
         if self._extent is None:
-            self._extent = ( numpy.min(self.x), numpy.max(self.x), 
-                             numpy.min(self.y), numpy.max(self.y) )
+            self._extent = ( np.min(self.x), np.max(self.x), 
+                             np.min(self.y), np.max(self.y) )
         return self._extent
     @extent.setter
     def extent(self, value):
@@ -386,29 +386,29 @@ class Topography(object):
             if self.unstructured:
 
                 # Calculate the smallest spacing between grid points            
-                dx = numpy.infty
-                dy = numpy.infty
+                dx = np.infty
+                dy = np.infty
                 num_comparisons = self.x.shape[0] - 1
                 for i in range(self.x.shape[0]):
                     for j in range(num_comparisons):
-                        dx = min(dx, numpy.abs(self.x[i + j + 1] - self.x[i]))
-                        dy = min(dy, numpy.abs(self.y[i + j + 1] - self.y[i]))
+                        dx = min(dx, np.abs(self.x[i + j + 1] - self.x[i]))
+                        dy = min(dy, np.abs(self.y[i + j + 1] - self.y[i]))
 
                     num_comparisons -= 1
                 self._delta = [dx, dy]
             else:
                 # All other topography types should have equally spaced grid
                 # points in each direction
-                begin_delta = numpy.array([abs(self.x[1] - self.x[0]), 
+                begin_delta = np.array([abs(self.x[1] - self.x[0]), 
                                            abs(self.y[1] - self.y[0])])
-                end_delta =   numpy.array([abs(self.x[-2] - self.x[-1]), 
+                end_delta =   np.array([abs(self.x[-2] - self.x[-1]), 
                                            abs(self.y[-2] - self.y[-1])])
-                if not numpy.allclose(begin_delta, end_delta, 1e-8):
+                if not np.allclose(begin_delta, end_delta, 1e-8):
                     raise ValueError("Grid spacing delta not constant, ",
                                      "%s != %s." % (begin_delta, end_delta))
                        
-                dx = numpy.round(begin_delta[0], 15) 
-                dy = numpy.round(begin_delta[1], 15) 
+                dx = np.round(begin_delta[0], 15) 
+                dy = np.round(begin_delta[1], 15) 
                 self._delta = (dx, dy)
         return self._delta
 
@@ -469,16 +469,16 @@ class Topography(object):
         if Z.shape != (len(y),len(x)):
             raise ValueError("shape of Z should be (len(y), len(x))")
 
-        diffx = numpy.diff(x)
-        diffy = numpy.diff(y)
-        dx = numpy.mean(diffx)
-        dy = numpy.mean(diffy)
+        diffx = np.diff(x)
+        diffy = np.diff(y)
+        dx = np.mean(diffx)
+        dy = np.mean(diffy)
         if dy < 0:
-            Y = numpy.flipud(Y)
-            y = numpy.flipud(y)
-            diffy = numpy.diff(y)
-            dy = numpy.mean(diffy)
-            Z = numpy.flipud(Z)
+            Y = np.flipud(Y)
+            y = np.flipud(y)
+            diffy = np.diff(y)
+            dy = np.mean(diffy)
+            Z = np.flipud(Z)
         if diffx.max()-diffx.min() > 1e-3*dx:
             print('diffx.max()-diffx.min() = ', diffx.max()-diffx.min())
             raise ValueError("x must be equally spaced for structured topo")
@@ -495,9 +495,9 @@ class Topography(object):
         self.generate_2d_coordinates()
 
         if X.ndim == 2:
-            assert numpy.allclose(self.X, X), '*** X set incorrectly?'
+            assert np.allclose(self.X, X), '*** X set incorrectly?'
         if Y.ndim == 2:
-            assert numpy.allclose(self.Y, Y), '*** Y set incorrectly?'
+            assert np.allclose(self.Y, Y), '*** Y set incorrectly?'
 
 
     def generate_2d_topo(self, mask=False):
@@ -534,11 +534,11 @@ class Topography(object):
                 else:
                     new_shape = (self._x.shape[0], self._y.shape[0])
                 # Reshape, note that the mask follows along with the new array
-                self._Z = numpy.reshape(self._z, new_shape)
+                self._Z = np.reshape(self._z, new_shape)
 
             elif self.topo_func is not None:
                 # Generate topo via topo_func
-                ## self._Z = numpy.flipud(self.topo_func(self.X, self.Y))
+                ## self._Z = np.flipud(self.topo_func(self.X, self.Y))
                 ## RJL:  Don't flip -- leave so Z[i,j] has same dimensions as X,Y
                 ## Othewise does not plot properly.
                 self._Z = self.topo_func(self.X, self.Y)
@@ -553,7 +553,7 @@ class Topography(object):
             # RJL: Added this to generate from _x and _y if available.
             # Correct?
             if (self._x is not None) and (self._y is not None):
-                self._X,self._Y = numpy.meshgrid(self._x, self._y)
+                self._X,self._Y = np.meshgrid(self._x, self._y)
 
         if self._X is None and self._Y is None:
             if self.unstructured:
@@ -573,7 +573,7 @@ class Topography(object):
                         # Try to read the data to get these, may not have been done yet
                         self.read(mask=mask)
                     # Generate arrays
-                    self._X, self._Y = numpy.meshgrid(self._x, self._y)
+                    self._X, self._Y = np.meshgrid(self._x, self._y)
                 else:
                     raise ValueError("Unrecognized topo_type: %s" % self.topo_type)
 
@@ -581,7 +581,7 @@ class Topography(object):
                 if self._x is None or self._y is None:
                     raise ValueError("The x and y arrays must be set to ",
                                      "create 2d coordinate arrays.")
-                self._X, self._Y = numpy.meshgrid(self._x, self._y)
+                self._X, self._Y = np.meshgrid(self._x, self._y)
 
             
             # If masking has been requested try to get the mask first from 
@@ -589,15 +589,15 @@ class Topography(object):
             if mask:
                 if self._Z is None:
                     # Check to see if we really need to do anything here
-                    if isinstance(self._z, numpy.ma.MaskedArray):
+                    if isinstance(self._z, np.ma.MaskedArray):
                         # Try to create self._Z
                         self.generate_2d_topo(mask=mask)
 
-                if isinstance(self._Z, numpy.ma.MaskedArray):
+                if isinstance(self._Z, np.ma.MaskedArray):
                     # Use Z's mask for the X and Y coordinates
-                    self._X = numpy.ma.MaskedArray(self._X, mask=self._Z.mask, 
+                    self._X = np.ma.MaskedArray(self._X, mask=self._Z.mask, 
                                                                      copy=False)
-                    self._Y = numpy.ma.MaskedArray(self._Y, mask=self._Z.mask, 
+                    self._Y = np.ma.MaskedArray(self._Y, mask=self._Z.mask, 
                                                                      copy=False)
 
 
@@ -656,7 +656,7 @@ class Topography(object):
 
         if self.unstructured:
             # Read in the data as series of tuples
-            data = numpy.loadtxt(self.path)
+            data = np.loadtxt(self.path)
             points = []
             values = []
 
@@ -673,9 +673,9 @@ class Topography(object):
                                   + "filter region.")
 
                 # Cast lists as ndarrays
-                self._x = numpy.array(points[:,0])
-                self._y = numpy.array(points[:,1])
-                self._z = numpy.array(values)
+                self._x = np.array(points[:,0])
+                self._y = np.array(points[:,1])
+                self._z = np.array(values)
 
             else:
                 self._x = data[:,0]
@@ -685,7 +685,7 @@ class Topography(object):
         else:
             # Data is in one of the GeoClaw supported formats
             if abs(self.topo_type) == 1:
-                data = numpy.loadtxt(self.path)
+                data = np.loadtxt(self.path)
                 N = [0,0]
                 y0 = data[0,1]
                 for (n, y) in enumerate(data[1:,1]):
@@ -696,7 +696,7 @@ class Topography(object):
 
                 self._x = data[:N[1],0]
                 self._y = data[::N[1],1]
-                self._Z = numpy.flipud(data[:,2].reshape(N))
+                self._Z = np.flipud(data[:,2].reshape(N))
                 dx = self.X[0,1] - self.X[0,0]
                 dy = self.Y[1,0] - self.Y[0,0]
                 self._delta = (dx,dy)
@@ -709,14 +709,14 @@ class Topography(object):
 
                 if abs(self.topo_type) == 2:
                     # Data is read in as a single column, reshape it
-                    self._Z = numpy.loadtxt(self.path, skiprows=6).reshape(N[1],N[0])
-                    self._Z = numpy.flipud(self._Z)
+                    self._Z = np.loadtxt(self.path, skiprows=6).reshape(N[1],N[0])
+                    self._Z = np.flipud(self._Z)
                 elif abs(self.topo_type) == 3:
                     # Data is read in starting at the top right corner
-                    self._Z = numpy.flipud(numpy.loadtxt(self.path, skiprows=6))
+                    self._Z = np.flipud(np.loadtxt(self.path, skiprows=6))
         
                 if mask:
-                    self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
+                    self._Z = np.ma.masked_values(self._Z, self.no_data_value, copy=False)
 
             elif abs(self.topo_type) == 4:
                 import netCDF4
@@ -758,7 +758,7 @@ class Topography(object):
                         raise e
 
                 if mask:
-                    self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
+                    self._Z = np.ma.masked_values(self._Z, self.no_data_value, copy=False)
                     
             elif abs(self.topo_type) == 5:
                 # GeoTIFF
@@ -776,10 +776,10 @@ class Topography(object):
                 dx = transform[1]
                 dy = -transform[5]
 
-                self._Z = numpy.flipud(z)
-                self._x = numpy.linspace(x_origin, 
+                self._Z = np.flipud(z)
+                self._x = np.linspace(x_origin, 
                                    x_origin + (z.shape[0] - 1) * dx, z.shape[0])
-                self._y = numpy.linspace(y_origin - (z.shape[1] - 1) * dy, 
+                self._y = np.linspace(y_origin - (z.shape[1] - 1) * dy, 
                                    y_origin, z.shape[1])
 
 
@@ -822,7 +822,7 @@ class Topography(object):
     def read_header(self):
         r"""Read in header of topography file at path.
 
-        If a value returns numpy.nan then the value was not retrievable.  Note
+        If a value returns np.nan then the value was not retrievable.  Note
         that this routine can read in headers whose values and labels are 
         swapped.
 
@@ -831,9 +831,9 @@ class Topography(object):
         if abs(self.topo_type) in [2,3]:
 
             # Default values to track errors
-            num_cells = [numpy.nan,numpy.nan]
-            self._extent = [numpy.nan,numpy.nan,numpy.nan,numpy.nan]
-            self._delta = numpy.nan
+            num_cells = [np.nan,np.nan]
+            self._extent = [np.nan,np.nan,np.nan,np.nan]
+            self._delta = np.nan
 
             with open(self.path, 'r') as topo_file:
                 # Check to see if we need to flip the header values
@@ -891,8 +891,8 @@ class Topography(object):
                         
                 self.no_data_value = float(topo_file.readline().split()[value_index])
 
-                x = numpy.linspace(xll, xll+(num_cells[0]-1)*dx, num_cells[0])
-                y = numpy.linspace(yll, yll+(num_cells[1]-1)*dy, num_cells[1])
+                x = np.linspace(xll, xll+(num_cells[0]-1)*dx, num_cells[0])
+                y = np.linspace(yll, yll+(num_cells[1]-1)*dy, num_cells[1])
                 if self.grid_registration in ['lower', 'llcenter']:
                     # x,y are cell center / data locations:
                     self._x = x
@@ -943,11 +943,11 @@ class Topography(object):
             dx = transform[1]
             dy = -transform[5]
 
-            # self._Z = numpy.flipud(z)
-            self._x = numpy.linspace(x_origin, 
+            # self._Z = np.flipud(z)
+            self._x = np.linspace(x_origin, 
                                      x_origin + (self.z.shape[0] - 1) * dx, 
                                      self.z.shape[0])
-            self._y = numpy.linspace(y_origin - (self.z.shape[0] - 1) * dy, 
+            self._y = np.linspace(y_origin - (self.z.shape[0] - 1) * dy, 
                                      y_origin, 
                                      self.z.shape[1])
         else:
@@ -1015,8 +1015,8 @@ class Topography(object):
             no_data_value = self.no_data_value
 
         # Check to see if masks have been applied to topography, if so 
-        # replace with fill_value (or  numpy.ma default value e.g. 1e+20)
-        if isinstance(self.Z, numpy.ma.MaskedArray):
+        # replace with fill_value (or  np.ma default value e.g. 1e+20)
+        if isinstance(self.Z, np.ma.MaskedArray):
             if fill_value is not None:
                 Z = self.Z.filled(fill_value)
             else:
@@ -1025,11 +1025,11 @@ class Topography(object):
             Z = self.Z
 
         # check for NaNs:
-        num_nan = numpy.isnan(Z).sum()
+        num_nan = np.isnan(Z).sum()
         if num_nan > 0:
             print('*** Z contains %i nan values, replacing with %s' \
                   % (num_nan, no_data_value))
-            Z = numpy.where(numpy.isnan(Z), no_data_value, Z)
+            Z = np.where(np.isnan(Z), no_data_value, Z)
 
         # also fill self.z in the same way for unstructured?
         
@@ -1039,8 +1039,8 @@ class Topography(object):
                     outfile.write("%s %s %s\n" % (self.x[i], self.y[i], topo))
 
         elif topo_type == 1:
-            # longitudes = numpy.linspace(lower[0], lower[0] + delta * Z.shape[0], Z.shape[0])
-            # latitudes = numpy.linspace(lower[1], lower[1] + delta * Z.shape[1], Z.shape[1])
+            # longitudes = np.linspace(lower[0], lower[0] + delta * Z.shape[0], Z.shape[0])
+            # latitudes = np.linspace(lower[1], lower[1] + delta * Z.shape[1], Z.shape[1])
 
             with open(path, 'w') as outfile:
                 for j in range(len(self.y)-1, -1, -1):
@@ -1097,7 +1097,7 @@ class Topography(object):
                     raise ValueError("*** Unrecognized header_style")
 
                 # Write out topography data
-                Z_flipped = numpy.flipud(Z) 
+                Z_flipped = np.flipud(Z) 
                 if topo_type == 2:
                     Z_format = Z_format + "\n"
                     for i in range(Z.shape[0]):
@@ -1199,8 +1199,8 @@ class Topography(object):
          - *axes* (matplotlib.pyplot.axes) - the axes on which plot created.
 
         Note that:
-          - if *type(self.Z)* is *numpy.ma.MaskedArray* then *pcolor* is used,
-          - if *type(self.Z)* is *numpy.ndarray* then *imshow* is used.
+          - if *type(self.Z)* is *np.ma.MaskedArray* then *pcolor* is used,
+          - if *type(self.Z)* is *np.ndarray* then *imshow* is used.
             (This is faster for large files)
         """
 
@@ -1225,9 +1225,9 @@ class Topography(object):
 
         if limits is None:
             if self.unstructured:
-                topo_extent = (numpy.min(self.z), numpy.max(self.z))
+                topo_extent = (np.min(self.z), np.max(self.z))
             else:
-                topo_extent = (numpy.min(self.Z), numpy.max(self.Z))
+                topo_extent = (np.min(self.Z), np.max(self.Z))
         else:
             topo_extent = limits
 
@@ -1273,7 +1273,7 @@ class Topography(object):
             if 'label' not in cb_kwargs.keys():
                 cbar.set_label('Topography (m)')
 
-        # levels = range(0,int(-numpy.min(Z)),500)
+        # levels = range(0,int(-np.min(Z)),500)
 
         if (contour_levels is not None) and (not self.unstructured):
             axes.contour(self.X, self.Y, self.Z, levels=contour_levels,
@@ -1301,7 +1301,7 @@ class Topography(object):
         
         if long_lat:
             mean_lat = 0.5 * (region_extent[3] + region_extent[2])
-            axes.set_aspect(1.0 / numpy.cos(numpy.pi / 180.0 * mean_lat))
+            axes.set_aspect(1.0 / np.cos(np.pi / 180.0 * mean_lat))
         else:
             axes.set_aspect('equal')
 
@@ -1329,7 +1329,7 @@ class Topography(object):
         *delta_limit* (meters).
 
         Note that the function *scipy.interpolate.griddata* does not respect
-        masks so a call to *numpy.ma.MaskedArray.compressed()* must be made to 
+        masks so a call to *np.ma.MaskedArray.compressed()* must be made to 
         remove the masked data.
 
         :Input:
@@ -1362,7 +1362,7 @@ class Topography(object):
         import scipy.interpolate as interpolate
 
         # Convert meter inputs to degrees
-        mean_latitude = numpy.mean(self.y)
+        mean_latitude = np.mean(self.y)
         buffer_degrees = util.dist_meters2latlong(buffer_length, 0.0, 
                                                   mean_latitude)[0]
         delta_degrees = util.dist_meters2latlong(delta_limit, 0.0, 
@@ -1374,29 +1374,29 @@ class Topography(object):
             
         # Calculate new grid coordinates
         if extent is None:
-            extent = [ numpy.min(self.x) - buffer_degrees, 
-                       numpy.max(self.x) + buffer_degrees, 
-                       numpy.min(self.y) - buffer_degrees, 
-                       numpy.max(self.y) + buffer_degrees ]
+            extent = [ np.min(self.x) - buffer_degrees, 
+                       np.max(self.x) + buffer_degrees, 
+                       np.min(self.y) - buffer_degrees, 
+                       np.max(self.y) + buffer_degrees ]
         if delta is None:
-            delta_x = max( numpy.abs(self.x[1:] - self.x[:-1]).min(), delta_degrees)
-            delta_y = max( numpy.abs(self.y[1:] - self.y[:-1]).min(), delta_degrees)
+            delta_x = max( np.abs(self.x[1:] - self.x[:-1]).min(), delta_degrees)
+            delta_y = max( np.abs(self.y[1:] - self.y[:-1]).min(), delta_degrees)
         else:   
             try:
                 delta_x, delta_y = delta   # tuple provided
             except:
                 delta_x = delta_y = delta  # assume float provided
                 
-        N = ( numpy.ceil((extent[1] - extent[0]) / delta_x),
-              numpy.ceil((extent[3] - extent[2]) / delta_y) )
-        if not numpy.all(N[:] < numpy.ones((2)) * resolution_limit):
+        N = ( np.ceil((extent[1] - extent[0]) / delta_x),
+              np.ceil((extent[3] - extent[2]) / delta_y) )
+        if not np.all(N[:] < np.ones((2)) * resolution_limit):
             ValueError("Calculated resolution too high, N=%s!" % str(N))
-        self._X, self._Y = numpy.meshgrid( 
-                                     numpy.linspace(extent[0], extent[1], int(N[0])),
-                                     numpy.linspace(extent[2], extent[3], int(N[1])))
+        self._X, self._Y = np.meshgrid( 
+                                     np.linspace(extent[0], extent[1], int(N[0])),
+                                     np.linspace(extent[2], extent[3], int(N[1])))
 
         # Add the unstructured points to the data
-        points = numpy.array([self.x, self.y]).transpose()
+        points = np.array([self.x, self.y]).transpose()
         values = self.z
 
         # Mask fill topography and flatten the arrays if needed
@@ -1409,34 +1409,34 @@ class Topography(object):
                 z_fill = topo.z
 
                 extent_mask = extent[0] > x_fill
-                extent_mask = numpy.logical_or(extent_mask,extent[1] < x_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[2] > y_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[3] < y_fill)
+                extent_mask = np.logical_or(extent_mask,extent[1] < x_fill)
+                extent_mask = np.logical_or(extent_mask,extent[2] > y_fill)
+                extent_mask = np.logical_or(extent_mask,extent[3] < y_fill)
                 
                 # Create fill no-data value mask
-                no_data_mask = numpy.logical_or(extent_mask, z_fill == no_data_value)
+                no_data_mask = np.logical_or(extent_mask, z_fill == no_data_value)
 
-                all_mask = numpy.logical_or(extent_mask, no_data_mask)
+                all_mask = np.logical_or(extent_mask, no_data_mask)
 
                 # Create proximity mask
                 if proximity_radius > 0.0:
                     indices = (~all_mask).nonzero()
                     for n in range(indices[0].shape[0]):
                         i = indices[0][n]
-                        all_mask[i] = numpy.any(numpy.sqrt((self.x - x_fill[i])**2 
+                        all_mask[i] = np.any(np.sqrt((self.x - x_fill[i])**2 
                                                          + (self.y - y_fill[i])**2)
                                                      < proximity_radius_deg)
 
-                x_fill_masked = numpy.ma.masked_where(all_mask, x_fill)
-                y_fill_masked = numpy.ma.masked_where(all_mask, y_fill)
-                z_fill_masked = numpy.ma.masked_where(all_mask, z_fill)    
+                x_fill_masked = np.ma.masked_where(all_mask, x_fill)
+                y_fill_masked = np.ma.masked_where(all_mask, y_fill)
+                z_fill_masked = np.ma.masked_where(all_mask, z_fill)    
 
                 # Add the fill bathymetry to points and values
-                fill_points = numpy.column_stack((x_fill_masked.compressed(), 
+                fill_points = np.column_stack((x_fill_masked.compressed(), 
                                                   y_fill_masked.compressed()))
 
-                points = numpy.concatenate((fill_points, points))
-                values = numpy.concatenate((z_fill_masked.compressed(), values))
+                points = np.concatenate((fill_points, points))
+                values = np.concatenate((z_fill_masked.compressed(), values))
 
             else:
                 # Structured fill data
@@ -1446,14 +1446,14 @@ class Topography(object):
 
                 # Create extent mask
                 extent_mask = extent[0] > X_fill
-                extent_mask = numpy.logical_or(extent_mask,extent[1] < X_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[2] > Y_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[3] < Y_fill)
+                extent_mask = np.logical_or(extent_mask,extent[1] < X_fill)
+                extent_mask = np.logical_or(extent_mask,extent[2] > Y_fill)
+                extent_mask = np.logical_or(extent_mask,extent[3] < Y_fill)
                 
                 # Create fill no-data value mask
-                no_data_mask = numpy.logical_or(extent_mask, Z_fill == no_data_value)
+                no_data_mask = np.logical_or(extent_mask, Z_fill == no_data_value)
 
-                all_mask = numpy.logical_or(extent_mask, no_data_mask)
+                all_mask = np.logical_or(extent_mask, no_data_mask)
 
                 # Create proximity mask
                 if proximity_radius > 0.0:
@@ -1462,20 +1462,20 @@ class Topography(object):
                     for n in range(indices[0].shape[0]):
                         i = indices[0][n]
                         j = indices[1][n]
-                        all_mask[i,j] = numpy.any(numpy.sqrt((self.x - X_fill[i,j])**2 
+                        all_mask[i,j] = np.any(np.sqrt((self.x - X_fill[i,j])**2 
                                                            + (self.y - Y_fill[i,j])**2)
                                                      < proximity_radius_deg)
 
-                X_fill_masked = numpy.ma.masked_where(all_mask, X_fill)
-                Y_fill_masked = numpy.ma.masked_where(all_mask, Y_fill)
-                Z_fill_masked = numpy.ma.masked_where(all_mask, Z_fill)    
+                X_fill_masked = np.ma.masked_where(all_mask, X_fill)
+                Y_fill_masked = np.ma.masked_where(all_mask, Y_fill)
+                Z_fill_masked = np.ma.masked_where(all_mask, Z_fill)    
 
                 # Add the fill bathymetry to points and values
-                fill_points = numpy.column_stack((X_fill_masked.compressed(),
+                fill_points = np.column_stack((X_fill_masked.compressed(),
                                                   Y_fill_masked.compressed()))
 
-                points = numpy.concatenate((fill_points, points))
-                values = numpy.concatenate((Z_fill_masked.compressed(), values))
+                points = np.concatenate((fill_points, points))
+                values = np.concatenate((Z_fill_masked.compressed(), values))
 
         # Use specified interpolation
         self._Z = interpolate.griddata(points, values, (self.X, self.Y), 
@@ -1499,9 +1499,9 @@ class Topography(object):
 
         :Returns:
         
-         - *X_mask* (numpy.ma.MaskedArray) Masked array of X coordinates where those
+         - *X_mask* (np.ma.MaskedArray) Masked array of X coordinates where those
            points outside of the polygon have been masked.
-         - *Y* (numpy.ndarray) Coordinates in y direction in a meshgrid type of
+         - *Y* (np.ndarray) Coordinates in y direction in a meshgrid type of
            configuration.
 
         """
@@ -1521,11 +1521,11 @@ class Topography(object):
         edges.append([polygon[-1], polygon[0]])
 
         # Check for intersections
-        num_intersections = numpy.zeros(x.shape[0])
+        num_intersections = np.zeros(x.shape[0])
 
         for edge in edges:
             # Check for a vertical line
-            if numpy.abs(edge[0][0] - edge[1][0]) < TOLERANCE:
+            if np.abs(edge[0][0] - edge[1][0]) < TOLERANCE:
                 x_intersect = edge[0][0]        
             else:
                 edge_slope = (edge[0][1] - edge[1][1]) / (edge[0][0] - edge[1][0])
@@ -1537,14 +1537,14 @@ class Topography(object):
                                  
 
         # General intersection of two lines
-        intersect = (numpy.mod(num_intersections, numpy.ones(x.shape) * 2) != 1)
+        intersect = (np.mod(num_intersections, np.ones(x.shape) * 2) != 1)
 
         # Return masked arrays that are reshaped back to the input shapes
-        return numpy.ma.masked_where(intersect, x, copy=False).reshape(self.X.shape), \
-               numpy.ma.masked_where(intersect, y, copy=False).reshape(self.Y.shape)
+        return np.ma.masked_where(intersect, x, copy=False).reshape(self.X.shape), \
+               np.ma.masked_where(intersect, y, copy=False).reshape(self.Y.shape)
 
 
-    def replace_values(self, indices, value=numpy.nan, method='fill'):
+    def replace_values(self, indices, value=np.nan, method='fill'):
         r"""Replace the values at *indices* by the specified method
 
         :Methods:
@@ -1704,12 +1704,12 @@ class Topography(object):
 
         The shoreline can be saved as a binary *.npy* file via:
 
-            >>> numpy.save(filename, shoreline_xy)
+            >>> np.save(filename, shoreline_xy)
 
         which is much smaller than the original topography file. 
         Reload via:
 
-            >>> shoreline_xy = numpy.load(filename)
+            >>> shoreline_xy = np.load(filename)
         """
 
         import matplotlib.pyplot as plt
@@ -1722,8 +1722,8 @@ class Topography(object):
         # catenate these together separated by array([nan,nan]):
         shoreline_xy = c.allsegs[0][0]  # first segment
         for k in range(1,len(c.allsegs[0])):
-            shoreline_xy = numpy.vstack((shoreline_xy, \
-                           numpy.array([numpy.nan,numpy.nan]), c.allsegs[0][k]))
+            shoreline_xy = np.vstack((shoreline_xy, \
+                           np.array([np.nan,np.nan]), c.allsegs[0][k]))
         return shoreline_xy
 
 
@@ -1788,10 +1788,12 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     and using `Z_format='%.0f'` will save as integers to minimize file size.
     """
     
-    from numpy import array
-    
     if return_xarray:
-        import xarray
+        try:
+            import xarray
+        except ImportError as e:
+            # Try to fallback on directly using netCDF4
+            import netCDF4
     else:
         import netCDF4
 
@@ -1829,8 +1831,8 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     # for selecting subset based on extent, convert to arrays if netCDF4 used:
     #if not return_xarray:
     
-    x = array(x)
-    y = array(y)
+    x = np.asarray(x)
+    y = np.asarray(y)
     
     if zvar is None:
         if 'Band1' in f.variables:
@@ -1855,8 +1857,8 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     else:
         x1,x2,y1,y2 = extent
         # find indices of x,y arrays for points lying within extent:
-        iindex = numpy.where(numpy.logical_and(x >= x1, x <= x2))[0]
-        jindex = numpy.where(numpy.logical_and(y >= y1, y <= y2))[0]
+        iindex = np.where(np.logical_and(x >= x1, x <= x2))[0]
+        jindex = np.where(np.logical_and(y >= y1, y <= y2))[0]
         i1 = iindex[0]
         i2 = iindex[-1] + 1
         j1 = jindex[0]
@@ -1873,7 +1875,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
             ys = y[j1:j2:coarsen]
             Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
 
-    Zs = array(Zs)
+    Zs = np.asarray(Zs)
     
     if verbose:
         print('Returning a DEM with shape = %s' \
