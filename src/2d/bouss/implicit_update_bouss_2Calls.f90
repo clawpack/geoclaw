@@ -12,15 +12,20 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     use amr_module
     use topo_module, only: topo_finalized
     use bouss_module
-        
+#include <petsc/finclude/petscvec.h>
+    use petscvec
+
     implicit none
     
     integer, intent(in) :: nvar, naux, levelBouss, numBoussCells
     logical, intent(in) :: doUpdate
     
     !! pass in numBoussCells for this level so can dimension this array
-    real(kind=8) :: soln(0:2*numBoussCells)
-    real(kind=8) :: rhs(0:2*numBoussCells)
+    Vec :: v_soln,v_rhs
+    integer :: ierr
+ 
+    real(kind=8),pointer :: soln(:)
+    real(kind=8),pointer :: rhs(:)
     
     type(matrix_patchIndex), pointer :: mi
     type(matrix_levInfo),  pointer :: minfo
@@ -38,6 +43,11 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
 #ifdef WHERE_AM_I
     write(*,*) "starting implicit_update for level ",levelBouss
 #endif
+    PetscCallA(VecCreateSeq(PETSC_COMM_SELF,2*numBoussCells,v_rhs,ierr))
+    PetscCallA(VecCreateSeq(PETSC_COMM_SELF,2*numBoussCells,v_soln,ierr))
+    PetscCallA(VecGetArrayF90(v_rhs,rhs,ierr))
+    PetscCallA(VecGetArrayF90(v_soln,soln,ierr))
+    
     dt = possk(levelBouss)
     nD = numBoussCells ! shorthand for size of matrix blocks D1 to D4
     
@@ -102,7 +112,8 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
       else ! CRS format
          minfo%vals = 0
          minfo%cols = -1  ! to recognize if not overwritten with real col indices
-        call prepBuildSparseMatrixSGNcrs(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+         call prepBuildSparseMatrixSGNcrs(soln,rhs,nvar,naux,levelBouss,numBoussCells)
+         CHKMEMQ
       endif
     endif
     
@@ -141,7 +152,12 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        if (minfo%numColsTot .gt. 0 .or. minfo%matrix_nelt .gt. 0) then
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
-          call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,topo_finalized)
+          PetscCallA(VecRestoreArrayF90(v_rhs,rhs,ierr))
+          PetscCallA(VecRestoreArrayF90(v_soln,soln,ierr))
+          CHKMEMQ;
+          call petsc_driver(v_soln,v_rhs,levelBouss,numBoussCells,time,topo_finalized)
+          PetscCallA(VecGetArrayF90(v_rhs,rhs,ierr))
+          PetscCallA(VecGetArrayF90(v_soln,soln,ierr))
           call system_clock(clock_finishLinSolve,clock_rate)
           call cpu_time(cpu_finishLinSolve)
           !write(89,*)" level ",levelBouss,"  rhs   soln"
@@ -201,6 +217,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
         !endif
     end do        
 !$OMP END PARALLEL DO
+    CHKMEMQ
 
     !! next loop to copy from either other grids at same level and to
     !! update ghost cell momenta with newly copied psi
@@ -238,6 +255,10 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     write(*,*) "ending   implicit_update for level ",levelBouss
 #endif
         
+    PetscCallA(VecRestoreArrayF90(v_rhs,rhs,ierr))
+    PetscCallA(VecRestoreArrayF90(v_soln,soln,ierr))
+    PetscCallA(VecDestroy(v_rhs,ierr))
+    PetscCallA(VecDestroy(v_soln,ierr))
 
 contains
 
@@ -254,8 +275,6 @@ contains
         !! ghost cells added to iaddaux definition, NOT to call
         iaddaux = locaux + iaux-1 + naux*((j-1+nghost)*mitot+i+nghost-1)
     end function iaddaux
-
-
 
 end subroutine implicit_update
 
@@ -279,7 +298,7 @@ subroutine solnUpdate(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
 
     integer, intent(in) :: nvar,nghost,mitot,mjtot,nD,mptr,nb,levelBouss
     logical, intent(in) :: doUpdate
-    real(kind=8), intent(in) :: soln(0:2*nD), dt, rhs(0:2*nD)
+    real(kind=8), intent(in) :: soln(2*nD), dt, rhs(2*nD)
 
     real(kind=8), intent(inout) :: valnew(nvar,mitot,mjtot)
     real(kind=8), intent(inout) :: valOther(nvar,mitot,mjtot)
@@ -415,7 +434,7 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
 
     integer, intent(in) :: nvar,naux,nghost,mitot,mjtot,nD,mptr,nb,levelBouss
     logical, intent(in) :: doUpdate
-    real(kind=8), intent(in) :: soln(0:2*nD), dt, rhs(0:2*nD)
+    real(kind=8), intent(in) :: soln(2*nD), dt, rhs(2*nD)
 
     real(kind=8), intent(inout) :: valnew(nvar,mitot,mjtot)
     real(kind=8), intent(inout) :: valOther(nvar,mitot,mjtot)
@@ -505,9 +524,9 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
                          (grav/alpha * etay(i,j) - soln(k_ij+nD))
                  else  ! CRS format,  different mapping
                   valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
-                         (grav/alpha * etax(i,j) - soln(2*(k_ij-1)))
+                         (grav/alpha * etax(i,j) - soln(2*(k_ij-1)+1))
                   valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
-                         (grav/alpha * etay(i,j) - soln(2*k_ij-1))
+                         (grav/alpha * etay(i,j) - soln(2*k_ij-1+1))
                  endif
 
                 ! save update in components 4,5 for Dirichlet BC next iteration
@@ -521,8 +540,8 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
                 else
                     !valOther(4,i,j) = soln(2*k_ij-1)
                     !valOther(5,i,j) = soln(2*k_ij)
-                    valOther(4,i,j) = soln(2*(k_ij-1))
-                    valOther(5,i,j) = soln(2*k_ij-1)
+                    valOther(4,i,j) = soln(2*(k_ij-1)+1)
+                    valOther(5,i,j) = soln(2*k_ij-1+1)
                  endif
             else  ! not a bouss cell. set to zero
                valOther(4,i,j) = 0.d0
@@ -610,8 +629,8 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
                 valnew(4,i,j) = soln(k_ij)
                 valnew(5,i,j) = soln(k_ij+nD)
               else
-                valnew(4,i,j) = soln(2*(k_ij-1))
-                valnew(5,i,j) = soln(2*k_ij-1)
+                valnew(4,i,j) = soln(2*(k_ij-1)+1)
+                valnew(5,i,j) = soln(2*k_ij-1+1)
               endif
             else
               valnew(4,i,j) = 0.d0

@@ -11,7 +11,7 @@ subroutine prepBuildSparseMatrixSGNcrs(soln,rhs,nvar,naux,levelBouss,numBoussCel
     integer, intent(in) :: nvar, naux, levelBouss, numBoussCells
     
     !! pass in numBoussCells for this level so can dimension this array
-    real(kind=8) :: soln(0:2*numBoussCells), rhs(0:2*numBoussCells) 
+    real(kind=8) :: soln(0:2*numBoussCells-1), rhs(0:2*numBoussCells-1) 
     
     type(matrix_patchIndex), pointer :: mi
     type(matrix_levInfo),  pointer :: minfo

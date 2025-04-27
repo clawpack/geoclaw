@@ -1,4 +1,4 @@
-subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalized)
+subroutine petsc_driver(solution,rhs,levelBouss,numBoussCells,time,topo_finalized)
 
     ! use petsc to solve sparse linear system
     ! called this way so can allocate storage of correct size
@@ -6,17 +6,12 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
     use bouss_module
 #ifdef HAVE_PETSC
 #include <petsc/finclude/petscksp.h>
-!!#include "petscmat.h"
     use petscksp
     implicit none
     
     integer, intent(in) :: levelBouss, numBoussCells
-    real(kind=8), intent(inout) :: rhs_geo(0:2*numBoussCells)
     real(kind=8), intent(in) :: time
     logical, intent(in) :: topo_finalized
-    
-    !! pass in numBoussCells for this level so can dimension this array
-    real(kind=8), intent(out) :: soln(0:2*numBoussCells)
     
     type(matrix_levInfo),  pointer :: minfo
     
@@ -87,6 +82,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
             end do
           else 
             ! using CRS sparse matrix format
+            CHKMEMQ;
             call MatCreateSeqAijWithArrays(PETSC_COMM_SELF,2*numBoussCells,  & 
                        2*numBoussCells,minfo%rowPtr,minfo%cols,  &
                        minfo%vals,Jr(levelBouss),ierr)
@@ -136,24 +132,24 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       ! if you want to use previous soln as initial guess,
       ! set soln to old soln here
 
-      if (.not. crs) then
-        ! switch to 0-based indexing for COO triplet format
-        ! (already 0-based for CRS)
-        do i = 1, 2*numBousscells
-           rhs_geo(i-1) = rhs_geo(i) 
-        end do
-      endif 
+!      if (.not. crs) then
+!        ! switch to 0-based indexing for COO triplet format
+!        ! (already 0-based for CRS)
+!        do i = 1, 2*numBousscells
+!           rhs_geo(i-1) = rhs_geo(i) 
+!        end do
+!      endif 
       
-      call VecCreateSeqWithArray(PETSC_COMM_SELF,1,n,rhs_geo,rhs,ierr)
-      CHKERRA(ierr)
-      call VecCreateSeqWithArray(PETSC_COMM_SELF,1,n,soln,solution,ierr)
+
       CHKERRA(ierr)
 
       ! save matrices for debugging. comment out to turn off
       !call MatView(Jr(levelBouss),PETSC_VIEWER_BINARY_SELF,ierr)
 
 
+      !call KSPSetUp(ksp(levelBouss),ierr)
       call KSPSolve(ksp(levelBouss),rhs,solution,ierr)
+      CHKERRA(ierr)
       call KSPGetIterationNumber(ksp(levelBouss), itnum,ierr)
       CHKERRA(ierr)
       itcount(levelBouss) = itcount(levelBouss)+ itnum
@@ -167,23 +163,17 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       !endif
 
       ! check if need to adjust soln back to 1 indexing
-      if (.not. crs) then ! bump both  back up
-        do i = 1, 2*numBoussCells
-          soln(2*numBoussCells-i+1) = soln(2*numBoussCells-i)
-          rhs_geo(2*numBoussCells-i+1) = rhs_geo(2*numBoussCells-i) 
-        end do
-      endif
+!      if (.not. crs) then ! bump both  back up
+!        do i = 1, 2*numBoussCells
+!          soln(2*numBoussCells-i+1) = soln(2*numBoussCells-i)
+!          rhs_geo(2*numBoussCells-i+1) = rhs_geo(2*numBoussCells-i) 
+!        end do
+!      endif
       
       !! if itnum > itmax then
       !! call KSPGetResidualNorm(ksp(levelBouss),resmax,ierr)
       CHKERRA(ierr)
       ! petsc already puts solution into my array soln so just return
-
-       ! create and destroy each step since fast
-       call VecDestroy(rhs,ierr)
-       CHKERRA(ierr)
-       call VecDestroy(solution,ierr)
-       CHKERRA(ierr)
 #endif
 
 end subroutine petsc_driver
