@@ -41,7 +41,7 @@ class QinitMultilayerData(clawpack.geoclaw.data.QinitData):
     def write(self, out_file='qinit.data', data_source='setrun.py'):
 
         # Initial perturbation
-        self.open_data_file('qinit.data',data_source)
+        self.open_data_file(out_file, data_source)
         self.data_write('qinit_type')
 
         # Perturbation requested
