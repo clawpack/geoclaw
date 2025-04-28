@@ -24,8 +24,8 @@
 -ksp_rtol 1.e-9
 
 # preconditioner:
-#-pc_type gamg
--pc_type hypre
+-pc_type gamg
+#-pc_type hypre
 
 
 # debug options:
