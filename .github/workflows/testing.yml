@@ -29,7 +29,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install gfortran liblapack-pic liblapack-dev libnetcdf-dev libnetcdff-dev
+        sudo apt-get install gfortran
+        # sudo apt-get liblapack-pic liblapack-dev
+        sudo apt-get libnetcdf-dev libnetcdff-dev
         python -m pip install --upgrade pip
         pip install flake8 pytest
     - name: Setup clawpack super repository
