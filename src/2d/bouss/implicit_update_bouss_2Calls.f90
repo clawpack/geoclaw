@@ -34,12 +34,14 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     integer(kind=8) :: clock_startLinSolve,clock_finishLinSolve
     real(kind=8) cpu_startBound,cpu_finishBound, time 
     real(kind=8) cpu_startLinSolve,cpu_finishLinSolve
+    logical :: debug
 
 #ifdef WHERE_AM_I
     write(*,*) "starting implicit_update for level ",levelBouss
 #endif
     dt = possk(levelBouss)
     nD = numBoussCells ! shorthand for size of matrix blocks D1 to D4
+    debug = .false.
     
     ! bc_xlo, bc_ylo, bc_xhi, bc_yhi are set in bouss_module.
     !     0 means Dirchlet value 0 (no correction at each of union of patches)
@@ -141,7 +143,8 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        if (minfo%numColsTot .gt. 0 .or. minfo%matrix_nelt .gt. 0) then
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
-          call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,topo_finalized)
+          call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,     &
+                           topo_finalized,minfo%matrix_nelt)
           call system_clock(clock_finishLinSolve,clock_rate)
           call cpu_time(cpu_finishLinSolve)
           !write(89,*)" level ",levelBouss,"  rhs   soln"
@@ -156,6 +159,12 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        endif
 #endif
     
+    endif
+
+    !  DEBUGGING: have soln, and matrix. Multiply and check diff with rhs
+    if (.not. crs .and. debug) then ! matvec not yet implemented for crs
+       call testSoln(2*numBoussCells,soln,rhs,minfo%matrix_nelt,minfo%matrix_ia,   &
+                  minfo%matrix_ja,minfo%matrix_sa)
     endif
 
     !================   Step 5  Update solution  =======================

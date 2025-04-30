@@ -16,6 +16,8 @@ OpenMP along with MPI.  Some flags have to be set as environment variables
 or directly in the application Makefile, e.g. see the lines commented out in
 radial_flat/Makefile.
 
+**Update:** Clawpack 5.12.0 now requires PETSc Version 3.23 (or later).
+
 The file setenv.sh illustrates how you might set some environment
 variables for the bash shell.
 

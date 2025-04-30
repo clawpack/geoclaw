@@ -162,6 +162,7 @@ COMMON_SOURCES += \
   $(BOUSSLIB)/buildSparseMatrixMScoo.f90 \
   $(BOUSSLIB)/compressOut.f \
   $(BOUSSLIB)/matvec.f90 \
+  $(BOUSSLIB)/testSoln.f90 \
   $(BOUSSLIB)/petsc_driver.f90 \
   $(BOUSSLIB)/lookAtGrid.f90 \
   $(BOUSSLIB)/resetBoussStuff.f \

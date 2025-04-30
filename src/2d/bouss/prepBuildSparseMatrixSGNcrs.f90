@@ -41,7 +41,7 @@ subroutine prepBuildSparseMatrixSGNcrs(soln,rhs,nvar,naux,levelBouss,numBoussCel
     !             Requires nvar==5.
     
 #ifdef WHERE_AM_I
-  write(*,*) "starting buildSparseMatrixSGNcrs"
+  write(*,*) "starting prepBuildSparseMatrixSGNcrs"
 #endif
 
     call system_clock(clock_start,clock_rate)
