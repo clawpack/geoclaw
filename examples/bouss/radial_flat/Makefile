@@ -22,13 +22,13 @@ CLAWMAKE = $(CLAW)/clawutil/src/Makefile.common
 
 CLAW_PKG = geoclaw                  # Clawpack package to use
 
-# These environment variables need to be set properly, usually in your
-# shell, but they could be explicitly set here:
-#PETSC_DIR=/full/path/to/petsc
-#PETSC_ARCH=arch-darwin-c-opt
+# Several environment variables are expected in this Makefile,
+# as set for example in the bash script
+#     $CLAW/geoclaw/examples/bouss/setenv.sh
+# Some of these could instead be set here explicitly.
 
+# But PETSC_OPTIONS must be set as an environment variable!
 # The file petscMPIoptions sets parameters for MPI and the iterative solver:
-# PETSC_OPTIONS must be set as an environment variable!
 # e.g. in bash:
 #   export PETSC_OPTIONS="-options_file $CLAW/geoclaw/examples/bouss/petscMPIoptions"
 
@@ -58,7 +58,6 @@ FC = ${CLAW_MPIFC}
 BOUSS_MPI_PROCS ?= 6
 
 EXE = $(PWD)/xgeoclaw
-#RUNEXE="${PETSC_DIR}/${PETSC_ARCH}/bin/mpiexec -n ${BOUSS_MPI_PROCS}"
 RUNEXE="${CLAW_MPIEXEC} -n ${BOUSS_MPI_PROCS}"
 SETRUN_FILE = setrun.py           # File containing function to make data
 OUTDIR = _output                  # Directory for output
@@ -67,7 +66,7 @@ PLOTDIR = _plots                  # Directory for plots
 
 
 # Some compiler flags below are needed for PETSc
-PETSC_INCLUDE = $(PETSC_DIR)/include $(PETSC_DIR)/$(PETSC_ARCH)/include         
+PETSC_INCLUDE = $(PETSC_DIR)/include $(PETSC_DIR)/$(PETSC_ARCH)/include
 INCLUDE += $(PETSC_INCLUDE)
 PETSC_LFLAGS = $(shell PKG_CONFIG_PATH=$(PETSC_DIR)/$(PETSC_ARCH)/lib/pkgconfig pkg-config --libs-only-L --libs-only-l PETSc)
 
@@ -93,7 +92,7 @@ include $(BOUSSLIB)/Makefile.bouss
 
 # ---------------------------------------
 # package sources specifically to exclude
-# (i.e. if a custom replacement source 
+# (i.e. if a custom replacement source
 #  under a different name is provided)
 # ---------------------------------------
 
