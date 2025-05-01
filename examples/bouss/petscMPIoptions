@@ -25,7 +25,7 @@
 
 # preconditioner:
 -pc_type gamg
-#-pc_type hypre
+#-pc_type hypre  # requires installing hypre
 
 
 # debug options:
@@ -36,6 +36,8 @@
 #-ksp_view
 #-info
 
+# print options at end of run:
+-options_view
+
 # test if any options are not used:
 #-options_left
--options_view
