@@ -45,8 +45,8 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
 #endif
     PetscCallA(VecCreateSeq(PETSC_COMM_SELF,2*numBoussCells,v_rhs,ierr))
     PetscCallA(VecCreateSeq(PETSC_COMM_SELF,2*numBoussCells,v_soln,ierr))
-    PetscCallA(VecGetArrayF90(v_rhs,rhs,ierr))
-    PetscCallA(VecGetArrayF90(v_soln,soln,ierr))
+    PetscCallA(VecGetArray(v_rhs,rhs,ierr))
+    PetscCallA(VecGetArray(v_soln,soln,ierr))
     
     dt = possk(levelBouss)
     nD = numBoussCells ! shorthand for size of matrix blocks D1 to D4
@@ -152,12 +152,12 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        if (minfo%numColsTot .gt. 0 .or. minfo%matrix_nelt .gt. 0) then
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
-          PetscCallA(VecRestoreArrayF90(v_rhs,rhs,ierr))
-          PetscCallA(VecRestoreArrayF90(v_soln,soln,ierr))
+          PetscCallA(VecRestoreArray(v_rhs,rhs,ierr))
+          PetscCallA(VecRestoreArray(v_soln,soln,ierr))
           CHKMEMQ;
           call petsc_driver(v_soln,v_rhs,levelBouss,numBoussCells,time,topo_finalized)
-          PetscCallA(VecGetArrayF90(v_rhs,rhs,ierr))
-          PetscCallA(VecGetArrayF90(v_soln,soln,ierr))
+          PetscCallA(VecGetArray(v_rhs,rhs,ierr))
+          PetscCallA(VecGetArray(v_soln,soln,ierr))
           call system_clock(clock_finishLinSolve,clock_rate)
           call cpu_time(cpu_finishLinSolve)
           !write(89,*)" level ",levelBouss,"  rhs   soln"
@@ -255,8 +255,8 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     write(*,*) "ending   implicit_update for level ",levelBouss
 #endif
         
-    PetscCallA(VecRestoreArrayF90(v_rhs,rhs,ierr))
-    PetscCallA(VecRestoreArrayF90(v_soln,soln,ierr))
+    PetscCallA(VecRestoreArray(v_rhs,rhs,ierr))
+    PetscCallA(VecRestoreArray(v_soln,soln,ierr))
     PetscCallA(VecDestroy(v_rhs,ierr))
     PetscCallA(VecDestroy(v_soln,ierr))
 
