@@ -346,182 +346,182 @@ def add_land(plotaxes, surface, plot_type='pcolor', bounds=[-10, 10]):
         raise NotImplementedError("Plot type %s not implemented" % plot_type)
 
 
-def add_combined_profile_plot(plot_data, slice_value, direction='x',
-                              figno=120):
-    def slice_index(cd):
-        if direction == 'x':
-            if cd.grid.y.lower < slice_value < cd.grid.y.upper:
-                return int((slice_value - cd.grid.y.lower) / cd.dy - 0.5)
-            else:
-                return None
-        elif direction == 'y':
-            if cd.grid.x.lower < slice_value < cd.grid.x.upper:
-                return int((slice_value - cd.grid.x.lower) / cd.dx - 0.5)
-            else:
-                return None
+# def add_combined_profile_plot(plot_data, slice_value, direction='x',
+#                               figno=120):
+#     def slice_index(cd):
+#         if direction == 'x':
+#             if cd.grid.y.lower < slice_value < cd.grid.y.upper:
+#                 return int((slice_value - cd.grid.y.lower) / cd.dy - 0.5)
+#             else:
+#                 return None
+#         elif direction == 'y':
+#             if cd.grid.x.lower < slice_value < cd.grid.x.upper:
+#                 return int((slice_value - cd.grid.x.lower) / cd.dx - 0.5)
+#             else:
+#                 return None
 
-    def bathy_profile(current_data):
-        index = slice_index(current_data)
-        if direction == 'x':
-            if index:
-                return current_data.x[:, index], b(current_data)[:, index]
-            else:
-                return None
-        elif direction == 'y':
-            if index:
-                return current_data.y[index, :], b(current_data)[index, :]
-            else:
-                return None
+#     def bathy_profile(current_data):
+#         index = slice_index(current_data)
+#         if direction == 'x':
+#             if index:
+#                 return current_data.x[:, index], b(current_data)[:, index]
+#             else:
+#                 return None
+#         elif direction == 'y':
+#             if index:
+#                 return current_data.y[index, :], b(current_data)[index, :]
+#             else:
+#                 return None
 
-    def lower_surface(current_data):
-        index = slice_index(current_data)
-        if direction == 'x':
-            if index:
-                return current_data.x[:, index], eta2(current_data)[:, index]
-            else:
-                return None
-        elif direction == 'y':
-            if index:
-                return current_data.y[index, :], eta2(current_data)[index, :]
-            else:
-                return None
+#     def lower_surface(current_data):
+#         index = slice_index(current_data)
+#         if direction == 'x':
+#             if index:
+#                 return current_data.x[:, index], eta2(current_data)[:, index]
+#             else:
+#                 return None
+#         elif direction == 'y':
+#             if index:
+#                 return current_data.y[index, :], eta2(current_data)[index, :]
+#             else:
+#                 return None
 
-    def upper_surface(current_data):
-        index = slice_index(current_data)
-        if direction == 'x':
-            if index:
-                return current_data.x[:, index], eta1(current_data)[:, index]
-            else:
-                return None
-        elif direction == 'y':
-            if index:
-                return current_data.y[index, :], eta1(current_data)[index, :]
-            else:
-                return None
+#     def upper_surface(current_data):
+#         index = slice_index(current_data)
+#         if direction == 'x':
+#             if index:
+#                 return current_data.x[:, index], eta1(current_data)[:, index]
+#             else:
+#                 return None
+#         elif direction == 'y':
+#             if index:
+#                 return current_data.y[index, :], eta1(current_data)[index, :]
+#             else:
+#                 return None
 
-    # Surfaces
-    plotfigure = plotdata.new_plotfigure(name='combined_surface_%s' % figno,
-                                         figno=figno)
-    plotfigure.show = True
-    plotfigure.kwargs = {'figsize': (6, 6)}
+#     # Surfaces
+#     plotfigure = plotdata.new_plotfigure(name='combined_surface_%s' % figno,
+#                                          figno=figno)
+#     plotfigure.show = True
+#     plotfigure.kwargs = {'figsize': (6, 6)}
 
-    # Top surface
-    plotaxes = plotfigure.new_plotaxes()
-    plotaxes.axescmd = 'subplot(2,1,1)'
-    plotaxes.title = 'Surfaces Profile %s at %s' % (direction, slice_value)
-    if multilayer_data.init_type == 2:
-        plotaxes.xlimits = xlimits
-    elif multilayer_data.init_type == 6:
-        plotaxes.xlimits = ylimits
+#     # Top surface
+#     plotaxes = plotfigure.new_plotaxes()
+#     plotaxes.axescmd = 'subplot(2,1,1)'
+#     plotaxes.title = 'Surfaces Profile %s at %s' % (direction, slice_value)
+#     if multilayer_data.init_type == 2:
+#         plotaxes.xlimits = xlimits
+#     elif multilayer_data.init_type == 6:
+#         plotaxes.xlimits = ylimits
 
-    plotaxes.ylimits = top_surf_zoomed
+#     plotaxes.ylimits = top_surf_zoomed
 
-    def top_surf_afteraxes(cd):
-        axes = plt.gca()
-        axes.set_xlabel('')
-        locs, labels = plt.xticks()
-        labels = ['' for i in range(len(locs))]
-        plt.xticks(locs, labels)
-        axes.plot([multilayer_data.bathy_location,
-                  multilayer_data.bathy_location], top_surf_zoomed, '--k')
-        axes.set_ylabel('m')
+#     def top_surf_afteraxes(cd):
+#         axes = plt.gca()
+#         axes.set_xlabel('')
+#         locs, labels = plt.xticks()
+#         labels = ['' for i in range(len(locs))]
+#         plt.xticks(locs, labels)
+#         axes.plot([multilayer_data.bathy_location,
+#                   multilayer_data.bathy_location], top_surf_zoomed, '--k')
+#         axes.set_ylabel('m')
 
-    plotaxes.afteraxes = top_surf_afteraxes
-    plotitem = plotaxes.new_plotitem(plot_type="1d_from_2d_data")
-    plotitem.map_2d_to_1d = upper_surface
-    plotitem.amr_plotstyle = ['-', '+', 'x']
-    plotitem.show = True
+#     plotaxes.afteraxes = top_surf_afteraxes
+#     plotitem = plotaxes.new_plotitem(plot_type="1d_from_2d_data")
+#     plotitem.map_2d_to_1d = upper_surface
+#     plotitem.amr_plotstyle = ['-', '+', 'x']
+#     plotitem.show = True
 
-    # Internal surface
-    plotaxes = plotfigure.new_plotaxes()
-    plotaxes.axescmd = 'subplot(2,1,2)'
-    plotaxes.title = ''
-    if multilayer_data.init_type == 2:
-        plotaxes.xlimits = xlimits
-    elif multilayer_data.init_type == 6:
-        plotaxes.xlimits = ylimits
-    plotaxes.ylimits = bottom_surf_zoomed
+#     # Internal surface
+#     plotaxes = plotfigure.new_plotaxes()
+#     plotaxes.axescmd = 'subplot(2,1,2)'
+#     plotaxes.title = ''
+#     if multilayer_data.init_type == 2:
+#         plotaxes.xlimits = xlimits
+#     elif multilayer_data.init_type == 6:
+#         plotaxes.xlimits = ylimits
+#     plotaxes.ylimits = bottom_surf_zoomed
 
-    def internal_surf_afteraxes(cd):
-        axes = plt.gca()
-        axes.set_title('')
-        axes.set_ylabel('m')
-        axes.subplots_adjust(hspace=0.05)
-        axes.plot([multilayer_data.bathy_location,
-                  multilayer_data.bathy_location], bottom_surf_zoomed, '--k')
-    plotaxes.afteraxes = internal_surf_afteraxes
-    plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
-    plotitem.map_2d_to_1d = lower_surface
-    plotitem.amr_plotstyle = ['-', '+', 'x']
-    plotitem.color = 'k'
-    plotitem.show = True
+#     def internal_surf_afteraxes(cd):
+#         axes = plt.gca()
+#         axes.set_title('')
+#         axes.set_ylabel('m')
+#         axes.subplots_adjust(hspace=0.05)
+#         axes.plot([multilayer_data.bathy_location,
+#                   multilayer_data.bathy_location], bottom_surf_zoomed, '--k')
+#     plotaxes.afteraxes = internal_surf_afteraxes
+#     plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
+#     plotitem.map_2d_to_1d = lower_surface
+#     plotitem.amr_plotstyle = ['-', '+', 'x']
+#     plotitem.color = 'k'
+#     plotitem.show = True
 
 
-def add_velocities_profile_plot(plot_data, slice_value, direction='x',
-                                figno=130):
+# def add_velocities_profile_plot(plot_data, slice_value, direction='x',
+#                                 figno=130):
 
-    def slice_index(cd):
-        if cd.grid.y.lower < slice_value < cd.grid.y.upper:
-            return int((slice_value - cd.grid.y.lower) / cd.dy - 0.5)
-        else:
-            return None
+#     def slice_index(cd):
+#         if cd.grid.y.lower < slice_value < cd.grid.y.upper:
+#             return int((slice_value - cd.grid.y.lower) / cd.dy - 0.5)
+#         else:
+#             return None
 
-    def upper_surface(current_data):
-        index = slice_index(current_data)
-        if index:
-            return current_data.x[:, index], eta1(current_data)[:, index]
-        else:
-            return None
+#     def upper_surface(current_data):
+#         index = slice_index(current_data)
+#         if index:
+#             return current_data.x[:, index], eta1(current_data)[:, index]
+#         else:
+#             return None
 
-    def top_speed(current_data):
-        index = slice_index(current_data)
-        if index:
-            return current_data.x[:, index], water_u1(current_data)[:, index]
-        else:
-            return None, None
+#     def top_speed(current_data):
+#         index = slice_index(current_data)
+#         if index:
+#             return current_data.x[:, index], water_u1(current_data)[:, index]
+#         else:
+#             return None, None
 
-    def bottom_speed(current_data):
-        index = slice_index(current_data)
-        if index:
-            return current_data.x[:, index], water_u2(current_data)[:, index]
-        else:
-            return None, None
+#     def bottom_speed(current_data):
+#         index = slice_index(current_data)
+#         if index:
+#             return current_data.x[:, index], water_u2(current_data)[:, index]
+#         else:
+#             return None, None
 
-    # Velocities
-    plotfigure = plotdata.new_plotfigure(name='combined_velocities_%s'
-                                         % figno, figno=figno)
-    plotfigure.show = True
+#     # Velocities
+#     plotfigure = plotdata.new_plotfigure(name='combined_velocities_%s'
+#                                          % figno, figno=figno)
+#     plotfigure.show = True
 
-    # Top surface
-    plotaxes = plotfigure.new_plotaxes()
-    plotaxes.title = 'Velocities Profile %s at %s' % (direction, slice_value)
-    if multilayer_data.init_type == 2:
-        plotaxes.xlimits = xlimits
-    elif multilayer_data.init_type == 6:
-        plotaxes.xlimits = ylimits
-    plotaxes.ylimits = velocities_zoomed
+#     # Top surface
+#     plotaxes = plotfigure.new_plotaxes()
+#     plotaxes.title = 'Velocities Profile %s at %s' % (direction, slice_value)
+#     if multilayer_data.init_type == 2:
+#         plotaxes.xlimits = xlimits
+#     elif multilayer_data.init_type == 6:
+#         plotaxes.xlimits = ylimits
+#     plotaxes.ylimits = velocities_zoomed
 
-    def velocity_afteraxes(cd):
-        axes = plt.gca()
-        axes.set_xlabel('')
-        locs, labels = plt.xticks()
-        labels = ['' for i in range(len(locs))]
-        plt.xticks(locs, labels)
-        axes.plot([multilayer_data.bathy_location,
-                  multilayer_data.bathy_location], velocities_zoomed, '--k')
-        axes.set_ylabel('m/s')
-    plotaxes.afteraxes = velocity_afteraxes
+#     def velocity_afteraxes(cd):
+#         axes = plt.gca()
+#         axes.set_xlabel('')
+#         locs, labels = plt.xticks()
+#         labels = ['' for i in range(len(locs))]
+#         plt.xticks(locs, labels)
+#         axes.plot([multilayer_data.bathy_location,
+#                   multilayer_data.bathy_location], velocities_zoomed, '--k')
+#         axes.set_ylabel('m/s')
+#     plotaxes.afteraxes = lambda cd: velocity_afteraxes(cd, velocities_zoomed)
 
-    plotitem = plotaxes.new_plotitem(plot_type="1d_from_2d_data")
-    plotitem.map_2d_to_1d = top_speed
-    plotitem.amr_plotstyle = ['-', '+', 'x']
-    plotitem.show = True
+#     plotitem = plotaxes.new_plotitem(plot_type="1d_from_2d_data")
+#     plotitem.map_2d_to_1d = top_speed
+#     plotitem.amr_plotstyle = ['-', '+', 'x']
+#     plotitem.show = True
 
-    plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
-    plotitem.map_2d_to_1d = bottom_speed
-    plotitem.amr_plotstyle = ['-', '+', 'x']
-    plotitem.color = 'k'
-    plotitem.show = True
+#     plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
+#     plotitem.map_2d_to_1d = bottom_speed
+#     plotitem.amr_plotstyle = ['-', '+', 'x']
+#     plotitem.color = 'k'
+#     plotitem.show = True
 
 
 

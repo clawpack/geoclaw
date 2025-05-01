@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
 import os
 import numpy
-import nose
-import os
+import pytest
 import warnings
+
 from clawpack.geoclaw import topotools
 
 
@@ -18,10 +17,7 @@ extent = [-125,-124, 48, 48.5]
 
 def test_etopo1_topo(make_plot=False, save=False):
     
-    try:
-        import netCDF4
-    except ImportError:
-        raise nose.SkipTest("netCDF4 not installed, skipping test")
+    netCDF4 = pytest.importorskip('netCDF4', reason="netCDF4 not installed, skipping test")
 
     try:
         topo1 = topotools.read_netcdf('etopo1', extent=extent, verbose=True)
@@ -29,7 +25,8 @@ def test_etopo1_topo(make_plot=False, save=False):
                                        coarsen=10, verbose=True)
     except (OSError, RuntimeError):
         warnings.warn('Could not read etopo1 data, check if thredds server up')
-        raise nose.SkipTest("Reading etopo1 failed, skipping test")
+        pytest.skip("Reading etopo1 failed, skipping test")
+        # raise nose.SkipTest("Reading etopo1 failed, skipping test")
 
     testdata_path = os.path.join(os.path.dirname(__file__), 'data', 'etopo1_10min.asc')
     if save:
@@ -57,10 +54,8 @@ def test_etopo1_topo(make_plot=False, save=False):
     
 def test_etopo1_xarray():
 
-    try:
-        import xarray
-    except ImportError:
-        raise nose.SkipTest("xarray not installed, skipping test")
+    xarray = pytest.importorskip("xarray", 
+                                 reason="xarray not installed, skipping test")
         
     try:
         topo10,topo10_xarray = topotools.read_netcdf('etopo1', extent=extent, 
@@ -68,7 +63,7 @@ def test_etopo1_xarray():
                                                      coarsen=10, verbose=True)
     except (OSError, RuntimeError):
         warnings.warn('Could not read etopo1 data, check if thredds server up')
-        raise nose.SkipTest("Reading etopo1 failed, skipping test")
+        pytest.skip("Reading etopo1 failed, skipping test")
 
     testdata_path = os.path.join(testdir, 'data', 'etopo1_10min.asc')
     topo10input = topotools.Topography()
@@ -86,8 +81,6 @@ if __name__ == "__main__":
         elif bool(sys.argv[1]):
             test_etopo1_topo(save=True)
     else:
-        # Run tests
         test_etopo1_topo()
         test_etopo1_xarray()
-        print("All tests passed.")
 
