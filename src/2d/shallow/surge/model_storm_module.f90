@@ -24,7 +24,7 @@ module model_storm_module
         integer :: num_casts
 
         ! Landfall - This is not used explicitly (t0 = landfall ideally)
-        character(len=10) :: landfall
+        character(len=19) :: landfall
 
         ! These parameters are located at time points but are interpolated in
         ! time and space when the relevant fields are requested.
@@ -139,6 +139,7 @@ contains
                                    storm%central_pressure(i), &
                                    storm%radius(i)
             enddo
+            close(data_file)
 
             ! Calculate storm speed
             allocate(storm%velocity(2, storm%num_casts))
@@ -280,6 +281,7 @@ contains
     ! ==========================================================================
     !  storm_index(t,storm)
     !    Finds the index of the next storm data point
+    !    This duplicates data_storm_module:storm_index
     ! ==========================================================================
     integer pure function storm_index(t, storm) result(index)
 
