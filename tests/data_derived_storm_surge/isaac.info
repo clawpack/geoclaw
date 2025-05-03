@@ -1,0 +1,9 @@
+## Control file for OWI ascii wind and pressure data files ##
+## Edit Files to include all wind and pressure data per storm ##
+## Ensure data remains in the below format ##
+## Must include absolute path to the wind and pressure files ##
+
+201208290000                          =: landfall_date    # Date of landfall for the storm
+"clawpack/geoclaw/scratch/isaac.WIN"                           =: wind_field       # path to wind forcing file
+'clawpack/geoclaw/scratch/isaac.PRE'                           =: pressure_field   # path to pressure forcing file
+0                                     =: regional_forcing # 0 for only basin forcing, 1 for regional 

@@ -74,6 +74,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dry_tolerance',1e-3)
         self.add_attribute('friction_depth',1.0e6)
         self.add_attribute('sea_level',0.0)
+        self.add_attribute('speed_limit',50.)
 
 
     def write(self,data_source='setrun.py', out_file='geoclaw.data'):
@@ -113,6 +114,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write()
 
         self.data_write('dry_tolerance')
+        self.data_write('speed_limit')
 
         self.close_data_file()
 
@@ -552,13 +554,14 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     r"""Data object describing storm surge related parameters"""
 
     # Provide some mapping between model names and integers
-    storm_spec_dict_mapping = {"HWRF":-1,
+    storm_spec_dict_mapping = {'owi': -2,
+                               "hwrf": -1,
                                None: 0,
                                'holland80': 1,
                                'holland08': 8,
                                'holland10': 2,
-                               'CLE': 3,
-                               'SLOSH': 4,
+                               'cle': 3,
+                               'slosh': 4,
                                'rankine': 5,
                                'modified-rankine': 6,
                                'DeMaria': 7,
@@ -587,8 +590,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         # Storm parameters
         self.add_attribute('storm_type', None)  # Backwards compatibility
         self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
-        self.add_attribute("storm_file", None) # File(s) containing data
-
+        self.add_attribute("storm_file", None) # File containing data
 
     def write(self, out_file='surge.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
@@ -644,28 +646,28 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.data_write()
 
         # Storm specification
+        # Handle deprecated member value
         if self.storm_type is not None:
             self.storm_specification_type = self.storm_type
-        if type(self.storm_specification_type) is not int:
-            if self.storm_specification_type in         \
-                    self.storm_spec_dict_mapping.keys():
-                if self.storm_specification_type in     \
-                    self.storm_spec_not_implemented:
-                    raise NotImplementedError("%s has not been implemented."
-                                %self.storm_specification_type)
-
-                else:
-                    self.data_write("storm_specification_type",
-                                self.storm_spec_dict_mapping[
-                                        self.storm_specification_type],
-                                description="(Storm specification)")
+        # Turn value into integer descriptor
+        if isinstance(self.storm_specification_type, int):
+            spec_type = self.storm_specification_type
+        elif isinstance(self.storm_specification_type, str):
+            if self.storm_specification_type.lower() in self.storm_spec_dict_mapping.keys():
+                spec_type = self.storm_spec_dict_mapping[self.storm_specification_type.lower()]
             else:
-                raise ValueError("Unknown storm specification type %s"
-                                 % self.storm_specification_type)
+                raise TypeError(f"Unknown storm specification type" +
+                                f" '{self.storm_specification_type}' provided.")
         else:
-            self.data_write("storm_specification_type",
-                            description="(Storm specification)")
-        self.data_write("storm_file", description='(Path to storm data)')
+            raise TypeError(f"Unknown storm specification type" +
+                            f" '{self.storm_specification_type}' provided.")
+        # Check to see if spec type is in supported formats
+        if spec_type in self.storm_spec_not_implemented:
+            raise NotImplementedError(f"'{spec_type}' has not been implemented.")
+        # Write out values
+        self.data_write(name="storm_specification_type", value=spec_type,
+                        description="(Storm specification)")
+        self.data_write(name="storm_file", description='(Path to storm data)')
 
         self.close_data_file()
 

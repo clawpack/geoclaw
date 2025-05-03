@@ -166,7 +166,7 @@ contains
         crs = .true.
     endif
 
-    ! crs = .false.  ! uncomment this line to force CRS with SGN for testing
+    ! crs = .false.  ! uncomment this line to force COO with SGN for testing
 
     !------------------------------------------
     if (rest) then
@@ -264,8 +264,8 @@ contains
     ! Boundary conditions to impose in computing Boussinesq update:
     if ((mthbc(1)==2) .or. (mthbc(2)==2) &
         .or. (mthbc(3)==2) .or. (mthbc(4)==2)) then
-        write(6,*) '*** Periodic BCs not supported in bouss_module'
-        stop
+        write(6,*) '*** Periodic BCs newly added to bouss_module'
+        !!stop
     endif
 
     if ((mthbc(1)==4) .or. (mthbc(2)==4) &

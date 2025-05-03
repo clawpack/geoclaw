@@ -8,6 +8,8 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     use geoclaw_module, only: RAD2DEG, pi, dry_tolerance, DEG2RAD
     use geoclaw_module, only: rho_air, rho
     use geoclaw_module, only: earth_radius, sphere_source
+
+    use geoclaw_module, only: speed_limit  ! used if no friction
       
     use storm_module, only: wind_forcing, pressure_forcing, wind_drag
     use storm_module, only: wind_index, pressure_index
@@ -33,6 +35,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     real(kind=8) :: tau, wind_speed, theta, phi, psi, P_gradient(2), S(2)
     real(kind=8) :: Ddt, sloc(2)
     real(kind=8) :: tanyR, huv, huu, hvv
+    real(kind=8) :: speed, sratio, xs, ys
 
     ! Algorithm parameters
 
@@ -107,8 +110,48 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
                 endif
             enddo
         enddo
-    endif
     ! End of friction source term
+
+    else  
+
+      ! if not friction_forcing: 
+
+      ! Use speed_limit to scale back unphysical speeds that might
+      ! arise from computing hu / h when h is very small.  This should
+      ! only be needed in this routine if friction is not being used or
+      ! the on-shore manning_coefficient is very small. 
+      ! (In the latter case, the user might need to tweak this by hand.)
+
+      do j=1-mbc,my+mbc
+        do i=1-mbc,mx+mbc
+            if (q(1,i,j) > 0.d0) then
+                speed = sqrt((q(2,i,j)**2 + q(3,i,j)**2)) / q(1,i,j)
+                if (speed > speed_limit) then
+                    sratio = speed_limit / speed
+                    q(2,i,j) = q(2,i,j) * sratio
+                    q(3,i,j) = q(3,i,j) * sratio
+
+                    if (.false.) then
+                        ! write out info useful for investigating topo:
+                        ! might give LOTS of output if no friction!
+                        xs = xlower + (i-0.5d0)*dx
+                        ys = ylower + (j-0.5d0)*dy
+                        write(6,604) t, i,j, mx,my, dx
+                        write(6,603) speed,q(1,i,j),aux(1,i,j),xs,ys
+
+ 604                    format('src2 at t =',f10.2, '  i,j,mx,my:',4i4, &
+                               '  dx = ',f10.7)
+ 603                    format('     reset s =',f9.2,'  h=',e11.3, ' B=',f8.2,&
+                               '  x,y = ', f11.6,',',f10.6)
+                    endif
+               endif
+            endif
+        enddo
+      enddo
+
+    ! end of speed limiting
+    endif  ! end of else (i.e., if not friction_forcing)
+
 
     ! Coriolis source term
     ! TODO: May want to remove the internal calls to coriolis as this could 

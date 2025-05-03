@@ -20,12 +20,15 @@ SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
-FFLAGS ?=
+# If using NetCDF reading use these flags
+FFLAGS += -DNETCDF -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib
+LFLAGS += -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib -lnetcdff
 
 # ---------------------------------
 # package sources for this program:
 # ---------------------------------
 
+AMRLIB = $(CLAW)/amrclaw/src/2d
 GEOLIB = $(CLAW)/geoclaw/src/2d/shallow
 include $(GEOLIB)/Makefile.geoclaw
 
@@ -35,9 +38,9 @@ include $(GEOLIB)/Makefile.geoclaw
 #  under a different name is provided)
 # ---------------------------------------
 
-EXCLUDE_MODULES = \
+EXCLUDE_MODULES = 
 
-EXCLUDE_SOURCES = \
+EXCLUDE_SOURCES = 
 
 # ----------------------------------------
 # List of custom sources for this program:
@@ -45,24 +48,15 @@ EXCLUDE_SOURCES = \
 
 RIEMANN = $(CLAW)/riemann/src
 
-MODULES = \
+MODULES =
 
 SOURCES = \
-  $(RIEMANN)/rpn2_geoclaw.f \
-  $(RIEMANN)/rpt2_geoclaw.f \
-  $(RIEMANN)/geoclaw_riemann_utils.f \
+	$(RIEMANN)/rpn2_geoclaw.f \
+	$(RIEMANN)/rpt2_geoclaw.f \
+	$(RIEMANN)/geoclaw_riemann_utils.f \
 
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
-
-
-# Construct the topography data
-.PHONY: all
-
-all:
-	$(MAKE) .plots
-	$(MAKE) .htmls
-
 
 ### DO NOT remove this line - make depends on it ###

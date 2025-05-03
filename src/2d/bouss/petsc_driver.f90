@@ -1,4 +1,4 @@
-subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalized)
+subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalized,nelt)
 
     ! use petsc to solve sparse linear system
     ! called this way so can allocate storage of correct size
@@ -14,14 +14,16 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
     real(kind=8), intent(inout) :: rhs_geo(0:2*numBoussCells)
     real(kind=8), intent(in) :: time
     logical, intent(in) :: topo_finalized
+    integer, intent(in) :: nelt
     
     !! pass in numBoussCells for this level so can dimension this array
     real(kind=8), intent(out) :: soln(0:2*numBoussCells)
     
     type(matrix_levInfo),  pointer :: minfo
     
-    integer :: numCores, omp_get_max_threads,i,nelt
+    integer :: numCores, omp_get_max_threads,i
     integer :: j
+    integer :: local_ia(nelt),local_ja(nelt)
 
     ! petsc declaration
     integer :: n, nn, ierr
@@ -31,12 +33,16 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
 
     !! These PETSC declarations are needed  
     Vec rhs,solution
+    Vec y
     PetscInt itnum
     KSPConvergedReason reason
     !! (moved the following to amr_module)
     !Mat J
     !KSP ksp  ! linear solver ojbect
 
+#ifdef WHERE_AM_I
+    write(*,*)" starting petsc_driver"
+#endif
 
     minfo => matrix_info_allLevs(levelBouss)
 
@@ -44,7 +50,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
             
        nn = 2*numBoussCells    ! number of rows and cols
        n = nn  ! petsc notation below
-       nelt = minfo%matrix_nelt
+       !nelt = minfo%matrix_nelt
        nz = nelt
        !write(17,*)" level ",levelBouss
        !write(17,777)(j+1,minfo%matrix_ia(j)+1,minfo%matrix_ja(j)+1,minfo%matrix_sa(j),j=0,nelt-1)
@@ -73,18 +79,18 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
             ! decrement indices since Petsc zero-based indexing
             ! and COO format is 1-based
             do i = 1, nz
-               minfo%matrix_ia(i) = minfo%matrix_ia(i) - 1
-               minfo%matrix_ja(i) = minfo%matrix_ja(i) - 1
+               local_ia(i) = minfo%matrix_ia(i) - 1
+               local_ja(i) = minfo%matrix_ja(i) - 1
             end do
 
             call MatSetPreallocationCOO(Jr(levelBouss), nz, &
-                                minfo%matrix_ia, minfo%matrix_ja,ierr)
+                                local_ia, local_ja,ierr)
             CHKERRA(ierr)
             ! put 1 indexing back in  
-            do i = 1, nz
-               minfo%matrix_ia(i) = minfo%matrix_ia(i) + 1
-               minfo%matrix_ja(i) = minfo%matrix_ja(i) + 1
-            end do
+            !do i = 1, nz
+            !   minfo%matrix_ia(i) = minfo%matrix_ia(i) + 1
+            !   minfo%matrix_ja(i) = minfo%matrix_ja(i) + 1
+            !end do
           else 
             ! using CRS sparse matrix format
             call MatCreateSeqAijWithArrays(PETSC_COMM_SELF,2*numBoussCells,  & 
@@ -150,14 +156,22 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       CHKERRA(ierr)
 
       ! save matrices for debugging. comment out to turn off
+      !call MatView(Jr(levelBouss),PETSC_VIEWER_STDOUT_SELF,ierr)
       !call MatView(Jr(levelBouss),PETSC_VIEWER_BINARY_SELF,ierr)
 
 
       call KSPSolve(ksp(levelBouss),rhs,solution,ierr)
       call KSPGetIterationNumber(ksp(levelBouss), itnum,ierr)
+      !write(*,*)" took ",itnum," iterations"
       CHKERRA(ierr)
       itcount(levelBouss) = itcount(levelBouss)+ itnum
       numTimes(levelBouss) = numTimes(levelBouss) + 1
+
+      !DEBUG
+      !call vecDuplicate(solution,y,ierr) !makes new vec y same size as first arg
+      !call MatMult(Jr(levelBouss),solution,y,ierr)
+      !call VecView(rhs,PETSC_VIEWER_STDOUT_SELF,ierr)
+      !call VecView(y,PETSC_VIEWER_STDOUT_SELF,ierr)
 
       ! still working on this aspect. 
       !call KSPGetConvergedReason(ksp(levelBouss),reason,ierr)
@@ -184,6 +198,10 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
        CHKERRA(ierr)
        call VecDestroy(solution,ierr)
        CHKERRA(ierr)
+#endif
+
+#ifdef WHERE_AM_I
+    write(*,*)" ending   petsc_driver"
 #endif
 
 end subroutine petsc_driver

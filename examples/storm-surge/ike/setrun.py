@@ -445,12 +445,12 @@ def setgeo(rundata):
     # Entire domain
     data.friction_regions.append([rundata.clawdata.lower,
                                   rundata.clawdata.upper,
-                                  [np.infty, 0.0, -np.infty],
+                                  [np.inf, 0.0, -np.inf],
                                   [0.030, 0.022]])
 
     # La-Tex Shelf
     data.friction_regions.append([(-98, 25.25), (-90, 30),
-                                  [np.infty, -10.0, -200.0, -np.infty],
+                                  [np.inf, -10.0, -200.0, -np.inf],
                                   [0.030, 0.012, 0.022]])
 
     return rundata

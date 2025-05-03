@@ -26,10 +26,16 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
     integer :: mitot, mjtot
     integer :: jst, jend, ivar
     integer :: colPtr
+    integer :: ii,jj
     
     real(kind=8) :: q(nvar,1-nghost:nx+nghost,1-nghost:ny+nghost)
     real(kind=8) :: qold(nvar,1-nghost:nx+nghost,1-nghost:ny+nghost)
     real(kind=8) :: aux(naux,1-nghost:nx+nghost,1-nghost:ny+nghost)
+
+    real(kind=8) ::etaxM(0:nx+1,0:ny+1)
+    real(kind=8) ::etayM(0:nx+1,0:ny+1)
+    real(kind=8) :: bu, bv,x, xlow, y, ylow
+    real(kind=8) ::brhs(2,1-nghost:nx+nghost,1-nghost:ny+nghost)
 
     real(kind=8), dimension(0:nx+1,0:ny+1) :: Bxx, Byy, Bx, By, Bxy
     real(kind=8), dimension(0:nx+1,0:ny+1) :: phi, eta, w
@@ -71,12 +77,12 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
     ! for ghost cells, so those 12 entires need to be sorted.
     ! The order for u starting from rowPtr index:
     !   0         1          2         3        4        5     6       7 
-    ! u_i-1,j-1  v_i,j-1  v_i+1,j-1  u_i-1,j  v_i-1,j  u_ij  v_ij   u_i+1,j
+    ! v_i-1,j-1  v_i,j-1  v_i+1,j-1  u_i-1,j  v_i-1,j  u_ij  v_ij   u_i+1,j
     !  8          9         10          11
     ! v_i+1,j  v_i-1,j+1, v_i,j+1, v_i+1,j+1
     ! The order for v starting from rowPtr+12 index:
     !   12        13         14        15      16        17    18      19
-    ! u_i-1,j-1  u_i,j-1  v_i,j-1  u_i+1,j-1  u_i-1,j  v_ij   u_i+1,j
+    ! u_i-1,j-1  u_i,j-1  v_i,j-1  u_i+1,j-1  u_i-1,j  u_ij   v_ij   u_i+1,j
     !  20         21        22          23
     ! u_i-1,j+1  u_i,j+1, v_i,j+1, u_i+1,j+1
 
@@ -89,11 +95,15 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
     
     debug = .false.
     !debug = .true.
+    etaxM = 0.d0
+    etayM = 0.d0
     
     minfo => matrix_info_allLevs(levelBouss)
 
     mitot = nx + 2*nghost
     mjtot = ny + 2*nghost
+    xlow = rnode(cornxlo,mptr)
+    ylow = rnode(cornylo,mptr)
 
 
 !
@@ -102,10 +112,10 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
     ! Set up matrix A and RHS by looping over all Bouss patches:
 
        if (debug) then
-         write(19,*)"Level ",levelBouss," grid ",mptr," at start of cleanBuild"
-         do j = 1-nghost, ny+nghost
+         write(49,*)"Level ",levelBouss," grid ",mptr," at start of cleanBuild"
          do i = 1-nghost, nx+nghost
-           write(19,900)i,j,(q(m,i,j),m=1,nvar)
+         do j = 1-nghost, ny+nghost
+           write(49,900)i+nghost,j+nghost,(q(m,i,j),m=1,nvar)
  900       format(2i5,5e15.7)
          end do
          end do
@@ -320,6 +330,8 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                 hy = (q(1,i,j+1) - q(1,i,j-1))/(2.d0*dym)
                 etax = (eta(i+1,j) - eta(i-1,j))/(2.d0*dxm)
                 etay = (eta(i,j+1) - eta(i,j-1))/(2.d0*dym)
+                etaxM(i,j) = etax
+                etayM(i,j) = etay
 
                 !-----------------------------------------------
                 ! I-D11 block (x and xx derivatives of hu components):
@@ -542,23 +554,38 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*k_ipjp-1 
                     cols(colPtr+11) = ja
                     vals(colPtr+11) = vals(colPtr+11) + sa
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                else if ((.not. yhi_db .or. j.lt. ny)  .and.    &
+                         (.not. xhi_db .or. i.lt. nx)) then  ! not last cell
+                    ! interior ghost cell not on domain boundary
                     hvc = q(5,i+1,j+1)
                     rhs(2*(k_ij-1)) = rhs(2*(k_ij-1)) - sa*hvc
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !    hvc = q(5,i+1,j+1)
+                !    rhs(2*(k_ij-1)) = rhs(2*(k_ij-1)) - sa*hvc
                 else if (k_ijp > -1) then
                     ! at right boundary, use cell above instead
                     !ja = k_ijp + nD
                     !ja = 2*k_ijp 
                     ja = 2*k_ijp-1 
+                    ! v at right bndry doesnt need negating
                     vals(colPtr+10) = vals(colPtr+10) + sa
                 else if (k_ipj > -1) then
                     ! at top boundary, use cell to right instead, 
                     !ja = k_ipj + nD
                     !ja = 2*k_ipj
                     ja = 2*k_ipj-1
-                    if (bc_yhi==3) sa = -sa  ! reflect V in y
+                    if (bc_yhi==3) sa = -sa  ! reflect V in y for wall bc
                     vals(colPtr+8) = vals(colPtr+8) + sa
+                else if (xhi_db .and. i .eq. nx .and. .not. yhi_db) then
+                      ! at top right corner of patch, which doesnt touch
+                      ! top domain bndry only right
+                      ! use cell ij instead with bc
+                      !ja = k_ij + nD
+                      !ja = 2*k_ij
+                      ja = 2*k_ij-1
+                      ! no reflection of V at right wall
+                      vals(colPtr+6) = vals(colPtr+6) + sa
                 else
                     ! top-right corner
                     !ja = k_ij + nD
@@ -577,23 +604,40 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*k_ipjm-1 
                     cols(colPtr+2) = ja
                     vals(colPtr+2) = vals(colPtr+2) + sa
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                else if ((.not. ylo_db .or. j>1)  .and.   &
+                         (.not. xhi_db .or. i .lt. nx)) then
                     hvc = q(5,i+1,j-1)
                     rhs(2*(k_ij-1)) = rhs(2*(k_ij-1)) - sa*hvc   
+                !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !    hvc = q(5,i+1,j-1)
+                !    rhs(2*(k_ij-1)) = rhs(2*(k_ij-1)) - sa*hvc   
                 else if (k_ijm > -1) then
-                    ! at right boundary, use cell below instead
+                    ! at right boundary but not bottom
+                    !  use cell below instead
                     !ja = k_ijm + nD
                     !ja = 2*k_ijm 
                     ja = 2*k_ijm-1 
+                    ! equations for v so doesnt need negating
                     vals(colPtr+1) = vals(colPtr+1) + sa
                 else if (k_ipj > -1) then
-                    ! at bottom boundary, use cell to right instead,
+                    ! at bottom boundary but not right bndry
+                    ! use cell to right instead,
                     !ja = k_ipj + nD
                     !ja = 2*k_ipj
                     ja = 2*k_ipj-1
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
                     vals(colPtr+8) = vals(colPtr+8) + sa
+                else if (xhi_db .and. i .eq. nx .and. .not. ylo_db) then
+                      ! at bottom right corner of patch that
+                      ! touches right domain boundary but not
+                      ! touch bottom
+                      ! use cell ij instead with bc
+                      !ja = k_ij + nD
+                      !ja = 2*k_ij
+                      ja = 2*k_ij-1
+                      ! no reflection of V at right wall
+                      vals(colPtr+6) = vals(colPtr+6) + sa
                 else
                     ! bottom-right corner
                     !ja = k_ij + nD
@@ -613,29 +657,46 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*k_imjp-1 
                     cols(colPtr+9) = ja
                     vals(colPtr+9) = vals(colPtr+9) + sa
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. yhi_db .or. j.lt.ny) .and.  &
+                         (.not. xlo_db .or. i .gt. 1)) then
+                    ! missing cell not outside phys. domain
                     hvc = q(5,i-1,j+1)
                     rhs(2*(k_ij-1)) = rhs(2*(k_ij-1)) - sa*hvc
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_imj == -1) .and. (.not. xlo_db))) then
+                !    hvc = q(5,i-1,j+1)
+                !    rhs(2*(k_ij-1)) = rhs(2*(k_ij-1)) - sa*hvc
                 else if (k_ijp > -1) then
                     ! at left domain boundary, use cell above instead
+                    ! to pw const extrap V 
                     !ja = k_ijp + nD
                     !ja = 2*k_ijp 
                     ja = 2*k_ijp-1 
                     vals(colPtr+10) = vals(colPtr+10) + sa
                 else if (k_imj > -1) then
                     ! at top domain boundary, use cell to left instead,
+                    ! since at V bndry impose V bc and reflect
                     !ja = k_imj + nD
                     !ja = 2*k_imj 
                     ja = 2*k_imj-1 
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
                     vals(colPtr+4) = vals(colPtr+4) + sa
+                else if (xlo_db .and. i .eq. 1 .and. .not. yhi_db) then
+                      ! at top left boundary of patch, left bndry of domain
+                      ! not top bndry of domain or would have to use y bcs, thats next clause
+                      !use cell ij instead with bc
+                      !ja = k_ij + nD
+                      !ja = 2*k_ij
+                      ja = 2*k_ij-1
+                      ! no reflection of V at left wall
+                      vals(colPtr+6) = vals(colPtr+6) + sa
                 else
-                    ! top-left corner
+                    ! top-left corner of domain
+                    ! put in V_ij stencil
                     !ja = k_ij + nD
                     !ja = 2*k_ij 
                     ja = 2*k_ij-1 
-                    if (bc_yhi==3) sa = -sa  ! reflect V in y
+                    if (bc_yhi==3) sa = -sa  ! reflect V in y but not x
                     vals(colPtr+6) = vals(colPtr+6) + sa
                 endif
                 
@@ -649,25 +710,33 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*k_imjm-1 
                     cols(colPtr+0) = ja
                     vals(colPtr+0) = vals(colPtr+0) + sa
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. xlo_db .or. i>1) .and. (.not. ylo_db .or. j>1)) then
+                    ! use ghost cells, outside phys. domain
                     hvc = q(5,i-1,j-1)
                     rhs(2*(k_ij-1)) = rhs(2*(k_ij-1)) - sa*hvc
-                else if (k_ijm > -1) then
-                    ! at left boundary, use cell below instead
-                   !ja = k_ijm + nD
-                   !ja = 2*k_ijm
-                   ja = 2*k_ijm-1
-                   vals(colPtr+1) = vals(colPtr+1) + sa
-                else if (k_imj > -1) then
-                    ! at bottom boundary, use cell to left instead,
+                else if (k_imj > -1) then 
+                    ! at bottom domain boundary, use cell to left instead with bc,
                     !ja = k_imj + nD
                     !ja = 2*k_imj 
                     ja = 2*k_imj-1 
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
                     vals(colPtr+4) = vals(colPtr+4) + sa
+                else if (k_ijm > -1) then
+                    ! at left domain boundary, use cell below instead
+                   !ja = k_ijm + nD
+                   !ja = 2*k_ijm
+                   !write(*,*)"shouldnt be in this clause"
+                   ja = 2*k_ijm-1
+                   vals(colPtr+1) = vals(colPtr+1) + sa
+                else if (xlo_db .and. i .eq. 1 .and. .not. ylo_db) then
+                      ! at left boundary, use cell ij instead with bc
+                      !ja = k_ij + nD
+                      !ja = 2*k_ij
+                      ja = 2*k_ij-1
+                      ! no reflection of V at left wall
+                      vals(colPtr+6) = vals(colPtr+6) + sa
                 else
-                    ! bottom-left corner
+                    ! bottom-left corner of domain
                     !ja = k_ij + nD
                     !ja = 2*k_ij
                     ja = 2*k_ij-1
@@ -793,14 +862,20 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*(k_ipjp-1)
                     cols(colPtr+23) = ja
                     vals(colPtr+23) = vals(colPtr+23) + sa
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                else if ((.not. yhi_db .or. j.lt.ny)  .and.   &
+                         (.not. xhi_db .or. i.lt.nx)) then
                     huc = q(4,i+1,j+1)
-                    !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
-                    !rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
                     rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !    huc = q(4,i+1,j+1)
+                !    !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                !    !rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
+                !    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
                 else if (k_ijp > -1) then
-                    ! at right boundary, use cell above instead,
+                    ! at right boundary but not corner
+                    ! use cell above instead,
+                    ! need u bcs.
                     !ja = k_ijp
                     !ja = 2*k_ijp-1
                     ja = 2*(k_ijp-1)
@@ -812,6 +887,13 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     !ja = 2*k_ipj-1
                     ja = 2*(k_ipj-1)
                     vals(colPtr+19) = vals(colPtr+19) + sa
+                else if (yhi_db .and. j .eq. ny .and. .not. xhi_db) then
+                      ! at top right boundary of patch which touches top
+                      ! of domain. Just use u value, no bc for u needed
+                      !ja = k_ij + nD
+                      !ja = 2*k_ij
+                      ja = 2*k_ij-1
+                      vals(colPtr+17) = vals(colPtr+17) + sa
                 else
                     ! top-right corner
                     !ja = k_ij ! FIXED BUG
@@ -831,14 +913,20 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*(k_ipjm-1)
                     cols(colPtr+15) = ja
                     vals(colPtr+15) = vals(colPtr+15) + sa
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                else if ((.not. ylo_db .or. j>1) .and.       &
+                         (.not. xhi_db .or. i .lt. nx)) then
+                    ! interior ghost cell, not touching domain bndry
                     huc = q(4,i+1,j-1)
-                    !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
-                    !rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
                     rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
+                !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
+                !         ((k_ipj == -1) .and. (.not. xhi_db))) then
+                !    huc = q(4,i+1,j-1)
+                !    !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                !    !rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
+                !    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
                 else if (k_ijm > -1) then
-                    ! at right boundary, use cell below instead,
+                    ! at right boundary but not phys domain bottom
+                    ! use cell below instead,
                     !ja = k_ijm
                     !ja = 2*k_ijm-1
                     ja = 2*(k_ijm-1)
@@ -850,6 +938,11 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     !ja = 2*k_ipj-1
                     ja = 2*(k_ipj-1)
                     vals(colPtr+19) = vals(colPtr+19) + sa
+                else if (ylo_db .and. j .eq. 1 .and. .not. xhi_db) then
+                    ! in corner of patch, which touches bottom of domain
+                    ! but not right bndry
+                    ! no reflection of u at bottom wall bndry
+                    vals(colPtr+17) = vals(colptr+17) + sa
                 else
                     ! bottom-right corner
                     !ja = k_ij ! FIXED BUG
@@ -869,14 +962,19 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*(k_imjp-1)
                     cols(colPtr+20) = ja
                     vals(colPtr+20) = vals(colPtr+20) + sa
-                else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. yhi_db .or. j<ny)  &
+                   .and. (.not. xlo_db .or. i>1)) then
                     huc = q(4,i-1,j+1)
-                    !rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
-                    !rhs(2*k_ij) = rhs(2*k_ij)  - sa*huc
                     rhs(2*k_ij-1) = rhs(2*k_ij-1)  - sa*huc
+                !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
+                !         ((k_imj == -1) .and. (.not. xlo_db))) then
+                !    huc = q(4,i-1,j+1)
+                !    !rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
+                !    !rhs(2*k_ij) = rhs(2*k_ij)  - sa*huc
+                !    rhs(2*k_ij-1) = rhs(2*k_ij-1)  - sa*huc
                 else if (k_ijp > -1) then
-                    ! at left boundary, use cell above instead,
+                    ! at left domain boundary but not top bndry
+                    !  use cell above but for u eq apply bcs
                     !ja = k_ijp
                     !ja = 2*k_ijp-1
                     ja = 2*(k_ijp-1)
@@ -888,6 +986,13 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     !ja = 2*k_imj-1
                     ja = 2*(k_imj-1)
                     vals(colPtr+16) = vals(colPtr+16) + sa
+                else if (yhi_db .and. j .eq. ny .and. .not. xlo_db) then
+                      ! at left boundary, use cell ij instead with bc
+                      !ja = k_ij + nD
+                      !ja = 2*k_ij
+                      ja = 2*k_ij-1
+                      ! no reflection of U needed since not at left wall
+                      vals(colPtr+17) = vals(colPtr+17) + sa
                 else
                     ! top-left corner
                     !ja = k_ij !FIXED BUG
@@ -907,12 +1012,16 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     ja = 2*(k_imjm-1)
                     cols(colPtr+12) = ja
                     vals(colPtr+12) = vals(colPtr+12) + sa
-                else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
-                         ((k_imj == -1) .and. (.not. xlo_db))) then
+                else if ((.not. ylo_db .or. j>1)  .and. (.not. xlo_db .or. i>1)) then
+                   ! interior ghost cell. 0 is first interior cell touching bndry
                     huc = q(4,i-1,j-1)
-                    !rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
-                    !rhs(2*k_ij) = rhs(2*k_ij)  - sa*huc
                     rhs(2*k_ij-1) = rhs(2*k_ij-1)  - sa*huc
+                !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
+                !         ((k_imj == -1) .and. (.not. xlo_db))) then
+                !    huc = q(4,i-1,j-1)
+                !    !rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
+                !    !rhs(2*k_ij) = rhs(2*k_ij)  - sa*huc
+                !    rhs(2*k_ij-1) = rhs(2*k_ij-1)  - sa*huc
                 else if (k_ijm > -1) then
                     ! at left boundary, use cell below instead,
                     !ja = k_ijm
@@ -926,6 +1035,15 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     !ja = 2*k_imj-1
                     ja = 2*(k_imj-1)
                     vals(colPtr+16) = vals(colPtr+16) + sa
+                else if (ylo_db .and. j .eq. 1 .and. .not. xlo_db) then
+                      ! at bottom phys domain  boundary
+                      ! in corner of patch, not left phys domain
+                      !ja = k_ij + nD
+                      !ja = 2*k_ij
+                      ja = 2*k_ij-1
+                      ! just use u from cell i-1,j above for v equation
+                      ! dont need u bc
+                      vals(colPtr+17) = vals(colPtr+17) + sa
                 else
                     ! bottom-left corner
                     !ja = k_ij !FIXED BUG
@@ -959,6 +1077,7 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
                     + 2.d0*h_ij*(h_ij/3.d0 * phiy &
                     + phi(i,j) * (hy + 0.5d0*By(i,j)))   &
                     + 0.5d0*h_ij*wy + w(i,j)*etay)
+
                     
               ! if ghost cells in stencil might not be sorted so fix
               ! interior cells numbered so CSR entries are sorted
@@ -1003,13 +1122,37 @@ subroutine buildSparseMatrixSGNcrs(q,qold,aux,soln,rhs,rowPtr,cols,vals,   &
         enddo
 
         if (debug) then ! dump matrix to look for singularity 
-           write(89,*)" level ",levelBouss
-           do k = 1,2*numBoussCells
-              write(89,104) k,rhs(k)
+           !write(89,*)" level ",levelBouss
+           !do k = 1,2*numBoussCells
+           !   write(89,104) k,rhs(k)
  104          format(i5,e16.7)
+           !end do
+           !!close(89)
+           !!stop
+           
+           write(69,*)" grid ",mptr," level ",levelBouss,"i,j,etax,etay,rhsu,rhsv"
+           !do ii = 0, nx+1
+           !do jj = 0, ny+1
+           do ii = 1, nx
+           do jj = 1, ny
+                k_ij = mi%mindex(ii,jj)
+                x = xlow + (ii-.5d0)*dx
+                y = ylow + (jj-.5d0)*dy
+                if (k_ij .ne. -1) then
+                  bu = rhs(2*(k_ij-1))
+                  bv = rhs(2*k_ij-1)
+                  write(69,798) x,y,etaxM(ii,jj),etayM(ii,jj),bu,bv,ii,jj,k_ij
+                else
+                  bu = 0.d0
+                  bv = 0.d0
+                  write(69,798) x,y,etaxM(ii,jj),etayM(ii,jj),bu,bv,ii,jj,k_ij
+                endif
+              !write(69,799) ii,jj,etaxM(ii,jj),etayM(ii,jj),bu,bv
+              !write(69,798) x,y,etaxM(ii,jj),etayM(ii,jj),bu,bv
+ 799          format(2i5,4e15.7)
+ 798          format(6e15.7,3i5)
            end do
-           !close(89)
-           !stop
+           end do
         endif
         
     
@@ -1048,31 +1191,3 @@ subroutine insertionSort(cols,vals)
 
    return
 end subroutine insertionSort
-subroutine insertionSortOrig(cols,vals,indexSt,numBoussCells)
-
-    integer, intent(inout) :: indexSt 
-    integer, intent(inout) :: cols(0:24*numBoussCells)
-    real(kind=8), intent(inout) :: vals(0:24*numBoussCells)
-
-    integer :: i,j, colSave
-    real(kind=8) :: valSave
-
-! in place insertion sort for 12 element, starting index is indexSt
-    do i = indexSt+1, indexSt+11
-      colSave = cols(i)
-      valSave = vals(i)
-
-      do j = i-1, 0, -1
-        if (colSave < cols(j)) then
-           cols(j+1) = cols(j)
-           vals(j+1) = vals(j)
-        else
-            exit
-        endif
-      end do
-      cols(j+1) = colSave 
-      vals(j+1) = valSave
-    end do
-
-   return
-end subroutine insertionSortOrig
