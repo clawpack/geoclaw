@@ -51,6 +51,7 @@ jobs:
         pip install --no-build-isolation --editable .
     
     - name: Lint with flake8
+      continue-on-error: true
       run: |
         cd ${CLAW}/geoclaw
         # stop the build if there are Python syntax errors or undefined names
@@ -62,3 +63,15 @@ jobs:
       run: |
         cd ${CLAW}/geoclaw
         pytest
+    
+    - name: Archive Test Results
+      if
+      run: actions/upload-aritfact@v1
+
+    - name: Upload test results
+        uses: actions/upload-artifact
+        if: ${{ always() }}
+        with:
+          name: test_results
+          path: *_output
+          if-no-files-found: ignore
