@@ -1067,7 +1067,7 @@ class Storm(object):
                 data_file.write(f"{num_casts}\n")
                 if isinstance(self.time_offset, datetime.datetime):
                     data_file.write(f"{np.datetime_as_string(self.time_offset, 
-                                                             unit="s")}\n\n")
+                                                             unit='s')}\n\n")
                 else:
                     data_file.write(f"{str(self.time_offset)}\n\n")
 
