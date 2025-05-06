@@ -63,10 +63,6 @@ jobs:
       run: |
         cd ${CLAW}/geoclaw
         pytest
-    
-    - name: Archive Test Results
-      if
-      run: actions/upload-aritfact@v1
 
     - name: Upload test results
         uses: actions/upload-artifact
