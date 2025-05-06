@@ -74,5 +74,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test_results
-        path: ${CLAW}/geoclaw/*_output
+        path: ${CLAW}/geoclaw/*_output/
         if-no-files-found: ignore
