@@ -56,19 +56,17 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude old_dtopotools.py
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      continue-on-error: true
     
     - name: Test with pytest
       run: |
         cd ${CLAW}/geoclaw
         pytest
-      continue-on-error: true
 
-    # - name: Upload pytest test results
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: test_results
-    #     path: *_output
-    #     if-no-files-found: ignore
-    #   if: ${{ always() }}
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_results
+        path: *_output
+        if-no-files-found: ignore
+      if: ${{ always() }}
       
