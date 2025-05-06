@@ -62,7 +62,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test_results
-        path: $CLAW/geoclaw/README.txt
+        path: /home/runner/work/geoclaw/geoclaw/geoclaw/README.txt
         if-no-files-found: error
 
     - name: Lint with flake8
