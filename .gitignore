@@ -10,8 +10,8 @@ xamr
 xgeoclaw
 xgeoclaw.dSYM
 *.html
-_output/
-_plots/
+*_output/
+*_plots/
 *~
 *.asc
 *.tt3
