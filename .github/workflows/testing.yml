@@ -65,9 +65,10 @@ jobs:
         pytest
 
     - name: Upload test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: test_results
-          path: *_output
-          if-no-files-found: ignore
-        if: ${{ always() }}
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_results
+        path: *_output
+        if-no-files-found: ignore
+      
