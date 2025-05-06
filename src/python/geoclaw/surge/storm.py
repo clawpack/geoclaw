@@ -1065,7 +1065,7 @@ class Storm(object):
             with open(path, "w") as data_file:
                 # Write header
                 data_file.write(f"{num_casts}\n")
-                if isinstance(self.time_offset, datetime.datetime):
+                if isinstance(self.time_offset, np.datetime64):
                     data_file.write(\
                       f"{np.datetime_as_string(self.time_offset,unit='s')}\n\n")
                 else:
