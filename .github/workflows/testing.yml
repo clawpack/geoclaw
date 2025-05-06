@@ -49,22 +49,6 @@ jobs:
         cd ${CLAW}
         pip install --no-build-isolation --editable .
 
-    - name: See directory test structure
-      if: always()
-      run: |
-        cd ${CLAW}/geoclaw/
-        ls .
-        pwd
-    
-    - name: Upload test results
-      # if: failure()
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test_results
-        path: ${{ env.CLAW }}/geoclaw/README.txt
-        if-no-files-found: error
-
     - name: Lint with flake8
       run: |
         cd ${CLAW}/geoclaw
@@ -77,4 +61,12 @@ jobs:
       run: |
         cd ${CLAW}/geoclaw
         pytest
+    
+    - name: Upload test results
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_results
+        path: ${{ env.CLAW }}/geoclaw/*_output
+        if-no-files-found: ignore
 
