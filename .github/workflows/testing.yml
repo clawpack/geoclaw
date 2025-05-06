@@ -64,11 +64,15 @@ jobs:
         cd ${CLAW}/geoclaw
         pytest
 
-    - name: Upload test results
-      if: ${{ always() }}
+    - name: Test
+      run: |
+        echo $CLAW
+
+    - name: Upload pytest test results
       uses: actions/upload-artifact@v4
       with:
         name: test_results
         path: *_output
         if-no-files-found: ignore
+      if: ${{ always() }}
       
