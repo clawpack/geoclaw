@@ -62,7 +62,7 @@ jobs:
         cd ${CLAW}/geoclaw
         pytest
 
-    -name: See directory test structure
+    - name: See directory test structure
       if: always()
       run: |
         cd ${CLAW}/geoclaw/
