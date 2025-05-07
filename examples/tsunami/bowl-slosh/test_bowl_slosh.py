@@ -20,21 +20,8 @@ class BowlSloshTest(test.GeoClawRegressionTest):
 
     r"""Bowl-Slosh regression test for GeoClaw"""
 
-    def setUp(self):
-
-        super(BowlSloshTest, self).setUp()
-
-        # fgmax_grids.data created by setrun.py now contains all info
-        #from . import make_fgmax_grid 
-        #make_fgmax_grid.make_fgmax_grid1(self.temp_path)
-
-
     def runTest(self, save=False, indices=(2, 3)):
-        r"""Test bowl-slosh example
-
-        Note that this stub really only runs the code and performs no tests.
-
-        """
+        r"""Test bowl-slosh example"""
 
         # Write out data files
         self.load_rundata()
@@ -47,10 +34,8 @@ class BowlSloshTest(test.GeoClawRegressionTest):
 
         # == fgmax.data values ==
         self.rundata.fgmax_data.num_fgmax_val = 2
-        fgmax_grids = self.rundata.fgmax_data.fgmax_grids  # empty list to start
-        # Now append to this list objects of class fgmax_tools.FGmaxGrid
-        # specifying any fgmax grids.
-
+        fgmax_grids = self.rundata.fgmax_data.fgmax_grids
+        
         fg = fgmax_tools.FGmaxGrid()
         fg.point_style = 2       # will specify a 2d grid of points
         fg.x1 = -2.
