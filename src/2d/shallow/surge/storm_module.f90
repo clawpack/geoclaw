@@ -129,7 +129,7 @@ contains
         ! Locals
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
-        character(len=256) :: storm_file_path, line, 
+        character(len=256) :: storm_file_path, line
         character(len=256) :: wind_file_path, pressure_file_path
         
         if (.not.module_setup) then

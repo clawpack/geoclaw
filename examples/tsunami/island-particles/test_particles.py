@@ -3,38 +3,21 @@
 r"""Particles regression test for GeoClaw
 
 To create new regression data use
-    `python regression_tests.py True`
+    `python test_particles.py True`
 """
 
-from __future__ import absolute_import
-import os
 import sys
 import unittest
 import shutil
 
-import numpy
+import numpy as np
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 
 
 class ParticlesTest(test.GeoClawRegressionTest):
-
     r"""Particles regression test for GeoClaw"""
-
-    def setUp(self):
-
-        super(ParticlesTest, self).setUp()
-        start_dir = os.getcwd()
-
-        # Make topography
-
-        shutil.copy(os.path.join(self.test_path, "maketopo.py"),
-                                 self.temp_path)
-        os.chdir(self.temp_path)
-        os.system('python maketopo.py')
-        os.chdir(start_dir)
-
 
     def runTest(self, save=False, indices=(2, 3)):
         r"""Test particles example
@@ -43,18 +26,33 @@ class ParticlesTest(test.GeoClawRegressionTest):
 
         """
 
+        # Create topo and qinit
+        import maketopo
+        maketopo.maketopo(self.temp_path)
+        maketopo.makeqinit(self.temp_path)
+
         # Write out data files
         self.load_rundata()
+
+        self.rundata.clawdata.num_output_times = 1
+        self.rundata.clawdata.tfinal = 6.0
+
+        self.rundata.amrdata.refinement_ratios_x = [2, 2]
+        self.rundata.amrdata.refinement_ratios_y = [2, 2]
+        self.rundata.amrdata.refinement_ratios_t = [2, 2]
+
+
+        self.rundata.gaugedata.gauges = []
+        self.rundata.gaugedata.gtype = {}
+        self.rundata.gaugedata.gauges.append([1, 15., 20., 0., 1e10])
+        self.rundata.gaugedata.gtype[1] = 'stationary'
+        self.rundata.gaugedata.gauges.append([2, 15., 30., 0., 1e10])
+        self.rundata.gaugedata.gtype[2] = 'lagrangian'
+
         self.write_rundata_objects()
 
         # Run code
         self.run_code()
-
-        import clawpack.pyclaw.gauges as gauges
-        gauge = gauges.GaugeSolution(1, path=self.temp_path)
-        print('+++ Gauge 1:\n', gauge.q)
-        gauge = gauges.GaugeSolution(2, path=self.temp_path)
-        print('+++ Gauge 2:\n', gauge.q)
 
         # Perform tests
         self.check_gauges(save=save, gauge_id=1, indices=(1, 2))
