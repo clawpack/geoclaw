@@ -6,6 +6,7 @@ Primarily tests all of the input formats GeoClaw handles
 
 from pathlib import Path
 import os
+import sys
 import gzip
 import unittest
 import pytest
@@ -47,9 +48,6 @@ class IsaacStormSurgeRun(test.GeoClawRegressionTest):
             raise ValueError(f"Invalid test file fromat {self.file_format}.")
         self.file_format = file_format
 
-    def setUp(self):
-
-
     def runTest(self, save=False):
 
         # Write out data files
@@ -87,12 +85,12 @@ class IsaacStormSurgeRun(test.GeoClawRegressionTest):
             isaac.data_file_format = 'NWS12'
             isaac.file_paths = [Path.cwd() / "isaac.PRE",
                                 Path.cwd() / "isaac.WIN"]
-            isaac.write(data.storm_file, file_format='OWI')
+            isaac.write(clawutil.data.storm_file, file_format='OWI')
         elif self.file_format.lower == "owi_netcdf":
             surge_data.storm_specification_type = 'OWI'
             isaac.data_file_format = "NWS13"
             isaac.file_paths = [self.test_path / "isaac.nc"]
-            isaac.write(data.storm_file, file_format='OWI')
+            isaac.write(clawutil.data.storm_file, file_format='OWI')
 
         self.write_rundata_objects()
 

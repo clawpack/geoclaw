@@ -47,7 +47,7 @@ def setplot(plotdata=None):
         ylabel('meters', fontsize=14)
 
         if current_data.frameno == 0:
-            text(-80,-0.4,'$\longrightarrow$',fontsize=20)
+            text(-80,-0.4,r'$\longrightarrow$',fontsize=20)
             text(-80,-0.6,'Incident')
         h = current_data.q[0,:]
         mx2 = int(round(len(h)/2.))

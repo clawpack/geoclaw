@@ -81,15 +81,16 @@ def setplot(plotdata=None, bathy_location=0.15, bathy_angle=0.0,
     # ========================================================================
     #  Generic helper functions
     def pcolor_afteraxes(current_data):
-        bathy_ref_lines(current_data)
+        pass
+        # bathy_ref_lines(current_data)
 
     def contour_afteraxes(current_data):
         axes = plt.gca()
         pos = -80.0 * (23e3 / 180) + 500e3 - 5e3
         axes.plot([pos, pos], [-300e3, 300e3], 'b',
                   [pos-5e3, pos-5e3], [-300e3, 300e3], 'y')
-        wind_contours(current_data)
-        bathy_ref_lines(current_data)
+        # wind_contours(current_data)
+        # bathy_ref_lines(current_data)
 
     def profile_afteraxes(current_data):
         pass
@@ -274,39 +275,40 @@ def setplot(plotdata=None, bathy_location=0.15, bathy_angle=0.0,
 
     # Internal surface
     def bathy_profile(current_data):
-        return current_data.x[:, slice_index], b(current_data)[:, slice_index]
+        return current_data.x[:, slice_index],      \
+                ml_plot.b(current_data)[:, slice_index]
 
     def lower_surface(current_data):
         if multilayer_data.init_type == 2:
             return current_data.x[:, slice_index],    \
-                    eta2(current_data)[:, slice_index]
+                    ml_plot.eta2(current_data)[:, slice_index]
         elif multilayer_data.init_type == 6:
             return current_data.y[slice_index, :],    \
-                    eta2(current_data)[slice_index, :]
+                    ml_plot.eta2(current_data)[slice_index, :]
 
     def upper_surface(current_data):
         if multilayer_data.init_type == 2:
             return current_data.x[:, slice_index],    \
-                    eta1(current_data)[:, slice_index]
+                    ml_plot.eta1(current_data)[:, slice_index]
         elif multilayer_data.init_type == 6:
             return current_data.y[slice_index, :],    \
-                    eta1(current_data)[slice_index, :]
+                    ml_plot.eta1(current_data)[slice_index, :]
 
     def top_speed(current_data):
         if multilayer_data.init_type == 2:
             return current_data.x[:, slice_index],    \
-                    water_u1(current_data)[:, slice_index]
+                    ml_plot.water_u1(current_data)[:, slice_index]
         elif multilayer_data.init_type == 6:
             return current_data.y[slice_index, :],    \
-                    water_u1(current_data)[slice_index, :]
+                    ml_plot.water_u1(current_data)[slice_index, :]
 
     def bottom_speed(current_data):
         if multilayer_data.init_type == 2:
             return current_data.x[:, slice_index],    \
-                    water_u2(current_data)[:, slice_index]
+                   ml_plot. water_u2(current_data)[:, slice_index]
         elif multilayer_data.init_type == 6:
             return current_data.y[slice_index, :],    \
-                    water_u2(current_data)[slice_index, :]
+                    ml_plot.water_u2(current_data)[slice_index, :]
 
     # Bathy
     plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
