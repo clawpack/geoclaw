@@ -28,7 +28,7 @@ scratch_dir = CLAW / 'geoclaw' / 'scratch'
 DART_32412_location = (-86.392, -17.975)
 
 
-def get_topo(path=None, makeplots=False):
+def get_topo(path=None, verbose=False, makeplots=False):
     """
     Retrieve the topo file from the GeoClaw repository.
     """
@@ -39,7 +39,7 @@ def get_topo(path=None, makeplots=False):
     topo_fname = 'etopo10min120W60W60S0S.asc'
     url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
     clawpack.clawutil.data.get_remote_file(url, output_dir=path, 
-            file_name=topo_fname, verbose=True)
+            file_name=topo_fname, verbose=verbose)
 
     if makeplots:
         import matplotlib.pyplot as plt
@@ -55,12 +55,10 @@ def makeqinit(path=None, center=None):
         Create qinit data file
     """
 
-    if not center:
-        center = DART_32412_location
     if not path:
         path = Path()
-    else:
-        path = Path(path)
+    if not center:
+        center = DART_32412_location
 
     nxpoints = 201
     nypoints = 201
@@ -84,5 +82,5 @@ def qinit(x, y, center=None):
     return np.exp(-(r / 20e3)**2)
 
 if __name__=='__main__':
-    get_topo(False)
+    get_topo(makeplots=False)
     makeqinit()

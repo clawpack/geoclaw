@@ -2,6 +2,7 @@
 Test for the adjoint problem for a tsunami
 """
 
+from pathlib import Path
 import sys
 import unittest
 
@@ -12,9 +13,12 @@ class Chile2010AdjointTest(test.GeoClawRegressionTest):
     def runTest(self, save=False):
 
         # Make topography and qinit
-        import maketopo
-        maketopo.get_topo(path=self.temp_path)
-        maketopo.makeqinit(path=self.temp_path, center=(-76.0, -36.0))
+        sys.path.insert(0, self.test_path)
+        import maketopo_adjoint
+        maketopo_adjoint.get_topo(path=Path(self.temp_path))
+        maketopo_adjoint.makeqinit(path=Path(self.temp_path), 
+                                   center=(-76.0, -36.0))
+        # sys.path.pop(0)
 
         # Write out data files
         self.load_rundata()
