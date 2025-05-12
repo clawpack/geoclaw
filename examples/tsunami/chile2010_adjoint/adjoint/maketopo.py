@@ -4,75 +4,84 @@
     Call functions with makeplots==True to create plots of topo, slip, and dtopo.
 """
 
-from __future__ import print_function
-import os,sys
+from pathlib import Path
+import os
+import sys
+
+import numpy as np
+
 import clawpack.clawutil.data
-from clawpack.geoclaw import topotools
-from numpy import *
+import clawpack.geoclaw.topotools as topotools
+from clawpack.geoclaw.util import haversine
 
 try:
-    CLAW = os.environ['CLAW']
+    CLAW = Path(os.environ['CLAW'])
 except:
     raise Exception("*** Must first set CLAW enviornment variable")
 
 # Scratch directory for storing topo and dtopo files:
-scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
+scratch_dir = CLAW / 'geoclaw' / 'scratch'
 
 
 # Initial data for adjoint is Gaussian hump around this location:
 # DART 32412 location:
-xcenter = -86.392
-ycenter = -17.975
+DART_32412_location = (-86.392, -17.975)
 
 
-def get_topo(makeplots=False):
+def get_topo(path=None, makeplots=False):
     """
     Retrieve the topo file from the GeoClaw repository.
     """
-    from clawpack.geoclaw import topotools
+
+    if not path:
+        path = scratch_dir
+
     topo_fname = 'etopo10min120W60W60S0S.asc'
     url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
-    clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
+    clawpack.clawutil.data.get_remote_file(url, output_dir=path, 
             file_name=topo_fname, verbose=True)
 
     if makeplots:
-        from matplotlib import pyplot as plt
-        topo = topotools.Topography(os.path.join(scratch_dir,topo_fname), 
-                                    topo_type=2)
+        import matplotlib.pyplot as plt
+        topo = topotools.Topography(path / topo_fname, topo_type=2)
         topo.plot()
-        fname = os.path.splitext(topo_fname)[0] + '.png'
+        fname = topo_fname.with_suffix('.png')
         plt.savefig(fname)
-        print("Created ",fname)
+        print("Created ", fname)
 
 
-def makeqinit():
+def makeqinit(path=None, center=None):
     """
         Create qinit data file
     """
-    
+
+    if not center:
+        center = DART_32412_location
+    if not path:
+        path = Path()
+    else:
+        path = Path(path)
+
     nxpoints = 201
     nypoints = 201
     
-    xlower = xcenter - 1.5
-    xupper = xcenter + 1.5
-    ylower = ycenter - 1.5
-    yupper = ycenter + 1.5
+    xlower = center[0] - 1.5
+    xupper = center[0] + 1.5
+    ylower = center[1] - 1.5
+    yupper = center[1] + 1.5
     
-    outfile= "hump.xyz"     
-    topotools.topo1writer(outfile,qinit,xlower,xupper,ylower,yupper,nxpoints,nypoints)
+    outfile = path / "hump.xyz"
+    topotools.topo1writer(outfile, lambda x, y: qinit(x, y, center=center), 
+                            xlower, xupper, ylower, yupper, nxpoints, nypoints)
 
-def qinit(x,y):
-    from numpy import where
-    from clawpack.geoclaw.util import haversine
+def qinit(x, y, center=None):
 
-    #radius = 1.0e0
-    #ze = sqrt((x-xcenter)**2 + (y-ycenter)**2)
-    #z = where(ze<radius, 1.0e0, 0.e0)
+    if not center:
+        center = DART_32412_location
 
     # Gaussian using distance in meters:
-    r = haversine(x,y,xcenter,ycenter)
-    z = exp(-(r/20e3)**2)
-    return z
+    r = haversine(x, y, center[0], center[1])
+    return np.exp(-(r / 20e3)**2)
 
 if __name__=='__main__':
     get_topo(False)
