@@ -6,81 +6,79 @@ To create new regression data use
     `python regression_tests.py True`
 """
 
-from __future__ import absolute_import
+from pathlib import Path
 import os
 import sys
 import unittest
 import shutil
 
-import numpy
+import numpy as np
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
-from clawpack.clawutil.test import wip
 
+from adjoint.test_chile2010_adjoint import Chile2010AdjointTest
+# import adjoint.maketopo as adjoint_maketopo
 
 try:
-    CLAW = os.environ['CLAW']
+    CLAW = Path(os.environ['CLAW'])
 except:
     raise Exception("*** Must first set CLAW enviornment variable")
 
 # Scratch directory for storing topo and dtopo files:
-scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
+scratch_dir = CLAW / 'geoclaw' / 'scratch'
 
-thisfile = os.path.realpath(__file__)
-testdir = os.path.split(thisfile)[0]
-
-
-class Chile2010AdjointTest(test.GeoClawRegressionTest):
-
+class Chile2010AdjointForwardTest(test.GeoClawRegressionTest):
     r"""Chile2010AdjointTest regression test for GeoClaw"""
 
-    def setUp(self):
-
-        super(Chile2010AdjointTest, self).setUp()
-
-        start_dir = os.getcwd()
-        test_adjoint_path = os.path.join(self.test_path, 'adjoint')
-        temp_adjoint_path = os.path.join(self.temp_path, 'adjoint')
-        #print('+++ test_adjoint_path = ',test_adjoint_path)
-        #print('+++ temp_adjoint_path = ',temp_adjoint_path)
-
-        shutil.copytree(test_adjoint_path, temp_adjoint_path)
-
-        # run adjoint code
-        os.chdir(temp_adjoint_path)
-        #print('+++ Running adjoint in directory ',os.getcwd())
-        #print('+++   contents: ', os.listdir('.'))
-        os.system('make -s topo')
-        os.system('make -s data')
-        os.system('make -s new')
-        os.system('make .output > output.txt')
-        #print('+++   contents of _output: ', os.listdir('_output'))
-
-        # set up forward code
-        shutil.copy(os.path.join(self.test_path, "maketopo.py"),
-                                 self.temp_path)
-        os.chdir(self.temp_path)
-        #print('+++ Running forward in directory ',os.getcwd())
-        #print('+++   contents: ', os.listdir())
-        os.system('python maketopo.py')
-        #print('+++   scratch directory: ', scratch_dir)
-        #print('+++   contents of scratch: ', os.listdir(scratch_dir))
-        os.chdir(start_dir)
-
-
     def runTest(self, save=False, indices=(2, 3)):
-        r"""Test chile2010_adjoint example
+        r"""Test chile2010_adjoint example"""
 
-        Note that this stub really only runs the code and performs no tests.
+        # Run adjoint problem
+        try:
+            adjoint_run = Chile2010AdjointTest()    
+            adjoint_run.setUp()
+            adjoint_run.runTest()
+            
+            # Copy output to local directory
+            adjoint_output = Path(self.temp_path) / "_adjoint_output"
 
-        """
+            if adjoint_output.exists():
+                shutil.rmtree(adjoint_output)
+            shutil.copytree(adjoint_run.temp_path, adjoint_output)
+        finally:
+            adjoint_run.tearDown()
+
+        # Make topo and dtopo
+        import maketopo
+        maketopo.get_topo(path=Path(self.temp_path))
+        maketopo.make_dtopo(path=Path(self.temp_path))
 
         # Write out data files
         self.load_rundata()
-        temp_adjoint_path = os.path.join(self.temp_path, 'adjoint')
-        self.rundata.adjointdata.adjoint_outdir = \
-             os.path.join(temp_adjoint_path, '_output')
+
+        self.rundata.clawdata.num_output_times = 2
+        self.rundata.clawdata.tfinal = 3600.
+
+        self.rundata.amrdata.flag2refine_tol = 0.0005
+
+        self.rundata.regiondata.regions = []
+        # all 3 levels anywhere, based on flagging:
+        self.rundata.regiondata.regions.append([1, 3, 0., 1e9, -220,0,-90,90])
+
+        # earthquake source region - force refinement initially:
+        # dtopo region, replacing minlevel in dtopofile specification:
+        self.rundata.regiondata.regions.append([3, 3, 0., 10., -77,-67,-40,-30])
+        # later times from original test:
+        self.rundata.regiondata.regions.append([3, 3, 0., 200., -85,-70,-38,-25])
+
+        self.rundata.flagregiondata.flagregions = []
+
+        self.rundata.gaugedata.gauges = []
+        self.rundata.gaugedata.gauges.append([1, -76, -36., 0., 1.e10])
+
+        self.rundata.adjointdata.adjoint_outdir = adjoint_output.resolve()
+
         self.write_rundata_objects()
 
         # Run code
@@ -95,7 +93,7 @@ if __name__=="__main__":
     if len(sys.argv) > 1:
         if bool(sys.argv[1]):
             # Fake the setup and save out output
-            test = Chile2010AdjointTest()
+            test = Chile2010AdjointForwardTest()
             try:
                 test.setUp()
                 test.runTest(save=True)
