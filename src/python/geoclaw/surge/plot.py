@@ -221,8 +221,9 @@ def b(cd):
 
 
 def extract_eta(h, eta, DRY_TOL=1e-3):
-    index = np.nonzero((np.abs(h) < DRY_TOL) + (h == np.nan))
-    eta[index[0], index[1]] = np.nan
+    index = np.nonzero((np.abs(h) < DRY_TOL) + (h == np.nan))[0]
+    if len(index.shape) > 1:
+        eta[index[0], index[1]] = np.nan
     return eta
 
 

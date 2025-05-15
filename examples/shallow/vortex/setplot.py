@@ -25,6 +25,22 @@ c2 = 0.02
 alpha = np.pi / 6.
 x0 = -20.
 y0 = -10.
+
+def extract_vorticity(delta, u, v):
+    """Computes the vorticity given the velocities u and v
+    The boundaries are left as zero, but one-sided differences could be used
+    to compute there.
+    """
+    omega = np.zeros(u.shape)
+    omega[1:-1, 1:-1] += (v[2:,1:-1] - v[:-2,1:-1]) / (2.0 * delta[0])
+    omega[1:-1, 1:-1] -= (u[1:-1,2:] - u[1:-1,:-2]) / (2.0 * delta[1])
+    return omega
+
+def water_vorticity(cd):
+    delta = [cd.x[1, 0] - cd.x[0, 0], cd.y[0, 1] - cd.y[0, 0]]
+    return extract_vorticity(delta, surgeplot.water_u(cd), 
+                                    surgeplot.water_v(cd))
+
 def exact_solution(x, y, t):
     f = lambda x,y,t: -c2*((x-x0-M*t*np.cos(alpha))**2+(y-y0-M*t*np.sin(alpha))**2)
     h = lambda x,y,t: 1.-c1**2/(4.*c2*g)*np.exp(2.*f(x,y,t))
@@ -56,14 +72,39 @@ def speed_error(cd):
     return speed - np.sqrt(u**2 + v**2)
 
 def vorticity_error(cd):
-    omega = surgeplot.water_vorticity(cd)
+    omega = water_vorticity(cd)
     # h, u, v = exact_solution(cd.x, cd.y, cd.t)
     # delta = [cd.x[1, 0] - cd.x[0, 0], cd.y[0, 1] - cd.y[0, 0]]
     # exact_omega = surgeplot.extract_vorticity(delta, u, v)
     exact_omega = exact_vorticity(cd.x, cd.y, cd.t)
     return omega - exact_omega
 
-# Setplot
+def add_vorticity(plotaxes, plot_type="pcolor", bounds=None, contours=None, shrink=1.0):
+    """Add vorticity plot to plotaxes"""
+
+    vorticity_cmap = plt.get_cmap('PRGn')
+
+    if plot_type == 'pcolor' or plot_type == 'imshow':
+        plotitem = plotaxes.new_plotitem(name='surface', plot_type='2d_pcolor')
+        plotitem.plot_var = water_vorticity
+
+        if bounds is not None:
+            if bounds[0] == 0.0:
+                plotitem.pcolor_cmap = plt.get_cmap('OrRd')
+            else:
+                plotitem.pcolor_cmap = vorticity_cmap
+            plotitem.pcolor_cmin = bounds[0]
+            plotitem.pcolor_cmax = bounds[1]
+        plotitem.add_colorbar = True
+        plotitem.colorbar_shrink = shrink
+        plotitem.colorbar_label = "Vorticity (1/s)"
+        plotitem.amr_celledges_show = [0] * 10
+        plotitem.amr_patchedges_show = [1, 1, 1, 0, 0, 0, 0]
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
+
+
+
 def setplot(plotdata=None):
     """"""
 
@@ -136,7 +177,7 @@ def setplot(plotdata=None):
     plotaxes.xlimits = domain_limits[0]
     plotaxes.ylimits = domain_limits[1]
 
-    surgeplot.add_vorticity(plotaxes, bounds=vorticity_limits)
+    add_vorticity(plotaxes, bounds=vorticity_limits)
     plotaxes.plotitem_dict['surface'].amr_patchedges_show = [0] * 10
 
     # ========================================================================
