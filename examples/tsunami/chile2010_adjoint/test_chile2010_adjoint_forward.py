@@ -18,7 +18,6 @@ import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 
 from adjoint.test_chile2010_adjoint import Chile2010AdjointTest
-# import adjoint.maketopo as adjoint_maketopo
 
 try:
     CLAW = Path(os.environ['CLAW'])
