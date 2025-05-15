@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import unittest
 
-import numpy
+import numpy as np
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
@@ -61,8 +61,8 @@ class BowlSloshTest(test.GeoClawRegressionTest):
 
         topo = topotools.Topography(topo_func=topo_func)
         topo.topo_type = 2
-        topo.x = numpy.linspace(-2.0, 2.0, 200)
-        topo.y = numpy.linspace(-2.0, 2.0, 200)
+        topo.x = np.linspace(-2.0, 2.0, 200)
+        topo.y = np.linspace(-2.0, 2.0, 200)
         topo.write(Path(self.temp_path) / "bowl.topotype2", topo_type=2, 
                                                             Z_format="%22.15e")
 
