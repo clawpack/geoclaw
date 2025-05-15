@@ -140,7 +140,7 @@ class Storm(object):
     *TODO:*  Add description of unit handling
 
     :Attributes:
-     - *t* (list(float) or list(np.datetiem64)) Contains the time at which
+     - *t* (list(float) or list(np.datetime64)) Contains the time at which
        each entry of the other arrays are at.  These are expected to
        be *datetime64* objects. Note that when written some formats require
        a *time_offset* to be set.
@@ -154,7 +154,7 @@ class Storm(object):
        are Pascals.
      - *storm_radius* (ndarray(:)) Radius of storm, often defined as the last
        closed iso-bar of pressure.  Default units are meters.
-     - *time_offset* (np.datetiem64) A date time that as an offset for the
+     - *time_offset* (np.datetime64) A date time that as an offset for the
        simulation time.  This will default to the beginning of the first of
        the year that the first time point is found in.
      - *wind_speeds* (ndarray(:, :)) Wind speeds defined in every record, such
@@ -231,7 +231,7 @@ class Storm(object):
         output = f"Name: {self.name}\n"
         if self.t is None and self.time_offset is not None:
             output += f"Time offset: {self.time_offset}\n"
-        elif isinstance(self.t[0], np.datetiem64):
+        elif isinstance(self.t[0], np.datetime64):
             output += f"Dates: {self.t[0].isoformat()}"
             output += f" - {self.t[-1].isoformat()}\n"
         else:
