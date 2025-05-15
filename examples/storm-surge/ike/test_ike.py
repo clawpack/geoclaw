@@ -5,11 +5,13 @@
 from pathlib import Path
 import sys
 import unittest
+import urllib
 import gzip
 
 import numpy as np
 
 import clawpack.geoclaw.test as test
+import clawpack.clawutil.data
 import clawpack.geoclaw.topotools
 from clawpack.geoclaw.surge import storm
 
@@ -29,21 +31,15 @@ class IkeStormSurgeTest(test.GeoClawRegressionTest):
         """        
 
         # Download and write out storm
-        # :TODO: store this locally so we do not depend on downloading this file
         remote_url = "http://ftp.nhc.noaa.gov/atcf/archive/2008/bal092008.dat.gz"
         try:
-            path = Path(self.get_remote_file(remote_url, unpack=False))
+            atcf_path = Path(clawpack.clawutil.data.get_remote_file(remote_url))
         except urllib.error.URLError as e:
             pytest.skip(f"Could not fetch remote file {remote_url}.")
-        atcf_path = path.with_suffix('')
-        storm_path = path.parent / 'ike.storm'
-        with gzip.GzipFile(path, 'r') as gzip_file:
-            file_content = gzip_file.read()
-        with open(atcf_path, 'wb') as out_file:
-            out_file.write(file_content)
-        ike = storm.Storm(atcf_path, file_format='ATCF', verbose=True)
+        storm_path = Path(self.temp_path) / 'ike.storm'
+        ike = storm.Storm(atcf_path, file_format='ATCF')
         ike.time_offset = np.datetime64("2008-09-13T07")
-        ike.write(storm_path)
+        ike.write(storm_path, file_format="geoclaw")
 
         # Create synthetic bathymetry
         topo = clawpack.geoclaw.topotools.Topography()
@@ -62,7 +58,7 @@ class IkeStormSurgeTest(test.GeoClawRegressionTest):
         self.rundata.clawdata.tfinal = 60.0**2 * 24.0
         self.rundata.clawdata.num_output_times = 1
 
-        self.rundata.surge_data.storm_file = storm_path
+        # self.rundata.surge_data.storm_file = storm_path
         self.write_rundata_objects()
 
         # Run code
