@@ -484,6 +484,7 @@ def bathy_step(x, y, location=0.15, angle=0.0, left=-1.0, right=-0.2):
 
 
 def write_topo_file(run_data, out_file, **kwargs):
+
     # Make topography
     topo_func = lambda x, y: bathy_step(x, y, **kwargs)
     topo = tt.Topography(topo_func=topo_func)
@@ -496,7 +497,7 @@ def write_topo_file(run_data, out_file, **kwargs):
     topo.write(out_file)
 
     # Write out simple bathy geometry file for communication to the plotting
-    with open("./bathy_geometry.data", 'w') as bathy_geometry_file:
+    with open(out_file.parent / "bathy_geometry.data", 'w') as bathy_geometry_file:
         if "location" in kwargs:
             location = kwargs['location']
         else:
@@ -518,4 +519,4 @@ if __name__ == '__main__':
 
     rundata.write()
 
-    write_topo_file(rundata, 'topo.tt2')
+    write_topo_file(rundata, Path() / 'topo.tt2')

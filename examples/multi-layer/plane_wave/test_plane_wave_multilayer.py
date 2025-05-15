@@ -23,21 +23,6 @@ class PlaneWaveMultilayerTest(test.GeoClawRegressionTest):
 
     """
 
-    def setUp(self):
-
-        super(PlaneWaveMultilayerTest, self).setUp()
-
-        # Make topography
-        # import setrun
-        # setrun.write_topo_file()
-        # topo_func = lambda x, y: setrun.bathy_step(x, y, location=0.15,
-        #                                           angle=np.pi / 8.0,
-        #                                           left=-1.0, right=-0.2)
-        # topo = topotools.Topography(topo_func=topo_func)
-        # topo.x = np.linspace(-1.16, 2.16, 166)
-        # topo.y = np.linspace(-1.16, 2.16, 166)
-        # topo.write(Path(self.temp_path) / "jump_topo.topotype2")
-
     def runTest(self, save=False):
         r"""Test multi-layer basic plane-waves."""
 
