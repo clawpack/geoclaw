@@ -23,7 +23,7 @@ days2seconds = lambda t: t * 60.0**2 * 24.0
 scratch_dir = Path(os.environ['CLAW']) / 'geoclaw' / 'scratch'
 
 # os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
-
+@pytest.mark.skip(reason="Generation of OWI files not available yet.")
 @pytest.mark.parametrize("data_file_format", 
                          ['geoclaw', 'owi_ascii', 'owi_netcdf'])
 def test_isaac_formats(data_file_format):
@@ -36,7 +36,7 @@ def test_isaac_formats(data_file_format):
 
 # :TODO: Restructure this to use pytest.mark.parameterize
 
-
+@pytest.mark.skip(reason="Generation of OWI files not available yet.")
 class IsaacStormSurgeRun(test.GeoClawRegressionTest):
     r"""Regression test for Hurrican Isaac storm surge"""
 

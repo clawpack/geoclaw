@@ -5,7 +5,7 @@ import pytest
 
 import numpy as np
 
-import clawpack.geoclaw.surge.storm
+from clawpack.geoclaw.surge.storm import Storm
 
 data_file_format_map = {1: ["ascii", 1, "nws12"], 
                         2: ["netcdf", 2, "nws13"]}
@@ -17,9 +17,9 @@ def test_geoclaw_storm():
 
 @pytest.mark.parametrize("data_file_format", 
                          ['ascii', 'netcdf', 1, 2, 'nws12', 'nws13'])
-def test_OWI_storm(data_file_format):
+def test_OWI_storm(data_file_format, tmp_path):
     """Test of Storm OWI formatted I/O"""
-    storm = clawpack.geoclaw.surge.storm.Storm()
+    storm = Storm()
     storm.time_offset = np.datetime64("2012-08-29")
     storm.data_file_format = data_file_format
     if data_file_format in ['ascii', 1, 'nws12']:
@@ -27,9 +27,9 @@ def test_OWI_storm(data_file_format):
                             Path("storm_2.PRE"), Path("storm_2.WIN")]
     else:
         storm.file_paths = [Path("storm.nc")]
-    storm.write(Path("test.storm"), file_format="OWI")
-    read_storm = clawpack.geoclaw.surge.storm.Storm(Path("test.storm"), 
-                                                    file_format="OWI")
+    storm_path = tmp_path / "test.storm"
+    storm.write(storm_path, file_format="OWI")
+    read_storm = Storm(storm_path, file_format="OWI")
     assert (storm.time_offset == read_storm.time_offset)
     assert (storm.data_file_format in
             data_file_format_map[read_storm.data_file_format])
