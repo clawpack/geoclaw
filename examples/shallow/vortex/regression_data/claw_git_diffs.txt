@@ -1,0 +1,740 @@
+Clawpack git diffs...
+
+===========
+clawpack
+===========
+/Users/mandli/Dropbox/src/clawpack/
+
+diff --git a/amrclaw b/amrclaw
+index 452d485..91b732b 160000
+--- a/amrclaw
++++ b/amrclaw
+@@ -1 +1 @@
+-Subproject commit 452d485e4032c085d0cc96b97acd054722c38326
++Subproject commit 91b732beb1b8df985d0f585afb56db762c20313a-dirty
+diff --git a/classic b/classic
+index 5f178e4..a4c0899 160000
+--- a/classic
++++ b/classic
+@@ -1 +1 @@
+-Subproject commit 5f178e4c8eb59d6f16f3d21c654b89033bd9be92
++Subproject commit a4c08996cb6cb4c13cf8262a1d5edd7acb9359b3
+diff --git a/clawutil b/clawutil
+index 2f7910a..6de9b00 160000
+--- a/clawutil
++++ b/clawutil
+@@ -1 +1 @@
+-Subproject commit 2f7910a05d81e4463e201c1b92a4168fa692c2b3
++Subproject commit 6de9b008b01df5810b523750d9ed59690f86baa7
+diff --git a/geoclaw b/geoclaw
+index 271bea3..b077935 160000
+--- a/geoclaw
++++ b/geoclaw
+@@ -1 +1 @@
+-Subproject commit 271bea35049d82217c789e41b1de2902d53583d3
++Subproject commit b077935660313c3279e26d5725dc13e3929071c9-dirty
+diff --git a/pyclaw b/pyclaw
+index 60de625..a978283 160000
+--- a/pyclaw
++++ b/pyclaw
+@@ -1 +1 @@
+-Subproject commit 60de625fb28b2e19db828d06db0cc3247109bd24
++Subproject commit a978283a5bbfd2dec37344832522085bf703005e
+diff --git a/visclaw b/visclaw
+index 44a1d2e..04c11f6 160000
+--- a/visclaw
++++ b/visclaw
+@@ -1 +1 @@
+-Subproject commit 44a1d2ea7073ab65c378e945d1bd47bb762e9a5f
++Subproject commit 04c11f6dc5a83fc996e1fd225dd1b77805992496
+
+
+===========
+classic
+===========
+/Users/mandli/Dropbox/src/clawpack/classic
+
+
+
+===========
+amrclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/amrclaw
+
+diff --git a/examples/acoustics_2d_adjoint/test_acoustics_2d_adjoint_forward.py b/examples/acoustics_2d_adjoint/test_acoustics_2d_adjoint_forward.py
+index 4be990d..17ff24e 100644
+--- a/examples/acoustics_2d_adjoint/test_acoustics_2d_adjoint_forward.py
++++ b/examples/acoustics_2d_adjoint/test_acoustics_2d_adjoint_forward.py
+@@ -8,7 +8,6 @@ import shutil
+ import unittest
+ 
+ import clawpack.amrclaw.test as test
+-import clawpack.clawutil.runclaw
+ 
+ from adjoint.test_acoustics_2d_adjoint import Acoustics2DAdjointTest 
+ 
+diff --git a/src/python/amrclaw/compare_gauges.py b/src/python/amrclaw/compare_gauges.py
+index 5e14b01..c68a023 100755
+--- a/src/python/amrclaw/compare_gauges.py
++++ b/src/python/amrclaw/compare_gauges.py
+@@ -1,5 +1,6 @@
+ #!/usr/bin/env python
+ 
++from pathlib import Path
+ import sys
+ 
+ import numpy
+@@ -12,43 +13,49 @@ import clawpack.pyclaw.gauges as gauges
+ def check_old_gauge_data(path, gauge_id):
+ 
+     # Load old gauge data
+-    data = numpy.loadtxt(path)
+-    old_ids = numpy.asarray(data[:, 0], dtype=int)
+-    gauge_indices = numpy.nonzero(old_ids == gauge_id)[0]
+-    q = data[gauge_indices, 3:]
++    # data = numpy.loadtxt(path)
++    # old_ids = numpy.asarray(data[:, 0], dtype=int)
++    # gauge_indices = numpy.nonzero(old_ids == gauge_id)[0]
++    # q = data[gauge_indices, 3:]
+ 
+     # Load new data
+-    gauge = gauges.GaugeSolution(gauge_id, "./regression_data/")
+-
+-    print(numpy.linalg.norm(q - gauge.q.transpose(), ord=2))
+-    print(numpy.argmax(q - gauge.q.transpose()))
++    new_gauge = gauges.GaugeSolution(gauge_id, path)
++    old_gauge = gauges.GaugeSolution(gauge_id, Path() / "regression_data")
++    num_eqn = new_gauge.q.shape[0]
+ 
+     fig = plt.figure()
+-    for i in range(gauge.q.shape[0]):
+-        axes = fig.add_subplot(1, gauge.q.shape[0], i + 1)
+-        axes.plot(q[:, i] - gauge.q[i, :])
+-        axes.set_title("q[%s, :] comparison" % i)
++    if new_gauge.t.shape == old_gauge.t.shape:
++        for i in range(num_eqn):
++            L2_norm = numpy.linalg.norm(new_gauge.q[i, :] - old_gauge.q[i, :], ord=2)
++            print(f"L2|{i}| = {L2_norm}")
++            max_norm = numpy.argmax(new_gauge.q[i, :] - old_gauge.q[i, :])
++            print(f"max|{i}| = {max_norm}")
++
++            axes = fig.add_subplot(1, num_eqn, i + 1)
++            axes.plot(new_gauge.q[i, :] - old_gauge.q[i, :])
++            axes.set_title(f"q[{i}, :] comparison")
++    else:
++        # If the gauge time points do not match just plot them
++        for i in range(num_eqn):
++            ax = fig.add_subplot(1, num_eqn, i + 1)
++            ax.plot(new_gauge.t, new_gauge.q[i, :], 'x', label='new')
++            ax.plot(old_gauge.t, old_gauge.q[i, :], '+', label='old')
++            ax.set_title(f"q[{i}, :] comparison")
+ 
+     return fig
+ 
+ if __name__ == "__main__":
+ 
+-    old_files = []
+-    gauge_ids = []
+-
+     if len(sys.argv) > 1:
+-        # Assume arguments are pairs of file locations and ids
+-        for i in range(1, len(sys.argv), 2):
+-            old_files.append(sys.argv[i])
+-            gauge_ids.append(int(sys.argv[i + 1]))
++        # First argument should be a path to new data
++        path = Path(sys.argv[1])
++        # Second+ arguments are gauge ids to compare
++        gauge_ids = [int(sys.argv[i]) for i in range(2, len(sys.argv))]
+     else:
+-        raise ValueError("Need at least one pair to compare")
+-
+-    print(old_files)
+-    print(gauge_ids)
++        raise ValueError("Need 1 path and a set of gauge ids to compare.")
+ 
+     figures = []
+-    for i in range(len(old_files)):
+-        figures.append(check_old_gauge_data(old_files[i], gauge_ids[i]))
++    for gauge_id in gauge_ids:
++        figures.append(check_old_gauge_data(path, gauge_id))
+ 
+     plt.show()
+\ No newline at end of file
+
+
+===========
+clawutil
+===========
+/Users/mandli/Dropbox/src/clawpack/clawutil
+
+
+
+===========
+pyclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/pyclaw
+
+
+
+===========
+visclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/visclaw
+
+
+
+===========
+riemann
+===========
+/Users/mandli/Dropbox/src/clawpack/riemann
+
+
+
+===========
+geoclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/geoclaw
+
+diff --git a/examples/shallow/vortex/setplot.py b/examples/shallow/vortex/setplot.py
+index 4bc45988..87d9dd57 100644
+--- a/examples/shallow/vortex/setplot.py
++++ b/examples/shallow/vortex/setplot.py
+@@ -25,6 +25,22 @@ c2 = 0.02
+ alpha = np.pi / 6.
+ x0 = -20.
+ y0 = -10.
++
++def extract_vorticity(delta, u, v):
++    """Computes the vorticity given the velocities u and v
++    The boundaries are left as zero, but one-sided differences could be used
++    to compute there.
++    """
++    omega = np.zeros(u.shape)
++    omega[1:-1, 1:-1] += (v[2:,1:-1] - v[:-2,1:-1]) / (2.0 * delta[0])
++    omega[1:-1, 1:-1] -= (u[1:-1,2:] - u[1:-1,:-2]) / (2.0 * delta[1])
++    return omega
++
++def water_vorticity(cd):
++    delta = [cd.x[1, 0] - cd.x[0, 0], cd.y[0, 1] - cd.y[0, 0]]
++    return extract_vorticity(delta, surgeplot.water_u(cd), 
++                                    surgeplot.water_v(cd))
++
+ def exact_solution(x, y, t):
+     f = lambda x,y,t: -c2*((x-x0-M*t*np.cos(alpha))**2+(y-y0-M*t*np.sin(alpha))**2)
+     h = lambda x,y,t: 1.-c1**2/(4.*c2*g)*np.exp(2.*f(x,y,t))
+@@ -56,14 +72,39 @@ def speed_error(cd):
+     return speed - np.sqrt(u**2 + v**2)
+ 
+ def vorticity_error(cd):
+-    omega = surgeplot.water_vorticity(cd)
++    omega = water_vorticity(cd)
+     # h, u, v = exact_solution(cd.x, cd.y, cd.t)
+     # delta = [cd.x[1, 0] - cd.x[0, 0], cd.y[0, 1] - cd.y[0, 0]]
+     # exact_omega = surgeplot.extract_vorticity(delta, u, v)
+     exact_omega = exact_vorticity(cd.x, cd.y, cd.t)
+     return omega - exact_omega
+ 
+-# Setplot
++def add_vorticity(plotaxes, plot_type="pcolor", bounds=None, contours=None, shrink=1.0):
++    """Add vorticity plot to plotaxes"""
++
++    vorticity_cmap = plt.get_cmap('PRGn')
++
++    if plot_type == 'pcolor' or plot_type == 'imshow':
++        plotitem = plotaxes.new_plotitem(name='surface', plot_type='2d_pcolor')
++        plotitem.plot_var = water_vorticity
++
++        if bounds is not None:
++            if bounds[0] == 0.0:
++                plotitem.pcolor_cmap = plt.get_cmap('OrRd')
++            else:
++                plotitem.pcolor_cmap = vorticity_cmap
++            plotitem.pcolor_cmin = bounds[0]
++            plotitem.pcolor_cmax = bounds[1]
++        plotitem.add_colorbar = True
++        plotitem.colorbar_shrink = shrink
++        plotitem.colorbar_label = "Vorticity (1/s)"
++        plotitem.amr_celledges_show = [0] * 10
++        plotitem.amr_patchedges_show = [1, 1, 1, 0, 0, 0, 0]
++    else:
++        raise ValueError(f"Unhandled plot type given {plot_type}.")
++
++
++
+ def setplot(plotdata=None):
+     """"""
+ 
+@@ -136,7 +177,7 @@ def setplot(plotdata=None):
+     plotaxes.xlimits = domain_limits[0]
+     plotaxes.ylimits = domain_limits[1]
+ 
+-    surgeplot.add_vorticity(plotaxes, bounds=vorticity_limits)
++    add_vorticity(plotaxes, bounds=vorticity_limits)
+     plotaxes.plotitem_dict['surface'].amr_patchedges_show = [0] * 10
+ 
+     # ========================================================================
+diff --git a/examples/tsunami/bowl-slosh/test_bowl_slosh.py b/examples/tsunami/bowl-slosh/test_bowl_slosh.py
+index f9526325..61db193b 100644
+--- a/examples/tsunami/bowl-slosh/test_bowl_slosh.py
++++ b/examples/tsunami/bowl-slosh/test_bowl_slosh.py
+@@ -10,7 +10,7 @@ from pathlib import Path
+ import sys
+ import unittest
+ 
+-import numpy
++import numpy as np
+ 
+ import clawpack.geoclaw.test as test
+ import clawpack.geoclaw.topotools as topotools
+@@ -61,8 +61,8 @@ class BowlSloshTest(test.GeoClawRegressionTest):
+ 
+         topo = topotools.Topography(topo_func=topo_func)
+         topo.topo_type = 2
+-        topo.x = numpy.linspace(-2.0, 2.0, 200)
+-        topo.y = numpy.linspace(-2.0, 2.0, 200)
++        topo.x = np.linspace(-2.0, 2.0, 200)
++        topo.y = np.linspace(-2.0, 2.0, 200)
+         topo.write(Path(self.temp_path) / "bowl.topotype2", topo_type=2, 
+                                                             Z_format="%22.15e")
+ 
+diff --git a/src/python/geoclaw/surge/plot.py b/src/python/geoclaw/surge/plot.py
+index 3871c42c..58adf2a2 100644
+--- a/src/python/geoclaw/surge/plot.py
++++ b/src/python/geoclaw/surge/plot.py
+@@ -221,8 +221,9 @@ def b(cd):
+ 
+ 
+ def extract_eta(h, eta, DRY_TOL=1e-3):
+-    index = np.nonzero((np.abs(h) < DRY_TOL) + (h == np.nan))
+-    eta[index[0], index[1]] = np.nan
++    index = np.nonzero((np.abs(h) < DRY_TOL) + (h == np.nan))[0]
++    if len(index.shape) > 1:
++        eta[index[0], index[1]] = np.nan
+     return eta
+ 
+ 
+diff --git a/examples/shallow/vortex/qinit.f90 b/examples/shallow/vortex/qinit.f90
+new file mode 100644
+index 00000000..22767150
+--- /dev/null
++++ b/examples/shallow/vortex/qinit.f90
+@@ -0,0 +1,49 @@
++
++subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
++    
++    use geoclaw_module, only: g => grav
++    use amr_module, only: t0
++    
++    implicit none
++    
++    ! Subroutine arguments
++    integer, intent(in) :: meqn,mbc,mx,my,maux
++    real(kind=8), intent(in) :: xlower,ylower,dx,dy
++    real(kind=8), intent(inout) :: q(meqn,1-mbc:mx+mbc,1-mbc:my+mbc)
++    real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
++    
++    ! Locals
++    integer :: i, j
++    real(kind=8) :: x, y, u, v
++
++    ! Constants
++    real(kind=8), parameter :: pi = 4.d0 * atan (1.d0)
++    real(kind=8), parameter :: c(2) = [0.04d0, 0.02d0]
++    real(kind=8), parameter :: x0(2) = [-20.d0, -10.d0]
++    real(kind=8), parameter :: M = 0.5d0
++    real(kind=8), parameter :: alpha = pi / 6.d0
++
++    do i=1-mbc, mx+mbc
++        x = xlower + (i - 0.5d0) * dx
++        do j=1-mbc, my+mbc
++            y = ylower + (j - 0.5d0) * dy
++
++            q(1, i, j) = 1.d0 - c(1)**2 / (4.d0 * c(2) * g) * exp(2.d0 * f(x, y, t0))
++            u = M * cos(alpha) + c(1) * (y - x0(2) - M * t0 * sin(alpha)) * exp(f(x, y, t0))
++            v = M * sin(alpha) - c(1) * (x - x0(1) - M * t0 * cos(alpha)) * exp(f(x, y, t0))
++            q(2, i, j) = u * q(1, i, j)
++            q(3, i, j) = v * q(1, i, j)
++        end do
++    end do
++
++contains
++
++    real(kind=8) pure function f(x, y, t)
++        implicit none
++        real(kind=8), intent(in) :: x, y, t
++
++        f = -c(2) * (  (x - x0(1) - M * t * cos(alpha))**2           &
++                     + (y - x0(2) - M * t * sin(alpha))**2)
++    end function f
++
++end subroutine qinit
+diff --git a/examples/shallow/vortex/rpn2_shallow_fwave.f90 b/examples/shallow/vortex/rpn2_shallow_fwave.f90
+new file mode 100644
+index 00000000..d7fc247f
+--- /dev/null
++++ b/examples/shallow/vortex/rpn2_shallow_fwave.f90
+@@ -0,0 +1,127 @@
++subroutine rpn2(ixy, maxm, num_eqn, num_waves, num_aux, num_ghost, num_cells, &
++                ql, qr, auxl, auxr, fwave, s, amdq, apdq)
++
++    use, intrinsic :: iso_fortran_env, only: real64
++
++    use geoclaw_module, only: g => grav, dry_tolerance, rho
++    use storm_module, only: pressure_index
++
++    implicit none 
++    
++    integer, parameter :: D = real64
++
++    ! Arguments
++    integer, intent(in) :: ixy, maxm, num_eqn, num_waves, num_ghost, num_aux, num_cells
++    real(kind=D), intent(in) :: ql(num_eqn, 1-num_ghost:maxm+num_ghost)
++    real(kind=D), intent(in) :: qr(num_eqn, 1-num_ghost:maxm+num_ghost)
++    real(kind=D), intent(in) :: auxl(num_aux, 1-num_ghost:maxm+num_ghost)
++    real(kind=D), intent(in) :: auxr(num_aux, 1-num_ghost:maxm+num_ghost)
++    real(kind=D), intent(out) :: s(num_waves, 1-num_ghost:maxm+num_ghost)
++    real(kind=D), intent(out) :: fwave(num_eqn, num_waves, 1-num_ghost:maxm+num_ghost)
++    real(kind=D), intent(out) :: amdq(num_eqn,1-num_ghost:maxm+num_ghost)
++    real(kind=D), intent(out) :: apdq(num_eqn,1-num_ghost:maxm+num_ghost)
++    
++    ! Locals
++    integer :: i, k, normal_index, transverse_index
++    real(kind=D) :: hl, ul, vl, hr, ur, vr, hbar, uhat, chat, db, dp
++    real(kind=D) :: phil, phir, dry_state_l, dry_state_r
++    real(kind=D) :: R(3,3)
++    real(kind=D) :: delta(3), beta(3)
++    
++    
++    ! Determine normal and tangential directions
++    if (ixy == 1) then
++        normal_index = 2
++        transverse_index = 3
++    else
++        normal_index = 3
++        transverse_index = 2
++    end if
++
++    amdq = 0.0_D
++    apdq = 0.0_D
++
++    ! Primary loop over each cell
++    do i = 2 - num_ghost, num_cells + num_ghost
++        
++        ! Check for dry states - need merge here to convert to float
++        dry_state_l = merge(0.0_D, 1.0_D, qr(1, i - 1) < dry_tolerance)
++        dry_state_r = merge(0.0_D, 1.0_D, ql(1, i) < dry_tolerance)
++
++        ! Note that for the states below u is always the normal velocity and
++        ! v is always the tangential velocity
++
++        ! Left states
++        hl = qr(1, i - 1) * dry_state_l
++        ul = qr(normal_index, i - 1) / qr(1, i - 1) * dry_state_l
++        vl = qr(transverse_index, i - 1) / qr(1, i - 1) * dry_state_l
++        phil = (0.5_D * g * hl**2 + hl * ul**2) * dry_state_l
++
++        ! Forcing
++        db = (auxl(1, i) - auxr(1, i - 1))
++        dp = 0.d0
++        ! dp = (auxl(pressure_index, i) - auxr(pressure_index, i - 1))
++    
++        ! Right states
++        hr = ql(1, i) * dry_state_r
++        ur = ql(normal_index, i) / ql(1, i) * dry_state_r
++        vr = ql(transverse_index, i) / ql(1, i) * dry_state_r
++        phir = (0.5_D * g * hr**2 + hr * ur**2) * dry_state_r
++
++        ! Roe average states (Roe's linearization)
++        hbar = 0.5_D * (hr + hl)
++        uhat = (sqrt(hr) * ur + sqrt(hl) * ul) / (sqrt(hr) + sqrt(hl))
++        chat = sqrt(g * hbar)
++    
++        ! Flux differences
++        delta(1) = hr * ur - hl * ul
++        delta(2) = phir - phil + g * hbar * db + hbar * dp / rho(1)
++        delta(3) = hr * ur * vr - hl * ul * vl
++    
++        ! Wave speeds
++        s(1, i) = min(uhat - chat, ul - sqrt(g * hl))
++        s(3, i) = max(uhat + chat, ur + sqrt(g * hr))
++        s(2, i) = 0.5_D * (s(1, i) + s(3, i))
++        
++        ! Right eigenvectors (columns)
++        ! could possibly use vhat instead of vl and vr
++        R(1, 1) = 1.0_D
++        R(normal_index, 1) = s(1, i)
++        R(transverse_index, 1) = vl
++        
++        R(1, 2) = 0.0_D
++        R(normal_index, 2) = 0.0
++        R(transverse_index, 2) = 1.0
++        
++        R(1, 3) = 1.0_D
++        R(normal_index, 3) = s(3, i)
++        R(transverse_index, 3) = vr
++        
++        ! Wave strengths
++        beta(1) = (s(3, i) * delta(1) - delta(2)) / (s(3, i) - s(1, i))
++        beta(3) = (delta(2) - s(1, i) * delta(1)) / (s(3, i) - s(1, i))
++        beta(2) = delta(3) - beta(1) * vl - beta(3) * vr
++
++        ! f-waves
++        do k = 1, num_waves
++            fwave(:, k, i) = beta(k) * R(:, k)
++        enddo
++    
++        ! Fluctuations
++        do k=1, num_waves
++            amdq(:, i) = amdq(:, i) + merge(fwave(:, k, i), 0.0_D,            &
++                                                        s(k, i) < -1e-14)
++            apdq(:, i) = apdq(:, i) + merge(fwave(:, k, i), 0.0_D,            &
++                                                        s(k, i) >  1e-14)
++
++            amdq(:, i) = amdq(:, i) + merge(0.5_D * fwave(:, k, i), 0.0_D,    &
++                                                          -1e-14_D < s(k, i)  & 
++                                                    .and. s(k, i) < 1e-14)
++            apdq(:, i) = apdq(:, i) + merge(0.5_D * fwave(:, k, i), 0.0_D,    &
++                                                          -1e-14_D < s(k, i)  &
++                                                    .and. s(k, i) < 1e-14)
++        enddo
++
++    enddo ! End of main loop
++
++end subroutine rpn2
+diff --git a/examples/shallow/vortex/run_tests.py b/examples/shallow/vortex/run_tests.py
+new file mode 100755
+index 00000000..d3e85048
+--- /dev/null
++++ b/examples/shallow/vortex/run_tests.py
+@@ -0,0 +1,74 @@
++#!/usr/bin/env python
++
++import os
++import numpy
++import datetime
++import subprocess
++
++import batch.batch
++
++import clawpack.geoclaw.topotools as topotools
++
++days2seconds = lambda days: days * 60.0**2 * 24.0
++
++# def eta(x, y, A=1.0, sigma=50e3, x0=0.0):
++#     return A * numpy.exp(-(x - x0)**2 / sigma**2)
++
++
++class VortexJob(batch.batch.Job):
++
++    def __init__(self, num_cells, rp_type):
++
++        super(VortexJob, self).__init__()
++
++        self.rp_type = rp_type
++
++        self.type = "vortex_example"
++        self.name = rp_type
++        self.prefix = f"n{str(num_cells).zfill(4)}"
++        self.executable = "xgeoclaw"
++
++        # Create base data object
++        import setrun
++        self.rundata = setrun.setrun()
++
++        self.rundata.clawdata.num_cells = [num_cells, num_cells]
++        self.rundata.clawdata.output_format = 'binary'
++        self.rundata.amrdata.max1d = 3000
++
++
++    def __str__(self):
++        output = super(VortexJob, self).__str__()
++        output += f"  N: {self.rundata.clawdata.num_cells[0]}\n"
++        output += f"  RP: {self.rp_type}\n"
++        return output
++
++
++    def write_data_objects(self):
++        r""""""
++
++        # Write out all data files
++        super(VortexJob, self).write_data_objects()
++
++
++if __name__ == '__main__':
++
++    jobs = []
++    num_cells = [2**n for n in range(6, 12)]
++    # num_cells = [50, 100, 200, 400, 800, 1600]
++    for rp_type in ['simple', 'geoclaw']:
++        subprocess.run(['make', 'new', f'RP={rp_type}'])
++        jobs = []
++        for N in num_cells:
++            jobs.append(VortexJob(N, rp_type))
++
++        controller = batch.batch.BatchController(jobs)
++        controller.wait = True
++        controller.plot = False
++        print(controller)
++        controller.run()
++
++        print(f"Done with {rp_type}!")
++
++    # Run convergence script
++    subprocess.run(['./plot_comparison.py', num_cells])
+diff --git a/examples/shallow/vortex/test_vortex.py b/examples/shallow/vortex/test_vortex.py
+new file mode 100644
+index 00000000..8b8d913e
+--- /dev/null
++++ b/examples/shallow/vortex/test_vortex.py
+@@ -0,0 +1,53 @@
++#!/usr/bin/env python
++
++r"""Shallow Water Travelling Vortex Test
++
++To create new regression data use
++    `python test_vortex.py True`
++"""
++
++from pathlib import Path
++import sys
++import unittest
++
++import numpy as np
++
++import clawpack.geoclaw.test as test
++import clawpack.geoclaw.topotools as topotools
++import clawpack.geoclaw.fgmax_tools as fgmax_tools
++
++class VortexTest(test.GeoClawRegressionTest):
++    r"""Traveling vortex regression test"""
++
++    def runTest(self, save=False):
++
++        # Write out data files
++        self.load_rundata()
++
++        # self.rundata.clawdata.num_output_times = 1
++        # self.rundata.clawdata.tfinal = 0.5
++
++        self.write_rundata_objects()
++
++        # Run code
++        self.run_code()
++
++        # Perform tests
++        for i in range(5):
++            self.check_gauges(save=save, gauge_id=i, indices=(2, 3))
++        
++        self.success = True
++
++
++if __name__=="__main__":
++    if len(sys.argv) > 1:
++        if bool(sys.argv[1]):
++            # Fake the setup and save out output
++            test = VortexTest()
++            try:
++                test.setUp()
++                test.runTest(save=True)
++            finally:
++                test.tearDown()
++            sys.exit(0)
++    unittest.main()
+\ No newline at end of file
+diff --git a/examples/shallow/vortex/vortex.py b/examples/shallow/vortex/vortex.py
+new file mode 100755
+index 00000000..ca75eaa4
+--- /dev/null
++++ b/examples/shallow/vortex/vortex.py
+@@ -0,0 +1,91 @@
++#!/usr/bin/env python
++# encoding: utf-8
++r"""
++2D shallow water: flow over a sill
++==================================
++
++Solve the 2D shallow water equations with
++variable bathymetry:
++
++.. :math:
++    h_t + (hu)_x + (hv)_y & = 0 \\
++    (hu)_t + (hu^2 + \frac{1}{2}gh^2)_x + (huv)_y & = -g h b_x \\
++    (hv)_t + (huv)_x + (hv^2 + \frac{1}{2}gh^2)_y & = -g h b_y.
++
++The bathymetry is flat in this example, but there is a translating vortex
++"""
++
++import sys
++import os
++import subprocess
++
++import numpy as np
++
++from clawpack import riemann
++from clawpack import pyclaw
++from clawpack.riemann.shallow_roe_with_efix_2D_constants import depth, x_momentum, y_momentum, num_eqn
++
++import setplot
++
++def setup(kernel_language='Fortran', solver_type='classic', use_petsc=False,
++          outdir='./_py_output', N=256):
++
++    solver = pyclaw.ClawSolver2D(riemann.shallow_bathymetry_fwave_2D)
++    solver.dimensional_split = 1  # No transverse solver available
++
++    solver.bc_lower[0] = pyclaw.BC.periodic
++    solver.bc_upper[0] = pyclaw.BC.periodic
++    solver.bc_lower[1] = pyclaw.BC.periodic
++    solver.bc_upper[1] = pyclaw.BC.periodic
++
++    solver.aux_bc_lower[0] = pyclaw.BC.extrap
++    solver.aux_bc_upper[0] = pyclaw.BC.extrap
++    solver.aux_bc_lower[1] = pyclaw.BC.extrap
++    solver.aux_bc_upper[1] = pyclaw.BC.extrap
++
++    x = pyclaw.Dimension(-50, 50, N, name='x')
++    y = pyclaw.Dimension(-50, 50, N, name='y')
++    domain = pyclaw.Domain([x, y])
++    state = pyclaw.State(domain, num_eqn, num_aux=1)
++
++    X, Y = state.p_centers
++    state.aux[0,:,:] = -np.ones((N, N))
++
++    h, u, v = setplot.exact_solution(X, Y, 0.0)
++    state.q[depth,:,:] = h
++    state.q[x_momentum,:,:] = h * u
++    state.q[y_momentum,:,:] = h * v
++
++    state.problem_data['grav'] = 1.0
++    state.problem_data['dry_tolerance'] = 1.e-3
++    state.problem_data['sea_level'] = 0.
++
++    claw = pyclaw.Controller()
++    claw.tfinal = 100
++    claw.solution = pyclaw.Solution(state, domain)
++    claw.solver = solver
++    claw.num_output_times = 10
++    claw.setplot = setplot
++    claw.outdir = outdir
++    claw.write_aux_init = True
++    claw.keep_copy = True
++
++    return claw
++
++if __name__=="__main__":
++    from clawpack.pyclaw.util import run_app_from_main, _info_from_argv
++    petsc_args, pyclaw_kwargs = _info_from_argv(sys.argv)
++    run_conv = bool(pyclaw_kwargs.pop('conv', False))
++    if run_conv:
++        base_path = os.path.expandvars(os.path.join("$DATA_PATH", "vortex_example", "pyclaw"))
++        num_cells = [2**n for n in range(6, 11)]
++        for N in num_cells:
++            path = os.path.join(base_path, f"n{str(N).zfill(4)}_output")
++            claw = setup(outdir=path, N=N)
++            print(f"Running {N}: {path}")
++            claw.run()
++        subprocess.run(["./plot_comparison.py", num_cells])
++    else:
++        claw = run_app_from_main(setup, setplot)
++
++    
