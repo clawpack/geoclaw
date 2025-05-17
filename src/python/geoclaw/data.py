@@ -160,9 +160,10 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         super(TopographyData,self).__init__()
 
         # Topography data
-        self.add_attribute('topo_missing',99999.)
-        self.add_attribute('test_topography',0)
-        self.add_attribute('topofiles',[])
+        self.add_attribute('topo_missing', 99999.0)
+        self.add_attribute('test_topography', 0)
+        self.add_attribute('override_order', False)
+        self.add_attribute('topofiles', [])
 
         # Jump discontinuity
         self.add_attribute('topo_location',-50e3)
@@ -188,6 +189,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         if self.test_topography == 0:
             ntopofiles = len(self.topofiles)
             self.data_write(value=ntopofiles,alt_name='ntopofiles')
+            self.data_write(name="override_order", description="(Override order topo files are used)")
             for tfile in self.topofiles:
 
                 if len(tfile) == 6:
