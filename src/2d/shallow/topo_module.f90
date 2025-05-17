@@ -225,6 +225,9 @@ contains
                 ! The finest topography will be given priority in any region
                 ! mtopoorder(rank) = i means that i'th topography file has rank rank,
                 ! where the file with rank=1 is the finest and considered first.
+                !
+                ! If override_topo_order is .true. then the order that the files were
+                ! specified is used directly
                 if (override_topo_order) then
                     do i=1, mtopofiles
                         mtopoorder(i) = i
