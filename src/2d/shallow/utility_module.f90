@@ -84,13 +84,14 @@ contains
            endif
 
         nw = nw + 1
-        word(nw) = trim(adjustl(str2(1:pos2-1)))
-        str2 = trim(adjustl(str2(pos2+1:)))
-        if (nw == 10) then
+        if (nw == 11) then
             write(6,*) '*** too many words on line, str = '
             write(6,*) str
             stop
             endif
+        word(nw) = trim(adjustl(str2(1:pos2-1)))
+        str2 = trim(adjustl(str2(pos2+1:)))
+
         enddo
 
     ! now extract numerical values:
