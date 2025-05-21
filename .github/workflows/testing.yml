@@ -60,7 +60,7 @@ jobs:
     - name: Test with pytest
       run: |
         cd ${CLAW}/geoclaw
-        pytest
+        pytest --basetemp=./test_output
     
     - name: Upload test results
       if: failure()
