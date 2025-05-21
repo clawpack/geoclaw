@@ -54,8 +54,7 @@ class VortexJob(batch.batch.Job):
 if __name__ == '__main__':
 
     jobs = []
-    num_cells = [2**n for n in range(6, 12)]
-    # num_cells = [50, 100, 200, 400, 800, 1600]
+    num_cells = [2**n for n in range(6, 10)]
     for rp_type in ['simple', 'geoclaw']:
         subprocess.run(['make', 'new', f'RP={rp_type}'])
         jobs = []
@@ -71,4 +70,4 @@ if __name__ == '__main__':
         print(f"Done with {rp_type}!")
 
     # Run convergence script
-    subprocess.run(['./plot_comparison.py', num_cells])
+    subprocess.run(['plot_comparison.py'])
