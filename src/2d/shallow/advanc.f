@@ -176,6 +176,7 @@ c
 
       double precision fp(nvar,mitot,mjtot),fm(nvar,mitot,mjtot)
       double precision gp(nvar,mitot,mjtot),gm(nvar,mitot,mjtot)
+      real(kind=8), parameter :: TOLERANCE = 1d-6
 
 
 c
@@ -245,11 +246,12 @@ c     NOW changed, mjb 2/6/2015.
 c     NOTE that gauge subr called before stepgrid, so never get
 c     the very last gauge time at end of run.
 
-      if (num_gauges > 0) then
+      if (num_gauges > 0 .and. abs(time - t0) < TOLERANCE ) then
            call update_gauges(alloc(locnew:locnew+nvar*mitot*mjtot),
      .                       alloc(locaux:locaux+naux*mitot*mjtot),
      .                       xlow,ylow,nvar,mitot,mjtot,naux,mptr)
-           endif
+      endif
+
 
 c
       call stepgrid(alloc(locnew),fm,fp,gm,gp,
@@ -273,6 +275,14 @@ c
 c        write(outunit,969) mythread,delt, dtnew
 c969     format(" thread ",i4," updated by ",e15.7, " new dt ",e15.7)
           rnode(timemult,mptr)  = rnode(timemult,mptr)+delt
+
+c     This currently is a sanity check to make sure we moved time
+      time = rnode(timemult,mptr)
+      if (num_gauges > 0 .and. .not. (abs(time - t0) < TOLERANCE) ) then
+           call update_gauges(alloc(locnew:locnew+nvar*mitot*mjtot),
+     .                       alloc(locaux:locaux+naux*mitot*mjtot),
+     .                       xlow,ylow,nvar,mitot,mjtot,naux,mptr)
+      endif
 c
       return
       end
