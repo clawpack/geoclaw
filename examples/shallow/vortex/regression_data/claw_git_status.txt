@@ -1,0 +1,118 @@
+Clawpack Git Status 
+Diffs can be found in /Users/mandli/Library/CloudStorage/Dropbox/src/clawpack/geoclaw/examples/shallow/vortex/regression_data/claw_git_diffs.txt
+
+Thu, 15 May 2025 15:00:54 MDT
+$CLAW = /Users/mandli/Dropbox/src/clawpack
+$FC = gfortran
+
+
+===========
+clawpack
+===========
+/Users/mandli/Dropbox/src/clawpack/
+
+--- last commit ---
+98ba40b (HEAD -> master, tag: v5.12.0, clawpack/master, clawpack/HEAD) Merge pull request #264 from rjleveque/v5.12.0fix
+
+--- branch and status ---
+## master...clawpack/master
+ M amrclaw
+ M classic
+ M clawutil
+ M geoclaw
+ M pyclaw
+ M visclaw
+
+
+===========
+classic
+===========
+/Users/mandli/Dropbox/src/clawpack/classic
+
+--- last commit ---
+a4c0899 (HEAD -> add-test-badge, mandli/add-test-badge) Add better description and links to README
+
+--- branch and status ---
+## add-test-badge...clawpack/master [ahead 11]
+
+
+===========
+amrclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/amrclaw
+
+--- last commit ---
+91b732b (HEAD -> update-tests, mandli/update-tests) Add test archiving action step
+
+--- branch and status ---
+## update-tests...clawpack/master [ahead 31, behind 7]
+ M examples/acoustics_2d_adjoint/test_acoustics_2d_adjoint_forward.py
+ M src/python/amrclaw/compare_gauges.py
+
+
+===========
+clawutil
+===========
+/Users/mandli/Dropbox/src/clawpack/clawutil
+
+--- last commit ---
+6de9b00 (HEAD -> switch-repr-str, mandli/switch-repr-str) Add assumption that a str value should be surrounded by quotes
+
+--- branch and status ---
+## switch-repr-str...clawpack/master [ahead 3, behind 4]
+
+
+===========
+pyclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/pyclaw
+
+--- last commit ---
+a978283a (HEAD -> master) Update 2D SWEs regression data (#742)
+
+--- branch and status ---
+## master...clawpack/master [behind 1]
+
+
+===========
+visclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/visclaw
+
+--- last commit ---
+04c11f6 (HEAD -> master) Remove Cygwin Code (#313)
+
+--- branch and status ---
+## master...clawpack/master [behind 2]
+
+
+===========
+riemann
+===========
+/Users/mandli/Dropbox/src/clawpack/riemann
+
+--- last commit ---
+c29dcab (HEAD -> master, clawpack/master, clawpack/HEAD) Merge pull request #181 from clawpack/set_fwave
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+geoclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/geoclaw
+
+--- last commit ---
+b0779356 (HEAD -> update-pytest) Add vortex example
+
+--- branch and status ---
+## update-pytest...clawpack/master [ahead 83]
+A  examples/shallow/vortex/qinit.f90
+A  examples/shallow/vortex/rpn2_shallow_fwave.f90
+A  examples/shallow/vortex/run_tests.py
+ M examples/shallow/vortex/setplot.py
+A  examples/shallow/vortex/test_vortex.py
+A  examples/shallow/vortex/vortex.py
+ M examples/tsunami/bowl-slosh/test_bowl_slosh.py
+ M src/python/geoclaw/surge/plot.py

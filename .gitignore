@@ -10,16 +10,22 @@ xamr
 xgeoclaw
 xgeoclaw.dSYM
 *.html
-_output/
-_plots/
+*_output/
+*_plots/
 *~
+# Topography
 *.asc
-*.tt3
-*.tt1
+*.tt*
+*.topotype*
 *.xyz
+
+# Scratch directory
 scratch/*
 !scratch/README.txt
+
+# Other data files
 *.nc
+
 # log files
 *.log
 

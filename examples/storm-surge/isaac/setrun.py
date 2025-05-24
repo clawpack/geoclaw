@@ -429,18 +429,16 @@ def setgeo(rundata):
         isaac.write(data.storm_file, file_format='geoclaw')
 
     elif data.storm_specification_type == "OWI":
+        isaac.data_file_format = "NWS12" # or "ascii"
+        isaac.data_file_format = "NWS13" # or "netcdf""
 
-        # :TODO: write out Isaac fields into appropriate file format, currently
-        # we are just storing the files as is
+        # :TODO: write out Isaac fields into appropriate file format
 
-        # ASCII
-        # isaac.data_file_format = 'NWS12'
-        # isaac.file_paths.append((Path() / "isaac.PRE").resolve())
-        # isaac.file_paths.append((Path() / "isaac.WIN").resolve())
-
-        # NetCDF file
-        isaac.data_file_format = "NWS13"
-        isaac.file_paths.append((Path() / "isaac.nc").resolve())
+        if isaac.data_file_format.lower() in ["nws12", 'ascii']:
+            isaac.file_paths.append((Path() / "isaac.PRE").resolve())
+            isaac.file_paths.append((Path() / "isaac.WIN").resolve())
+        elif isaac.data_file_format.lower() in ["nws13", 'netcdf']:
+            isaac.file_paths.append((Path() / "isaac.nc").resolve())
 
         isaac.write(data.storm_file, file_format='OWI')
 

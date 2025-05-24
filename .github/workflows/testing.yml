@@ -1,7 +1,4 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
-name: Python application
+name: Test GeoClaw
 
 on:
   push:
@@ -9,49 +6,67 @@ on:
   pull_request:
     branches: [ "master" ]
 
+  workflow_dispatch:
+
 permissions:
   contents: read
 
+env:
+  CLAW: ${{ github.workspace }}
+
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - name: Set up Python 3.10
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-    - name: Checkout clawpack
-      uses: actions/checkout@v4.1.5
-      with:
-        repository: clawpack/clawpack
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install gfortran
-        # sudo apt-get liblapack-pic 
+        # sudo apt-get install liblapack-pic
         sudo apt-get install liblapack-dev
         sudo apt-get install libnetcdf-dev libnetcdff-dev
         python -m pip install --upgrade pip
-        pip install flake8 pytest
-    - name: Setup clawpack super repository
+        pip install flake8 meson-python ninja pytest numpy 
+        pip install netCDF4 pandas xarray
+
+    - name: Checkout Clawpack
+      uses: actions/checkout@v4.1.5
+      with:
+        repository: clawpack/clawpack
+        submodules: true
+
+    - name: Checkout GeoClaw branch
+      uses: actions/checkout@v4.1.5
+      with:
+        path: geoclaw
+    
+    - name: Install clawpack
       run: |
-        git submodule init
-        git submodule update
-        pip install --user -e .
-    - name: Setup geoclaw
-      run: |
-        cd geoclaw
-        git checkout ${{ github.ref }}
+        cd ${CLAW}
+        pip install --no-build-isolation --editable .
+
     - name: Lint with flake8
       run: |
-        cd geoclaw
+        cd ${CLAW}/geoclaw
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude old_dtopotools.py
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
     - name: Test with pytest
       run: |
-        cd geoclaw
+        cd ${CLAW}/geoclaw
         pytest
+    
+    - name: Upload test results
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_results
+        path: ${{ env.CLAW }}/geoclaw/*_output
+        if-no-files-found: ignore
+
