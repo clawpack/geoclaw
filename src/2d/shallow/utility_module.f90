@@ -63,10 +63,10 @@ contains
 
     character(len=*), intent(in) :: str
     integer, intent(out) :: n
-    real(kind=8), intent(out) :: values(10)
+    real(kind=8), intent(out) :: values(16)
 
     integer :: pos2,nw,i,e
-    character(len=80) :: word(10), str2
+    character(len=80) :: word(16), str2
     real(kind=8) :: x
 
     ! First break into words / tokens based on white space.  
@@ -84,7 +84,7 @@ contains
            endif
 
         nw = nw + 1
-        if (nw == 11) then
+        if (nw == 17) then
             write(6,*) '*** too many words on line, str = '
             write(6,*) str
             stop
