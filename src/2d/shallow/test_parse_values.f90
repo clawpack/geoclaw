@@ -12,7 +12,7 @@ program test_parse_values
     implicit none
     character(len=150) str,fname
     integer :: n,i,topo_type,mx,my
-    real(kind=8) :: values(10), xll,yll,xhi,yhi,dx,dy
+    real(kind=8) :: values(16), xll,yll,xhi,yhi,dx,dy
 
     if (.true.) then
         write(6,*) 'input line with mix of character strings and numbers...'
