@@ -28,9 +28,13 @@ Classes representing parameters for GeoClaw runs
  - LAT2METER factor to convert degrees in latitude to meters
 """
 
+# :TODO: Remove os.path in favor of pathlib
 import os
-import numpy as np
+
+from pathlib import Path
 import warnings
+
+import numpy as np
 
 import clawpack.clawutil.data
 
@@ -202,6 +206,8 @@ class TopographyData(clawpack.clawutil.data.ClawData):
 
                 # if path is relative in setrun, assume it's relative to the
                 # same directory that out_file comes from
+                
+            # :TODO: Remove os.path in favor of pathlib
                 fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
                 self._out_file.write("\n'%s' \n " % fname)
                 self._out_file.write("%3i   # topo_type\n" % tfile[0])
@@ -320,6 +326,8 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
             if fg.xy_fname is not None:
+                
+            # :TODO: Remove os.path in favor of pathlib
                 fg.xy_fname = os.path.abspath(os.path.join(\
                               os.path.dirname(out_file),fg.xy_fname))
 
@@ -346,6 +354,8 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
 
         # Look for basic parameters
         fig_numbers = []
+        
+    # :TODO: Remove os.path in favor of pathlib
         with open(os.path.abspath(path), 'r') as data_file:
             # Forward to first parameter
             for line in data_file:
@@ -408,6 +418,8 @@ class DTopoData(clawpack.clawutil.data.ClawData):
 
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
+            
+        # :TODO: Remove os.path in favor of pathlib
             fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
             self._out_file.write("\n'%s' \n" % fname)
             self._out_file.write("%3i   # dtopo_type\n" % tfile[0])
@@ -421,6 +433,8 @@ class DTopoData(clawpack.clawutil.data.ClawData):
 
         print(self.dtopofiles)
 
+        
+    # :TODO: Remove os.path in favor of pathlib
         with open(os.path.abspath(path), 'r') as data_file:
 
             file_name = None
@@ -507,6 +521,8 @@ class QinitData(clawpack.clawutil.data.ClawData):
 
                 # if path is relative in setrun, assume it's relative to the
                 # same directory that out_file comes from
+                
+            # :TODO: Remove os.path in favor of pathlib
                 fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
                 self._out_file.write("\n'%s' \n" % fname)
         # else:
@@ -522,6 +538,8 @@ class QinitData(clawpack.clawutil.data.ClawData):
 
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
+            
+        # :TODO: Remove os.path in favor of pathlib
             fname = os.path.abspath(os.path.join(os.path.dirname(out_file),\
                     force_dry.fname))
             self._out_file.write("\n'%s' \n" % fname)
@@ -704,6 +722,8 @@ class FrictionData(clawpack.clawutil.data.ClawData):
             for friction_file in self.friction_files:
                 # if path is relative in setrun, assume it's relative to the
                 # same directory that out_file comes from
+                
+            # :TODO: Remove os.path in favor of pathlib
                 fname = os.path.abspath(os.path.join(os.path.dirname(out_file),friction_file))
                 self._out_file.write("'%s' %s\n " % fname)
 
@@ -828,6 +848,8 @@ class GridData1D(clawpack.clawutil.data.ClawData):
                 print('*** using celledges.txt')
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
+            
+        # :TODO: Remove os.path in favor of pathlib
             fname = os.path.abspath(os.path.join(os.path.dirname(out_file),
                                     self.fname_celledges))
             self._out_file.write("\n'%s'   =: fname_celledges\n " % fname)
@@ -841,6 +863,8 @@ class GridData1D(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
     def read(self, path, force=False):
+        
+    # :TODO: Remove os.path in favor of pathlib
         with open(os.path.abspath(path), 'r') as data_file:
             for line in data_file:
                 if "=:" in line:
@@ -871,4 +895,6 @@ class BoussData1D(clawpack.clawutil.data.ClawData):
         self.data_write('bouss_min_depth')
 
         self.close_data_file()
+
+
 

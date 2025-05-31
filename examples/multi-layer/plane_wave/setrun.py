@@ -4,9 +4,9 @@ The values set in the function setrun are then written out to data files
 that will be read in by the Fortran code.
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-import numpy
+from pathlib import Path
+
+import numpy as np
 
 import clawpack.geoclaw.data
 import clawpack.geoclaw.topotools as tt
@@ -14,12 +14,12 @@ import clawpack.geoclaw.topotools as tt
 
 # Rotation transformations
 def transform_c2p(x,y,x0,y0,theta):
-    return ((x+x0)*numpy.cos(theta) - (y+y0)*numpy.sin(theta),
-            (x+x0)*numpy.sin(theta) + (y+y0)*numpy.cos(theta))
+    return ((x+x0) * np.cos(theta) - (y + y0) * np.sin(theta),
+            (x+x0) * np.sin(theta) + (y + y0) * np.cos(theta))
 
 def transform_p2c(x,y,x0,y0,theta):
-    return ( x*numpy.cos(theta) + y*numpy.sin(theta) - x0,
-            -x*numpy.sin(theta) + y*numpy.cos(theta) - y0)
+    return ( x * np.cos(theta) + y * np.sin(theta) - x0,
+            -x * np.sin(theta) + y * np.cos(theta) - y0)
 
 
 # Class containing some setup for the qinit especially for multilayer tests 
@@ -41,7 +41,7 @@ class QinitMultilayerData(clawpack.geoclaw.data.QinitData):
     def write(self, out_file='qinit.data', data_source='setrun.py'):
 
         # Initial perturbation
-        self.open_data_file('qinit.data',data_source)
+        self.open_data_file(out_file, data_source)
         self.data_write('qinit_type')
 
         # Perturbation requested
@@ -51,11 +51,11 @@ class QinitMultilayerData(clawpack.geoclaw.data.QinitData):
             # Check to see if each qinit file is present and then write the data
             for tfile in self.qinitfiles:
                 try:
-                    fname = "'%s'" % os.path.abspath(tfile[-1])
+                    fname = f"'{Path(tfile[-1])}'"
                 except:
                     raise Warning("File %s was not found." % fname)
                     # raise MissingFile("file not found")
-                self._out_file.write("\n%s  \n" % fname)
+                self._out_file.write(f"\n{fname}  \n")
                 self._out_file.write("%3i %3i \n" % tuple(tfile[:-1]))
         elif self.qinit_type >= 5 and self.qinit_type <= 9:
             self.data_write('epsilon')
@@ -300,15 +300,15 @@ def setrun(claw_pkg='geoclaw'):
         # Do not checkpoint at all
         pass
 
-    elif numpy.abs(clawdata.checkpt_style) == 1:
+    elif np.abs(clawdata.checkpt_style) == 1:
         # Checkpoint only at tfinal.
         pass
 
-    elif numpy.abs(clawdata.checkpt_style) == 2:
+    elif np.abs(clawdata.checkpt_style) == 2:
         # Specify a list of checkpoint times.  
         clawdata.checkpt_times = [0.1,0.15]
 
-    elif numpy.abs(clawdata.checkpt_style) == 3:
+    elif np.abs(clawdata.checkpt_style) == 3:
         # Checkpoint every checkpt_interval timesteps (on Level 1)
         # and at the final time.
         clawdata.checkpt_interval = 5
@@ -384,8 +384,8 @@ def setrun(claw_pkg='geoclaw'):
     for (i,x_c) in enumerate(gauge_locations):
         # y0 = (self.run_data.clawdata.yupper - self.run_data.clawdata.ylower) / 2.0
         # x_p,y_p = transform_c2p(x_c,0.0,location[0],location[1],angle)
-        x_p = x_c * numpy.cos(0.0)
-        y_p = x_c * numpy.sin(0.0)
+        x_p = x_c * np.cos(0.0)
+        y_p = x_c * np.sin(0.0)
         # print "+=====+"
         # print x_c,0.0
         # print x_p,y_p
@@ -484,19 +484,20 @@ def bathy_step(x, y, location=0.15, angle=0.0, left=-1.0, right=-0.2):
 
 
 def write_topo_file(run_data, out_file, **kwargs):
+
     # Make topography
     topo_func = lambda x, y: bathy_step(x, y, **kwargs)
     topo = tt.Topography(topo_func=topo_func)
-    topo.x = numpy.linspace(run_data.clawdata.lower[0],
+    topo.x = np.linspace(run_data.clawdata.lower[0],
                             run_data.clawdata.upper[0],
                             run_data.clawdata.num_cells[0] + 8)
-    topo.y = numpy.linspace(run_data.clawdata.lower[1],
+    topo.y = np.linspace(run_data.clawdata.lower[1],
                             run_data.clawdata.upper[1],
                             run_data.clawdata.num_cells[1] + 8)
     topo.write(out_file)
 
     # Write out simple bathy geometry file for communication to the plotting
-    with open("./bathy_geometry.data", 'w') as bathy_geometry_file:
+    with open(out_file.parent / "bathy_geometry.data", 'w') as bathy_geometry_file:
         if "location" in kwargs:
             location = kwargs['location']
         else:
@@ -518,4 +519,4 @@ if __name__ == '__main__':
 
     rundata.write()
 
-    write_topo_file(rundata, 'topo.tt2')
+    write_topo_file(rundata, Path() / 'topo.tt2')
