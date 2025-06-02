@@ -434,7 +434,7 @@ contains
         logical, parameter :: maketype2 = .false.
         integer :: missing,status,n
         real(kind=8) :: no_data_value,x,y,topo_temp
-        real(kind=8) :: values(10)
+        real(kind=8) :: values(16)
         character(len=80) :: str
         integer(kind=8) :: i, j, mtot
 
@@ -730,7 +730,7 @@ contains
         integer :: topo_size, status, n
         real(kind=8) :: x,y,z,nodata_value
         logical :: found_file
-        real(kind=8) :: values(10)
+        real(kind=8) :: values(16)
         character(len=80) :: str
         logical :: verbose
         logical :: xll_registered, yll_registered
