@@ -342,11 +342,13 @@ class FGoutGrid(object):
         self.output_format = output_format
 
         # list of which components to print:
-        if 'eta' in self.qmap.keys():
-            # default: h,hu,hv,eta as in previous versions of GeoClaw
-            self.q_out_vars = [1,2,3,self.qmap['eta']]
+        if qmap == 'dclaw':
+            # default: h,hu,hv,hm,pb,hchi,bdif,eta, DClaw
+            self.q_out_vars = [1,2,3,4,5,6,7]
         else:
-            self.q_out_vars = [1,2,3]  # if qmap['eta'] not defined
+            self.q_out_vars = [1,2,3] # use Geoclaw values as default.
+        if 'eta' in self.qmap.keys():
+            self.q_out_vars.append(self.qmap['eta'])
 
         self.drytol = 1e-3          # used for computing u,v from hu,hv
 
