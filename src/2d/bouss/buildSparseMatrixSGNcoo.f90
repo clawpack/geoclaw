@@ -952,7 +952,7 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ! Need to add comments on SGN RHS.
                 
               if (debug) then
-                  write(67,*) '++b i,j,rhs = ',i,j,rhs(k_ij),rhs(k_ij + nD)
+                  write(67,*) '++before  i,j,rhs = ',i,j,rhs(k_ij),rhs(k_ij + nD)
               endif 
               
               !RHS for SGN 
@@ -977,19 +977,25 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
 
 
               if (debug) then
+                  write(67,*) '++after   i,j,rhs = ',i,j,rhs(k_ij),rhs(k_ij + nD)
+              endif 
+
+              if (debug) then
                 write(44,998) nelt,nelt-neltSt
  998                format("                               ending with nelt ",i6,"   used ",i5)
               endif
                      
-            enddo
-        enddo
 
-        if (debug .and. .false.) then ! dump matrix to look for singularity 
-           write(88,*)" level ",levelBouss
+        if (debug) then ! dump matrix to look for singularity 
+           write(88,*)" triplets for i,j ",i,j," level  ",levelBouss
            do k = neltBegin+1, nelt
-              write(88,103) minfo_matrix_ia(k),minfo_matrix_ja(k),minfo_matrix_sa(k)
- 103          format(2i8,e16.7)
+              !write(88,103) minfo_matrix_ia(k),minfo_matrix_ja(k),minfo_matrix_sa(k)
+              write(88,103) minfo_matrix_sa(k)
+ !103          format(2i8,e16.7)
+ 103          format(e16.7)
            end do
+           write(88,*)
+
            !close(88)
            !write(89,*)" level ",levelBouss
            !do k = 1,2*numBoussCells
@@ -999,6 +1005,9 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
            !!close(89)
            !!stop
         endif
+
+            enddo
+        enddo
 
         if (debug) then
          if (mptr .eq. 1) then

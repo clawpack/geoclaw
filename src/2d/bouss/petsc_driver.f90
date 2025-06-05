@@ -1,4 +1,5 @@
-subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalized,nelt)
+subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
+                        is_finalized,nelt)
 
     ! use petsc to solve sparse linear system
     ! called this way so can allocate storage of correct size
@@ -13,7 +14,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
     integer, intent(in) :: levelBouss, numBoussCells
     real(kind=8), intent(inout) :: rhs_geo(0:2*numBoussCells)
     real(kind=8), intent(in) :: time
-    logical, intent(in) :: topo_finalized
+    logical, intent(in) :: is_finalized
     integer, intent(in) :: nelt
     
     !! pass in numBoussCells for this level so can dimension this array
@@ -56,7 +57,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
        !write(17,777)(j+1,minfo%matrix_ia(j)+1,minfo%matrix_ja(j)+1,minfo%matrix_sa(j),j=0,nelt-1)
  777   format(3i8,e15.6)
 
-       if (newGrids(levelBouss) .or. .not. topo_finalized) then
+       if (newGrids(levelBouss) .or. .not. is_finalized) then
           ! destroy old solver objects to recreate for new grid setup. No need 
           ! to check if init or restart because petsc checks if null
             call KSPDestroy(ksp(levelBouss),ierr)
@@ -168,7 +169,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,topo_finalize
       numTimes(levelBouss) = numTimes(levelBouss) + 1
 
       !DEBUG
-      !call vecDuplicate(solution,y,ierr) !makes new vec y same size as first arg
+      !call vecDuplicate(solution,y,ierr)  ! makes new vec y with same size as soln
       !call MatMult(Jr(levelBouss),solution,y,ierr)
       !call VecView(rhs,PETSC_VIEWER_STDOUT_SELF,ierr)
       !call VecView(y,PETSC_VIEWER_STDOUT_SELF,ierr)

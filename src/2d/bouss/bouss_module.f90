@@ -19,7 +19,7 @@ module bouss_module
 
     logical :: startWithBouss
 
-    logical :: crs  
+    logical :: crs, origCooFormat   
 
     real(kind=8) :: startBoussTime
 
@@ -166,7 +166,8 @@ contains
         crs = .true.
     endif
 
-    ! crs = .false.  ! uncomment this line to force COO with SGN for testing
+     !crs = .false.  ! uncomment this line to force COO with SGN for testing
+     !origCooFormat = .false.  ! using block format with coo
 
     !------------------------------------------
     if (rest) then
