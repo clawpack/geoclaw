@@ -221,7 +221,11 @@ class FGOutBackend(BackendEntrypoint):
         if fgout_grid.point_style != 2:
             raise ValueError("FGOutBackend only works with fg.point_style=2")
 
-        fgout_grid.read_fgout_grids_data()
+        try:
+            fgout_grid.read_fgout_grids_data()
+        except AssertionError:
+            fgout_grid.read_fgout_grids_data_pre511()
+
         fgout = fgout_grid.read_frame(frameno)
 
         time = fgout.t
