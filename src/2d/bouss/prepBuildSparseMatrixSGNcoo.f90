@@ -52,7 +52,7 @@ subroutine prepBuildSparseMatrixSGNcoo(soln,rhs,nvar,naux,levelBouss,numBoussCel
     call system_clock(clock_start,clock_rate)
     call cpu_time(cpu_start)
     
-    !debug = .false.
+    debug = .false.
     !debug = .true.
     
     minfo => matrix_info_allLevs(levelBouss)
@@ -101,24 +101,37 @@ subroutine prepBuildSparseMatrixSGNcoo(soln,rhs,nvar,naux,levelBouss,numBoussCel
         if (locold .eq. 0) locold = loc  ! finest level has no old time soln
         locaux = node(storeaux,mptr)  ! needed for iaddaux
 
-        call buildSparseMatrixSGNcoo(alloc(loc),alloc(locold),             &
+        if (origCooFormat) then
+           call buildSparseMatrixSGNcoo(alloc(loc),alloc(locold),          &
                         alloc(locaux), soln,rhs,                           &
                         minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa,   &
                         numBoussCells,levelBouss,mptr,nx,ny,nvar,naux,     &
                         matrix_rhs1_max,matrix_rhs2_max)
+         else
+           call buildSparseMatrixSGNcoo_blocks(alloc(loc),alloc(locold),   &
+                        alloc(locaux), soln,rhs,                           &
+                        minfo%matrix_ia,minfo%matrix_ja,minfo%matrix_sa,   &
+                        numBoussCells,levelBouss,mptr,nx,ny,nvar,naux,     &
+                        matrix_rhs1_max,matrix_rhs2_max)
+         endif
             
     
     enddo  nng_loop
 
 
-    !if (minfo%matrix_nelt .gt. 0) then
-    !! copy into allocatable to continue. stack vars needed for debugging
-    !  minfo%matrix_ia = minfo_matrix_ia
-    !  minfo%matrix_ja = minfo_matrix_ja
-    !  minfo%matrix_sa = minfo_matrix_sa
-    !  !write(35,909) (j,minfo_matrix_ia(j),minfo_matrix_ja(j),minfo_matrix_sa(j),j=1,minfo%matrix_nelt)
- 909  format(3i6,e25.15)
-    !endif
+    if (minfo%matrix_nelt .gt. 0 .and. debug) then
+    ! output for testing in matlab 
+      !minfo%matrix_ia = minfo_matrix_ia
+      !minfo%matrix_ja = minfo_matrix_ja
+      !minfo%matrix_sa = minfo_matrix_sa
+      write(25,*)" coo matrix level ",levelBouss," num rows ",minfo%matrix_nelt
+      write(25,909) (j,minfo%matrix_ia(j),minfo%matrix_ja(j),minfo%matrix_sa(j),j=1,minfo%matrix_nelt)
+ 909  format(3i8,e25.15)
+      write(26,*)" rhs size",2*numBoussCells," u and v equations"
+      write(26,908) (j,rhs(j),j=1,numBoussCells)
+      write(26,908) (j+nD,rhs(j+nD),j=1,numBoussCells)
+ 908  format(i8,e25.15)
+    endif
     
     !============ Debug:
             

@@ -159,6 +159,7 @@ COMMON_SOURCES += \
   $(BOUSSLIB)/buildSparseMatrixSGNcrs.f90 \
   $(BOUSSLIB)/prepBuildSparseMatrixSGNcoo.f90 \
   $(BOUSSLIB)/buildSparseMatrixSGNcoo.f90 \
+  $(BOUSSLIB)/buildSparseMatrixSGNcoo_blocks.f90 \
   $(BOUSSLIB)/buildSparseMatrixMScoo.f90 \
   $(BOUSSLIB)/compressOut.f \
   $(BOUSSLIB)/matvec.f90 \

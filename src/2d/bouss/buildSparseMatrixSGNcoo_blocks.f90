@@ -1,5 +1,5 @@
 
-subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
+subroutine buildSparseMatrixSGNcoo_blocks(q,qold,aux,soln,rhs,                    &
                                      minfo_matrix_ia,minfo_matrix_ja,minfo_matrix_sa, &
                                      numBoussCells,levelBouss,                        &
                                      mptr,nx,ny,nvar,naux,                    &
@@ -74,6 +74,7 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
     
     debug = .false.
     !debug = .true.
+    !write(67,*)"level ",levelBouss
     
     minfo => matrix_info_allLevs(levelBouss)
 
@@ -96,7 +97,7 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
          do j = 1-nghost, ny+nghost
          do i = 1-nghost, nx+nghost
            write(49,900)i+nghost,j+nghost,(q(m,i,j),m=1,nvar)
- 900       format(2i5,5e15.7)
+ 900       format(2i5,5e15.6)
          end do
          end do
        endif
@@ -118,6 +119,7 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
     nelt = minfo%matrix_nelt  ! some number of matrix elements already added, 
     neltBegin = nelt  ! this is where this grid started
               
+    !REORG to put u and v together in blocks
         
         ! set booleans indicating whether each patch edge is a Domain Boundary:
         !call setDomainBndries(mptr,yhi_db,ylo_db,xlo_db,xhi_db)
@@ -270,16 +272,20 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                     
                     ! Replace diagonal block I-D11 by I matrix:
                     nelt = nelt + 1
-                    minfo_matrix_ia(nelt) = k_ij
-                    minfo_matrix_ja(nelt) = k_ij
+                    !minfo_matrix_ia(nelt) = k_ij
+                    !minfo_matrix_ja(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
+                    minfo_matrix_ja(nelt) = 2*k_ij-1
 
                     ! changed to +1*max on sept 2 2022 to test gamg
                     minfo_matrix_sa(nelt) =  1.d0*max(abs(h_ij),1000.d0)
                     
                     ! Replace diagonal block I-D22 by I matrix:
                     nelt = nelt + 1
-                    minfo_matrix_ia(nelt) = k_ij + nD
-                    minfo_matrix_ja(nelt) = k_ij + nD
+                    !minfo_matrix_ia(nelt) = k_ij + nD
+                    !minfo_matrix_ja(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij 
+                    minfo_matrix_ja(nelt) = 2*k_ij 
 
                     ! changed to +1*max on sept 2 2022 to test gamg
                     minfo_matrix_sa(nelt) =  1.d0*max(abs(h_ij),1000.d0)
@@ -329,8 +335,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = (1.d0 + alpha*(2.d0*h_ij**2/(3.d0*dxdx) &
                      + 0.5d0*h_ij*Bxx(i,j) + Bx(i,j)*etax))
                 nelt = nelt+1
-                minfo_matrix_ia(nelt) = k_ij
-                minfo_matrix_ja(nelt) = k_ij
+                !minfo_matrix_ia(nelt) = k_ij
+                !minfo_matrix_ja(nelt) = k_ij
+                minfo_matrix_ia(nelt) = 2*k_ij-1
+                minfo_matrix_ja(nelt) = 2*k_ij-1
                 minfo_matrix_sa(nelt) = sa
                 
                 nelt_ij = nelt  ! index of diagonal matrix element
@@ -342,15 +350,15 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 if (k_ipj > -1) then
                     ! adjacent cell is interior pt, set matrix element to sa:
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
-                    minfo_matrix_ja(nelt) = k_ipj
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
+                    minfo_matrix_ja(nelt) = 2*k_ipj-1
                     minfo_matrix_sa(nelt) = sa
                 else
                     ! right boundary of patch
                     if (.not. xhi_db) then
                         ! Dirichlet BC using Bouss correction from ghost cell
                         huc = q(4,i+1,j)
-                        rhs(k_ij) = rhs(k_ij) - sa*huc
+                        rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
                     else if (bc_xhi==1) then 
                         ! For Neumann BC add sa to diagonal matrix element:
                         minfo_matrix_sa(nelt_ij) = minfo_matrix_sa(nelt_ij) + sa
@@ -360,21 +368,20 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                     endif                    
                 endif
                 
-                
                 ! Matrix element row U(i,j) column U(i-1,j):
                 sa = alpha*(h_ij*hx/(2.d0*dxm) - h_ij**2/(3.d0*dxdx))
                 if (k_imj > -1) then
                     ! adjacent cell is interior pt, set matrix element to sa:
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
-                    minfo_matrix_ja(nelt) = k_imj
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
+                    minfo_matrix_ja(nelt) = 2*k_imj-1
                     minfo_matrix_sa(nelt) = sa
                 else
                     ! left boundary of patch
                     if (.not. xlo_db) then
                         ! Dirichlet BC using Bouss correction from ghost cell
                         huc = q(4,i-1,j)
-                        rhs(k_ij) = rhs(k_ij) - sa*huc
+                        rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
                     else if (bc_xlo==1) then
                         ! For Neumann BC add sa to diagonal matrix element:
                         minfo_matrix_sa(nelt_ij) = minfo_matrix_sa(nelt_ij) + sa
@@ -392,8 +399,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = (1.d0 + alpha*(2.d0*h_ij**2/(3.d0*dydy) &
                      + 0.5d0*h_ij*Byy(i,j) + By(i,j)*etay))
                 nelt = nelt+1
-                minfo_matrix_ia(nelt) = k_ij + nD
-                minfo_matrix_ja(nelt) = k_ij + nD
+                !minfo_matrix_ia(nelt) = k_ij + nD
+                !minfo_matrix_ja(nelt) = k_ij + nD
+                minfo_matrix_ia(nelt) = 2*k_ij
+                minfo_matrix_ja(nelt) = 2*k_ij
                 minfo_matrix_sa(nelt) = sa
                 
                 nelt_ij_nD = nelt  ! index of diagonal matrix element
@@ -403,15 +412,16 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*(-h_ij*hy/(2.d0*dym) - h_ij**2/(3.d0*dydy))
                 if (k_ijp > -1) then
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
-                    minfo_matrix_ja(nelt) = k_ijp + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij 
+                    minfo_matrix_ja(nelt) = 2*k_ijp
                     minfo_matrix_sa(nelt) = sa
                 else
                     ! top boundary of patch
                     if (.not. yhi_db) then
                         ! Dirichlet BC using Bouss correction from ghost cell
                         hvc = q(5,i,j+1)
-                        rhs(k_ij+nD) = rhs(k_ij+nD) - sa*hvc
+                        !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*hvc
+                        rhs(2*k_ij) = rhs(2*k_ij) - sa*hvc
                     else if (bc_yhi==1) then
                         ! For Neumann BC add sa to diagonal matrix element:
                         minfo_matrix_sa(nelt_ij_nD) = &
@@ -423,19 +433,23 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                     endif
                 endif
                 
+
                 ! Matrix element row V(i,j) column V(i,j-1):
                 sa = alpha*(h_ij*hy/(2.d0*dym) - h_ij**2/(3.d0*dydy))
                 if (k_ijm > -1) then
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
-                    minfo_matrix_ja(nelt) = k_ijm + nD
+                    !minfo_matrix_ia(nelt) = k_ij + nD
+                    !minfo_matrix_ja(nelt) = k_ijm + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij
+                    minfo_matrix_ja(nelt) = 2*k_ijm
                     minfo_matrix_sa(nelt) = sa
                 else
                     ! bottom boundary of patch
                     if (.not. ylo_db) then
                         ! Dirichlet BC using Bouss correction from ghost cell
                         hvc = q(5,i,j-1)
-                        rhs(k_ij+nD) = rhs(k_ij+nD) - sa*hvc
+                        !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*hvc
+                        rhs(2*k_ij) = rhs(2*k_ij) - sa*hvc
                     else if (bc_ylo==1) then
                         ! For Neumann BC add sa to diagonal matrix element:
                         minfo_matrix_sa(nelt_ij_nD) = &
@@ -457,8 +471,10 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ! NEW MATRIX ELEMENT FOR SGN WITH VARYING TOPO
                 sa = alpha*(0.5d0*h_ij*Bxy(i,j) + etax*By(i,j))
                 nelt = nelt+1
-                minfo_matrix_ia(nelt) = k_ij
-                minfo_matrix_ja(nelt) = k_ij + nD
+                !minfo_matrix_ia(nelt) = k_ij
+                !minfo_matrix_ja(nelt) = k_ij + nD
+                minfo_matrix_ia(nelt) = 2*k_ij-1
+                minfo_matrix_ja(nelt) = 2*k_ij 
                 minfo_matrix_sa(nelt) = sa
                     
             
@@ -467,20 +483,23 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = -alpha*h_ij*(hx + 0.5d0*Bx(i,j))/(2.d0*dym)
                 ja = -1
                 if (k_ijp > -1) then
-                    ja = k_ijp + nD
+                    !ja = k_ijp + nD
+                    ja = 2*k_ijp
                 else if (.not. yhi_db) then
                     hvc = q(5,i,j+1)
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    !rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc
                 else
                     ! at top boundary, use cell ij instead,
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij 
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -491,20 +510,23 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*(h_ij*(hx + 0.5d0*Bx(i,j))/(2.d0*dym))
                 ja = -1
                 if (k_ijm > -1) then
-                    ja = k_ijm + nD
+                    !ja = k_ijm + nD
+                    ja = 2*k_ijm
                 else if (.not. ylo_db) then
                     hvc = q(5,i,j-1)
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    !rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc
                 else
                     ! at bottom boundary, use cell ij instead,
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -515,20 +537,22 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*0.5d0*h_ij*By(i,j) / (2.d0*dxm)
                 ja = -1
                 if (k_ipj > -1) then
-                    ja = k_ipj + nD
+                    !ja = k_ipj + nD
+                    ja = 2*k_ipj
                 else if (.not. xhi_db) then
                     hvc = q(5,i+1,j) 
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc
                 else
                     ! at right boundary, use cell ij instead,
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij
                     ! no reflection of V at right wall
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -539,20 +563,22 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = -alpha*0.5d0*h_ij*By(i,j) / (2.d0*dxm)
                 ja = -1
                 if (k_imj > -1) then
-                    ja = k_imj + nD
+                    !ja = k_imj + nD
+                    ja = 2*k_imj
                 else if (.not. xlo_db) then
                     hvc = q(5,i-1,j)
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc
                 else
                     ! at left boundary, use cell ij instead,
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij
                     ! no reflection of V at left wall
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -562,32 +588,37 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = -alpha*h_ij**2 / (3.d0*dxdy4)
                 ja = -1
                 if (k_ipjp > -1) then
-                    ja = k_ipjp + nD
+                    !ja = k_ipjp + nD
+                    ja = 2*k_ipjp
                 !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
                 !         ((k_ipj == -1) .and. (.not. xhi_db))) then
                  else if ((.not. yhi_db .or. j .lt. ny) .and.    &
                           (.not. xhi_db .or. i .lt. nx)) then
                     hvc = q(5,i+1,j+1)
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc
                 else if (k_ijp > -1) then
                     ! at right boundary, use cell above instead
-                    ja = k_ijp + nD
+                    !ja = k_ijp + nD
+                    ja = 2*k_ijp
                 else if (k_ipj > -1) then
                     ! at top boundary, use cell to right instead, 
-                    ja = k_ipj + nD
+                    !ja = k_ipj + nD
+                    ja = 2*k_ipj 
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
                 else if (xhi_db .and. i .eq. nx .and. .not. yhi_db) then
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij 
                 else
                     ! top-right corner
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -597,32 +628,37 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*h_ij**2 / (3.d0*dxdy4)
                 ja = -1
                 if (k_ipjm > -1) then
-                    ja = k_ipjm + nD            
+                    !ja = k_ipjm + nD            
+                    ja = 2*k_ipjm 
                 !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
                 !         ((k_ipj == -1) .and. (.not. xhi_db))) then
                 else if ((.not. ylo_db .or. j>1) .and.            &
                          (.not. xhi_db .or. i .lt. nx)) then
                     hvc = q(5,i+1,j-1)
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc   
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc   
                 else if (k_ijm > -1) then
                     ! at right boundary, use cell below instead
-                    ja = k_ijm + nD
+                    !ja = k_ijm + nD
+                    ja = 2*k_ijm 
                 else if (k_ipj > -1) then
                     ! at bottom boundary, use cell to right instead,
-                    ja = k_ipj + nD
+                    !ja = k_ipj + nD
+                    ja = 2*k_ipj 
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
                 else if (xhi_db .and. i.eq.nx .and. .not. ylo_db) then
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij
                 else
                     ! bottom-right corner
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij 
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -632,67 +668,75 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*h_ij**2 / (3.d0*dxdy4)
                 ja = -1
                 if (k_imjp > -1) then
-                    ja = k_imjp + nD
+                    !ja = k_imjp + nD
+                    ja = 2*k_imjp 
                 !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
                 !         ((k_imj == -1) .and. (.not. xlo_db))) then
                 else if ((.not. yhi_db .or. j .lt. ny) .and. &
                          (.not. xlo_db .or. i > 1)) then
                     hvc = q(5,i-1,j+1)
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc
                 else if (k_ijp > -1) then
                     ! at left domain boundary, use cell above instead
-                    ja = k_ijp + nD
+                    !ja = k_ijp + nD
+                    ja = 2*k_ijp
                 else if (k_imj > -1) then
                     ! at top domain boundary, use cell to left instead,
-                    ja = k_imj + nD
+                    !ja = k_imj + nD
+                    ja = 2*k_imj
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
                 else if (xlo_db .and. i .eq. 1 .and. .not. yhi_db) then
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij
                 else
                     ! top-left corner
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij 
                     if (bc_yhi==3) sa = -sa  ! reflect V in y
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
-                
                 
                 ! Matrix element row U(i,j) column V(i-1,j-1):
                 sa = -alpha*h_ij**2 / (3.d0*dxdy4)
                 ja = -1
                 if (k_imjm > -1) then
-                    ja = k_imjm + nD
+                    ja = 2*k_imjm 
                 !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
                 !         ((k_imj == -1) .and. (.not. xlo_db))) then
                 else if ((.not. ylo_db .or. j>1) .and.      &
                          (.not. xlo_db .or. i>1)) then
                     hvc = q(5,i-1,j-1)
-                    rhs(k_ij) = rhs(k_ij) - sa*hvc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*hvc
                 else if (k_ijm > -1) then
                     ! at left boundary, use cell below instead
-                   ja = k_ijm + nD
+                   !ja = k_ijm + nD
+                   ja = 2*k_ijm
                 else if (k_imj > -1) then
                     ! at bottom boundary, use cell to left instead,
-                    ja = k_imj + nD
+                    !ja = k_imj + nD
+                    ja = 2*k_imj 
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
                 else if (xlo_db .and. i .eq. 1 .and. .not. ylo_db) then
-                   ja = k_ij + nD
+                   !ja = k_ij + nD
+                   ja = 2*k_ij
                 else
                     ! bottom-left corner
-                    ja = k_ij + nD
+                    !ja = k_ij + nD
+                    ja = 2*k_ij
                     if (bc_ylo==3) sa = -sa  ! reflect V in y
                 endif
-                
+
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij
+                    minfo_matrix_ia(nelt) = 2*k_ij-1
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -707,8 +751,8 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ! NEW MATRIX ELEMENT FOR SGN WITH VARYING TOPO
                 sa = alpha*(0.5d0*h_ij*Bxy(i,j) + etay*Bx(i,j))
                 nelt = nelt+1
-                minfo_matrix_ia(nelt) = k_ij + nD
-                minfo_matrix_ja(nelt) = k_ij
+                minfo_matrix_ia(nelt) = 2*k_ij 
+                minfo_matrix_ja(nelt) = 2*k_ij-1
                 minfo_matrix_sa(nelt) = sa
                 
                 ! Matrix element row V(i,j) column U(i+1,j):
@@ -716,20 +760,23 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = -alpha*h_ij*(hy + 0.5d0*By(i,j))/(2.d0*dxm)
                 ja = -1
                 if (k_ipj > -1) then
-                    ja = k_ipj
+                    !ja = k_ipj
+                    ja = 2*k_ipj-1
                 else if (.not. xhi_db) then
                     huc = q(4,i+1,j)
-                    rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                    !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                    rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
                 else
                     ! at right boundary, use cell ij instead,
-                    ja = k_ij
+                    !ja = k_ij
+                    ja = 2*k_ij-1
                     if (bc_xhi==3) sa = -sa  ! reflect U in x
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij 
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -740,20 +787,23 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*h_ij*(hy + 0.5d0*By(i,j))/(2.d0*dxm)
                 ja = -1
                 if (k_imj > -1) then
-                    ja = k_imj
+                    !ja = k_imj
+                    ja = 2*k_imj-1
                 else if (.not. xlo_db) then
                     huc = q(4,i-1,j)
-                    rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                    !rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                    rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
                 else
                     ! at left boundary, use cell ij instead,
-                    ja = k_ij
+                    !ja = k_ij
+                    ja = 2*k_ij-1
                     if (bc_xlo==3) sa = -sa  ! reflect U in x
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij 
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -764,43 +814,48 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*0.5d0*h_ij*Bx(i,j) / (2.d0*dym)
                 ja = -1
                 if (k_ijp > -1) then
-                    ja = k_ijp ! FIXED BUG2
+                    !ja = k_ijp ! FIXED BUG2
+                    ja = 2*k_ijp-1 ! FIXED BUG2
                 else if (.not. yhi_db) then
                     huc = q(4,i,j+1)
-                    rhs(k_ij) = rhs(k_ij) - sa*huc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
                 else
                     ! at top boundary, use cell ij instead,
-                    ja = k_ij
+                    !ja = k_ij
+                    ja = 2*k_ij-1
                     ! no reflection of U at top wall
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij 
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
+
 
                 ! Matrix element row V(i,j) column U(i,j-1): ! FIXED BUG2
                 ! NEW MATRIX ELEMENT FOR SGN WITH TOPO
                 sa = -alpha*0.5d0*h_ij*Bx(i,j) / (2.d0*dym)
                 ja = -1
                 if (k_ijm > -1) then
-                    ja = k_ijm ! FIXED BUG2
+                    !ja = k_ijm ! FIXED BUG2
+                    ja = 2*k_ijm-1 ! FIXED BUG2
                 else if (.not. ylo_db) then
                     huc = q(4,i,j-1)
-                    rhs(k_ij) = rhs(k_ij) - sa*huc
+                    rhs(2*k_ij-1) = rhs(2*k_ij-1) - sa*huc
                 else
                     ! at bottom boundary, use cell ij instead,
-                    ja = k_ij ! FIXED BUG2
+                    !ja = k_ij ! FIXED BUG2
+                    ja = 2*k_ij-1 ! FIXED BUG2
                     ! no reflection of U at bottom wall
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -810,32 +865,37 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = -alpha*h_ij**2 / (3.d0*dxdy4)
                 ja = -1
                 if (k_ipjp > -1) then
-                    ja = k_ipjp
+                    !ja = k_ipjp
+                    ja = 2*k_ipjp-1
                 !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
                 !         ((k_ipj == -1) .and. (.not. xhi_db))) then
                 else if ((.not. yhi_db .or. j.lt.ny) .and. &
                          (.not. xhi_db .or. i.lt.nx)) then
                     huc = q(4,i+1,j+1)
-                    rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                    rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
                 else if (k_ijp > -1) then
                     ! at right boundary, use cell above instead,
-                    ja = k_ijp
+                    !ja = k_ijp
+                    ja = 2*k_ijp-1
                     if (bc_xhi==3) sa = -sa  ! reflect U in x
                 else if (k_ipj > -1) then
                     ! at top boundary, use cell to right instead,
-                    ja = k_ipj
+                    !ja = k_ipj
+                    ja = 2*k_ipj-1
                 else if (yhi_db .and. j .eq. ny .and. .not. xhi_db) then
-                    ja = k_ij
+                    !ja = k_ij
+                    ja = 2*k_ij-1
                 else
                     ! top-right corner
-                    ja = k_ij ! FIXED BUG
+                    !ja = k_ij ! FIXED BUG
+                    ja = 2*k_ij-1 ! FIXED BUG
                     if (bc_xhi==3) sa = -sa  ! reflect U in x
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -845,32 +905,37 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*h_ij**2 / (3.d0*dxdy4)
                 ja = -1
                 if (k_ipjm > -1) then
-                    ja = k_ipjm
+                    !ja = k_ipjm
+                    ja = 2*k_ipjm-1
                 !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
                 !         ((k_ipj == -1) .and. (.not. xhi_db))) then
                 else if ((.not. ylo_db .or. j>1) .and. &
                          (.not. xhi_db .or. i .lt. nx)) then
                     huc = q(4,i+1,j-1)
-                    rhs(k_ij+nD) = rhs(k_ij+nD) - sa*huc
+                    rhs(2*k_ij) = rhs(2*k_ij) - sa*huc
                 else if (k_ijm > -1) then
                     ! at right boundary, use cell below instead,
-                    ja = k_ijm
+                    !ja = k_ijm
+                    ja = 2*k_ijm-1
                     if (bc_xhi==3) sa = -sa  ! reflect U in x
                 else if (k_ipj > -1) then
                     ! at bottom boundary, use cell to right instead,
-                    ja = k_ipj
+                    !ja = k_ipj
+                    ja = 2*k_ipj-1
                 else if (ylo_db .and. j .eq. 1 .and. .not. xhi_db) then
-                    ja = k_ij
+                    !ja = k_ij
+                    ja = 2*k_ij-1
                 else
                     ! bottom-right corner
-                    ja = k_ij ! FIXED BUG
+                    !ja = k_ij ! FIXED BUG
+                    ja = 2*k_ij-1 ! FIXED BUG
                     if (bc_xhi==3) sa = -sa  ! reflect U in x
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                     if (debug) write(67,*) i,j,i+1,j-1,c,nelt,sa
@@ -881,32 +946,37 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = alpha*h_ij**2 / (3.d0*dxdy4)
                 ja = -1
                 if (k_imjp > -1) then
-                    ja = k_imjp
+                    !ja = k_imjp
+                    ja = 2*k_imjp-1
                 !else if (((k_ijp == -1) .and. (.not. yhi_db)) .or. &
                 !         ((k_imj == -1) .and. (.not. xlo_db))) then
                 else if ((.not. yhi_db .or. j .lt. ny) .and. &
                          (.not. xlo_db .or. i>1)) then
                     huc = q(4,i-1,j+1)
-                    rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
+                    rhs(2*k_ij) = rhs(2*k_ij)  - sa*huc
                 else if (k_ijp > -1) then
                     ! at left boundary, use cell above instead,
-                    ja = k_ijp
+                    !ja = k_ijp
+                    ja = 2*k_ijp-1
                     if (bc_xlo==3) sa = -sa  ! reflect U in x
                 else if (k_imj > -1) then
                     ! at top boundary, use cell to left instead,
-                    ja = k_imj
+                    !ja = k_imj
+                    ja = 2*k_imj-1
                 else if (yhi_db .and. j.eq.ny .and. .not. xlo_db) then
-                    ja = k_ij
+                    !ja = k_ij
+                    ja = 2*k_ij-1
                 else
                     ! top-left corner
-                    ja = k_ij !FIXED BUG
+                    !ja = k_ij !FIXED BUG
+                    ja = 2*k_ij-1 !FIXED BUG
                     if (bc_xlo==3) sa = -sa  ! reflect U in x
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -916,32 +986,37 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 sa = -alpha*h_ij**2 / (3.d0*dxdy4)  
                 ja = -1
                 if (k_imjm > -1) then
-                    ja = k_imjm
+                    !ja = k_imjm
+                    ja = 2*k_imjm-1
                 !else if (((k_ijm == -1) .and. (.not. ylo_db)) .or. &
                 !         ((k_imj == -1) .and. (.not. xlo_db))) then
                 else if ((.not. ylo_db .or. j>1) .and. &
                          (.not. xlo_db .or. i>1)) then
                     huc = q(4,i-1,j-1)
-                    rhs(k_ij+nD) = rhs(k_ij+nD)  - sa*huc
+                    rhs(2*k_ij) = rhs(2*k_ij)  - sa*huc
                 else if (k_ijm > -1) then
                     ! at left boundary, use cell below instead,
-                    ja = k_ijm
+                    !ja = k_ijm
+                    ja = 2*k_ijm-1
                     if (bc_xlo==3) sa = -sa  ! reflect U in x
                 else if (k_imj > -1) then
                     ! at bottom boundary, use cell to left instead,
-                    ja = k_imj
+                    !ja = k_imj
+                    ja = 2*k_imj-1
                 else if (ylo_db .and. j .eq. 1 .and. .not. xlo_db) then
-                    ja = k_ij
+                    !ja = k_ij
+                    ja = 2*k_ij-1
                 else
                     ! bottom-left corner
-                    ja = k_ij !FIXED BUG
+                    !ja = k_ij !FIXED BUG
+                    ja = 2*k_ij-1 !FIXED BUG
                     if (bc_xlo==3) sa = -sa  ! reflect U in x
                 endif
                 
                 if (ja > -1) then
                     ! add a new matrix element for interior, wall, Neumann case
                     nelt = nelt+1
-                    minfo_matrix_ia(nelt) = k_ij + nD
+                    minfo_matrix_ia(nelt) = 2*k_ij
                     minfo_matrix_ja(nelt) = ja
                     minfo_matrix_sa(nelt) = sa
                 endif
@@ -952,7 +1027,7 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                 ! Need to add comments on SGN RHS.
                 
               if (debug) then
-                  write(67,*) '++before  i,j,rhs = ',i,j,rhs(k_ij),rhs(k_ij + nD)
+                  write(67,*) '++before  i,j,rhs = ',i,j,rhs(2*k_ij-1),rhs(2*k_ij)
               endif 
               
               !RHS for SGN 
@@ -965,19 +1040,18 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
               etax = (eta(i+1,j) - eta(i-1,j))/(2.d0*dxm)
               etay = (eta(i,j+1) - eta(i,j-1))/(2.d0*dym)
                                  
-              rhs(k_ij) = rhs(k_ij)  +  (grav/alpha * etax      &
+              rhs(2*k_ij-1) = rhs(2*k_ij-1)  +  (grav/alpha * etax      &
                     + 2.d0*h_ij*(h_ij/3.d0 * phix &
                     + phi(i,j) * (hx + 0.5d0*Bx(i,j)))   &
                     + 0.5d0*h_ij*wx + w(i,j)*etax)
 
-              rhs(k_ij+nD) = rhs(k_ij+nD) +  (grav/alpha * etay &
+              rhs(2*k_ij) = rhs(2*k_ij) +  (grav/alpha * etay &
                     + 2.d0*h_ij*(h_ij/3.d0 * phiy &
                     + phi(i,j) * (hy + 0.5d0*By(i,j)))   &
                     + 0.5d0*h_ij*wy + w(i,j)*etay)
 
-
               if (debug) then
-                  write(67,*) '++after   i,j,rhs = ',i,j,rhs(k_ij),rhs(k_ij + nD)
+                  write(67,*) '++after   i,j,rhs = ',i,j,rhs(2*k_ij-1),rhs(2*k_ij)
               endif 
 
               if (debug) then
@@ -987,15 +1061,14 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
                      
 
         if (debug) then ! dump matrix to look for singularity 
-           write(88,*)" triplets for i,j ",i,j," level  ",levelBouss
+           write(88,*)" triplets for i,j  ",i,j," level ",levelBouss
            do k = neltBegin+1, nelt
               !write(88,103) minfo_matrix_ia(k),minfo_matrix_ja(k),minfo_matrix_sa(k)
               write(88,103) minfo_matrix_sa(k)
- !103          format(2i8,e16.7)
+!   103          format(2i8,e16.7)
  103          format(e16.7)
            end do
            write(88,*)
-
            !close(88)
            !write(89,*)" level ",levelBouss
            !do k = 1,2*numBoussCells
@@ -1041,4 +1114,4 @@ subroutine buildSparseMatrixSGNcoo(q,qold,aux,soln,rhs,                    &
 
 
     return
-end subroutine buildSparseMatrixSGNcoo
+end subroutine buildSparseMatrixSGNcoo_blocks
