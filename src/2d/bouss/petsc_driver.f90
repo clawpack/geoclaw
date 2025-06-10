@@ -1,5 +1,5 @@
 subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
-                        is_finalized,nelt)
+                        aux_finalized,nelt)
 
     ! use petsc to solve sparse linear system
     ! called this way so can allocate storage of correct size
@@ -14,8 +14,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
     integer, intent(in) :: levelBouss, numBoussCells
     real(kind=8), intent(inout) :: rhs_geo(0:2*numBoussCells)
     real(kind=8), intent(in) :: time
-    logical, intent(in) :: is_finalized
-    integer, intent(in) :: nelt
+    integer, intent(in) :: nelt, aux_finalized
     
     !! pass in numBoussCells for this level so can dimension this array
     real(kind=8), intent(out) :: soln(0:2*numBoussCells)
@@ -57,7 +56,7 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
        !write(17,777)(j+1,minfo%matrix_ia(j)+1,minfo%matrix_ja(j)+1,minfo%matrix_sa(j),j=0,nelt-1)
  777   format(3i8,e15.6)
 
-       if (newGrids(levelBouss) .or. .not. is_finalized) then
+       if (newGrids(levelBouss) .or.  aux_finalized .lt. 2) then
           ! destroy old solver objects to recreate for new grid setup. No need 
           ! to check if init or restart because petsc checks if null
             call KSPDestroy(ksp(levelBouss),ierr)

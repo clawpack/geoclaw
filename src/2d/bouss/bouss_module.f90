@@ -165,9 +165,9 @@ contains
         ! using compressed row storage (CRS, also known as CSR or Yale) format:
         crs = .true.
     endif
+    ! if crs is false this will force SGN to use triplet COO form
+    ! crs = .false.  
 
-     ! if crs is false this will force SGN to use triplet COO form
-     ! crs = .false.  
      ! origCoo format ordered unknowns by all u updates then all v updates 
      ! block format is u and v together for a given cell. Better cache
      ! performance, better for debugging and comparing with crs.

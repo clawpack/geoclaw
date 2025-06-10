@@ -10,7 +10,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     ! Boussinesq version.
     
     use amr_module
-    use topo_module, only: topo_finalized, aux_finalized
+    use topo_module, only: aux_finalized
     use bouss_module
         
     implicit none
@@ -34,7 +34,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     integer(kind=8) :: clock_startLinSolve,clock_finishLinSolve
     real(kind=8) cpu_startBound,cpu_finishBound, time 
     real(kind=8) cpu_startLinSolve,cpu_finishLinSolve
-    logical :: debug, is_finalized
+    logical :: debug
 
 #ifdef WHERE_AM_I
     write(*,*) "starting implicit_update for level ",levelBouss
@@ -62,14 +62,9 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
 
     !!write(*,*) "before bound loop"
     !!call timestamp()
-    !! reset isBouss flag array if topo still moving
-    if (.not. topo_finalized .or. aux_finalized .lt. 2) then
-       is_finalized = .false.
-    else
-       is_finalized = .true.
-    endif
+    !! reset isBouss flag array if topo/aux still changing
 
-    if (.not. is_finalized) then
+    if (aux_finalized .lt. 2) then
       call setBoussFlag(levelBouss,naux)
     endif
 !$OMP PARALLEL DO PRIVATE(j,locnew,locaux,mptr,nx,ny,mitot,                   &
@@ -133,7 +128,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        !  ! convert to compressed row format
        !  nst = minfo%matrix_nelt
        !  call st_to_cc_size(nst,minfo%matrix_ia,minfo%matrix_ja,ncc)
-       !  call pardiso_driver(soln,rhs,levelBouss,numBoussCells,nst,ncc,topo_finalized)
+       !  call pardiso_driver(soln,rhs,levelBouss,numBoussCells,nst,ncc,aux_finalized)
        !  call system_clock(clock_finishLinSolve,clock_rate)
        !  call cpu_time(cpu_finishLinSolve)
        !  timeLinSolve = timeLinSolve + clock_finishLinSolve - clock_startLinSolve
@@ -150,7 +145,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
           call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,     &
-                           is_finalized,minfo%matrix_nelt)
+                           aux_finalized,minfo%matrix_nelt)
           call system_clock(clock_finishLinSolve,clock_rate)
           call cpu_time(cpu_finishLinSolve)
           !write(89,*)" level ",levelBouss,"  rhs   soln"
