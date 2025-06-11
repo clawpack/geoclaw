@@ -174,7 +174,7 @@ contains
      ! also reads into matlab for cond number testing, plotting,
      ! so keeping around
      !origCooFormat = .false.  ! set to false to use block format with coo
-     ! setting to avoid uninitialized variable but now used
+     ! setting to avoid uninitialized var, but not used unless crs set to false
      origCooFormat = .true. 
 
     !------------------------------------------
