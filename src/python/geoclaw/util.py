@@ -267,9 +267,109 @@ def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
         ytrans[j] = yV
         
     return xtrans, ytrans
+
+
+# ==============================================================================
+#  Data Fetching
+# ==============================================================================
+def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
+    r"""Determine names of dimensions/variables in the NetCDF file at *path*
+
+    Default dimension mapping:
+     - "x": ["x", "longitude", "lon"]
+     - "y": ["y", "latitude", "lat"]
+     - "z": ["z"]
+     - "t": ["t", "time"]
+
+    Default variable mapping:
+     - "wind_x":   ["wind_x", "u10", "u"]
+     - "wind_y":   ["wind_y", "v10", "v"]
+     - "pressure": ["pressure"]
+     - "topo":     ["topo", "elevation", "z", "band1"]
+
+    :Input:
+     - path (Path)
+     - lookup_type (str)
+     - user_mapping (dict)
+     - verbose (bool)
+
+    :Output:
+     - (dict) 
+    """
+
+    import xarray as xr
+
+    # Open file and construct set of names
+    data = xr.open_dataset(path)
+    if 'dim' in lookup_type.lower():
+        _var_mapping = {"x": (False, ["x", "longitude", "lon"]), 
+                        "y": (False, ["y", "latitude", "lat"]),
+                        "z": (False, ["z"]),
+                        "t": (False, ["t", "time"])
+                       }
+        var_names = [var_name.lower() for var_name in data.dims]
+        # Assume that we only want ('x'), weird
+        if len(var_names) == 1:
+            _var_mapping.pop(['y', 'z', 't'])
+        # Assume that we only want ('x', 'y')
+        elif len(var_names) == 2:
+            _var_mapping.pop('z', 't')
+        # Assume that we have ('x', 'y', 't')
+        elif len(var_names) == 3:
+            _var_mapping.pop('z')
+        # Maybe a third or extraneous dimension is present?
+        elif len(var_names) == 4:
+            pass
+        else:
+            raise ValueError(f"{len(var_names)} present, not sure what to do.")
+    elif 'var' in lookup_type.lower():
+        _var_mapping = {"wind_x":   (False, ["wind_x", "u10", "u"]),
+                        "wind_y":   (False, ["wind_y", "v10", "v"]),
+                        "pressure": (False, ["pressure"]),
+                        "topo":     (False, ["topo", "elevation", "z", "band1"])
+               }
+        var_names = [var_name.lower() for var_name in data.keys()]
+    else:
+        raise ValueError(f"Unknown lookup type {lookup_type}")
+
+    # Use defaults here, checking to make sure they are in the dimension names
+    if user_mapping:
+        for (coord, names) in user_mapping.items():
+            if isinstance(names, str):
+                if names in var_names:
+                    _var_mapping[coord] = (True, names)
+            else:
+                for (i, name) in enumerate(names):
+                    if name in var_names:
+                        _var_mapping[coord] = (True, name)
+                        break
+
+    # Search for names in default names
+    for var_name in var_names:
+        for (coord, values) in _var_mapping.items():
+            if not values[0]:
+                if var_name.lower() in values[1]:
+                    _var_mapping[coord] = (True, var_name)
+                    break
+
+    # Check dims are matched, Cannot check for variable names
+    if 'dim' in lookup_type.lower():
+        for (coord, value) in _var_mapping.items():
+            if not value[0]:
+                raise ValueError(f"Could not find matching dim name in " +
+                                 f"{path.name} with dimensions {var_names}.")
+
+    # Construct final dictionary
+    var_names = {}
+    for (key, value) in _var_mapping.items():
+        if value[0]:
+            var_names[key] = value[-1]
+    return var_names
     
 
-
+# ==============================================================================
+#  Data Fetching
+# ==============================================================================
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
                          datum='STND', units='metric', cache_dir=None,
                          verbose=True):

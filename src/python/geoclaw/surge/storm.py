@@ -29,8 +29,7 @@ workflow in a `setrun.py` file would do the following:
     - JMA (reading only)
     - IMD (planned)
     - tcvitals (reading only)
-    - HWRF (data-derived)
-    - OWI (data-derived)
+    - Data
 """
 
 import sys
@@ -44,7 +43,9 @@ import numpy as np
 import pandas as pd
 
 import clawpack.geoclaw.units as units
+import clawpack.geoclaw.util as util
 import clawpack.clawutil.data as clawdata
+
 
 # =============================================================================
 #  Common acronyms across formats
@@ -182,7 +183,7 @@ class Storm(object):
                           "jma": ["JMA", "http://www.jma.go.jp/jma/jma-eng/jma-center/rsmc-hp-pub-eg/Besttracks/e_format_bst.html"],
                           "imd": ["IMD", "http://www.rsmcnewdelhi.imd.gov.in/index.php"],
                           "tcvitals": ["TC-Vitals", "http://www.emc.ncep.noaa.gov/mmb/data_processing/tcvitals_description.htm"],
-                          "hwrf": ["HWRF", None],
+                          "netcdf": ["NetCDF", None],
                           "owi": ['OWI', "http://www.oceanweather.com"]}
 
 
@@ -1227,16 +1228,50 @@ class Storm(object):
                                    "implemented yet but is planned for a ",
                                    "future release."))
 
-    def write_hwrf(self, path, verbose=False):
-        r"""Write out an TCVITALS formatted storm file
+    def write_netcdf(self, path, dim_mapping=None, var_mapping=None, verbose=False):
+        r"""
+         """    
+        # Get dimension mapping
+        _dim_mapping = util.get_netcdf_names(self.file_paths[0], 
+                                             lookup_type='dim',
+                                             user_mapping=dim_mapping,
+                                             verbose=verbose)
 
-        :Input:
-         - *path* (string) Path to the file to be written.
-         - *verbose* (bool) Print out additional information when writing.
-         """
+        # Get variable mapping
+        _var_mapping = util.get_netcdf_names(self.file_paths[0], 
+                                             lookup_type='var',
+                                             user_mapping=var_mapping,
+                                             verbose=verbose)
         
-        raise NotImplementedError("HWRF formatted info files cannot be ",
-                                  "written out yet.")
+        with path.open("w") as data_file:
+            # Write header
+            data_file.write("# NetCDF CF-Conventions Data Description\n")
+            
+            # Time offset
+            self.time_offset = np.datetime64(self.time_offset)
+            if isinstance(self.time_offset, np.datetime64):
+                t = np.datetime_as_string(self.time_offset, unit="s")
+                data_file.write(f"{t.ljust(20)} # Time Offset\n\n")
+            else:
+                raise ValueError("Time offset must be a datetime64 object.")
+            data_file.write("# Mappings\n")
+            data_file.write(f"{str(_dim_mapping['x'])} ")
+            data_file.write(f"{str(_dim_mapping['y'])} ")
+            data_file.write(f"{str(_dim_mapping['t'])}\n")
+            data_file.write(f"{str(_var_mapping['wind_x'])} ")
+            data_file.write(f"{str(_var_mapping['wind_y'])} ")
+            data_file.write(f"{str(_var_mapping['pressure'])}\n")
+            data_file.write("\n")
+
+            # Only handles one file right now
+            data_file.write("# File paths\n")
+            if len(self.file_paths) != 1:
+                raise ValueError(f"Expected 1 file for format " + 
+                                 f"{file_format} rather than " +
+                                 f"{len(self.file_paths)}")
+            data_file.write(f"{self.file_paths[0]}")
+
+
 
     def write_owi(self, path, verbose=False):
         r"""Write out an OWI information formatted storm file

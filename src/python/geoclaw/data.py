@@ -537,7 +537,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
 
     # Provide some mapping between model names and integers
     storm_spec_dict_mapping = {'owi': -2,
-                               "hwrf": -1,
+                               "netcdf": -1,
                                None: 0,
                                'holland80': 1,
                                'holland08': 8,
