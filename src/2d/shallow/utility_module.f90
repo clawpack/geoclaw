@@ -3,11 +3,38 @@ module utility_module
 
     implicit none
 
+    ! ISO Time Format String
+    character(len=*), parameter :: ISO_time_format = "(i4,1x,i2,1x,i2,1x,i2,1x,i2,1x,i2)"
+
     ! String manipulation
     character( * ), private, parameter :: LOWER_CASE = 'abcdefghijklmnopqrstuvwxyz'
     character( * ), private, parameter :: UPPER_CASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 
 
 contains
+
+   ! ==========================================================================
+   ! Check for netcdf file errors when loading data, only active if the
+   ! NETCDF FFLAGS are in the Makefile
+   ! ==========================================================================
+    subroutine check_netcdf_error(ios)
+#ifdef NETCDF
+        use netcdf
+#endif
+        implicit none
+
+        integer, intent(in) :: ios
+#ifdef NETCDF
+        if (ios /= NF90_NOERR) then
+            print *, "NetCDF IO error: ", ios
+            print *, trim(nf90_strerror(ios))
+            stop
+        end if
+#else
+        print *, "GeoClaw was not compiled with NetCDF support."
+        stop
+#endif
+    end subroutine check_netcdf_error
+
 
     ! Returns number of arguments in list, assumes arbitrary number of white 
     ! space as delimiter
@@ -108,69 +135,32 @@ contains
 
     end subroutine parse_values
 
+    ! ==========================================================================
+    ! seconds_from_epoch() Calculates seconds from 1970 from a datetime
+    ! Returns the total seconds from the epoch includes leap years and days
+    ! ==========================================================================
+    pure function seconds_from_epoch(time) result(seconds)
+        implicit none
 
-    !------------------------------------------------------------------------------
-    !S+
-    ! NAME:
-    !       StrUpCase
-    !
-    ! PURPOSE:
-    !       Function to convert an input string to upper case.
-    !
-    ! CATEGORY:
-    !       Utility
-    !
-    ! LANGUAGE:
-    !       Fortran-95
-    !
-    ! CALLING SEQUENCE:
-    !       Result = StrUpCase( String )
-    !
-    ! INPUT ARGUMENTS:
-    !       String:  Character string to be converted to upper case.
-    !                UNITS:      N/A
-    !                TYPE:       CHARACTER( * )
-    !                DIMENSION:  Scalar
-    !                ATTRIBUTES: INTENT( IN )
-    !
-    ! OPTIONAL INPUT ARGUMENTS:
-    !       None.
-    !
-    ! OUTPUT ARGUMENTS:
-    !       None.
-    !
-    ! OPTIONAL OUTPUT ARGUMENTS:
-    !       None.
-    !
-    ! FUNCTION RESULT:
-    !       Result:  The input character string converted to upper case.
-    !                UNITS:      N/A
-    !                TYPE:       CHARACTER( LEN(String) )
-    !                DIMENSION:  Scalar
-    !
-    ! CALLS:
-    !       None.
-    !
-    ! SIDE EFFECTS:
-    !       None.
-    !
-    ! RESTRICTIONS:
-    !       None.
-    !
-    ! EXAMPLE:
-    !       string = 'this is a string'
-    !       WRITE( *, '( a )' ) StrUpCase( string )
-    !   THIS IS A STRING
-    !
-    ! PROCEDURE:
-    !       Figure 3.5B, pg 80, "Upgrading to Fortran 90", by Cooper Redwine,
-    !       1995 Springer-Verlag, New York.
-    !
-    ! CREATION HISTORY:
-    !       Written by:     Paul van Delst, CIMSS/SSEC 18-Oct-1999
-    !                       paul.vandelst@ssec.wisc.edu
-    !S-
-    !------------------------------------------------------------------------------
+        integer, intent(in) :: time(:) ! year, month, day, hour, minutes (optional)
+        integer :: seconds
+        integer, parameter, dimension(12) :: days_in_month=[31, 28, 31, 30, &
+                                                            31, 30, 31, 31, &
+                                                            30, 31, 30, 31]
+        integer :: leap_days, days, minutes
+
+        days = (time(1) - 1970) * 365
+        leap_days = (time(1) - 1968)/4 - (time(1) - 1900)/4 + (time(1) - 1600)/400
+        days = days + leap_days
+        if (mod(time(1), 4) == 0 .and. (mod(time(1),100) /= 0 &
+            .or. mod(time(1), 400) == 0).and.time(2) >2) THEN
+                days = days + 1
+        endif
+        days = days + sum(days_in_month(1:time(2)-1)) + time(3)
+        minutes = merge(0, time(size(time)), size(time) == 4)
+        seconds = (days*86400) + (time(4)*3600) + (minutes*60)
+
+    end function seconds_from_epoch
 
 
     ! ==========================================================================

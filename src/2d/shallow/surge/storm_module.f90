@@ -116,7 +116,7 @@ contains
         use model_storm_module, only: set_willoughby_fields
 
         use data_storm_module, only: set_data_storm => set_storm
-        use data_storm_module, only: set_HWRF_fields
+        use data_storm_module, only: set_netcdf_fields
         use data_storm_module, only: set_owi_fields
 
         use utility_module, only: get_value_count
@@ -241,8 +241,8 @@ contains
                                      storm_specification_type, log_unit)
             else if (storm_specification_type < 0) then
                 select case(storm_specification_type)
-                    case(-1) ! HWRF
-                        set_data_fields => set_HWRF_fields
+                    case(-1) ! NetCDF
+                        set_data_fields => set_netcdf_fields
                     case(-2) ! OWI
                         set_data_fields => set_OWI_fields
                     case default

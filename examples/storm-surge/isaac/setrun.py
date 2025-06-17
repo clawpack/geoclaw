@@ -406,6 +406,7 @@ def setgeo(rundata):
     # Storm parameters - Parameterized storm (Holland 1980)
     data.storm_specification_type = 'holland80'  # (type 1)
     # data.storm_specification_type = 'OWI'
+    data.storm_specification_type = 'netcdf'
     data.storm_file = (Path() / 'isaac.storm').resolve()
 
     # Convert ATCF data to GeoClaw format
@@ -443,6 +444,10 @@ def setgeo(rundata):
         isaac.file_paths.append((Path() / "isaac.nc").resolve())
 
         isaac.write(data.storm_file, file_format='OWI')
+    elif data.storm_specification_type == 'netcdf':
+        isaac.data_file_format = "NWS13"
+        isaac.file_paths.append((Path() / "isaac.nc").resolve())
+        isaac.write(data.storm_file, file_format='netcdf')
 
     else:
         raise ValueError("Invalid storm specification type.")

@@ -28,7 +28,7 @@ module data_storm_module
         ! Landfall in string - parsed for times by not used directly
         character(len=19) :: landfall
 
-        ! size of latitude and longitude arrays
+        ! ! size of latitude and longitude arrays
         integer :: mx, my
 
         ! Storm data, wind velocity in x and y, pressure and wind speed
@@ -42,6 +42,9 @@ module data_storm_module
 
         ! Time steps from wind/pressure files in seconds
         integer, allocatable :: time(:)
+
+        ! Paths to data
+        character(len=256), allocatable :: paths(:)
 
     end type data_storm_type
 
@@ -66,8 +69,8 @@ contains
         
         if (-2 <= storm_spec_type .and. storm_spec_type < 0) then
             select case(storm_spec_type)
-            case(-1) ! HWRF
-                call set_HWRF_storm(storm_data_path, storm, storm_spec_type, log_unit)
+            case(-1) ! NetCDf
+                call set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
             case(-2) ! OWI
                 call set_OWI_storm(storm_data_path, storm, storm_spec_type, log_unit)
             end select
@@ -79,18 +82,153 @@ contains
     !    Initializes the storm type for an HWRF type data derived storm that
     !    is saved as a netcdf format
     ! ==========================================================================
-    subroutine set_HWRF_storm(storm_data_path, storm, storm_spec_type, log_unit)
+    subroutine set_netcdf_storm(storm_data_path, storm, storm_spec_type, log_unit)
         
+#ifdef NETCDF
+        use netcdf
+        use amr_module, only: t0, rinfinity
+        use utility_module, only: to_upper, check_netcdf_error
+
         implicit none
 
         ! Subroutine I/O
         character(len=*), optional :: storm_data_path
         type(data_storm_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
+        
+        ! Set up for dimension info, dims are lat/lon/time
+        integer :: num_dims, x_dim_id, y_dim_id, t_dim_id, dim_ids(3)
+        character (len=10) :: x_dim_name, y_dim_name, t_dim_name
 
-        stop "HWRF storm support not implemented."
+        ! Set up for variable info, variables are pressure, lat, lon, time
+        integer :: nvars, var_type, var_id
+        character (len=13) :: var_name
 
-    end subroutine set_HWRF_storm
+        ! Netcdf file id and counter for looping
+        integer :: nc_fid, n
+        
+        integer :: file_format, io_status
+        integer, parameter :: data_unit = 10
+
+        integer :: mt, mx, my
+
+        ! NetCDF
+        character(len=16) :: dim_names(3), var_names(3)
+
+        if (.not.module_setup) then
+            ! Open data file
+            print *,'Reading storm data file ', storm_data_path
+            open(unit=data_unit, file=storm_data_path, status='old',        &
+                 action='read', iostat=io_status)
+            if (io_status /= 0) then
+                print *, "Error opening storm data file. status = ", io_status
+                stop
+            endif
+
+            read(data_unit, *) ! Comment line
+            read(data_unit, "(a)") storm%landfall
+            ! read(data_unit, "(i2)") file_format
+            ! read(data_unit, "(i2)") num_data_files
+            read(data_unit, *)
+            read(data_unit, *)
+            read(data_unit, *) dim_names
+            read(data_unit, *) var_names
+            read(data_unit, *)
+            read(data_unit, *)
+
+            ! Read rest of data file and close
+            allocate(storm%paths(1))
+            read(data_unit, "(a)") storm%paths(1)
+            close(data_unit)
+
+            write(log_unit, "('Landfall = ',a)") storm%landfall
+            write(log_unit, "('Format = ',i2)") file_format
+            write(log_unit, "('dims = ',a)") dim_names
+            write(log_unit, "('vars = ',a)") var_names
+            write(log_unit, *) "File Paths = ", storm%paths(1)
+
+            print "('Landfall = ',a)", storm%landfall
+            print "('Format = ',i2)", file_format
+            print "('dims = ',a)", dim_names
+            print "('vars = ',a)", var_names
+            print "('File Paths = ',a)", storm%paths(1)
+
+            ! Open file and get file ID
+            print *, "Reading storm NetCDF file ", storm%paths(1)
+            call check_netcdf_error(nf90_open(storm%paths(1), nf90_nowrite, nc_fid))
+            ! Read number of dimensions and variables in nc file
+            call check_netcdf_error(nf90_inquire(nc_fid, num_dims, nvars)) 
+
+            ! Get the dimension names and sizes from the file
+            call get_dim_info(nc_fid, num_dims, x_dim_id, x_dim_name, mx, &
+            y_dim_id, y_dim_name, my, t_dim_id, t_dim_name, mt)    
+
+            ! allocate arrays in storm object
+            allocate(storm%pressure(mx, my, mt))
+            allocate(storm%wind_u(mx, my, mt))
+            allocate(storm%wind_v(mx, my, mt))
+            allocate(storm%longitude(mx))
+            allocate(storm%latitude(my))
+            allocate(storm%time(mt))
+            ! Set up lat/lon lengths in storm object for use in linear interpolation of time
+            storm%mx = mx
+            storm%my = my
+
+            ! Number of time steps in data
+            storm%num_casts = mt
+            
+            ! Fill out variable data/info
+            do n = 1, nvars
+                ! read file for one variable and parse the data in storm object
+                call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
+                if ('PRESSURE' == to_upper(var_name)) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
+                elseif(ANY((/'LON      ','LONGITUDE'/) == to_upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%longitude))
+                elseif(ANY((/'LAT     ', 'LATITUDE'/) == to_upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%latitude))
+                elseif(ANY((/'TIME', 'T   '/) == to_upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%time))
+                elseif(ANY((/'U     ', 'WIND_U', 'UU    '/) == to_upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_u))
+                elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == to_upper(var_name))) then
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
+                end if
+            end do
+
+            ! Close file to stop corrupting the netcdf files
+            call check_netcdf_error(nf90_close(nc_fid))
+
+            ! Make sure first time step in setrun is inside the times in the data
+            if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
+                print *, 'Start time', t0, " is outside of the tracking"
+                print *, 'tolerance range with the track start'
+                print *, storm%time(1), '.'
+                stop
+            end if
+
+            last_storm_index = 2
+            last_storm_index = storm_index(t0, storm)
+            if (last_storm_index == -1) then
+                print *, 'Forecast not found for time ', t0, '.'
+                stop
+            end if
+
+            module_setup = .true.
+        endif
+
+#else
+        print *, "GeoClaw was not compiled with NetCDF support."
+        stop
+#endif
+
+    end subroutine set_netcdf_storm
 
     ! ==========================================================================
     !  set_owi_storm(storm_data_path, storm, storm_spec_type, log_unit)
@@ -103,6 +241,8 @@ contains
         use netcdf
 #endif
         use amr_module, only: t0, rinfinity
+        use utility_module, only: ISO_time_Format, seconds_from_epoch, to_upper
+        use utility_module, only: check_netcdf_error
 
         implicit none
 
@@ -121,12 +261,12 @@ contains
         integer :: mt, mx, my
 
         ! ASCII / NWS12
-        character(len=*), parameter :: ISO_time_Format = "(i4,1x,i2,1x,i2,1x,i2,1x,i2,1x,i2)"
+        ! character(len=*), parameter :: ISO_time_Format = "(i4,1x,i2,1x,i2,1x,i2,1x,i2,1x,i2)"
         ! character(len=*), parameter :: header_format = "(t56,i4,i2,i2,i2,t71,i4,i2,i2,i2)"
         ! character(len=*), parameter :: full_info_format = "(t6,i4,t16,i4,t23,f6.0,t32,f6.0,t44,f8.0,t58,f8.0,t69,i4,i2,i2,i2,i2)"
         ! character(len=*), parameter :: time_info_format = "(t69,i4,i2,i2,i2,i2)"
         ! real(kind=8) :: sw_lon, sw_lat, dx, dy
-        character(len=256), allocatable :: wind_files(:), pressure_files(:)
+        ! character(len=256), allocatable :: wind_files(:), pressure_files(:)
 
         ! Temp conversion
         ! integer :: yr, mo, da, hr, minute, seconds
@@ -144,7 +284,6 @@ contains
 
         ! Netcdf file id and counter for looping
         integer :: nc_fid, n
-        character(len=256) :: nc_path
 
         if (.not. module_setup) then
             ! Open data file
@@ -174,11 +313,9 @@ contains
                 end if
                 
                 ! Read in file paths
-                allocate(wind_files(storm%num_regions))
-                allocate(pressure_files(storm%num_regions))
-                do i=1, storm%num_regions
-                    read(data_unit, "(a)") pressure_files(i)
-                    read(data_unit, "(a)") wind_files(i)
+                allocate(storm%paths(storm%num_regions * 2))
+                do i=1, storm%num_regions * 2
+                    read(data_unit, "(a)") storm%paths(i)
                 end do
                 close(data_unit)
 
@@ -186,7 +323,7 @@ contains
                 read(storm%landfall, ISO_time_format) time(:, 1)
 
                 ! Load headers for setting up the rest of the data
-                call read_OWI_ASCII_header(pressure_files(1), mx, my, mt,   &
+                call read_OWI_ASCII_header(storm%paths(1), mx, my, mt,   &
                                                               swlon, swlat, &
                                                               dy, dx)
                 write(log_unit, *) "Storm header info:"
@@ -209,9 +346,9 @@ contains
                 allocate(storm%time(mt))
 
                 ! Fill out variable data/info
-                print *, "Reading wind file ", wind_files(1)
-                print *, "Reading pressure file ", pressure_files(1)
-                call read_OWI_ASCII(wind_files(1), pressure_files(1),       &
+                print *, "Reading pressure file ", storm%paths(1)
+                print *, "Reading wind file ", storm%paths(2)
+                call read_OWI_ASCII(storm%paths(2), storm%paths(1),       &
                                         mx, my, mt, swlat, swlon, dy, dx,   &
                                         storm, seconds_from_epoch(time(1:5, 1)))
 
@@ -219,12 +356,13 @@ contains
             else if (file_format == 2) then
 #ifdef NETCDF
                 ! Read rest of data file and close
-                read(data_unit, "(a)") nc_path
+                allocate(storm%paths(1))
+                read(data_unit, "(a)") storm%paths(1)
                 close(data_unit)
 
                 ! Open file and get file ID
-                print *, "Reading storm NetCDF file ", nc_path
-                call check_netcdf_error(nf90_open(nc_path, nf90_nowrite, nc_fid))
+                print *, "Reading storm NetCDF file ", storm%paths(1)
+                call check_netcdf_error(nf90_open(storm%paths(1), nf90_nowrite, nc_fid))
                 ! Read number of dimensions and variables in nc file
                 call check_netcdf_error(nf90_inquire(nc_fid, num_dims, nvars)) 
 
@@ -250,22 +388,22 @@ contains
                 do n = 1, nvars
                     ! read file for one variable and parse the data in storm object
                     call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
-                    if ('PRESSURE' == upper(var_name)) then
+                    if ('PRESSURE' == to_upper(var_name)) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
-                    elseif(ANY((/'LON      ','LONGITUDE'/) == upper(var_name))) then
+                    elseif(ANY((/'LON      ','LONGITUDE'/) == to_upper(var_name))) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%longitude))
-                    elseif(ANY((/'LAT     ', 'LATITUDE'/) == upper(var_name))) then
+                    elseif(ANY((/'LAT     ', 'LATITUDE'/) == to_upper(var_name))) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%latitude))
-                    elseif(ANY((/'TIME', 'T   '/) == upper(var_name))) then
+                    elseif(ANY((/'TIME', 'T   '/) == to_upper(var_name))) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%time))
-                    elseif(ANY((/'U     ', 'WIND_U', 'UU    '/) == upper(var_name))) then
+                    elseif(ANY((/'U     ', 'WIND_U', 'UU    '/) == to_upper(var_name))) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_u))
-                    elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == upper(var_name))) then
+                    elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == to_upper(var_name))) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
                     end if
@@ -304,37 +442,14 @@ contains
     end subroutine set_OWI_storm
 
     ! ==========================================================================
-    !  Use the 1980 Holland model to set the storm fields
-    ! ==========================================================================
-    subroutine set_HWRF_fields(maux, mbc, mx, my, xlower, ylower,    &
-                          dx, dy, t, aux, wind_index,           &
-                          pressure_index, storm)
-
-  
-        implicit none
-
-        ! Time of the wind field requested
-        integer, intent(in) :: maux,mbc,mx,my
-        real(kind=8), intent(in) :: xlower,ylower,dx,dy,t
-
-        ! Storm description, need in out here since we may update the storm
-        ! if at next time point
-        type(data_storm_type), intent(inout) :: storm
-
-        ! Array storing wind and presure field
-        integer, intent(in) :: wind_index, pressure_index
-        real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
-
-        stop "HWRF data input is not yet implemented!"
-
-    end subroutine set_HWRF_fields
-
-    ! ==========================================================================
     ! read_OWI_ASCII_header() Opens ASCII formatted OWI file and reads the 
     ! header for use in parsing the data structure
     ! ==========================================================================
     subroutine read_OWI_ASCII_header(pressure_file, mx, my, mt, swlon, swlat, &
                                                     dy, dx)
+        
+        use utility_module, only: seconds_from_epoch
+
         implicit none
 
         ! Subroutine I/O
@@ -392,6 +507,8 @@ contains
                                                         dx, dy, storm,      &
                                                         seconds_from_landfall)
         
+        use utility_module, only: seconds_from_epoch
+        
         implicit none
         
         ! Input arguments
@@ -447,6 +564,8 @@ contains
 #ifdef NETCDF
     use netcdf
 #endif
+        use utility_module, only: to_upper, check_netcdf_error
+
         implicit none
         integer, intent(in) :: nc_file, ndims
         integer, intent(out) :: x_dim_id, y_dim_id, mx, my, t_dim_id, mt
@@ -458,15 +577,15 @@ contains
         do n=1, ndims
             call check_netcdf_error(nf90_inquire_dimension(nc_file, &
                 n, dim_name_tmp, m_tmp))
-            if (ANY((/ 'LON      ','LONGITUDE','X        ' /) == upper(dim_name_tmp))) then
+            if (ANY((/ 'LON      ','LONGITUDE','X        ' /) == to_upper(dim_name_tmp))) then
                 x_dim_name = dim_name_tmp
                 mx = m_tmp
                 x_dim_id = n
-            else if (ANY((/ 'LAT     ','LATITUDE','Y       ' /) == upper(dim_name_tmp))) then
+            else if (ANY((/ 'LAT     ','LATITUDE','Y       ' /) == to_upper(dim_name_tmp))) then
                 y_dim_name = dim_name_tmp
                 my = m_tmp
                 y_dim_id = n
-            else if (ANY((/'TIME', 'T   '/) == upper(dim_name_tmp))) then
+            else if (ANY((/'TIME', 'T   '/) == to_upper(dim_name_tmp))) then
                 t_dim_name = dim_name_tmp
                 mt = m_tmp
                 t_dim_id = n
@@ -572,6 +691,29 @@ contains
     end function storm_direction
 
     ! ==========================================================================
+    ! set_netcdf_fields()
+    ! Fills out data for current time step and current patch
+    ! ==========================================================================
+    subroutine set_netcdf_fields(maux, mbc, mx, my, xlower, ylower,    &
+                                 dx, dy, t, aux, wind_index,           &
+                                 pressure_index, storm)
+
+        implicit none
+        
+        ! Subroutine I/O
+        integer, intent(in) :: maux, mbc, mx, my
+        real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
+        type(data_storm_type), intent(inout) :: storm
+        integer, intent(in) :: wind_index, pressure_index
+        real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
+
+
+        call set_owi_fields(maux, mbc, mx, my, xlower, ylower, dx, dy, t, &
+                            aux, wind_index, pressure_index, storm)
+
+    end subroutine set_netcdf_fields
+
+    ! ==========================================================================
     ! set_owi_fields()
     ! Fills out data for current time step and current patch
     ! ==========================================================================
@@ -620,6 +762,7 @@ contains
     ! Calculates the wind and pressure fields for the current time step
     ! ==========================================================================
     subroutine get_storm_time(storm, t, wind_tu, wind_tv,  pressure_t,  mx, my)
+        
         implicit none
         ! Subroutine IO
         type(data_storm_type), intent(in) :: storm
@@ -755,72 +898,5 @@ contains
         lon = storm%longitude(xidx)
         lat = storm%latitude(yidx)
     end subroutine find_nearest
-
-   ! ==========================================================================
-   ! Check for netcdf file errors when loading data, only active if the
-   ! NETCDF FFLAGS are in the Makefile
-   ! ==========================================================================
-    subroutine check_netcdf_error(ios)
-#ifdef NETCDF
-    use netcdf
-#endif
-        implicit none
-
-        integer, intent(in) :: ios
-#ifdef NETCDF
-        if (ios /= NF90_NOERR) then
-            print *, "NetCDF IO error: ", ios
-            print *, trim(nf90_strerror(ios))
-            stop
-        end if
-#endif
-    end subroutine check_netcdf_error
-
-    ! ==========================================================================
-    ! seconds_from_epoch() Calculates seconds from 1970 from a datetime
-    ! Returns the total seconds from the epoch includes leap years and days
-    ! ==========================================================================
-    pure function seconds_from_epoch(time) result(seconds)
-        implicit none
-
-        integer, intent(in) :: time(:) ! year, month, day, hour, minutes (optional)
-        integer :: seconds
-        integer, parameter, dimension(12) :: days_in_month=[31, 28, 31, 30, &
-                                                            31, 30, 31, 31, &
-                                                            30, 31, 30, 31]
-        integer :: leap_days, days, minutes
-
-        days = (time(1) - 1970) * 365
-        leap_days = (time(1) - 1968)/4 - (time(1) - 1900)/4 + (time(1) - 1600)/400
-        days = days + leap_days
-        if (mod(time(1), 4) == 0 .and. (mod(time(1),100) /= 0 &
-            .or. mod(time(1), 400) == 0).and.time(2) >2) THEN
-                days = days + 1
-        endif
-        days = days + sum(days_in_month(1:time(2)-1)) + time(3)
-        minutes = merge(0, time(size(time)), size(time) == 4)
-        seconds = (days*86400) + (time(4)*3600) + (minutes*60)
-
-    end function seconds_from_epoch
-    
-
-    ! ==========================================================================
-    ! function upper() Returns the Upper case characater in response to input
-    ! character
-    ! ==========================================================================
-    pure function upper(s1) result (s2)
-        implicit none
-        character(len=*), intent(in):: s1
-        character(len=len(s1)) :: s2
-        character :: ch
-        integer, parameter :: duc = ichar('A') - ichar('a')
-        integer :: i
-
-        do i = 1, len(s1)
-           ch = s1(i:i)
-           if (ch >= 'a' .and. ch <= 'z') ch = char(ichar(ch)+duc)
-           s2(i:i) = ch
-        end do
-    end function upper
 
 end module data_storm_module
