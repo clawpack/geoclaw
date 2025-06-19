@@ -142,7 +142,7 @@ contains
             close(data_unit)
 
             write(log_unit, "('Landfall = ',a)") storm%landfall
-            write(log_unit, "('Format = ',i2)") file_format
+            ! write(log_unit, "('Format = ',i2)") file_format
             write(log_unit, "('dims = ',a)") dim_names
             write(log_unit, "('vars = ',a)") var_names
             write(log_unit, *) "File Paths = ", storm%paths(1)
@@ -177,30 +177,22 @@ contains
             ! Number of time steps in data
             storm%num_casts = mt
             
-            ! Fill out variable data/info
-            do n = 1, nvars
-                ! read file for one variable and parse the data in storm object
-                call check_netcdf_error(nf90_inquire_variable(nc_fid, n, var_name, var_type, num_dims, dim_ids))
-                if ('PRESSURE' == to_upper(var_name)) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%pressure))
-                elseif(ANY((/'LON      ','LONGITUDE'/) == to_upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%longitude))
-                elseif(ANY((/'LAT     ', 'LATITUDE'/) == to_upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%latitude))
-                elseif(ANY((/'TIME', 'T   '/) == to_upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%time))
-                elseif(ANY((/'U     ', 'WIND_U', 'UU    '/) == to_upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_u))
-                elseif(ANY((/'V     ', 'WIND_V', 'VV    '/) == to_upper(var_name))) then
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_name, var_id))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_id, storm%wind_v))
-                end if
-            end do
+            ! Dimensions
+            call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(1), var_ID))
+            call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%longitude))
+            call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(2), var_ID))
+            call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%latitude))
+            call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(3), var_ID))
+            call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%time))
+            
+            ! Wind
+            call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(1), var_ID))
+            call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_u))
+            call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(2), var_ID))
+            call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_v))
+            ! Pressure
+            call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(3), var_ID))
+            call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%pressure))
 
             ! Close file to stop corrupting the netcdf files
             call check_netcdf_error(nf90_close(nc_fid))
