@@ -908,23 +908,7 @@ class Storm(object):
         self.file_format = "tcvitals"
 
     def read_data(self, path, verbose=False):
-        r"""Read in HWRF information file
-
-        :Input:
-         - *path* (string) Path to the file to be read.
-         - *verbose* (bool) Output more info regarding reading.
-        """
-
-        raise NotImplementedError("Reading data driven storms not yet implemented.")
-        
-        self.file_paths.append(path)
-        self.file_format = "geoclaw"
-
-    def read_owi(self, path, verbose=False):
-        r"""Read in OWI information file
-
-        Reads in file that provides information about the forcing for an OWI
-        produced wind and pressure field as well as the paths to those files.
+        r"""Read in a data derived storm data information file
 
         :Input:
          - *path* (string) Path to the file to be read.
@@ -934,29 +918,25 @@ class Storm(object):
         with path.open() as data_file:
             data_file.readline()
             self.time_offset = np.datetime64(data_file.readline()[:19])
-            self.data_file_format = int(
-                                data_file.readline().partition("#")[0].rstrip())
+            self.file_format = int(data_file.readline().partition("#")[0].rstrip())
+            num_files = int(data_file.readline().partition("#")[0].rstrip())
             data_file.readline()
             data_file.readline()
-            self.file_paths = []
-            if self.data_file_format == 1:
-                num_regions = int(data_file.readline().partition("#")[0].rstrip())
-                for line in data_file:
-                    self.file_paths.append(Path(line.partition("#")[0].rstrip()))
-                # Check to make sure we have the right number of files
-                if len(self.file_paths)%2 != 0:
-                    raise ValueError(f"Found {len(self.file_paths)} files " + 
-                                      "listed, expected even number.")
-                if num_regions != int(len(self.file_paths) / 2):
-                    raise ValueError(f"Found {len(self.file_paths)} files " + 
-                                      "listed but number of regions was " +
-                                     f"{num_regions}.")
-            elif self.data_file_format == 2:
-                self.file_paths.append(
-                          Path(data_file.readline().partition("#")[0].rstrip()))
 
-        self.file_paths.append(path)
-        self.file_format = "owi"
+            # We do not keep track of any of the format specific information
+            if self.file_format == 1:
+                self.readline()
+                self.readline()
+            elif self.file_format == 2:
+                self.readline()
+                self.readline()
+                self.readline()
+            else:
+                raise TypeError(f"Unknown storm data file format type" +
+                                f" '{self.file_format}' provided.")
+
+            for i in range(num_files):
+                self.file_paths.append(self.readline())
 
 
     # =========================================================================
@@ -1320,75 +1300,6 @@ class Storm(object):
             data_file.write("# File paths\n")
             for path in self.file_paths:
                 data_file.write(f"{path}\n")
-
-    # def write_owi(self, path, verbose=False):
-    #     r"""Write out an OWI information formatted storm file
-
-    #     :Input:
-    #      - *path* (string) Path to the file to be written.
-    #      - *verbose* (bool) Print out additional information when writing.
-    #      """
-
-    #      # OWI file formats
-    #     _data_file_format_mapping = {'ascii': 1, 'nws12': 1, 
-    #                                  'netcdf': 2, 'nws13': 2}
-
-    #     try:
-    #         with path.open('w') as data_file:
-    #             # Write header
-    #             data_file.write("# OWI Data Decription - NWS12 and NWS13\n")
-    #             if isinstance(self.data_file_format, int):
-    #                 file_format = self.data_file_format
-    #             elif isinstance(self.data_file_format, str):
-    #                 if (self.data_file_format.lower() in 
-    #                                         _data_file_format_mapping.keys()):
-    #                     file_format = _data_file_format_mapping[
-    #                                               self.data_file_format.lower()]
-    #                 else:
-    #                     raise TypeError(f"Unknown storm data file format type" +
-    #                                     f" '{self.data_file_format}' provided.")
-    #             else:
-    #                 raise TypeError(f"Unknown storm data file format type" +
-    #                                 f" '{self.data_file_format}' provided.")
-
-    #             # Write out data
-    #             # Time offset
-    #             self.time_offset = np.datetime64(self.time_offset)
-    #             if isinstance(self.time_offset, np.datetime64):
-    #                 t = np.datetime_as_string(self.time_offset, unit="s")
-    #                 data_file.write(f"{t.ljust(20)} # Time Offset\n")
-    #             else:
-    #                 raise ValueError("Time offset must be a datetime64 object.")
-
-    #             # File format
-    #             data_file.write(f"{str(file_format).ljust(20)} # File format\n")
-    #             data_file.write("\n")
-
-    #             # File format specific values
-    #             data_file.write(f"# Data Information\n")
-    #             if file_format ==  1:
-    #                 # :TODO: Modify number of regions to be indpendent of file_paths
-    #                 if len(self.file_paths)%2 != 0:
-    #                     raise ValueError("The number of files should be even, " + 
-    #                                      "one for pressure and wind, for each " +
-    #                                      "resolution provided.")
-    #                 num_regions = int(len(self.file_paths) / 2)
-    #                 data_file.write(f"{str(num_regions).ljust(20)}" + 
-    #                                  " # Number of regions\n")
-    #                 for n in range(int(len(self.file_paths) / 2)):
-    #                     data_file.write(f"{str(self.file_paths[n * 2]).ljust(20)}\n")
-    #                     data_file.write(f"{str(self.file_paths[n * 2 + 1]).ljust(20)}\n")
-    #             elif file_format == 2:
-    #                 if len(self.file_paths) != 1:
-    #                     raise ValueError(f"Expected 1 file for format " + 
-    #                                      f"{file_format} rather than " +
-    #                                      f"{len(self.file_paths)}")
-    #                 data_file.write(f"{self.file_paths[0]}\n")
-
-    #     except Exception as e:
-    #         # If an exception occurs clean up a partially generated file            
-    #         Path.unlink(path, missing_ok=True)
-    #         raise e
 
 
     # ================
