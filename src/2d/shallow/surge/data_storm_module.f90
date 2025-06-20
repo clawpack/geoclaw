@@ -16,7 +16,7 @@ module data_storm_module
     save
 
     logical, private :: module_setup = .false.
-    logical, private :: DEBUG = .true.
+    logical, private :: DEBUG = .false.
 
     ! Model storm type definition
     type data_storm_type
@@ -25,9 +25,8 @@ module data_storm_module
         ! integer :: num_casts
         integer :: num_regions
 
-        ! Landfall in string - parsed for times by not used directly
-        ! :TODO: Change to time_offset
-        character(len=19) :: landfall
+        ! Time offset in string - parsed for times by not used directly
+        character(len=19) :: time_offset
 
         ! Storm data, wind velocity in x and y, pressure and wind speed
         real(kind=8), allocatable :: pressure(:,:,:)
@@ -51,6 +50,10 @@ module data_storm_module
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
 
 contains
+
+    ! ==========================================================================
+    !  Setup and Data I/O
+    ! ==========================================================================
 
     ! === set_storm ============================================================
     ! Initializes the storm type for an HWRF type data derived storm that is
@@ -77,7 +80,7 @@ contains
         integer :: mt, mx, my, time(6, 2)
 
         ! ASCII
-        integer :: dt, total_time, seconds_from_landfall
+        integer :: dt, total_time, seconds_from_offset
         real(kind=8) :: sw_lon, sw_lat, dx, dy
         
         ! NetCDF
@@ -95,16 +98,16 @@ contains
             endif
 
             read(data_unit, *) ! Comment line
-            read(data_unit, "(a)") storm%landfall
+            read(data_unit, "(a)") storm%time_offset
             read(data_unit, "(i2)") file_format
             read(data_unit, "(i2)") num_data_files
             read(data_unit, *)
-            write(log_unit, "('Landfall = ',a)") storm%landfall
+            write(log_unit, "('time_offset = ',a)") storm%time_offset
             write(log_unit, "('Format = ',i2)") file_format
             write(log_unit, "('Num files = ',i2)") num_data_files
 
             if (DEBUG) then
-                print "('Landfall = ',a)", storm%landfall
+                print "('time_offset = ',a)", storm%time_offset
                 print "('Format = ',i2)", file_format
                 print "('Num files = ',i2)", num_data_files
             end if
@@ -145,7 +148,7 @@ contains
             close(data_unit)
 
             ! Calculate number of seconds from epoch
-            read(storm%landfall, ISO_time_format) time(:, 1)
+            read(storm%time_offset, ISO_time_format) time(:, 1)
 
             ! Read actual data
             select case(file_format)
@@ -312,14 +315,13 @@ contains
 
     end subroutine read_OWI_ASCII_header  
     
-    ! ==========================================================================
-    ! read_OWI_ASCII() reads the data files and fills out the storm object
-    ! and it's dataarrays
-    ! ==========================================================================
+
+    ! === read_OWI_ASCII =======================================================
+    ! reads the data files and fills out the storm object and it's dataarrays
     subroutine read_OWI_ASCII(wind_file, pressure_file, mx, my, mt,         &
                                                         swlat, swlon,       &
                                                         dx, dy, storm,      &
-                                                        seconds_from_landfall)
+                                                        seconds_from_offset)
         
         use utility_module, only: seconds_from_epoch
         
@@ -328,7 +330,7 @@ contains
         ! Input arguments
         type(data_storm_type) :: storm
         character(len=*), intent(in) :: wind_file, pressure_file
-        integer, intent(in) :: my, mx, mt, seconds_from_landfall 
+        integer, intent(in) :: my, mx, mt, seconds_from_offset 
         real(kind=8), intent(in) :: swlat, swlon, dx, dy
         
         ! Local storage
@@ -347,7 +349,7 @@ contains
             ! Read each time from the next array
             read(wind_unit, '(t69, i4,i2,i2,i2, i2)') time
             storm%time(n) = real(seconds_from_epoch(time)               &
-                                    - seconds_from_landfall, kind=8)
+                                    - seconds_from_offset, kind=8)
 
             read(wind_unit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
             read(wind_unit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,mx),j=1,my)
@@ -370,6 +372,7 @@ contains
         end do
         
     end subroutine read_OWI_ASCII
+
 
     ! ==========================================================================
     !  Management functions
