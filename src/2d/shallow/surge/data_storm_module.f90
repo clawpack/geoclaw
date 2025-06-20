@@ -82,10 +82,7 @@ contains
         
         ! NetCDF
         integer :: nc_fid, num_dims, num_vars, var_id
-        character(len=16) :: dim_names(3), var_names(3)
-
-        ! DEBUG
-        character(len=256) :: line
+        character(len=16) :: name, dim_names(3), var_names(3)
 
         if (.not.module_setup) then
             ! Open data file
@@ -195,7 +192,15 @@ contains
                         print *, "  num_dims = ", num_dims
                         print *, "  num_vars = ", num_vars
                         stop
-                    end if  
+                    end if
+
+                    ! Get dimensions
+                    call check_netcdf_error(nf90_inq_dimid(nc_fid, dim_names(1), var_ID))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, mx))
+                    call check_netcdf_error(nf90_inq_dimid(nc_fid, dim_names(2), var_ID))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, my))
+                    call check_netcdf_error(nf90_inq_dimid(nc_fid, dim_names(3), var_ID))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, mt))
 
                     ! allocate arrays in storm object
                     allocate(storm%pressure(mx, my, mt))
@@ -224,10 +229,6 @@ contains
 
                     ! Close file to stop corrupting the netcdf files
                     call check_netcdf_error(nf90_close(nc_fid))
-
-                    ! print "('t    = ', 3D25.16)", storm%time(1:3)
-                    print *, storm%time
-                    stop
 #else
                     print *, "GeoClaw was not compiled with NetCDF support."
                     stop
