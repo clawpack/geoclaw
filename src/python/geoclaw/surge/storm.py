@@ -1287,8 +1287,8 @@ class Storm(object):
                 data_file.write(f"{str(_dim_mapping['x'])} ")
                 data_file.write(f"{str(_dim_mapping['y'])} ")
                 data_file.write(f"{str(_dim_mapping['t'])}\n")
-                data_file.write(f"{str(_var_mapping['wind_x'])} ")
-                data_file.write(f"{str(_var_mapping['wind_y'])} ")
+                data_file.write(f"{str(_var_mapping['wind_u'])} ")
+                data_file.write(f"{str(_var_mapping['wind_v'])} ")
                 data_file.write(f"{str(_var_mapping['pressure'])}\n")
                 data_file.write("\n")
 

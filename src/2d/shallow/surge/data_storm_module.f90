@@ -11,7 +11,7 @@
 !                     http://www.opensource.org/licenses/
 ! ==============================================================================
 module data_storm_module
-
+        
     implicit none
     save
 
@@ -36,7 +36,7 @@ module data_storm_module
         ! Wind field dimension arrays
         real(kind=8), allocatable :: latitude(:)
         real(kind=8), allocatable :: longitude(:)
-        real(kind=8), allocatable :: time(:)
+        integer, allocatable :: time(:)
 
         ! Paths to data
         character(len=256), allocatable :: paths(:)
@@ -63,7 +63,8 @@ contains
 #ifdef NETCDF
         use netcdf
 #endif
-        use amr_module, only: t0, rinfinity
+
+        use amr_module, only: t0
         use utility_module, only: to_upper, check_netcdf_error
         use utility_module, only: seconds_from_epoch, ISO_time_format
 
@@ -80,7 +81,6 @@ contains
         integer :: mt, mx, my, time(6, 2)
 
         ! ASCII
-        integer :: dt, total_time, seconds_from_offset
         real(kind=8) :: sw_lon, sw_lat, dx, dy
         
         ! NetCDF
@@ -147,7 +147,7 @@ contains
             end do
             close(data_unit)
 
-            ! Calculate number of seconds from epoch
+            ! Calculate number of seconds from epoch - needed below
             read(storm%time_offset, ISO_time_format) time(:, 1)
 
             ! Read actual data
@@ -180,9 +180,9 @@ contains
                     ! Fill out variable data/info
                     print *, "Reading pressure file ", storm%paths(1)
                     print *, "Reading wind file ", storm%paths(2)
-                    call read_OWI_ASCII(storm%paths(2), storm%paths(1),       &
-                                            mx, my, mt, sw_lat, sw_lon, dy, dx,   &
-                                            storm, seconds_from_epoch(time(1:5, 1)))
+                    call read_OWI_ASCII(storm%paths(2), storm%paths(1),        &
+                                        mx, my, mt, sw_lat, sw_lon, dy, dx,    &
+                                        storm, seconds_from_epoch(time(:, 1)))
                 case(2)
 #ifdef NETCDF                    
                     ! Open file and get file ID
@@ -213,6 +213,14 @@ contains
                     allocate(storm%latitude(my))
                     allocate(storm%time(mt))
                     
+                    write(log_unit, *) "Storm header info:"
+                    write(log_unit, "('  mx,mx,mt = ', 3i4)") mx, my, mt
+
+                    if (DEBUG) then
+                        print *, "Storm header info:"
+                        print "('  mx,mx,mt = ', 3i4)", mx, my, mt
+                    end if
+
                     ! Dimensions
                     call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(1), var_ID))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%longitude))
@@ -220,13 +228,16 @@ contains
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%latitude))
                     call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(3), var_ID))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%time))
-                    
+
+                    ! Convert time to seconds from offset
+                    storm%time(:) = storm%time(:) - seconds_from_epoch(time(:, 1))
+
                     ! Wind
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(1), var_ID))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_u))
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(2), var_ID))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_v))
-                    ! Pressure
+                    ! ! Pressure
                     call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(3), var_ID))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%pressure))
 
@@ -348,8 +359,7 @@ contains
         do n = 1, mt
             ! Read each time from the next array
             read(wind_unit, '(t69, i4,i2,i2,i2, i2)') time
-            storm%time(n) = real(seconds_from_epoch(time)               &
-                                    - seconds_from_offset, kind=8)
+            storm%time(n) = seconds_from_epoch(time) - seconds_from_offset
 
             read(wind_unit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
             read(wind_unit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,mx),j=1,my)
@@ -392,12 +402,9 @@ contains
         real(kind=8) :: t0,t1
         logical :: found
 
-        integer :: i
-
         ! Figure out where we are relative to the last time we checked for the
         ! index (stored in last_storm_index)
         ! Check if we are already beyond the end of the last forecast time
-
         if (last_storm_index == size(storm%time) + 1) then
             index = size(storm%time) + 1
         else
@@ -437,6 +444,7 @@ contains
 
     end function storm_index
 
+
     ! === storm_location(t,storm) ==============================================
     ! Interpolate location of hurricane in the current time interval
     function storm_location(t,storm) result(location)
@@ -454,6 +462,7 @@ contains
 
     end function storm_location
 
+
     ! === storm_direction ======================================================
     ! Angle off of due north that the storm is traveling
     real(kind=8) function storm_direction(t, storm) result(theta)
@@ -469,7 +478,7 @@ contains
     end function storm_direction
 
 
-    ! === set_data_fields() ====================================================
+    ! === set_data_fields ======================================================
     ! Fills out data for current time step and current patch
     subroutine set_data_fields(maux, mbc, mx, my, xlower, ylower,    &
                                dx, dy, t, aux, wind_index,           &
@@ -490,27 +499,23 @@ contains
         real(kind=8) :: u_value, v_value, p_value
         integer :: i, j
         real(kind=8) :: x, y
-        logical :: convert_height=.true.
 
-        ! wind and pressure arrays for current time step
-        real(kind=8) :: wind_tu(size(storm%longitude),size(storm%latitude))
-        real(kind=8) :: wind_tv(size(storm%longitude), size(storm%latitude))
-        real(kind=8) :: pressure_t(size(storm%longitude),size(storm%latitude))
+        ! Temporally interpolated fields
+        real(kind=8) :: wind_u(size(storm%longitude),size(storm%latitude))
+        real(kind=8) :: wind_v(size(storm%longitude), size(storm%latitude))
+        real(kind=8) :: pressure(size(storm%longitude),size(storm%latitude))
         
         ! get the wind and pressure arrays for the current timestep
-        call get_storm_time(storm, t, wind_tu, wind_tv, pressure_t, mx, my)
+        call interp_time(storm, t, wind_u, wind_v, pressure)
 
         ! Loop over every point in the patch and fill in the data
         do j=1-mbc, my+mbc
             y = ylower + (j-0.5d0) * dy
             do i=1-mbc, mx+mbc
                 x = xlower + (i-0.5d0) * dx
-                call interp_array_data(storm, x, y, wind_tu, u_value)
-                aux(wind_index, i, j) = u_value
-                call interp_array_data(storm, x, y, wind_tv, v_value)
-                aux(wind_index + 1, i, j) = v_value
-                call interp_array_data(storm, x, y, pressure_t, p_value)
-                aux(pressure_index, i, j) = p_value
+                aux(wind_index, i, j) = spatial_interp(storm, x, y, wind_u)
+                aux(wind_index + 1, i, j) = spatial_interp(storm, x, y, wind_v)
+                aux(pressure_index, i, j) = spatial_interp(storm, x, y, pressure)
             end do
         end do
     end subroutine set_data_fields
@@ -552,22 +557,26 @@ contains
     end subroutine set_netcdf_fields
 
 
-    ! === get_storm_time =======================================================
-    ! Calculates the wind and pressure fields for the current time step
-    subroutine get_storm_time(storm, t, wind_tu, wind_tv,  pressure_t,  mx, my)
+    ! === interp_time ==========================================================
+    ! Interpolate storm arrays to get current time
+    subroutine interp_time(storm, t, wind_u, wind_v, pressure)
         
         implicit none
         ! Subroutine IO
         type(data_storm_type), intent(in) :: storm
-        integer, intent(in) :: mx, my
         real(kind=8), intent(in) :: t
-        real(kind=8), intent(inout) :: wind_tu(size(storm%longitude), size(storm%latitude))
-        real(kind=8), intent(inout) :: wind_tv(size(storm%longitude), size(storm%latitude))
-        real(kind=8), intent(inout) :: pressure_t(size(storm%longitude), size(storm%latitude))
+        real(kind=8), intent(inout) :: wind_u(size(storm%longitude),        &
+                                              size(storm%latitude))
+        real(kind=8), intent(inout) :: wind_v(size(storm%longitude),        &
+                                              size(storm%latitude))
+        real(kind=8), intent(inout) :: pressure(size(storm%longitude),      &
+                                                size(storm%latitude))
 
         ! Local storage
-        integer :: i, j, k, mx_orig, my_orig
+        integer :: i
         real(kind=8) :: tn, tnm, weight
+
+        ! Get indices of bracketing storm fields
         last_storm_index = 2
         i = storm_index(t, storm)
         last_storm_index = i
@@ -588,34 +597,34 @@ contains
         endif
         if (i == size(storm%time) + 1) then
             i = i -1
-            wind_tu = storm%wind_u(:,:,i)
-            wind_tv = storm%wind_v(:,:,i)
-            pressure_t = storm%pressure(:,:,i)
+            wind_u = storm%wind_u(:,:,i)
+            wind_v = storm%wind_v(:,:,i)
+            pressure = storm%pressure(:,:,i)
         else
             tn = storm%time(i)
             tnm = storm%time(i - 1)
             weight = (t - tnm) / (tn - tnm)
-            wind_tu = (storm%wind_u(:,:,i) - storm%wind_u(:,:,i - 1)) * weight + &
+            wind_u = (storm%wind_u(:,:,i) - storm%wind_u(:,:,i - 1)) * weight + &
                       storm%wind_u(:,:, i-1)
-            wind_tv = (storm%wind_v(:,:,i) - storm%wind_v(:,:,i - 1)) * weight + &
+            wind_v = (storm%wind_v(:,:,i) - storm%wind_v(:,:,i - 1)) * weight + &
                       storm%wind_v(:,:, i-1)
-            pressure_t = (storm%pressure(:,:,i) - storm%pressure(:,:,i - 1)) * weight + &
-                          storm%pressure(:,:,i - 1)
+            pressure = (storm%pressure(:,:,i) - storm%pressure(:,:,i - 1)) * weight + &
+                        storm%pressure(:,:,i - 1)
         end if
 
-    end subroutine get_storm_time
-       
+    end subroutine interp_time
 
-    ! === interp_array_data ====================================================
-    ! Obtains wind and pressure data for each patch. Uses bilinear interpolation
-    ! to get the data.
-    subroutine interp_array_data(storm, x, y, interp_array, value)
+
+    ! === spatial_intrp ========================================================
+    ! Spatially interpolate interp_array onto (x,y) point
+    pure real(kind=8) function spatial_interp(storm, x, y, interp_array) result(value)
+        
         implicit none
+        
         ! Subroutine I/O
-        type(data_storm_type), intent(inout) :: storm
-        real(kind=8), intent(inout) :: x, y
-        real(kind=8), intent(in) :: interp_array(size(storm%longitude), size(storm%latitude))
-        real(kind=8), intent(out) :: value
+        type(data_storm_type), intent(in) :: storm
+        real(kind=8), intent(in) :: x, y, interp_array(size(storm%longitude),  &
+                                                       size(storm%latitude))
 
         ! Local storage
         real(kind=8) :: q11, q12, q21, q22
@@ -626,8 +635,6 @@ contains
         ! Get the data resolution
         storm_dx = storm%longitude(2) - storm%longitude(1)
         storm_dy = storm%latitude(2) - storm%latitude(1)
-
-        
 
         ! Add a edge case handling that reflects the boundary
         if (x < minval(storm%longitude) .or. x > maxval(storm%longitude) .or. &
@@ -672,7 +679,7 @@ contains
             
         end if
         
-    end subroutine interp_array_data
+    end function spatial_interp
 
     ! === find_nearest =========================================================
     ! Finds nearest value to x and y for interpolation points. Finds the nearest

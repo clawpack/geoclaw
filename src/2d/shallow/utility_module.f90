@@ -136,31 +136,60 @@ contains
     end subroutine parse_values
 
     ! ==========================================================================
-    ! seconds_from_epoch() Calculates seconds from 1970 from a datetime
-    ! Returns the total seconds from the epoch includes leap years and days
+    ! seconds_from_epoch() Calculates seconds from UNIX epoch (1970) from a
+    ! datetime. Returns the total seconds from the epoch includes leap years and
+    ! days
     ! ==========================================================================
-    pure function seconds_from_epoch(time) result(seconds)
+    pure integer function seconds_from_epoch(time) result(seconds_since_epoch)
         implicit none
 
-        integer, intent(in) :: time(:) ! year, month, day, hour, minutes (optional)
-        integer :: seconds
-        integer, parameter, dimension(12) :: days_in_month=[31, 28, 31, 30, &
-                                                            31, 30, 31, 31, &
-                                                            30, 31, 30, 31]
-        integer :: leap_days, days, minutes
+        ! year, month, day, hour, [minutes], [seconds] (optional)
+        integer, intent(in) :: time(:)
+        integer :: days_since_epoch
+        integer :: years, months, days, hours, minutes, seconds
 
-        days = (time(1) - 1970) * 365
-        leap_days = (time(1) - 1968)/4 - (time(1) - 1900)/4 + (time(1) - 1600)/400
-        days = days + leap_days
-        if (mod(time(1), 4) == 0 .and. (mod(time(1),100) /= 0 &
-            .or. mod(time(1), 400) == 0).and.time(2) >2) THEN
-                days = days + 1
-        endif
-        days = days + sum(days_in_month(1:time(2)-1)) + time(3)
-        minutes = merge(0, time(size(time)), size(time) == 4)
-        seconds = (days*86400) + (time(4)*3600) + (minutes*60)
+        ! Handle possibly missing values
+        years = time(1)
+        months = time(2)
+        days = time(3)
+        hours = time(4)
+        minutes = 0
+        seconds = 0
+        if (size(time) >= 5) then
+            minutes = time(5)
+            if (size(time) == 6) then
+                seconds = time(6)
+            end if 
+        end if
+
+        ! Compute days since epoch (1970-01-01)
+        days_since_epoch = date_to_days(years, months, days)        &
+                                - date_to_days(1970, 1, 1)
+
+        ! Compute total seconds
+        seconds_since_epoch = days_since_epoch * 86400      &
+                                + hours * 3600              &
+                                + minutes * 60              &
+                                + seconds
 
     end function seconds_from_epoch
+
+    ! Helper function: convert date to days since a fixed point
+    pure integer function date_to_days(y, m, d)
+        integer, intent(in) :: y, m, d
+        integer :: a, y_adj, m_adj
+
+        a = (14 - m) / 12
+        y_adj = y + 4800 - a
+        m_adj = m + 12 * a - 3
+
+        date_to_days = d + (153 * m_adj + 2) / 5    &
+                         + 365 * y_adj              &
+                         + y_adj / 4                &
+                         - y_adj / 100              &
+                         + y_adj / 400              &
+                         - 32045                
+    end function date_to_days
 
 
     ! ==========================================================================
