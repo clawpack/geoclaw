@@ -76,8 +76,8 @@ contains
         integer, intent(in) :: storm_spec_type, log_unit
 
         ! General data
-        integer :: i, io_status, file_format, num_data_files
         integer, parameter :: data_unit = 10
+        integer :: i, io_status, file_format, num_data_files
         integer :: mt, mx, my, time(6, 2)
 
         ! ASCII
