@@ -275,6 +275,11 @@ def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
 def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     r"""Determine names of dimensions/variables in the NetCDF file at *path*
 
+    Note that if a file has multiple matching variables that the first it finds
+    will be the one used.  It is best practice to provide the label if there
+    are multiple available, e.g. 'msl' (mean sealevel pressure) and 'sp'
+    (surface pressure) for pressure.
+
     Default dimension mapping:
      - "x": ["x", "longitude", "lon"]
      - "y": ["y", "latitude", "lat"]
@@ -282,9 +287,9 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
      - "t": ["t", "time"]
 
     Default variable mapping:
-     - "wind_x":   ["wind_x", "u10", "u"]
-     - "wind_y":   ["wind_y", "v10", "v"]
-     - "pressure": ["pressure"]
+     - "wind_u":   ["wind_x", "wind_u", "u10", "u"]
+     - "wind_v":   ["wind_y", "wind_v", "v10", "v"]
+     - "pressure": ["pressure", "msl", "sp"]
      - "topo":     ["topo", "elevation", "z", "band1"]
 
     :Input:
@@ -323,9 +328,9 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
         else:
             raise ValueError(f"{len(var_names)} present, not sure what to do.")
     elif 'var' in lookup_type.lower():
-        _var_mapping = {"wind_x":   (False, ["wind_x", "u10", "u"]),
-                        "wind_y":   (False, ["wind_y", "v10", "v"]),
-                        "pressure": (False, ["pressure"]),
+        _var_mapping = {"wind_u":   (False, ["wind_u", "wind_x", "u10", "u"]),
+                        "wind_v":   (False, ["wind_v", "wind_y", "v10", "v"]),
+                        "pressure": (False, ["pressure", "msl", "sp"]),
                         "topo":     (False, ["topo", "elevation", "z", "band1"])
                }
         var_names = [var_name.lower() for var_name in data.keys()]
