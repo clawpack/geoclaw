@@ -1511,6 +1511,7 @@ subroutine intersection(indicator,area,xintlo,xinthi, &
 
 end subroutine intersection
 
+! :TODO: Use the utility module's version of these
 #ifdef NETCDF
     subroutine check_netcdf_error(ios)
 
