@@ -386,12 +386,14 @@ def wrap_coords(input_path, output_path=None, force=False, dim_mapping=None):
        file, not just 'x'.  Default is {}.
     """
 
+    import xarray as xr
+
     if not output_path:
         output_path = (input_path.parent / 
                                 f"{input_path.stem}_wrap{input_path.suffix}")
 
     if not output_path.exists() or force:
-        dim_mapping = util.get_netcdf_names(input_path, lookup_type='dim', 
+        dim_mapping = get_netcdf_names(input_path, lookup_type='dim', 
                                                        user_mapping=dim_mapping)
         ds = xr.open_dataset(input_path)
         lon_atrib = ds.coords[dim_mapping['x']].attrs
