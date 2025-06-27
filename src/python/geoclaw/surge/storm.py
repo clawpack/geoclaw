@@ -219,6 +219,12 @@ class Storm(object):
         self.classification = None          # Classification of storm (e.g. HU)
         self.event = None                   # Event (e.g. landfall) - HURDAT
 
+        # Ramping information - only applies to data storms currently
+        self.window_type = 0
+        self.ramp_width = 1e0               # 1 degree
+        self.window = None                  # If not provided for data files it
+                                            # will be set to the file extents
+
         if path is not None:
             self.read(path, file_format=file_format, **kwargs)
 
@@ -1236,6 +1242,8 @@ class Storm(object):
         _data_file_format_mapping = {'ascii': 1, 'nws12': 1, "owi": 1,
                                      'netcdf': 2, 'nws13': 2}
 
+        _window_type_mapping = {None: 0, 'none': 0, 'custom': 1}
+
         if isinstance(self.file_format, int):
             file_format = self.file_format
         elif isinstance(self.file_format, str):
@@ -1250,6 +1258,20 @@ class Storm(object):
             raise TypeError(f"Unknown storm data file format type" +
                             f" '{self.file_format}' provided.")
 
+        if isinstance(self.window_type, int):
+            window_type = self.window_type
+        elif isinstance(self.window_type, str):
+            if (self.window_type.lower() in 
+                                    _window_type_mapping.keys()):
+                window_type = _window_type_mapping[
+                                          self.window_type.lower()]
+            else:
+                raise TypeError(f"Unknown window type" +
+                                f" '{self.window_type}' provided.")
+        else:
+            raise TypeError(f"Unknown window type" +
+                            f" '{self.window_type}' provided.")
+
         with path.open("w") as data_file:
             # Write header
             data_file.write("# Data Derived Storm\n")
@@ -1263,6 +1285,12 @@ class Storm(object):
                 raise ValueError("Time offset must be a datetime64 object.")
             data_file.write(f"{str(file_format).ljust(20)} # File format\n")
             data_file.write(f"{str(len(self.file_paths)).ljust(20)} # Number of files\n")
+            data_file.write(f"{str(window_type).ljust(20)} # Window type\n")
+            data_file.write(f"{str(self.ramp_width).ljust(20)} # Ramp width\n")
+            if window_type > 0:
+                data_file.write(f"{str(self.window)[1:-1].ljust(20)} # Window\n")
+            else:
+                data_file.write(f"{str(None).ljust(20)} # Window\n")
             data_file.write("\n")
             data_file.write("# Format Data Information\n")
             if file_format == 1:

@@ -45,6 +45,10 @@ module data_storm_module
 
     integer, private :: last_storm_index
 
+    ! Ramping settings
+    integer :: window_type
+    real(kind=8) :: window(4), ramp_width
+
     ! Time tracking tolerance allowance - allows for the beginning of the storm
     ! track to be close to but not equal the start time of the simulation
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
@@ -101,11 +105,23 @@ contains
             read(data_unit, "(a)") storm%time_offset
             read(data_unit, "(i2)") file_format
             read(data_unit, "(i2)") num_data_files
-            read(data_unit, *)
+            read(data_unit, "(i2)") window_type
+            read(data_unit, *) ramp_width
+
             write(log_unit, "('time_offset = ',a)") storm%time_offset
             write(log_unit, "('Format = ',i2)") file_format
             write(log_unit, "('Num files = ',i2)") num_data_files
+            write(log_unit, "('window_type = ',i2)") window_type
+            write(log_unit, "('ramp_width = ',d16.8)") ramp_width
 
+            ! If not provided, then we use the file extents after being read
+            if (window_type > 0) then
+                read(data_unit, *) window
+            else
+                read(data_unit, *)
+            end if
+            read(data_unit, *)
+            
             if (DEBUG) then
                 print "('time_offset = ',a)", storm%time_offset
                 print "('Format = ',i2)", file_format
@@ -183,6 +199,7 @@ contains
                     call read_OWI_ASCII(storm%paths(2), storm%paths(1),        &
                                         mx, my, mt, sw_lat, sw_lon, dy, dx,    &
                                         storm, seconds_from_epoch(time(:, 1)))
+
                 case(2)
 #ifdef NETCDF                    
                     ! Open file and get file ID
@@ -263,6 +280,13 @@ contains
                 print *, 'Forecast not found for time ', t0, '.'
                 stop
             end if
+
+            ! Set bounds on window to file bounds if not provided
+            if (window_type == 0) then
+                window = [storm%longitude(1), storm%latitude(1),            &
+                          storm%longitude(mx), storm%latitude(my)]
+            end if
+            write(log_unit, "('window = ',4d16.8)") window
 
             module_setup = .true.
         endif
@@ -483,6 +507,10 @@ contains
     subroutine set_data_fields(maux, mbc, mx, my, xlower, ylower,    &
                                dx, dy, t, aux, wind_index,           &
                                pressure_index, storm)
+
+        use geoclaw_module, only: Pa => ambient_pressure, pi
+        use utility_module, only: point_in_rectangle, rects_intersect
+
         implicit none
         ! subroutine i/o
         integer, intent(in) :: maux, mbc, mx, my
@@ -504,22 +532,63 @@ contains
         real(kind=8) :: wind_u(size(storm%longitude),size(storm%latitude))
         real(kind=8) :: wind_v(size(storm%longitude), size(storm%latitude))
         real(kind=8) :: pressure(size(storm%longitude),size(storm%latitude))
-        
-        ! get the wind and pressure arrays for the current timestep
-        call interp_time(storm, t, wind_u, wind_v, pressure)
 
-        ! Loop over every point in the patch and fill in the data
-        do j=1-mbc, my+mbc
-            y = ylower + (j-0.5d0) * dy
-            do i=1-mbc, mx+mbc
-                x = xlower + (i-0.5d0) * dx
-                aux(wind_index, i, j) = spatial_interp(storm, x, y, wind_u)
-                aux(wind_index + 1, i, j) = spatial_interp(storm, x, y, wind_v)
-                aux(pressure_index, i, j) = spatial_interp(storm, x, y, pressure)
+        ! Ramping window support
+        real(kind=8) :: d, ramp, xhi, yhi
+
+        ! Check to see if this anything on this grid is inside of the window
+        ! Patch boundaries [xlower, xhi] x [ylower, yhi] \in window + ramp_width
+        xhi = xlower + (mx + mbc - 0.5d0) * dx
+        yhi = ylower + (my + mbc - 0.5d0) * dy
+        if (rects_intersect([xlower, ylower, xhi, yhi],                        &
+                        [window(1) - ramp_width, window(2) - ramp_width,       &
+                         window(3) + ramp_width, window(4) + ramp_width])) then
+
+            ! Get the wind and pressure arrays for the current timestep
+            call interp_time(storm, t, wind_u, wind_v, pressure)
+
+            ! Loop over every point in the patch and fill in the data
+            do j=1-mbc, my+mbc
+                y = ylower + (j-0.5d0) * dy
+                do i=1-mbc, mx+mbc
+                    x = xlower + (i-0.5d0) * dx
+
+                    ! Inside of window + ramp_width
+                    if (point_in_rectangle([x, y], [window(1) - ramp_width,   &
+                                                    window(2) - ramp_width,   &
+                                                    window(3) + ramp_width,   &
+                                                    window(4) + ramp_width])) then
+
+                        aux(wind_index, i, j) = spatial_interp(storm, x, y, wind_u)
+                        aux(wind_index + 1, i, j) = spatial_interp(storm, x, y, wind_v)
+                        aux(pressure_index, i, j) = spatial_interp(storm, x, y, pressure)
+
+                        ! Ramp function, hardcoded right now
+                        d = min(x - window(1), window(3) - x,         &
+                                y - window(2), window(4) - y)
+                        if (-ramp_width < d .and. d < 0.d0) then
+                            ramp = 0.5d0 * (1.d0 + sin(-pi / ramp_width * d + pi / 2.0))
+                        else if (d > 0.d0) then
+                            ramp = 1.d0
+                        else
+                            ramp = 0.d0
+                        end if
+                        aux(pressure_index,i,j) =                              &
+                                    Pa + (aux(pressure_index,i,j) - Pa) * ramp
+                        aux(wind_index:wind_index+1,i,j) =                     &
+                                    aux(wind_index:wind_index+1,i,j) * ramp
+
+                    else
+                        aux(wind_index:wind_index + 1, i, j) = 0.d0
+                        aux(pressure_index, i, j) = Pa
+                    end if
+                end do
             end do
-        end do
+        else
+            aux(wind_index:wind_index+1, :, :) = 0.d0
+            aux(pressure_index, :, :) = Pa
+        end if
     end subroutine set_data_fields
-
 
     ! === set_ascii_fields =====================================================
     ! Stub that points to the generic set_data_fields

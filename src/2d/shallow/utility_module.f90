@@ -135,6 +135,31 @@ contains
 
     end subroutine parse_values
 
+    ! === Geometry Functions ===================================================
+    !
+    
+    !  point_in_rectangle(p, rect) - Returns whether p is in rect.
+    !    real(kind=8) :: p(2), rect(4)
+    !    rect is in the format (lower x, lower y, upper x, upper y)
+    pure logical function point_in_rectangle(p, rect)
+        implicit none
+        real(kind=8), intent(in) :: p(2), rect(4)
+        point_in_rectangle = p(1) >= rect(1) .and. p(1) <= rect(3) .and. &
+                             p(2) >= rect(2) .and. p(2) <= rect(4)
+    end function point_in_rectangle
+
+    !  rects_intersect(rect1, rect2) - Returns whether rectangles intersect
+    !    real(kind=8) :: rect1(4), rect2(4)
+    !    rects are in the format (lower x, lower y, upper x, upper y)
+    pure logical function rects_intersect(rect1, rect2)
+        implicit none
+        real(kind=8), intent(in) :: rect1(4), rect2(4)
+        rects_intersect = .not. (rect1(3) < rect2(1) .or.  &
+                                 rect1(4) < rect2(2) .or.  &
+                                 rect1(1) > rect2(3) .or.  &
+                                 rect1(2) > rect2(4))
+    end function rects_intersect
+
     ! ==========================================================================
     ! seconds_from_epoch() Calculates seconds from UNIX epoch (1970) from a
     ! datetime. Returns the total seconds from the epoch includes leap years and
