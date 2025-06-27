@@ -372,13 +372,13 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     return var_names
     
 
-def wrap_coordinates(input_path, output_path=None, force=False, dim_mapping=None):
+def wrap_coords(input_path, output_path=None, force=False, dim_mapping=None):
     r"""Wrap the x coordinates of a NetCDF file from [0, 360] to [-180, 180]
 
     :Input:
      - *input_path* (path) Path to input file.
      - *output_path* (path) Path to output file.  Default is slightly modified
-       version of *input_path* with 'swap' appended.
+       version of *input_path* with 'wrap' appended.
      - *force* (bool) By default this routine will not overwrite a file that
        alreaady exists.  The value *force = True* will overwrite the file.  
        Default is False
@@ -387,17 +387,19 @@ def wrap_coordinates(input_path, output_path=None, force=False, dim_mapping=None
     """
 
     if not output_path:
-        output_path = input_path.parent / f"{input_path.stem}_swap{input_path.suffix}"
+        output_path = (input_path.parent / 
+                                f"{input_path.stem}_wrap{input_path.suffix}")
 
     if not output_path.exists() or force:
         dim_mapping = util.get_netcdf_names(input_path, lookup_type='dim', 
-                                                        user_mapping=dim_mapping)
+                                                       user_mapping=dim_mapping)
         ds = xr.open_dataset(input_path)
         lon_atrib = ds.coords[dim_mapping['x']].attrs
-        ds.coords[dim_mapping['x']] = (ds.coords[dim_mapping['x']] + 180) % 360 - 180
-        swapped_ds = ds.sortby(ds[dim_mapping['x']])
-        swapped_ds.coords[dim_mapping['x']].attrs = lon_atrib
-        swapped_ds.to_netcdf(output_path)
+        ds.coords[dim_mapping['x']] = \
+                                (ds.coords[dim_mapping['x']] + 180) % 360 - 180
+        wrapped_ds = ds.sortby(ds[dim_mapping['x']])
+        wrapped_ds.coords[dim_mapping['x']].attrs = lon_atrib
+        wrapped_ds.to_netcdf(output_path)
 
 
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
