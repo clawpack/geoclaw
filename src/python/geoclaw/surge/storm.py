@@ -924,25 +924,34 @@ class Storm(object):
         with path.open() as data_file:
             data_file.readline()
             self.time_offset = np.datetime64(data_file.readline()[:19])
-            self.file_format = int(data_file.readline().partition("#")[0].rstrip())
+            self.file_format = int(
+                                data_file.readline().partition("#")[0].rstrip())
             num_files = int(data_file.readline().partition("#")[0].rstrip())
+            self.window_type = int(
+                                data_file.readline().partition("#")[0].rstrip())
+            self.ramp_width = float(
+                                data_file.readline().partition("#")[0].rstrip())
+            # self.window = [value for value in 
+            #             data_file.readline().partition("#")[0].rstrip().split()]
+            data_file.readline()
             data_file.readline()
             data_file.readline()
 
             # We do not keep track of any of the format specific information
             if self.file_format == 1:
-                self.readline()
-                self.readline()
+                data_file.readline()
+                data_file.readline()
             elif self.file_format == 2:
-                self.readline()
-                self.readline()
-                self.readline()
+                data_file.readline()
+                data_file.readline()
+                data_file.readline()
+                data_file.readline()
             else:
                 raise TypeError(f"Unknown storm data file format type" +
                                 f" '{self.file_format}' provided.")
 
             for i in range(num_files):
-                self.file_paths.append(self.readline())
+                self.file_paths.append(Path(data_file.readline().rstrip()))
 
 
     # =========================================================================
