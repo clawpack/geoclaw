@@ -68,7 +68,7 @@ contains
         use netcdf
 #endif
 
-        use amr_module, only: t0
+        use amr_module, only: t0, tfinal
         use utility_module, only: to_upper, check_netcdf_error
         use utility_module, only: seconds_from_epoch, ISO_time_format
 
@@ -203,6 +203,7 @@ contains
                 case(2)
 #ifdef NETCDF                    
                     ! Open file and get file ID
+                    ! :TODO: Only read in times that are between t0 and tfinal
                     print *, "Reading storm NetCDF file ", storm%paths(1)
                     call check_netcdf_error(nf90_open(storm%paths(1), nf90_nowrite, nc_fid))
                     ! Check dim/var number
