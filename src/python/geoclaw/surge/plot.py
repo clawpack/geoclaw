@@ -45,6 +45,29 @@ land_cmap = geoplot.land_colors
 
 surge_data = geodata.SurgeData()
 
+# ===========================
+#  General Drawing Functions
+# ===========================
+def draw_box(ax, box, style='r-', fill=True):
+    r"""Draw the box specified
+
+    :Input:
+     - *ax* (matplotlib.Axes) axes object to plot on
+     - *box* (list) set of coordinates defined box.  First two coordinates are 
+       the lower left corner and the last two coordiantes are the upper corner.
+     - *style* (str) string that will be used to specify the style of the lines.
+       Default = *'r-'*.
+     - *fill* (bool) If True draws a filled box.  Not implemented.
+
+    :TODO:
+     - Handle fill request
+    """
+    ax.plot([box[0], box[2]], [box[1], box[1]], style) # Bottom
+    ax.plot([box[0], box[2]], [box[3], box[3]], style) # Top
+    ax.plot([box[0], box[0]], [box[1], box[3]], style) # Left
+    ax.plot([box[2], box[2]], [box[1], box[3]], style) # Right
+
+
 # ==============================
 #  Track Plotting Functionality
 # ==============================
