@@ -19,7 +19,7 @@ module bouss_module
 
     logical :: startWithBouss
 
-    logical :: crs  
+    logical :: crs, origCooFormat   
 
     real(kind=8) :: startBoussTime
 
@@ -165,8 +165,17 @@ contains
         ! using compressed row storage (CRS, also known as CSR or Yale) format:
         crs = .true.
     endif
+    ! if crs is false this will force SGN to use triplet COO form
+    ! crs = .false.  
 
-    ! crs = .false.  ! uncomment this line to force COO with SGN for testing
+     ! origCoo format ordered unknowns by all u updates then all v updates 
+     ! block format is u and v together for a given cell. Better cache
+     ! performance, better for debugging and comparing with crs.
+     ! also reads into matlab for cond number testing, plotting,
+     ! so keeping around
+     !origCooFormat = .false.  ! set to false to use block format with coo
+     ! setting to avoid uninitialized var, but not used unless crs set to false
+     origCooFormat = .true. 
 
     !------------------------------------------
     if (rest) then

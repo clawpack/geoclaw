@@ -265,7 +265,7 @@ contains
         use utility_module, only: parse_values
         character(len=*), intent(in) :: fname
         integer :: iunit,i,j,n
-        real(kind=8) :: values(10), nodata_value
+        real(kind=8) :: values(16), nodata_value
         character(len=80) :: str
 
         iunit = 8

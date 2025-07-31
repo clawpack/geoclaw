@@ -10,7 +10,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     ! Boussinesq version.
     
     use amr_module
-    use topo_module, only: topo_finalized
+    use topo_module, only: aux_finalized
     use bouss_module
         
     implicit none
@@ -62,10 +62,11 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
 
     !!write(*,*) "before bound loop"
     !!call timestamp()
-    !! reset isBouss flag array if topo still moving
-    !if (.not. topo_finalized) then
+    !! reset isBouss flag array if topo/aux still changing
+
+    if (aux_finalized .lt. 2) then
       call setBoussFlag(levelBouss,naux)
-    !endif
+    endif
 !$OMP PARALLEL DO PRIVATE(j,locnew,locaux,mptr,nx,ny,mitot,                   &
 !$OMP                     mjtot,levSt),                                       &
 !$OMP             SHARED(levelBouss,nvar,naux,alloc,nghost,time,              &
@@ -127,7 +128,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
        !  ! convert to compressed row format
        !  nst = minfo%matrix_nelt
        !  call st_to_cc_size(nst,minfo%matrix_ia,minfo%matrix_ja,ncc)
-       !  call pardiso_driver(soln,rhs,levelBouss,numBoussCells,nst,ncc,topo_finalized)
+       !  call pardiso_driver(soln,rhs,levelBouss,numBoussCells,nst,ncc,aux_finalized)
        !  call system_clock(clock_finishLinSolve,clock_rate)
        !  call cpu_time(cpu_finishLinSolve)
        !  timeLinSolve = timeLinSolve + clock_finishLinSolve - clock_startLinSolve
@@ -144,7 +145,7 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
           call system_clock(clock_startLinSolve,clock_rate)
           call cpu_time(cpu_startLinSolve)
           call petsc_driver(soln,rhs,levelBouss,numBoussCells,time,     &
-                           topo_finalized,minfo%matrix_nelt)
+                           aux_finalized,minfo%matrix_nelt)
           call system_clock(clock_finishLinSolve,clock_rate)
           call cpu_time(cpu_finishLinSolve)
           !write(89,*)" level ",levelBouss,"  rhs   soln"
@@ -416,10 +417,10 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
     use amr_module, only: outunit,mxnest
     use bouss_module, only: matrix_info_allLevs,boussMindepth,crs
     use bouss_module, only: matrix_levInfo, matrix_patchIndex
+    use bouss_module, only: alpha, origCooFormat
     use amr_module, only: rnode,cornxlo,cornylo,hxposs,hyposs
     use geoclaw_module, only: earth_radius, deg2rad, coordinate_system, grav
     use geoclaw_module, only: dry_tolerance
-    use bouss_module, only: alpha
     implicit none
 
     integer, intent(in) :: nvar,naux,nghost,mitot,mjtot,nD,mptr,nb,levelBouss
@@ -466,10 +467,13 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
 
     !debug = .true.
     debug = .false.
-
+    !if (levelBouss .eq. 1) debug = .true.
 
     !! if not updating momentum, just save psi, translating from
     !! soln vector back to patch variables
+    if (debug) then
+      write(*,*)"start of solnUpdateSGN, level ",levelBouss," doUpate = ",doUpdate
+    endif
 
     !! if finest level grid, dont have 2 levels of storage
     !! no need to save in old since wont need for interpolation
@@ -506,18 +510,35 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
             if (mi%isBouss(i-nghost,j-nghost)) then
               ! check if soln == 0 as proxy if cell is more shallow than deep bouss
               ! and no update
-                 if (.not. crs) then
+                if (.not. crs) then
                   ! COO triplet format
-                  valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
-                         (grav/alpha * etax(i,j) - soln(k_ij))
-                  valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
-                         (grav/alpha * etay(i,j) - soln(k_ij+nD))
-                 else  ! CRS format,  different mapping
+                  if (origCooFormat) then
+                   valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
+                          (grav/alpha * etax(i,j) - soln(k_ij))
+                   valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
+                          (grav/alpha * etay(i,j) - soln(k_ij+nD))
+                   if (debug) then
+                      write(*,901) i,j,k_ij,soln(k_ij),soln(k_ij+nD),rhs(k_ij),rhs(k_ij+nD)
+                   endif
+                  else ! block format, 1-based
+  901              format(3i9,4e18.8)
+                   valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
+                          (grav/alpha * etax(i,j) - soln(2*k_ij-1))
+                   valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
+                          (grav/alpha * etay(i,j) - soln(2*k_ij))
+                   if (debug) then
+                      write(*,901) i,j,k_ij,soln(2*k_ij-1),soln(2*k_ij),rhs(2*k_ij-1),rhs(2*k_ij)
+                   endif
+                 endif
+                else  ! CRS format,  different mapping, 0 based
                   valnew(2,i,j) = valnew(2,i,j) + dt * valnew(1,i,j)*     &
                          (grav/alpha * etax(i,j) - soln(2*(k_ij-1)))
                   valnew(3,i,j) = valnew(3,i,j) + dt * valnew(1,i,j)*     &
                          (grav/alpha * etay(i,j) - soln(2*k_ij-1))
-                 endif
+                  if (debug) then
+                     write(*,901)i,j,k_ij,soln(2*(k_ij-1)),soln(2*k_ij-1),rhs(2*(k_ij-1)),rhs(2*k_ij-1)
+                  endif
+                endif
 
                 ! save update in components 4,5 for Dirichlet BC next iteration
                 ! for coarser levels, valOther is valOld
@@ -525,9 +546,14 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
                 ! and valOther is valNew, since dont need to save old
                 ! and new for interpolation
                 if (.not. crs) then
-                    valOther(4,i,j) = soln(k_ij)
-                    valOther(5,i,j) = soln(k_ij+nD)
-                else
+                    if (origCooFormat) then
+                       valOther(4,i,j) = soln(k_ij)
+                       valOther(5,i,j) = soln(k_ij+nD)
+                    else ! block format
+                       valOther(4,i,j) = soln(2*k_ij-1)
+                       valOther(5,i,j) = soln(2*k_ij)
+                    endif
+                else ! crs format
                     !valOther(4,i,j) = soln(2*k_ij-1)
                     !valOther(5,i,j) = soln(2*k_ij)
                     valOther(4,i,j) = soln(2*(k_ij-1))
@@ -547,6 +573,7 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
        ! ghost cells should be updated. CORNERS?
 
        ! remember mindex only from 1:nx, 1:ny so subtract nghost as needed
+       ! below code left in to remember why it doesnt work
        go to 444
        ! left side
        do j = nghost+1, mjtot-nghost
@@ -616,21 +643,35 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
             k_ij = mi%mindex(i-nghost,j-nghost)  ! hu element index for (i,j)
             if (mi%isBouss(i-nghost,j-nghost)) then
               if (.not. crs) then
-                valnew(4,i,j) = soln(k_ij)
-                valnew(5,i,j) = soln(k_ij+nD)
-              else
-                valnew(4,i,j) = soln(2*(k_ij-1))
-                valnew(5,i,j) = soln(2*k_ij-1)
+                if (origCooFormat) then
+                  valnew(4,i,j) = soln(k_ij)
+                  valnew(5,i,j) = soln(k_ij+nD)
+                  if (debug) then
+                     write(*,901)i,j,k_ij,soln(k_ij),soln(k_ij+nD),rhs(k_ij),rhs(k_ij+nD)
+                  endif
+                else ! block format
+                  valnew(4,i,j) = soln(2*k_ij-1)
+                  valnew(5,i,j) = soln(2*k_ij)
+                  if (debug) then
+                     write(*,901)i,j,k_ij,soln(2*k_ij-1),soln(2*k_ij),rhs(2*k_ij-1),rhs(2*k_ij)
+                  endif
+                endif
+              else ! using crs
+                 valnew(4,i,j) = soln(2*(k_ij-1))
+                 valnew(5,i,j) = soln(2*k_ij-1)
+                 if (debug) then
+                    write(*,901)i,j,k_ij,soln(2*(k_ij-1)),soln(2*k_ij-1),rhs(2*(k_ij-1)),rhs(2*k_ij-1)
+                 endif
               endif
-            else
+            else ! not bouss cell
               valnew(4,i,j) = 0.d0
               valnew(5,i,j) = 0.d0
             endif
-        end do
-        end do
+       end do
+       end do
     endif
 
-    if (debug .or.  0 .eq. 1) then
+    if (debug) then
        xlowWithGhost = rnode(cornxlo,mptr) - nghost*dx
        ylowWithGhost = rnode(cornylo,mptr) - nghost*dy
        write(34,*)" end of solnUpdateSGN for grid ",mptr," with doUpdate ",doUpdate
@@ -638,29 +679,6 @@ subroutine solnUpdateSGN(valnew,valOther,nb,mitot,mjtot,nghost,nvar,dt, &
        iunit = 34
        call lookAtGrid(valnew,valOther,dx,dy,xlowWithGhost,ylowWithGhost,nvar,   &
                        mitot,mjtot,ng,iunit,doUpdate,levelBouss)
-    endif
-
-    if (.true. .and. debug) then
-    imax = -1
-    jmax = -1
-    speedmax = -1.d0
-    do j = nghost+1, mjtot-nghost
-    do i = nghost+1, mitot-nghost
-       if (valnew(1,i,j) .gt. dry_tolerance) then
-         speed(i,j) = sqrt((valnew(2,i,j)**2+valnew(3,i,j)**2))/valnew(1,i,j)
-         if (speed(i,j) .gt. speedmax) then
-            speedmax = speed(i,j)
-            imax = i
-            jmax = j
-         endif
-       else
-          speed(i,j) = 0.d0
-       endif
-    end do
-    end do
-    write(*,333) mptr,mitot,mjtot,speedmax,imax,jmax,    &
-           (valnew(ivar,imax,jmax),ivar=1,nvar)
- 333 format("grid ",i4," dims ",i4,i4," speed",f9.2," max index at ",2i4,5e12.4)
     endif
 
 end subroutine solnUpdateSGN
