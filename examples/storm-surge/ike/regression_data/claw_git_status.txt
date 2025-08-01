@@ -1,107 +1,117 @@
 Clawpack Git Status 
-Diffs can be found in /home/catherinej/clawpack/geoclaw/tests/storm_surge/regression_data/claw_git_diffs.txt
+Diffs can be found in /Users/mandli/Library/CloudStorage/Dropbox/src/clawpack/geoclaw/examples/storm-surge/ike/regression_data/claw_git_diffs.txt
 
-Tue, 03 Dec 2024 15:00:27 EST
-$CLAW = /home/catherinej/clawpack
-$FC = gfortran
+Fri, 01 Aug 2025 10:24:26 EDT
+$CLAW = /Users/mandli/Dropbox/src/clawpack
+$FC = not set
 
 
 ===========
 clawpack
 ===========
-/home/catherinej/clawpack/
+/Users/mandli/Dropbox/src/clawpack/
 
 --- last commit ---
-285b7de (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #257 from rjleveque/v5.11.0rc
+98ba40b (HEAD -> master, tag: v5.12.0, clawpack/master, clawpack/HEAD) Merge pull request #264 from rjleveque/v5.12.0fix
 
 --- branch and status ---
-## master...origin/master
+## master...clawpack/master
+ M amrclaw
+ M classic
+ M clawutil
  M geoclaw
+ M pyclaw
  M riemann
+ M visclaw
 
 
 ===========
 classic
 ===========
-/home/catherinej/clawpack/classic
+/Users/mandli/Dropbox/src/clawpack/classic
 
 --- last commit ---
-5f178e4 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #90 from rjleveque/pytest
+a00219b (HEAD -> new-pytest-test-runner, mandli/new-pytest-test-runner) Change name of action to test
 
 --- branch and status ---
-## master...origin/master
+## new-pytest-test-runner...clawpack/master [ahead 11]
 
 
 ===========
 amrclaw
 ===========
-/home/catherinej/clawpack/amrclaw
+/Users/mandli/Dropbox/src/clawpack/amrclaw
 
 --- last commit ---
-2d9d076 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #296 from mandli/add-ci-action
+3836645 (HEAD -> fix-auxloc-array-bound, mandli/fix-auxloc-array-bound) Add aux_loc to q grid output
 
 --- branch and status ---
-## master...origin/master
+## fix-auxloc-array-bound...clawpack/master [ahead 1]
 
 
 ===========
 clawutil
 ===========
-/home/catherinej/clawpack/clawutil
+/Users/mandli/Dropbox/src/clawpack/clawutil
 
 --- last commit ---
-1ee5f67 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #173 from rjleveque/idiff_threshold
+f1030b6 (HEAD -> fix-negate-deprecation, mandli/fix-negate-deprecation) Switch negation ~ to not as ~ will be deprecated
 
 --- branch and status ---
-## master...origin/master
+## fix-negate-deprecation...clawpack/master [ahead 1]
 
 
 ===========
 pyclaw
 ===========
-/home/catherinej/clawpack/pyclaw
+/Users/mandli/Dropbox/src/clawpack/pyclaw
 
 --- last commit ---
-a16a6095 (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #724 from carlosmunozmoncayo/additionalchanges
+d08f2dd3 (HEAD -> improve-cli-gauge-comparison, mandli/improve-cli-gauge-comparison) Add short flag versions
 
 --- branch and status ---
-## master...origin/master
+## improve-cli-gauge-comparison...clawpack/master [ahead 2]
 
 
 ===========
 visclaw
 ===========
-/home/catherinej/clawpack/visclaw
+/Users/mandli/Dropbox/src/clawpack/visclaw
 
 --- last commit ---
-1fc821c (HEAD -> master, tag: v5.11.0, origin/master, origin/HEAD) Merge pull request #306 from rjleveque/default_linewidths
+2c12be9 (HEAD -> shorten-poll-interval, mandli/shorten-poll-interval) Shorten poll interval for process checking to 0.5 seconds
 
 --- branch and status ---
-## master...origin/master
+## shorten-poll-interval...clawpack/master [ahead 1]
 
 
 ===========
 riemann
 ===========
-/home/catherinej/clawpack/riemann
+/Users/mandli/Dropbox/src/clawpack/riemann
 
 --- last commit ---
-95a03ca (HEAD -> master, origin/master, origin/HEAD) Add missing ~/Documents/src/clawpack/riemann from fluctuation loop (#177)
+bbe1ab3 (HEAD -> master, clawpack/master, clawpack/HEAD) Merge pull request #183 from dlgeorge/fix_riemann_conv
 
 --- branch and status ---
-## master...origin/master
+## master...clawpack/master
 
 
 ===========
 geoclaw
 ===========
-/home/catherinej/clawpack/geoclaw
+/Users/mandli/Dropbox/src/clawpack/geoclaw
 
 --- last commit ---
-e1a05dae (HEAD -> OWI_integration, cjeffr/OWI_integration) made isaac.info generic for other users
+5b392b6d (HEAD -> update-pytest, mandli/update-pytest) Merge remote-tracking branch 'clawpack/master' into update-pytest
 
 --- branch and status ---
-## OWI_integration...cjeffr/OWI_integration
- M tests/storm_surge/regression_data/claw_git_status.txt
- M tests/storm_surge/regression_data/gauge00001.txt
- M tests/storm_surge/setrun.py
+## update-pytest...clawpack/master [ahead 92]
+ M examples/multi-layer/plane_wave/qinit_module.f90
+ M examples/storm-surge/ike/regression_data/claw_git_diffs.txt
+ M examples/storm-surge/ike/regression_data/claw_git_status.txt
+ M examples/storm-surge/ike/regression_data/gauge00001.txt
+ M examples/storm-surge/ike/setrun.py
+ M examples/storm-surge/ike/test_ike.py
+ M examples/tsunami/chile2010/Makefile
+ M examples/tsunami/radial-ocean-island-fgmax/setrun.py
