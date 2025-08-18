@@ -386,8 +386,8 @@ class Topography(object):
             if self.unstructured:
 
                 # Calculate the smallest spacing between grid points            
-                dx = numpy.infty
-                dy = numpy.infty
+                dx = numpy.inf
+                dy = numpy.inf
                 num_comparisons = self.x.shape[0] - 1
                 for i in range(self.x.shape[0]):
                     for j in range(num_comparisons):
