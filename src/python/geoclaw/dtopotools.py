@@ -1069,7 +1069,7 @@ class Fault(object):
 
         """
 
-        extent = [numpy.infty, -numpy.infty, numpy.infty, -numpy.infty]
+        extent = [numpy.inf, -numpy.inf, numpy.inf, -numpy.inf]
         for subfault in self.subfaults:
             for corner in subfault.corners:
                 extent[0] = min(corner[0], extent[0])
