@@ -1,4 +1,4 @@
-This repository hosts the GeoClaw code.
+# This repository hosts the GeoClaw code.
 
 See the main [clawpack/clawpack repository](https://github.com/clawpack/clawpack)
  README for more links.  
