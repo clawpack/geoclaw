@@ -1056,6 +1056,11 @@ def make_input_data_kmls(rundata=None, combined=False):
         dtopo_file_name = f[-1]
         dtopo_type = f[0]
         dtopo2kml(dtopo_file_name, dtopo_type)
+        fname_kmz = os.path.split(dtopo_file_name)[-1]
+        fname_kmz = os.path.splitext(fname_kmz)[0]  # without path or extension
+        fname_kmz = fname_kmz + '_contours.kmz'
+        dtopo_contours2kmz(dtopo_file_name, dtopo_type=dtopo_type,
+                           dZ_interval=1, fname_kmz=fname_kmz, verbose=False)
 
 
 def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
@@ -1551,7 +1556,7 @@ def transect2kml(xtrans, ytrans, fname='transect.kml'):
 
 def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
                        text_label=True, text_x=None, text_y=None,
-                       fname_kmz=None):
+                       fname_kmz=None, verbose=True):
 
     """
     Create dtopo_contours.kmz file containing contour plots of the dtopo
@@ -1571,12 +1576,14 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
         dopofile name, dZ_interval, and the max, min values of dZ.
      - *text_x, text_y* are the location of the text,
         or if None then the mean of dtopofile.X and dtopofile.Y are used.
+
+    TODO: Could also add pcolor plot of deformation to kmz file.
     """
     from clawpack.geoclaw import dtopotools
-    from numpy import ma
-    import os,sys, zipfile
 
-    kml_dir = 'dtopos_kml'
+    import os,sys, zipfile, shutil
+
+    kml_dir = 'temp_dtopos_kml'
     os.system('mkdir -p %s' % kml_dir)
     events = []
     png_files = []
@@ -1590,15 +1597,17 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
         dtopofile = os.path.abspath(dtopofile)
         event = os.path.splitext(os.path.split(dtopofile)[-1])[0]
         events.append(event)
-        print('Making contours for event = ',event)
-        print('  contour interval = %gm' % dZ_interval)
+        if verbose:
+            print('Making contours for event = ',event)
+            print('  contour interval = %gm' % dZ_interval)
 
         dtopo = dtopotools.DTopography(dtopofile, dtopo_type=dtopo_type)
 
         # first make empty plot of right dimensions:
         Zm = ma.masked_where(dtopo.Y < 90, dtopo.Y)  # all masked
         fig,ax,png_extent,kml_dpi = pcolorcells_for_kml(dtopo.X, dtopo.Y, Zm,
-                                                 png_filename=None, dpc=4)
+                                                 png_filename=None, dpc=4,
+                                                 verbose=verbose)
 
         if previous_png_extent is not None:
             assert png_extent == previous_png_extent, \
@@ -1635,15 +1644,20 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
         png_files.append(png_filename)
         png_filename = os.path.join(kml_dir, png_filename)
         plt.savefig(png_filename, transparent=True, dpi=kml_dpi)
-        close(fig)
+        plt.close(fig)
 
+    if fname_kmz is None:
+        fname_kmz = 'dtopo_contours.kmz'
+    path_kmz = os.path.abspath('./%s' % fname_kmz)  # path in this directory
+
+    # move to kml_dir for making kml files:
     savedir = os.getcwd()
     os.chdir(kml_dir)
     png_names = events
     fname = 'dtopo_contours.kml'
     name = 'dtopo_contours'
     png2kml(png_extent, png_files=png_files, png_names=png_names,
-                     radio_style=True, name=name, fname=fname)
+                     radio_style=True, name=name, fname=fname, verbose=verbose)
 
     files = [fname] + ['%s_contours.png' % event for event in events]
     if 0:
@@ -1651,11 +1665,12 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
         for file in files:
             print('    ', file)
 
-    if fname_kmz is None:
-        fname_kmz = 'dtopo_contours.kmz'
-
-    with zipfile.ZipFile(fname_kmz, 'w') as zip:
+    with zipfile.ZipFile(path_kmz, 'w') as zip:
         for file in files:
             zip.write(file)
-        print('Created %s' % os.path.abspath(fname_kmz))
+        print('Created %s' % fname_kmz)
     os.chdir(savedir)
+
+    if verbose:
+        print('Removing ',kml_dir)
+    shutil.rmtree(kml_dir)
