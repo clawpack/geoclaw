@@ -149,8 +149,9 @@ c     This has been moved to tick.f, after advancing all patches on
 c     finest level.  No need to check on each patch separately.
 c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-       call b4step2(mbc,mx,my,nvar,q,
-     &             xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux,actualstep)
+c      This call has been moved out to advanc
+c       call b4step2(mbc,mx,my,nvar,q,
+c     &              xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux,actualstep)
       
 c::::::::::::::::::::::::FGOUT DATA before step:::::::::::::::::::::::
 c     # fill in values at fgout points affected at time tc0
