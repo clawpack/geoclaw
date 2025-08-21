@@ -9,7 +9,7 @@ Classes representing parameters for GeoClaw runs
  - GeoClawData
  - RefinementData
  - TopographyData
- - FixedGridData
+ - FGoutData
  - FGmaxData
  - DTopoData
  - QinitData
@@ -28,21 +28,19 @@ Classes representing parameters for GeoClaw runs
  - LAT2METER factor to convert degrees in latitude to meters
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import os
-import numpy
-import clawpack.clawutil.data
+import numpy as np
 import warnings
 
+import clawpack.clawutil.data
 
 # Radius of earth in meters.
 # For consistency, should always use this value when needed, e.g.
 # in setrun.py or topotools:
 Rearth = 6367.5e3  # average of polar and equatorial radii
 
-DEG2RAD = numpy.pi / 180.0
-RAD2DEG = 180.0 / numpy.pi
+DEG2RAD = np.pi / 180.0
+RAD2DEG = 180.0 / np.pi
 LAT2METER = Rearth * DEG2RAD
 
 class GeoClawData(clawpack.clawutil.data.ClawData):
@@ -72,6 +70,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dry_tolerance',1e-3)
         self.add_attribute('friction_depth',1.0e6)
         self.add_attribute('sea_level',0.0)
+        self.add_attribute('speed_limit',50.)
 
 
     def write(self,data_source='setrun.py', out_file='geoclaw.data'):
@@ -111,6 +110,7 @@ class GeoClawData(clawpack.clawutil.data.ClawData):
         self.data_write()
 
         self.data_write('dry_tolerance')
+        self.data_write('speed_limit')
 
         self.close_data_file()
 
@@ -536,26 +536,29 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     r"""Data object describing storm surge related parameters"""
 
     # Provide some mapping between model names and integers
-    storm_spec_dict_mapping = {"HWRF":-1,
+    storm_spec_dict_mapping = {'owi': -2,
+                               "hwrf": -1,
                                None: 0,
                                'holland80': 1,
                                'holland08': 8,
                                'holland10': 2,
-                               'CLE': 3,
-                               'SLOSH': 4,
+                               'cle': 3,
+                               'slosh': 4,
                                'rankine': 5,
                                'modified-rankine': 6,
-                               'DeMaria': 7
+                               'DeMaria': 7,
+                               'willoughby': 9,
                               }
     storm_spec_not_implemented = ['CLE']
 
     def __init__(self):
-        super(SurgeData,self).__init__()
+        super(SurgeData, self).__init__()
 
         # Source term controls
-        self.add_attribute('wind_forcing',False)
-        self.add_attribute('drag_law',1)
-        self.add_attribute('pressure_forcing',False)
+        self.add_attribute('wind_forcing', False)
+        self.add_attribute('drag_law', 1)
+        self.add_attribute('pressure_forcing', False)
+        self.add_attribute('rotation_override', 0)
 
         # Algorithm parameters - Indexing is python based
         self.add_attribute("wind_index", 4)
@@ -563,16 +566,15 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("display_landfall_time", False)
 
         # AMR parameters
-        self.add_attribute('wind_refine',[20.0,40.0,60.0])
-        self.add_attribute('R_refine',[60.0e3,40e3,20e3])
+        self.add_attribute('wind_refine', [20.0,40.0,60.0])
+        self.add_attribute('R_refine', [60.0e3,40e3,20e3])
 
         # Storm parameters
         self.add_attribute('storm_type', None)  # Backwards compatibility
         self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
-        self.add_attribute("storm_file", None) # File(s) containing data
+        self.add_attribute("storm_file", None) # File containing data
 
-
-    def write(self,out_file='surge.data',data_source="setrun.py"):
+    def write(self, out_file='surge.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
 
         # print "Creating data file %s" % out_file
@@ -582,6 +584,19 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.data_write('drag_law', description='(Type of drag law to use)')
         self.data_write('pressure_forcing',
                         description="(Pressure source term used)")
+        if isinstance(self.rotation_override, str):
+            if self.rotation_override.lower() == "normal":
+                self.rotation_override = 0
+            elif "n" in self.rotation_override.lower():
+                self.rotation_override = 1
+            elif "s" in self.rotation_override.lower():
+                self.rotation_override = 2
+            else:
+                raise ValueError("Unknown rotation_override specification.")
+        else:
+            self.rotation_override = int(self.rotation_override)
+        self.data_write('rotation_override', 
+                        description="(Override storm rotation)")
         self.data_write()
 
         self.data_write("wind_index", value=self.wind_index + 1,
@@ -613,28 +628,28 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.data_write()
 
         # Storm specification
+        # Handle deprecated member value
         if self.storm_type is not None:
             self.storm_specification_type = self.storm_type
-        if type(self.storm_specification_type) is not int:
-            if self.storm_specification_type in         \
-                    self.storm_spec_dict_mapping.keys():
-                if self.storm_specification_type in     \
-                    self.storm_spec_not_implemented:
-                    raise NotImplementedError("%s has not been implemented."
-                                %self.storm_specification_type)
-
-                else:
-                    self.data_write("storm_specification_type",
-                                self.storm_spec_dict_mapping[
-                                        self.storm_specification_type],
-                                description="(Storm specification)")
+        # Turn value into integer descriptor
+        if isinstance(self.storm_specification_type, int):
+            spec_type = self.storm_specification_type
+        elif isinstance(self.storm_specification_type, str):
+            if self.storm_specification_type.lower() in self.storm_spec_dict_mapping.keys():
+                spec_type = self.storm_spec_dict_mapping[self.storm_specification_type.lower()]
             else:
-                raise ValueError("Unknown storm specification type %s"
-                                 % self.storm_specification_type)
+                raise TypeError(f"Unknown storm specification type" +
+                                f" '{self.storm_specification_type}' provided.")
         else:
-            self.data_write("storm_specification_type",
-                            description="(Storm specification)")
-        self.data_write("storm_file", description='(Path to storm data)')
+            raise TypeError(f"Unknown storm specification type" +
+                            f" '{self.storm_specification_type}' provided.")
+        # Check to see if spec type is in supported formats
+        if spec_type in self.storm_spec_not_implemented:
+            raise NotImplementedError(f"'{spec_type}' has not been implemented.")
+        # Write out values
+        self.data_write(name="storm_specification_type", value=spec_type,
+                        description="(Storm specification)")
+        self.data_write(name="storm_file", description='(Path to storm data)')
 
         self.close_data_file()
 

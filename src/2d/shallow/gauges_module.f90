@@ -58,8 +58,8 @@ module gauges_module
         integer :: gauge_num
         integer :: gdata_bytes
 
-        character(len=14) :: file_name      ! for header (and data if 'ascii')
-        character(len=14) :: file_name_bin  ! used if file_format='binary'
+        character(len=24) :: file_name      ! for header (and data if 'ascii')
+        character(len=24) :: file_name_bin  ! used if file_format='binary'
 
         ! Location in time and space
         real(kind=8) :: x, y, t_start, t_end
@@ -116,6 +116,7 @@ contains
         integer, parameter :: UNIT = 7
         character(len=128) :: header_1
         character(len=40) :: q_column, aux_column
+        character(len=15) :: numstr
 
         if (.not.module_setup) then
 
@@ -140,7 +141,6 @@ contains
                 ! note that for lagrangian gauges, the x,y values read here 
                 ! might be overwritten if this is a restart
                 gauges(i)%buffer_index = 1
-                gauges(i)%last_time = gauges(i)%t_start
                 ! keep track of last position for lagrangian gauges,
                 ! initialize here in case checkpoint happens before 
                 ! ever writing this gauge:
@@ -163,10 +163,17 @@ contains
             read(UNIT, *)
             read(UNIT, *) (gauges(i)%gtype, i=1, num_gauges)
 
+
             ! Read in q fields
             read(UNIT, *)
             read(UNIT, *)
             do i = 1, num_gauges
+
+                ! initialize last_time so that first gauge output will be
+                ! at time gauges(i)%t_start regardless of min_time_increment:
+                gauges(i)%last_time = gauges(i)%t_start - 1.d0 &
+                                      - gauges(i)%min_time_increment
+
                 allocate(gauges(i)%q_out_vars(num_eqn))
                 read(UNIT, *) gauges(i)%q_out_vars
 
@@ -207,17 +214,15 @@ contains
 
             ! Create gauge output files
             do i = 1, num_gauges
-                gauges(i)%file_name = 'gaugexxxxx.txt'  ! ascii
                 num = gauges(i)%gauge_num
-                do pos = 10, 6, -1
-                    digit = mod(num,10)
-                    gauges(i)%file_name(pos:pos) = char(ichar('0') + digit)
-                    num = num / 10
-                end do
+
+                ! convert num to string numstr with zero padding if <5 digits
+                ! since we want format gauge00012.txt or gauge1234567.txt:
+                write (numstr,'(I0.5)') num
+                gauges(i)%file_name = 'gauge'//trim(numstr)//'.txt'
 
                 if (gauges(i)%file_format >= 2) then
-                    gauges(i)%file_name_bin = gauges(i)%file_name
-                    gauges(i)%file_name_bin(12:14) = 'bin'
+                    gauges(i)%file_name_bin = 'gauge'//trim(numstr)//'.bin'
                 endif
 
 
@@ -243,7 +248,7 @@ contains
 
                 if (.not. restart) then
                     ! Write header to .txt file:
-                    header_1 = "('# gauge_id= ',i5,' " //                 &
+                    header_1 = "('# gauge_id= ',i0,' " //                 &
                                "location=( ',1e17.10,' ',1e17.10,' ) " // &
                                "num_var= ',i2)"
                     write(OUTGAUGEUNIT, header_1) gauges(i)%gauge_num,    &

@@ -434,12 +434,12 @@ contains
         logical, parameter :: maketype2 = .false.
         integer :: missing,status,n
         real(kind=8) :: no_data_value,x,y,topo_temp
-        real(kind=8) :: values(10)
+        real(kind=8) :: values(16)
         character(len=80) :: str
         integer(kind=8) :: i, j, mtot
 
         ! NetCDF Support
-        character(len=10) :: direction, x_dim_name, x_var_name, y_dim_name, &
+        character(len=64) :: direction, x_dim_name, x_var_name, y_dim_name, &
             y_var_name, z_var_name, var_name
         ! character(len=1) :: axis_string
         real(kind=8), allocatable :: nc_buffer(:, :), xlocs(:), ylocs(:)
@@ -730,7 +730,7 @@ contains
         integer :: topo_size, status, n
         real(kind=8) :: x,y,z,nodata_value
         logical :: found_file
-        real(kind=8) :: values(10)
+        real(kind=8) :: values(16)
         character(len=80) :: str
         logical :: verbose
         logical :: xll_registered, yll_registered
@@ -744,8 +744,8 @@ contains
         logical, allocatable :: x_in_dom(:),y_in_dom(:)
         integer(kind=4) :: dim_ids(2), num_dims, var_type, num_vars, num_dims_tot
         integer(kind=4), allocatable :: var_ids(:)
-        character(len=10) :: var_name, x_var_name, y_var_name, z_var_name
-        character(len=10) :: x_dim_name, y_dim_name
+        character(len=64) :: var_name, x_var_name, y_var_name, z_var_name
+        character(len=64) :: x_dim_name, y_dim_name
         integer(kind=4) :: x_var_id, y_var_id, z_var_id, x_dim_id, y_dim_id
 
         verbose = .false.

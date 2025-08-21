@@ -7,13 +7,11 @@ that will be read in by the Fortran code.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-
 import os
 import datetime
 import shutil
 import gzip
+from pathlib import Path
 
 import numpy as np
 
@@ -28,8 +26,7 @@ def seconds2days(seconds):
     return seconds / (60.0**2 * 24.0)
 
 # Scratch directory for storing topo and dtopo files:
-scratch_dir = os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
-
+scratch_dir = (Path(os.environ["CLAW"]) / "geoclaw" / "scratch").resolve()
 
 # ------------------------------
 def setrun(claw_pkg='geoclaw'):
@@ -313,17 +310,16 @@ def setrun(claw_pkg='geoclaw'):
     regions = rundata.regiondata.regions
     # to specify regions of refinement append lines of the form
     #  [minlevel,maxlevel,t1,t2,x1,x2,y1,y2]
-    # Gauges from Ike AWR paper (2011 Dawson et al)
-    rundata.gaugedata.gauges.append([1, -95.04, 29.07,
+
+    # Pilots Station East, S.W. Pass, LA - 28°55.9429'N, 89°24.4445'W
+    # https://tidesandcurrents.noaa.gov/stationhome.html?id=8760922
+    rundata.gaugedata.gauges.append([1, -89.40740833, 28.93238167,
                                      rundata.clawdata.t0,
                                      rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([2, -94.71, 29.28,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([3, -94.39, 29.49,
-                                     rundata.clawdata.t0,
-                                     rundata.clawdata.tfinal])
-    rundata.gaugedata.gauges.append([4, -94.13, 29.58,
+
+    # Grand Isle, LA - 29°15.8761'N 89°57.4960'W
+    # https://tidesandcurrents.noaa.gov/stationhome.html?id=8761724
+    rundata.gaugedata.gauges.append([2, -89.95826667, 29.26460167,
                                      rundata.clawdata.t0,
                                      rundata.clawdata.tfinal])
 
@@ -382,7 +378,7 @@ def setgeo(rundata):
     # the smaller domains
     clawutil.data.get_remote_file(
            "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2")
-    topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
+    topo_path = scratch_dir / 'gulf_caribbean.tt3'
     topo_data.topofiles.append([3, topo_path])
 
     # == fgout grids ==
@@ -409,16 +405,16 @@ def setgeo(rundata):
 
     # Storm parameters - Parameterized storm (Holland 1980)
     data.storm_specification_type = 'holland80'  # (type 1)
-    data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
-                                         'isaac.storm'))
+    # data.storm_specification_type = 'OWI'
+    data.storm_file = (Path() / 'isaac.storm').resolve()
 
     # Convert ATCF data to GeoClaw format
     clawutil.data.get_remote_file(
                    "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-    atcf_path = os.path.join(scratch_dir, "bal092012.dat")
+    atcf_path = scratch_dir / "bal092012.dat"
     # Note that the get_remote_file function does not support gzip files which
     # are not also tar files.  The following code handles this
-    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
+    with gzip.open(atcf_path.with_suffix(".dat.gz"), 'rb') as atcf_file,    \
             open(atcf_path, 'w') as atcf_unzipped_file:
         atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
 
@@ -427,9 +423,29 @@ def setgeo(rundata):
 
     # Calculate landfall time - Need to specify as the file above does not
     # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
-    isaac.time_offset = datetime.datetime(2012, 8, 29, 0)
+    isaac.time_offset = np.datetime64("2012-08-29T00:00")
 
-    isaac.write(data.storm_file, file_format='geoclaw')
+    if data.storm_specification_type == "holland80":
+        isaac.write(data.storm_file, file_format='geoclaw')
+
+    elif data.storm_specification_type == "OWI":
+
+        # :TODO: write out Isaac fields into appropriate file format, currently
+        # we are just storing the files as is
+
+        # ASCII
+        # isaac.data_file_format = 'NWS12'
+        # isaac.file_paths.append((Path() / "isaac.PRE").resolve())
+        # isaac.file_paths.append((Path() / "isaac.WIN").resolve())
+
+        # NetCDF file
+        isaac.data_file_format = "NWS13"
+        isaac.file_paths.append((Path() / "isaac.nc").resolve())
+
+        isaac.write(data.storm_file, file_format='OWI')
+
+    else:
+        raise ValueError("Invalid storm specification type.")
 
     # =======================
     #  Set Variable Friction
@@ -443,12 +459,12 @@ def setgeo(rundata):
     # Entire domain
     data.friction_regions.append([rundata.clawdata.lower,
                                   rundata.clawdata.upper,
-                                  [np.infty, 0.0, -np.infty],
+                                  [np.inf, 0.0, -np.inf],
                                   [0.030, 0.022]])
 
     # La-Tex Shelf
     data.friction_regions.append([(-98, 25.25), (-90, 30),
-                                  [np.infty, -10.0, -200.0, -np.infty],
+                                  [np.inf, -10.0, -200.0, -np.inf],
                                   [0.030, 0.012, 0.022]])
 
     return rundata

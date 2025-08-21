@@ -8,6 +8,15 @@ A Gaussian hump of water at the origin spreads out over a flat bottom,
 as specified by the topo file `flat100.txt` (uniform water depth 100 m).
 The equations are solved in Cartesian coordinates with the SGN equations.
 
+Running the GeoClaw Boussinesq solvers requires PETSc and MPI.
+For more details see the documentation
+  https://www.clawpack.org/bouss2d.html
+and
+  $CLAW/geoclaw/examples/bouss/README.txt
+Run
+  make check
+in this directory to check if things seem ok for running this code.
+
 A flagregion specified by `RuledRectangle_Diagonal.data` (that is created by
 code in `setrun.py` is used to allow flagging for refinement to
 level 2 only near the diagonal (for abs(x-y) < 1000).  The code is set up to

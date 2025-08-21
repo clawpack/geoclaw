@@ -66,6 +66,10 @@ subroutine flagregions2(mx,my,mbuff,xlower,ylower,dx,dy,level,t, &
                     y_lower_x_low, y_lower_x_hi, y_upper_x_low, y_upper_x_hi, &
                     y_lower_s, y_upper_s, alpha_x_low, alpha_x_hi
 
+#ifdef WHERE_AM_I
+      write(*,*)"starting flagregions2"
+#endif
+
     !write(58,*) 'level, lower: ',level,xlower,ylower  ! +++
     !allocate(minlevel(mx,my), maxlevel(mx,my))
     

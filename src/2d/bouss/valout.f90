@@ -431,9 +431,9 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
              status='unknown', action='write', position='append')
              !status='old', action='write', position='append')
     
-    timing_line = "(e16.6, ', ', e16.6, ', ', e16.6,"
+    timing_line = "(e16.6, ', ', e16.6, ', ', e16.6"
     do level=1, mxnest
-        timing_substr = "', ', e16.6, ', ', e16.6, ', ', e16.6"
+        timing_substr = ", ', ', e16.6, ', ', e16.6, ', ', e16.6"
         timing_line = trim(timing_line) // timing_substr
     end do
     timing_line = trim(timing_line) // ")"

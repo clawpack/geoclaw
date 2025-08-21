@@ -1553,6 +1553,7 @@ def transect2kml(xtrans, ytrans, fname='transect.kml'):
         kml_file.write("\n</Document>\n</kml>")
 
     print('Created ', fname)
+<<<<<<< HEAD
 
 def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
                        text_label=True, text_x=None, text_y=None,
@@ -1664,3 +1665,5 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
             zip.write(file)
         print('Created %s' % os.path.abspath(fname_kmz))
     os.chdir(savedir)
+=======
+>>>>>>> master

@@ -159,14 +159,16 @@ COMMON_SOURCES += \
   $(BOUSSLIB)/buildSparseMatrixSGNcrs.f90 \
   $(BOUSSLIB)/prepBuildSparseMatrixSGNcoo.f90 \
   $(BOUSSLIB)/buildSparseMatrixSGNcoo.f90 \
+  $(BOUSSLIB)/buildSparseMatrixSGNcoo_blocks.f90 \
   $(BOUSSLIB)/buildSparseMatrixMScoo.f90 \
   $(BOUSSLIB)/compressOut.f \
   $(BOUSSLIB)/matvec.f90 \
+  $(BOUSSLIB)/testSoln.f90 \
   $(BOUSSLIB)/petsc_driver.f90 \
   $(BOUSSLIB)/lookAtGrid.f90 \
   $(BOUSSLIB)/resetBoussStuff.f \
   $(BOUSSLIB)/simpleBound.f90 \
   $(BOUSSLIB)/umfpack_support.f \
-  $(BOUSSLIB)/rpn2_geoclaw.f \
-  $(BOUSSLIB)/rpt2_geoclaw_sym.f \
-  $(BOUSSLIB)/geoclaw_riemann_utils.f \
+  $(CLAW)/riemann/src/rpn2_geoclaw.f \
+  $(CLAW)/riemann/src/rpt2_geoclaw.f \
+  $(CLAW)/riemann/src/geoclaw_riemann_utils.f \

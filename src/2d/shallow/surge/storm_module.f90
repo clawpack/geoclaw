@@ -11,7 +11,7 @@
 
 module storm_module
 
-    use model_storm_module, only: model_storm_type
+    use model_storm_module, only: model_storm_type, rotation
     use data_storm_module, only: data_storm_type
 
     implicit none
@@ -80,7 +80,7 @@ module storm_module
             implicit none
             integer, intent(in) :: maux, mbc, mx, my
             real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-            type(data_storm_type), intent(in out) :: storm
+            type(data_storm_type), intent(inout) :: storm
             integer, intent(in) :: wind_index, pressure_index
             real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
         end subroutine set_data_fields_def
@@ -113,9 +113,11 @@ contains
         use model_storm_module, only: set_rankine_fields
         use model_storm_module, only: set_modified_rankine_fields
         use model_storm_module, only: set_deMaria_fields
+        use model_storm_module, only: set_willoughby_fields
 
-        ! use data_storm_module, only: set_data_storm => set_storm
+        use data_storm_module, only: set_data_storm => set_storm
         use data_storm_module, only: set_HWRF_fields
+        use data_storm_module, only: set_owi_fields
 
         use utility_module, only: get_value_count
 
@@ -126,9 +128,11 @@ contains
 
         ! Locals
         integer, parameter :: unit = 13
-        integer :: i, drag_law
-        character(len=200) :: storm_file_path, line
-
+        integer :: i, drag_law, rotation_override
+        character(len=200) :: storm_file_path, line, wind_file_path, pressure_file_path
+        ! integer :: num_storm_files
+        ! character(len=200), allocatable, dimension(:) :: storm_files_array
+        ! character(len=12) :: landfall_time
         if (.not.module_setup) then
 
             ! Open file
@@ -153,6 +157,17 @@ contains
                     stop "*** ERROR *** Invalid wind drag law."
             end select
             read(unit,*) pressure_forcing
+            read(unit,*) rotation_override
+            select case(rotation_override)
+                case(0)
+                    rotation => hemisphere_rotation
+                case(1)
+                    rotation => N_rotation
+                case(2)
+                    rotation => S_rotation
+                case default
+                    stop " *** ERROR *** Rotation override invalid."
+            end select
             read(unit,*)
 
             ! Set some parameters
@@ -181,7 +196,7 @@ contains
             read(unit,*)
 
             ! Storm Setup
-            read(unit, "(i1)") storm_specification_type
+            read(unit, "(i2)") storm_specification_type
             read(unit, *) storm_file_path
 
             close(unit)
@@ -197,9 +212,7 @@ contains
             write(log_unit, *) "  file = ", storm_file_path
 
             ! Use parameterized storm model
-            if (0 < storm_specification_type .and.              &
-                    storm_specification_type <= 3               &
-                .or. storm_specification_type == 8) then
+            if (0 < storm_specification_type .and. storm_specification_type <= 9) then
                 select case(storm_specification_type)
                     case(1) ! Holland 1980 model
                         set_model_fields => set_holland_1980_fields
@@ -213,30 +226,31 @@ contains
                         set_model_fields => set_SLOSH_fields
                     case(5) ! rankine model
                         set_model_fields => set_rankine_fields
-                    case(6) ! modified_ankine model
+                    case(6) ! modified rankine model
                         set_model_fields => set_modified_rankine_fields
                     case(7) ! deMaria model
                         set_model_fields => set_deMaria_fields
+                    case(9) ! Willoughby model
+                        set_model_fields => set_willoughby_fields
+                    case default
+                        print *, "Storm specification model type ",              &
+                                    storm_specification_type, "not available."
+                        stop
                 end select
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
-            else if (storm_specification_type > 0) then
-                print *, "Storm specification model type ",                &
-                            storm_specification_type, "not available."
-                stop
-            end if
-
-            ! Storm will be set based on a gridded set of data
-            if (-1 <= storm_specification_type .and.                    &
-                      storm_specification_type < 0) then
-                select case(storm_specification_type)
-                    case(1) ! HWRF Data
-                        set_data_fields => set_HWRF_fields
-                end select
             else if (storm_specification_type < 0) then
-                print *, "Storm specification data type ",               &
-                            storm_specification_type, "not available."
-                stop
+                select case(storm_specification_type)
+                    case(-1) ! HWRF
+                        set_data_fields => set_HWRF_fields
+                    case(-2) ! OWI
+                        set_data_fields => set_OWI_fields
+                    case default
+                        print *, "Storm specification data type ",               &
+                                    storm_specification_type, "not available."
+                end select
+                call set_data_storm(storm_file_path, data_storm, &
+                                    storm_specification_type, log_unit) 
             end if
 
             close(log_unit)
@@ -407,14 +421,15 @@ contains
         ! Output
         real(kind=8) :: location(2)
 
-        if (storm_specification_type == 0) then
-            location = [rinfinity,rinfinity]
-        else if (storm_specification_type > 0) then
+        
+        if (storm_specification_type > 0) then
             location = model_location(t, model_storm)
-        else if (storm_specification_type < 0) then
-            location = data_location(t, data_storm)
+        ! else if (storm_specification_type < 0) then
+            ! Location of data storms is not supported
+            ! location = data_location(t, data_storm)
+            ! location = [rinfinity, rinfinity]
         else
-            stop "Something may be wrong."
+            location = [rinfinity, rinfinity]
         end if
 
     end function storm_location
@@ -432,8 +447,9 @@ contains
 
         if (storm_specification_type > 0) then
             theta = model_direction(t, model_storm)
-        else if (storm_specification_type < 0) then
-            theta = data_direction(t, data_storm)
+        ! else if (storm_specification_type < 0) then
+            ! Direction of data storms is not supported
+            ! theta = data_direction(t, data_storm)
         else
             theta = rinfinity
         end if
@@ -449,7 +465,7 @@ contains
         ! Input arguments
         integer, intent(in) :: maux, mbc, mx, my
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-        real(kind=8), intent(in out) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
+        real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
 
         if (storm_specification_type > 0) then
             call set_model_fields(maux,mbc,mx,my, &
@@ -480,4 +496,26 @@ contains
 
     end subroutine output_storm_location
 
+    ! ==========================================================================
+    ! Default to assuming y is a latitude and if y >= 0 we are want to spin
+    ! counter-clockwise
+    ! ==========================================================================
+    logical pure function hemisphere_rotation(x, y) result(rotation)
+        implicit none
+        real(kind=8), intent(in) :: x, y
+        rotation = (y >= 0.d0)
+    end function hemisphere_rotation
+    ! This version just returns the user defined direction
+    logical pure function N_rotation(x, y) result(rotation)
+        implicit none
+        real(kind=8), intent(in) :: x, y
+        rotation = .true.
+    end function N_rotation
+    ! This version just returns the user defined direction
+    logical pure function S_rotation(x, y) result(rotation)
+        implicit none
+        real(kind=8), intent(in) :: x, y
+        rotation = .false.
+    end function S_rotation
+    
 end module storm_module
