@@ -42,7 +42,9 @@ try:
 except:
     pass # assume python2, already has reload
 
-from pylab import *
+import numpy as np
+from numpy import ma
+from matplotlib import pyplot as plt
 import os
 
 def f2s(x, num_digits=6):
@@ -1111,8 +1113,6 @@ def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
     module.
     """
 
-    from matplotlib import pyplot as plt
-    import numpy as np
 
     # If X is 2d extract proper 1d slice:
     if X.ndim == 1:
@@ -1351,9 +1351,7 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
     cmin, cmax are used only if nrm is not provided.
     """
 
-    import matplotlib.pyplot as plt
     import matplotlib as mpl
-    import numpy
 
     fig = plt.figure(figsize=(1.2,3))
     ax1 = fig.add_axes([0.3, 0.075, 0.20, 0.80])
@@ -1370,12 +1368,12 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
 
     # make sure ticks appear at lower and upper limits of scale:
     cbticks = cb1.get_ticks()
-    cbticks = numpy.hstack([norm.vmin, cbticks, norm.vmax])
+    cbticks = np.hstack([norm.vmin, cbticks, norm.vmax])
     # remove 2nd and/or next-to-last tick if they are cramped:
     if cbticks[1]-cbticks[0] < 0.25*(cbticks[2]-cbticks[1]):
-        cbticks = numpy.hstack((cbticks[:1], cbticks[2:]))
+        cbticks = np.hstack((cbticks[:1], cbticks[2:]))
     if cbticks[-1]-cbticks[-2] < 0.25*(cbticks[-2]-cbticks[-3]):
-        cbticks = numpy.hstack((cbticks[:-2], cbticks[-1:]))
+        cbticks = np.hstack((cbticks[:-2], cbticks[-1:]))
     cb1.set_ticks(cbticks)
 
     if label:
@@ -1419,11 +1417,8 @@ def topo2kmz(topo, zlim=(-20,20), mask_outside_zlim=True, sea_level=0.,
     """
 
     import os, glob
-    import numpy
-    from numpy import ma
     from clawpack.visclaw import colormaps
     import zipfile
-    import matplotlib.pyplot as plt
 
     assert force_dry is None, 'force_dry not yet implemented'
 
@@ -1444,7 +1439,7 @@ def topo2kmz(topo, zlim=(-20,20), mask_outside_zlim=True, sea_level=0.,
                                          data_break=sea_level)
 
     if mask_outside_zlim:
-        Z = ma.masked_where(numpy.logical_or(topo.Z<zlim[0], topo.Z>zlim[1]), topo.Z)
+        Z = ma.masked_where(np.logical_or(topo.Z<zlim[0], topo.Z>zlim[1]), topo.Z)
         cbar_extend = 'neither'
     else:
         Z = topo.Z
@@ -1612,11 +1607,11 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
         previous_png_extent = png_extent
 
         # now add contour plot:
-        clines = arange(dZ_interval,dZmax,dZ_interval)
+        clines = np.arange(dZ_interval,dZmax,dZ_interval)
         lw = 2.
         ax.contour(dtopo.X, dtopo.Y, dtopo.dZ[-1,:,:], clines, colors='r',
                    linestyles='-', linewidths=lw)
-        clines = arange(-dZmax,0,dZ_interval)
+        clines = np.arange(-dZmax,0,dZ_interval)
         ax.contour(dtopo.X, dtopo.Y, dtopo.dZ[-1,:,:], clines, colors='c',
                    linestyles='-', linewidths=lw)
 
@@ -1629,9 +1624,9 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
             dZ_min = dtopo.dZ[-1,:,:].min()
             dZ_max = dtopo.dZ[-1,:,:].max()
             if type(text_label) == str:
-                text(text_x, text_y, text_label, fontsize=15,color='yellow')
+                plt.text(text_x, text_y, text_label, fontsize=15,color='yellow')
             else:
-                text(text_x, text_y,'%s\ndZ_min = %.1fm, dZ_max = %.1fm' \
+                plt.text(text_x, text_y,'%s\ndZ_min = %.1fm, dZ_max = %.1fm' \
                         % (event,dZ_min,dZ_max) \
                         +  '\ndZ_interval = %.1f m' % dZ_interval, \
                      fontsize=15,color='yellow')
