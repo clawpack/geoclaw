@@ -1101,9 +1101,11 @@ def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
     png file, as described below.
 
     Internally the value `dpi` (dots per inch) for the png file is
-    determined so that it is at least 16 and so that:
+    determined so that it is at least 16 and so that::
+
         dpi * x_inches = dcp * x_cells
         dpi * y_inches = dcp * y_cells
+
     where `x_cells`, `y_cells` are the number of cells in each direction.
 
     `kwargs` are passed to `pcolormesh`, e.g. `cmap` and `norm` are
@@ -1111,8 +1113,10 @@ def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
 
     This function returns `fig, ax, png_extent, kml_dpi` so the user can further
     annotate the figure befor saving it as a png file, which should then
-    be done with:
+    be done with::
+
         plt.savefig(png_filename, transparent=True, dpi=kml_dpi)
+
     The `png_extent` is needed in construcing a kml file to display the
     png file on Google Earth, e.g. using the function `png2kml` in this
     module.
@@ -1415,9 +1419,9 @@ def topo2kmz(topo, zlim=(-20,20), mask_outside_zlim=True, sea_level=0.,
      - *close_figs* to close the pyplot figures after making png files
 
     :Future:
-    If `force_dry` is an array of the same shape as `topo.Z` then another png
-    and kml file are created for land that is below `sea_level` but where
-    `force_dry = True`.
+     - If `force_dry` is an array of the same shape as `topo.Z` then another png
+       and kml file are created for land that is below `sea_level` but where
+       `force_dry = True`.
 
     """
 
