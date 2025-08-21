@@ -1555,7 +1555,8 @@ def transect2kml(xtrans, ytrans, fname='transect.kml'):
     print('Created ', fname)
 
 def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
-                       text_label=True, text_x=None, text_y=None):
+                       text_label=True, text_x=None, text_y=None,
+                       fname_kmz=None):
 
     """
     Create dtopo_contours.kmz file containing contour plots of the dtopo
@@ -1655,7 +1656,9 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
         for file in files:
             print('    ', file)
 
-    fname_kmz = 'dtopo_contours.kmz'
+    if fname_kmz is None:
+        fname_kmz = 'dtopo_contours.kmz'
+        
     with zipfile.ZipFile(fname_kmz, 'w') as zip:
         for file in files:
             zip.write(file)
