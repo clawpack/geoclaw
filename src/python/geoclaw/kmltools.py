@@ -1017,7 +1017,7 @@ def fgout2kml(rundata=None,fname='fgout_grids.kml',verbose=True,combined=False):
         box2kml(xy, kml_file, fname_root, color='8888FF')
 
 
-def make_input_data_kmls(rundata=None, combined=False):
+def make_input_data_kmls(rundata=None, combined=False, dtopo_contours=False):
     """
     Produce kml files for the computational domain, all gauges and regions
     specified, and all topo and dtopo files specified in rundata.
@@ -1061,11 +1061,13 @@ def make_input_data_kmls(rundata=None, combined=False):
         dtopo_file_name = f[-1]
         dtopo_type = f[0]
         dtopo2kml(dtopo_file_name, dtopo_type)
-        fname_kmz = os.path.split(dtopo_file_name)[-1]
-        fname_kmz = os.path.splitext(fname_kmz)[0]  # without path or extension
-        fname_kmz = fname_kmz + '_contours.kmz'
-        dtopo_contours2kmz(dtopo_file_name, dtopo_type=dtopo_type,
-                           dZ_interval=1, fname_kmz=fname_kmz, verbose=False)
+        if dtopo_contours:
+            # also make a kmz file showing dtopo contours (takes a bit longer)
+            fname_kmz = os.path.split(dtopo_file_name)[-1]
+            fname_kmz = os.path.splitext(fname_kmz)[0]  # w/o path or extension
+            fname_kmz = fname_kmz + '_contours.kmz'
+            dtopo_contours2kmz(dtopo_file_name, dtopo_type=dtopo_type,
+                               dZ_interval=1, fname_kmz=fname_kmz,verbose=False)
 
 
 def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
@@ -1586,7 +1588,8 @@ def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
      - *text_x, text_y* are the location of the text,
         or if None then the mean of dtopofile.X and dtopofile.Y are used.
 
-    TODO: Could also add pcolor plot of deformation to kmz file.
+    :Future:
+     - Could also add pcolor plot of deformation to kmz file.
     """
     from clawpack.geoclaw import dtopotools
 
