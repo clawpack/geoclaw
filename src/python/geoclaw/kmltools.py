@@ -960,7 +960,7 @@ def fgmax2kml(rundata=None,fname='fgmax_grids.kml',verbose=True,combined=False):
             xy = ([fg.x1,fg.x2,fg.x3,fg.x4],
                   [fg.y1,fg.y2,fg.y3,fg.y4])
             poly2kml(xy, kml_file, fname_root, color='8888FF')
-       elif fg.point_style==4:
+        elif fg.point_style==4:
             # points specified by mask in a topo-like file, so plot its extent:
             topo_file_name = fg.xy_fname
             topo_type = 3
