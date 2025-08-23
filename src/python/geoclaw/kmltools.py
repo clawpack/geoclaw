@@ -346,11 +346,11 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
         v = v + "%s,%s,%s\n" % (f2s(x[0]),f2s(y[0]),f2s(elev))
         v.replace(' ','')
 
-        region_text = kml_region(mapping, v)
+        region_text = kml_region(mapping)  #, v)
+        kml_text = kml_text + region_text
 
         fname = flagregion.name + '.kml'
-        region_text = kml_region(mapping, v)
-        kml_text = kml_text + region_text
+        #region_text = kml_region(mapping, v)
 
         if not combined:
             kml_text = kml_text + kml_footer()
@@ -699,6 +699,28 @@ def kml_footer():
 
 
 def kml_region(mapping, vertex_text=None):
+
+    print('+++ vertex_text = ', vertex_text)
+    # if all x values are > 180 or all are < -180 shift the values for plotting
+    if 'x3' in mapping:
+        xge = np.array([mapping['x1'], mapping['x2'], mapping['x3'],mapping['x4']])
+    else:
+        xge = np.array([mapping['x1'], mapping['x2']])
+    print('+++ initial xge = ',xge)
+    if xge.min() > 180:
+        xge = xge - 360.
+    if xge.max() < -180:
+        xge = xge + 360.
+    if xge.min() < -180 or xge.max() > 180:
+        print('+++ kml_region spans date line, might not display properly')
+    print('+++ final xge = ',xge)
+
+    mapping['x1'] = xge[0]
+    mapping['x2'] = xge[1]
+    if 'x3' in mapping:
+        mapping['x3'] = xge[2]
+        mapping['x4'] = xge[3]
+
 
     if vertex_text is None:
         if 'x3' in mapping:
