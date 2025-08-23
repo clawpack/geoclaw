@@ -15,7 +15,7 @@ Classes representing parameters for GeoClaw runs
  - QinitData
  - SurgeData
  - MultilayerData
- - FrictionData 
+ - FrictionData
  - BoussData
  - GridData1D
  - BoussData1D
@@ -360,16 +360,16 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
                         self.num_fgmax_val = int(value)
                     elif varname == "num_fgmax_grids":
                         num_fgmax_grids = int(value)
-                
+
                 # Contains a fixed grid number
                 elif "# fgno" in line:
                     value, tail = line.split("#")
                     fig_numbers.append(int(value))
 
         if len(fig_numbers) != num_fgmax_grids:
-            raise ValueError("Number of FGMaxGrid numbers found does not ", 
+            raise ValueError("Number of FGMaxGrid numbers found does not ",
                              "equal the number of grids recorded.")
-        
+
         # Read each fgmax grid
         import clawpack.geoclaw.fgmax_tools
         for (i, grid_num) in enumerate(fig_numbers):
@@ -538,8 +538,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
     r"""Data object describing storm surge related parameters"""
 
     # Provide some mapping between model names and integers
-    storm_spec_dict_mapping = {'owi': -2,
-                               "hwrf": -1,
+    storm_spec_dict_mapping = {"data": -1,
                                None: 0,
                                'holland80': 1,
                                'holland08': 8,
@@ -597,7 +596,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                 raise ValueError("Unknown rotation_override specification.")
         else:
             self.rotation_override = int(self.rotation_override)
-        self.data_write('rotation_override', 
+        self.data_write('rotation_override',
                         description="(Override storm rotation)")
         self.data_write()
 
@@ -676,6 +675,44 @@ class FrictionData(clawpack.clawutil.data.ClawData):
         # File support
         self.add_attribute('friction_files', [])
 
+
+    def read(self, path="friction.data", force=False):
+        r"""Read friction data file"""
+
+        with open(os.path.abspath(path), 'r') as data_file:
+            # Header
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+
+            # Generic data
+            self.variable_friction = bool(data_file.readline().split("=:")[0])
+            self.friction_index = int(data_file.readline().split("=:")[0])
+            data_file.readline()
+            num_regions = int(data_file.readline().split("=:")[0])
+            data_file.readline()
+            # Regions
+            self.friction_regions = []
+            for n in range(num_regions):
+                lower = self._convert_line(data_file.readline())
+                upper = self._convert_line(data_file.readline())
+                depths = self._convert_line(data_file.readline())
+                coeff = self._convert_line(data_file.readline())
+                self.friction_regions.append([lower, upper, depths, coeff])
+                data_file.readline()
+            self.friction_files = [] # Is not supported
+
+    def _convert_line(self, line):
+        values = []
+        for value in line.split("=:")[0].split(" "):
+            if len(value) > 1:
+                values.append(float(value))
+        return values
+
+
     def write(self, out_file='friction.data', data_source='setrun.py'):
 
         self.open_data_file(out_file, data_source)
@@ -706,7 +743,8 @@ class FrictionData(clawpack.clawutil.data.ClawData):
             for friction_file in self.friction_files:
                 # if path is relative in setrun, assume it's relative to the
                 # same directory that out_file comes from
-                fname = os.path.abspath(os.path.join(os.path.dirname(out_file),friction_file))
+                fname = os.path.abspath(os.path.join(os.path.dirname(out_file),
+                                                     friction_file))
                 self._out_file.write("'%s' %s\n " % fname)
 
         self.close_data_file()

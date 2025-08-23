@@ -400,49 +400,49 @@ def setgeo(rundata):
     data.display_landfall_time = True
 
     # AMR parameters, m/s and m respectively
-    data.wind_refine = [20.0, 40.0, 60.0]
-    data.R_refine = [60.0e3, 40e3, 20e3]
+    import pandas as pd
+    import xarray as xr
+    data.wind_refine = pd.DataFrame([[20.0], [40.0], [60.0]])
+    data.R_refine = xr.DataArray([60.0e3, 40e3, 20e3])
 
     # Storm parameters - Parameterized storm (Holland 1980)
-    data.storm_specification_type = 'holland80'  # (type 1)
-    # data.storm_specification_type = 'OWI'
+    # data.storm_specification_type = 'holland80'
+    data.storm_specification_type = 'data'
     data.storm_file = (Path() / 'isaac.storm').resolve()
-
-    # Convert ATCF data to GeoClaw format
-    clawutil.data.get_remote_file(
-                   "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-    atcf_path = scratch_dir / "bal092012.dat"
-    # Note that the get_remote_file function does not support gzip files which
-    # are not also tar files.  The following code handles this
-    with gzip.open(atcf_path.with_suffix(".dat.gz"), 'rb') as atcf_file,    \
-            open(atcf_path, 'w') as atcf_unzipped_file:
-        atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
-
-    # Uncomment/comment out to use the old version of the Ike storm file
-    isaac = Storm(path=atcf_path, file_format="ATCF")
-
+    isaac = Storm()
     # Calculate landfall time - Need to specify as the file above does not
     # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
     isaac.time_offset = np.datetime64("2012-08-29T00:00")
 
-    if data.storm_specification_type == "holland80":
+    if data.storm_specification_type == 'holland80':
+        # Convert ATCF data to GeoClaw format
+        clawutil.data.get_remote_file(
+                       "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
+        atcf_path = scratch_dir / "bal092012.dat"
+        # Note that the get_remote_file function does not support gzip files which
+        # are not also tar files.  The following code handles this
+        with gzip.open(atcf_path.with_suffix(".dat.gz"), 'rb') as atcf_file,    \
+                open(atcf_path, 'w') as atcf_unzipped_file:
+            atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
+
+        # Uncomment/comment out to use the old version of the Ike storm file
+        isaac.read(path=atcf_path, file_format="ATCF")
+
         isaac.write(data.storm_file, file_format='geoclaw')
 
-    elif data.storm_specification_type == "OWI":
-
-        # :TODO: write out Isaac fields into appropriate file format, currently
-        # we are just storing the files as is
-
+    elif data.storm_specification_type == "data":
         # ASCII
-        # isaac.data_file_format = 'NWS12'
-        # isaac.file_paths.append((Path() / "isaac.PRE").resolve())
-        # isaac.file_paths.append((Path() / "isaac.WIN").resolve())
+        isaac.file_format = 'NWS12'
+        isaac.file_paths.append((Path() / "isaac.PRE").resolve())
+        isaac.file_paths.append((Path() / "isaac.WIN").resolve())
 
-        # NetCDF file
-        isaac.data_file_format = "NWS13"
-        isaac.file_paths.append((Path() / "isaac.nc").resolve())
+        # NetCDF
+        # isaac.file_format = "NWS13"
+        # isaac.file_paths.append((Path() / "isaac.nc").resolve())
+        # # For NetCDF we need to set this to the epoch or things do not work yet
+        # isaac.time_offset = np.datetime64("1970-01-01")
 
-        isaac.write(data.storm_file, file_format='OWI')
+        isaac.write(data.storm_file, file_format='data')
 
     else:
         raise ValueError("Invalid storm specification type.")

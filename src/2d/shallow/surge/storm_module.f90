@@ -116,8 +116,7 @@ contains
         use model_storm_module, only: set_willoughby_fields
 
         use data_storm_module, only: set_data_storm => set_storm
-        use data_storm_module, only: set_HWRF_fields
-        use data_storm_module, only: set_owi_fields
+        use data_storm_module, only: set_ascii_fields, set_netcdf_fields
 
         use utility_module, only: get_value_count
 
@@ -240,15 +239,7 @@ contains
                 call set_model_storm(storm_file_path, model_storm,         &
                                      storm_specification_type, log_unit)
             else if (storm_specification_type < 0) then
-                select case(storm_specification_type)
-                    case(-1) ! HWRF
-                        set_data_fields => set_HWRF_fields
-                    case(-2) ! OWI
-                        set_data_fields => set_OWI_fields
-                    case default
-                        print *, "Storm specification data type ",               &
-                                    storm_specification_type, "not available."
-                end select
+                set_data_fields => set_ascii_fields
                 call set_data_storm(storm_file_path, data_storm, &
                                     storm_specification_type, log_unit) 
             end if

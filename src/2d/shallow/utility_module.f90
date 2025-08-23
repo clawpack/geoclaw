@@ -3,11 +3,38 @@ module utility_module
 
     implicit none
 
+    ! ISO Time Format String
+    character(len=*), parameter :: ISO_time_format = "(i4,1x,i2,1x,i2,1x,i2,1x,i2,1x,i2)"
+
     ! String manipulation
     character( * ), private, parameter :: LOWER_CASE = 'abcdefghijklmnopqrstuvwxyz'
     character( * ), private, parameter :: UPPER_CASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 
 
 contains
+
+   ! ==========================================================================
+   ! Check for netcdf file errors when loading data, only active if the
+   ! NETCDF FFLAGS are in the Makefile
+   ! ==========================================================================
+    subroutine check_netcdf_error(ios)
+#ifdef NETCDF
+        use netcdf
+#endif
+        implicit none
+
+        integer, intent(in) :: ios
+#ifdef NETCDF
+        if (ios /= NF90_NOERR) then
+            print *, "NetCDF IO error: ", ios
+            print *, trim(nf90_strerror(ios))
+            stop
+        end if
+#else
+        print *, "GeoClaw was not compiled with NetCDF support."
+        stop
+#endif
+    end subroutine check_netcdf_error
+
 
     ! Returns number of arguments in list, assumes arbitrary number of white 
     ! space as delimiter
@@ -108,69 +135,86 @@ contains
 
     end subroutine parse_values
 
+    ! === Geometry Functions ===================================================
+    !
+    
+    !  point_in_rectangle(p, rect) - Returns whether p is in rect.
+    !    real(kind=8) :: p(2), rect(4)
+    !    rect is in the format (lower x, lower y, upper x, upper y)
+    pure logical function point_in_rectangle(p, rect)
+        implicit none
+        real(kind=8), intent(in) :: p(2), rect(4)
+        point_in_rectangle = p(1) >= rect(1) .and. p(1) <= rect(3) .and. &
+                             p(2) >= rect(2) .and. p(2) <= rect(4)
+    end function point_in_rectangle
 
-    !------------------------------------------------------------------------------
-    !S+
-    ! NAME:
-    !       StrUpCase
-    !
-    ! PURPOSE:
-    !       Function to convert an input string to upper case.
-    !
-    ! CATEGORY:
-    !       Utility
-    !
-    ! LANGUAGE:
-    !       Fortran-95
-    !
-    ! CALLING SEQUENCE:
-    !       Result = StrUpCase( String )
-    !
-    ! INPUT ARGUMENTS:
-    !       String:  Character string to be converted to upper case.
-    !                UNITS:      N/A
-    !                TYPE:       CHARACTER( * )
-    !                DIMENSION:  Scalar
-    !                ATTRIBUTES: INTENT( IN )
-    !
-    ! OPTIONAL INPUT ARGUMENTS:
-    !       None.
-    !
-    ! OUTPUT ARGUMENTS:
-    !       None.
-    !
-    ! OPTIONAL OUTPUT ARGUMENTS:
-    !       None.
-    !
-    ! FUNCTION RESULT:
-    !       Result:  The input character string converted to upper case.
-    !                UNITS:      N/A
-    !                TYPE:       CHARACTER( LEN(String) )
-    !                DIMENSION:  Scalar
-    !
-    ! CALLS:
-    !       None.
-    !
-    ! SIDE EFFECTS:
-    !       None.
-    !
-    ! RESTRICTIONS:
-    !       None.
-    !
-    ! EXAMPLE:
-    !       string = 'this is a string'
-    !       WRITE( *, '( a )' ) StrUpCase( string )
-    !   THIS IS A STRING
-    !
-    ! PROCEDURE:
-    !       Figure 3.5B, pg 80, "Upgrading to Fortran 90", by Cooper Redwine,
-    !       1995 Springer-Verlag, New York.
-    !
-    ! CREATION HISTORY:
-    !       Written by:     Paul van Delst, CIMSS/SSEC 18-Oct-1999
-    !                       paul.vandelst@ssec.wisc.edu
-    !S-
-    !------------------------------------------------------------------------------
+    !  rects_intersect(rect1, rect2) - Returns whether rectangles intersect
+    !    real(kind=8) :: rect1(4), rect2(4)
+    !    rects are in the format (lower x, lower y, upper x, upper y)
+    pure logical function rects_intersect(rect1, rect2)
+        implicit none
+        real(kind=8), intent(in) :: rect1(4), rect2(4)
+        rects_intersect = .not. (rect1(3) < rect2(1) .or.  &
+                                 rect1(4) < rect2(2) .or.  &
+                                 rect1(1) > rect2(3) .or.  &
+                                 rect1(2) > rect2(4))
+    end function rects_intersect
+
+    ! ==========================================================================
+    ! seconds_from_epoch() Calculates seconds from UNIX epoch (1970) from a
+    ! datetime. Returns the total seconds from the epoch includes leap years and
+    ! days
+    ! ==========================================================================
+    pure integer function seconds_from_epoch(time) result(seconds_since_epoch)
+        implicit none
+
+        ! year, month, day, hour, [minutes], [seconds] (optional)
+        integer, intent(in) :: time(:)
+        integer :: days_since_epoch
+        integer :: years, months, days, hours, minutes, seconds
+
+        ! Handle possibly missing values
+        years = time(1)
+        months = time(2)
+        days = time(3)
+        hours = time(4)
+        minutes = 0
+        seconds = 0
+        if (size(time) >= 5) then
+            minutes = time(5)
+            if (size(time) == 6) then
+                seconds = time(6)
+            end if 
+        end if
+
+        ! Compute days since epoch (1970-01-01)
+        days_since_epoch = date_to_days(years, months, days)        &
+                                - date_to_days(1970, 1, 1)
+
+        ! Compute total seconds
+        seconds_since_epoch = days_since_epoch * 86400      &
+                                + hours * 3600              &
+                                + minutes * 60              &
+                                + seconds
+
+    end function seconds_from_epoch
+
+    ! Helper function: convert date to days since a fixed point
+    pure integer function date_to_days(y, m, d)
+        integer, intent(in) :: y, m, d
+        integer :: a, y_adj, m_adj
+
+        a = (14 - m) / 12
+        y_adj = y + 4800 - a
+        m_adj = m + 12 * a - 3
+
+        date_to_days = d + (153 * m_adj + 2) / 5    &
+                         + 365 * y_adj              &
+                         + y_adj / 4                &
+                         - y_adj / 100              &
+                         + y_adj / 400              &
+                         - 32045                
+    end function date_to_days
 
 
     ! ==========================================================================
