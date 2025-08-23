@@ -126,6 +126,7 @@ check:
 	@env | grep PETSC_OPTIONS
 	@echo PETSC_DIR = $(PETSC_DIR)
 	@echo PETSC_ARCH = $(PETSC_ARCH)
+	@echo INCLUDE = $(INCLUDE)
 	@echo CLAW_MPIEXEC = $(CLAW_MPIEXEC)
 	@echo RUNEXE = $(RUNEXE)
 	@echo EXE = $(EXE)
