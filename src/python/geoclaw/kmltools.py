@@ -28,6 +28,7 @@ the full 8 digits if you want it transparent).
  - kml_build_colorbar - create a colorbar to display on GE
  - topo2kmz - create kmz file showing onshore and offshore topography
  - transect2kml - create kml file showing a set of points on a transect
+ - dtopo_contours2kmz - create a kmz file containing contour plots of dtopo(s)
  - kml_header - used internally
  - kml_footer - used internally
  - kml_region - used internally
@@ -40,6 +41,11 @@ try:
     from importlib import reload
 except:
     pass # assume python2, already has reload
+
+import numpy as np
+from numpy import ma
+from matplotlib import pyplot as plt
+import os
 
 def f2s(x, num_digits=6):
     r"""
@@ -954,6 +960,11 @@ def fgmax2kml(rundata=None,fname='fgmax_grids.kml',verbose=True,combined=False):
             xy = ([fg.x1,fg.x2,fg.x3,fg.x4],
                   [fg.y1,fg.y2,fg.y3,fg.y4])
             poly2kml(xy, kml_file, fname_root, color='8888FF')
+        elif fg.point_style==4:
+            # points specified by mask in a topo-like file, so plot its extent:
+            topo_file_name = fg.xy_fname
+            topo_type = 3
+            topo2kml(topo_file_name, topo_type, color='8888FF')
         else:
             print('fgmax2kml not yet implemented for point_style = %i' \
                   % fg.point_style)
@@ -1006,7 +1017,7 @@ def fgout2kml(rundata=None,fname='fgout_grids.kml',verbose=True,combined=False):
         box2kml(xy, kml_file, fname_root, color='8888FF')
 
 
-def make_input_data_kmls(rundata=None, combined=False):
+def make_input_data_kmls(rundata=None, combined=False, dtopo_contours=False):
     """
     Produce kml files for the computational domain, all gauges and regions
     specified, and all topo and dtopo files specified in rundata.
@@ -1050,6 +1061,13 @@ def make_input_data_kmls(rundata=None, combined=False):
         dtopo_file_name = f[-1]
         dtopo_type = f[0]
         dtopo2kml(dtopo_file_name, dtopo_type)
+        if dtopo_contours:
+            # also make a kmz file showing dtopo contours (takes a bit longer)
+            fname_kmz = os.path.split(dtopo_file_name)[-1]
+            fname_kmz = os.path.splitext(fname_kmz)[0]  # w/o path or extension
+            fname_kmz = fname_kmz + '_contours.kmz'
+            dtopo_contours2kmz(dtopo_file_name, dtopo_type=dtopo_type,
+                               dZ_interval=1, fname_kmz=fname_kmz,verbose=False)
 
 
 def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
@@ -1090,9 +1108,11 @@ def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
     png file, as described below.
 
     Internally the value `dpi` (dots per inch) for the png file is
-    determined so that it is at least 16 and so that:
+    determined so that it is at least 16 and so that::
+
         dpi * x_inches = dcp * x_cells
         dpi * y_inches = dcp * y_cells
+
     where `x_cells`, `y_cells` are the number of cells in each direction.
 
     `kwargs` are passed to `pcolormesh`, e.g. `cmap` and `norm` are
@@ -1100,15 +1120,15 @@ def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
 
     This function returns `fig, ax, png_extent, kml_dpi` so the user can further
     annotate the figure befor saving it as a png file, which should then
-    be done with:
+    be done with::
+
         plt.savefig(png_filename, transparent=True, dpi=kml_dpi)
+
     The `png_extent` is needed in construcing a kml file to display the
     png file on Google Earth, e.g. using the function `png2kml` in this
     module.
     """
 
-    from matplotlib import pyplot as plt
-    import numpy as np
 
     # If X is 2d extract proper 1d slice:
     if X.ndim == 1:
@@ -1160,8 +1180,8 @@ def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
     dots_per_cell = dpc
     max_dots = dots_per_cell * max_cells
 
-    # determine dots per inch for png file, minimum 16:
-    kml_dpi = max(int(round(max_dots / max_inches)), 16)
+    # determine dots per inch for png file, minimum 64:
+    kml_dpi = max(int(round(max_dots / max_inches)), 64)
     dots_x = x_cells * dots_per_cell
     dots_y = y_cells * dots_per_cell
 
@@ -1347,9 +1367,7 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
     cmin, cmax are used only if nrm is not provided.
     """
 
-    import matplotlib.pyplot as plt
     import matplotlib as mpl
-    import numpy
 
     fig = plt.figure(figsize=(1.2,3))
     ax1 = fig.add_axes([0.3, 0.075, 0.20, 0.80])
@@ -1366,12 +1384,12 @@ def kml_build_colorbar(cb_filename, cmap, cmin=None, cmax=None,
 
     # make sure ticks appear at lower and upper limits of scale:
     cbticks = cb1.get_ticks()
-    cbticks = numpy.hstack([norm.vmin, cbticks, norm.vmax])
+    cbticks = np.hstack([norm.vmin, cbticks, norm.vmax])
     # remove 2nd and/or next-to-last tick if they are cramped:
     if cbticks[1]-cbticks[0] < 0.25*(cbticks[2]-cbticks[1]):
-        cbticks = numpy.hstack((cbticks[:1], cbticks[2:]))
+        cbticks = np.hstack((cbticks[:1], cbticks[2:]))
     if cbticks[-1]-cbticks[-2] < 0.25*(cbticks[-2]-cbticks[-3]):
-        cbticks = numpy.hstack((cbticks[:-2], cbticks[-1:]))
+        cbticks = np.hstack((cbticks[:-2], cbticks[-1:]))
     cb1.set_ticks(cbticks)
 
     if label:
@@ -1408,18 +1426,15 @@ def topo2kmz(topo, zlim=(-20,20), mask_outside_zlim=True, sea_level=0.,
      - *close_figs* to close the pyplot figures after making png files
 
     :Future:
-    If `force_dry` is an array of the same shape as `topo.Z` then another png
-    and kml file are created for land that is below `sea_level` but where
-    `force_dry = True`.
+     - If `force_dry` is an array of the same shape as `topo.Z` then another png
+       and kml file are created for land that is below `sea_level` but where
+       `force_dry = True`.
 
     """
 
     import os, glob
-    import numpy
-    from numpy import ma
     from clawpack.visclaw import colormaps
     import zipfile
-    import matplotlib.pyplot as plt
 
     assert force_dry is None, 'force_dry not yet implemented'
 
@@ -1440,7 +1455,7 @@ def topo2kmz(topo, zlim=(-20,20), mask_outside_zlim=True, sea_level=0.,
                                          data_break=sea_level)
 
     if mask_outside_zlim:
-        Z = ma.masked_where(numpy.logical_or(topo.Z<zlim[0], topo.Z>zlim[1]), topo.Z)
+        Z = ma.masked_where(np.logical_or(topo.Z<zlim[0], topo.Z>zlim[1]), topo.Z)
         cbar_extend = 'neither'
     else:
         Z = topo.Z
@@ -1549,3 +1564,125 @@ def transect2kml(xtrans, ytrans, fname='transect.kml'):
         kml_file.write("\n</Document>\n</kml>")
 
     print('Created ', fname)
+
+def dtopo_contours2kmz(dtopofiles, dtopo_type=3, dZ_interval=1, dZmax=40,
+                       text_label=True, text_x=None, text_y=None,
+                       fname_kmz=None, verbose=True):
+
+    """
+    Create dtopo_contours.kmz file containing contour plots of the dtopo
+    deformations with radio buttons to select which one to show.
+    (Or dtopofiles can be a string for a single dtopofile.)
+
+    To show multiple dtopofiles, they must all have the same extent.
+
+    :Inputs:
+
+     - *dtopofiles* (str or list of str): single or list of dtopofile paths
+     - *dZ_interval* (float) the interval in meters between contours.
+     - *dZmax* (float) max for contour levels shown (and -dZmax is the min)
+     - *text_label* Text label to add to plots,
+        If text_label is a string this will be added as a text label,
+        If text_label == True a standard label will be added with the
+        dopofile name, dZ_interval, and the max, min values of dZ.
+     - *text_x, text_y* are the location of the text,
+        or if None then the mean of dtopofile.X and dtopofile.Y are used.
+
+    :Future:
+     - Could also add pcolor plot of deformation to kmz file.
+    """
+    from clawpack.geoclaw import dtopotools
+
+    import os,sys, zipfile, shutil
+
+    kml_dir = 'temp_dtopos_kml'
+    os.system('mkdir -p %s' % kml_dir)
+    events = []
+    png_files = []
+
+    if type(dtopofiles) == str:
+        dtopofiles = [dtopofiles]  # if only one passed in
+
+    previous_png_extent = None
+
+    for dtopofile in dtopofiles:
+        dtopofile = os.path.abspath(dtopofile)
+        event = os.path.splitext(os.path.split(dtopofile)[-1])[0]
+        events.append(event)
+        if verbose:
+            print('Making contours for event = ',event)
+            print('  contour interval = %gm' % dZ_interval)
+
+        dtopo = dtopotools.DTopography(dtopofile, dtopo_type=dtopo_type)
+
+        # first make empty plot of right dimensions:
+        Zm = ma.masked_where(dtopo.Y < 90, dtopo.Y)  # all masked
+        fig,ax,png_extent,kml_dpi = pcolorcells_for_kml(dtopo.X, dtopo.Y, Zm,
+                                                 png_filename=None, dpc=4,
+                                                 verbose=verbose)
+
+        if previous_png_extent is not None:
+            assert png_extent == previous_png_extent, \
+                    '*** dtopofiles have different extents\n' \
+                  + '*** cannot make a single kmz file displaying them'
+        previous_png_extent = png_extent
+
+        # now add contour plot:
+        clines = np.arange(dZ_interval,dZmax,dZ_interval)
+        lw = 2.
+        ax.contour(dtopo.X, dtopo.Y, dtopo.dZ[-1,:,:], clines, colors='r',
+                   linestyles='-', linewidths=lw)
+        clines = np.arange(-dZmax,0,dZ_interval)
+        ax.contour(dtopo.X, dtopo.Y, dtopo.dZ[-1,:,:], clines, colors='c',
+                   linestyles='-', linewidths=lw)
+
+        if text_label:
+            if text_x is None:
+                text_x = dtopo.x.mean()
+            if text_y is None:
+                text_y = dtopo.y.mean()
+
+            dZ_min = dtopo.dZ[-1,:,:].min()
+            dZ_max = dtopo.dZ[-1,:,:].max()
+            if type(text_label) == str:
+                plt.text(text_x, text_y, text_label, fontsize=15,color='yellow')
+            else:
+                plt.text(text_x, text_y,'%s\ndZ_min = %.1fm, dZ_max = %.1fm' \
+                        % (event,dZ_min,dZ_max) \
+                        +  '\ndZ_interval = %.1f m' % dZ_interval, \
+                     fontsize=15,color='yellow')
+
+        png_filename = '%s_contours.png' % event
+        png_files.append(png_filename)
+        png_filename = os.path.join(kml_dir, png_filename)
+        plt.savefig(png_filename, transparent=True, dpi=kml_dpi)
+        plt.close(fig)
+
+    if fname_kmz is None:
+        fname_kmz = 'dtopo_contours.kmz'
+    path_kmz = os.path.abspath('./%s' % fname_kmz)  # path in this directory
+
+    # move to kml_dir for making kml files:
+    savedir = os.getcwd()
+    os.chdir(kml_dir)
+    png_names = events
+    fname = 'dtopo_contours.kml'
+    name = 'dtopo_contours'
+    png2kml(png_extent, png_files=png_files, png_names=png_names,
+                     radio_style=True, name=name, fname=fname, verbose=verbose)
+
+    files = [fname] + ['%s_contours.png' % event for event in events]
+    if 0:
+        print('kmz file will include:')
+        for file in files:
+            print('    ', file)
+
+    with zipfile.ZipFile(path_kmz, 'w') as zip:
+        for file in files:
+            zip.write(file)
+        print('Created %s' % fname_kmz)
+    os.chdir(savedir)
+
+    if verbose:
+        print('Removing ',kml_dir)
+    shutil.rmtree(kml_dir)
