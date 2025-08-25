@@ -21,8 +21,10 @@ PLOTDIR = _plots               # Directory for plots
 
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 # If using NetCDF reading use these flags
-FFLAGS += -DNETCDF -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib
-LFLAGS += -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib -lnetcdff
+# FFLAGS += -DNETCDF -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib
+# LFLAGS += -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib -lnetcdff
+FFLAGS += -DNETCDF $(shell nf-config --fflags)
+LFLAGS += $(FFLAGS) $(shell nf-config --flibs) $(shell nc-config --libs)
 
 # ---------------------------------
 # package sources for this program:

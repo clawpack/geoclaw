@@ -311,8 +311,11 @@ c
       rvoll(level) = rvoll(level) + nx * ny
 !$OMP END CRITICAL(rv)
 
-
+c     Call b4step2 here so that time dependent arrays can be filled properly
       locaux = node(storeaux,mptr)
+      call b4step2(nghost, nx, ny, nvar, alloc(locnew), 
+     &             rnode(cornxlo,mptr), rnode(cornylo,mptr), hx, hy, 
+     &             time, dt, naux, alloc(locaux))
 c
       if (node(ffluxptr,mptr) .ne. 0) then
          lenbc  = 2*(nx/intratx(level-1)+ny/intraty(level-1))

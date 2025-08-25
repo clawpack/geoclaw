@@ -8,22 +8,22 @@ Module provides several functions for reading, writing and manipulating
 topography (bathymetry) files.
 
 :Classes:
- - Topography 
+ - Topography
 
 :Functions:
 
  - determine_topo_type
  - create_topo_func
  - topo1writer
- - topo2writer 
- - topo3writer 
+ - topo2writer
+ - topo3writer
  - swapheader
 
 
 :TODO:
  - Add sub and super sampling capababilities
  - Add functions for creating topography based off a topo function, incorporate
-   the create_topo_func into Topography class, maybe allow more broad 
+   the create_topo_func into Topography class, maybe allow more broad
    initialization ability to the class to handle this?
  - Fix `in_poly` function
  - Add remove/fill no data value
@@ -47,17 +47,17 @@ def determine_topo_type(path, default=None):
     :Input:
 
      - *path* (string) - Path to the file.  Can include archive extensions (they
-       will be stripped off). 
-     - *default* (object) - Value returned if no suitable topo type was 
+       will be stripped off).
+     - *default* (object) - Value returned if no suitable topo type was
        determined.  Default is *None*.
 
     returns integer between 1-3 or *default* if nothing matches.
-    
+
     """
 
     extension = os.path.splitext(
                   clawpack.clawutil.data.strip_archive_extensions(path))[-1][1:]
-    
+
     topo_type = default
     if extension[:2] == "tt" or extension[:8] == 'topotype':
         topo_type = int(extension[-1])
@@ -75,40 +75,40 @@ def determine_topo_type(path, default=None):
 
 def create_topo_func(loc,verbose=False):
     """
-    Given a 1-dimensional topography profile specfied by a set of (x,z) 
-    values, create a lambda function that when evaluated will give the 
+    Given a 1-dimensional topography profile specfied by a set of (x,z)
+    values, create a lambda function that when evaluated will give the
     topgraphy at the point (x,y).  (The resulting function is constant in y.)
-    
-    :Example: 
+
+    :Example:
 
         >>> f = create_topo_func(loc)
         >>> b = f(x, y)
-    
+
     :Input:
      - *loc* (list) - Create a topography file with the profile denoted by the
-       tuples inside of loc.  A sample set of points are shown below.  Note 
-       that the first value of the list is the x location and the second is 
+       tuples inside of loc.  A sample set of points are shown below.  Note
+       that the first value of the list is the x location and the second is
        the height of the topography. ::
 
 
         z (m)
         ^                                                  o loc[5]  o
-        |                                                    
-        |                                          loc[4]   
+        |
+        |                                          loc[4]
         |--------------------------------------------o-----> x (m) (sea level)
-        |                                            
+        |
         |                                o loc[2] o loc[3]
-        |                         
-        |                         
+        |
+        |
         |                           o loc[1]
-        |           
-        |                               
+        |
+        |
         |__________________o loc[0]
-        0.0               
-        
-        
+        0.0
+
+
     """
-    
+
     cmd_str = "lambda x,y: (x <= %s) * %s" % (loc[0][0],loc[0][1])
     for i in range(0,len(loc)-1):
         loc_str = " + (%s < x) * (x <= %s)" % (loc[i][0],loc[i+1][0])
@@ -117,7 +117,7 @@ def create_topo_func(loc,verbose=False):
         loc_str = "".join((loc_str," * (x - %s) + %s)" % (loc[i][0],loc[i][1])))
         cmd_str = "".join((cmd_str,loc_str))
     cmd_str = "".join((cmd_str," + (%s < x) * %s" % (loc[-1][0],loc[-1][1])))
-    
+
     if verbose:
         print(cmd_str)
     return eval(cmd_str)
@@ -138,7 +138,7 @@ def topo1writer (outfile,topo,xlower,xupper,ylower,yupper,nxpoints,nypoints):
 
     topography.x = np.linspace(xlower,xupper,nxpoints)
     topography.y = np.linspace(ylower,yupper,nypoints)
-    
+
     topography.write(outfile, topo_type=1)
 
 
@@ -176,7 +176,7 @@ def topo3writer (outfile,topo,xlower,xupper,ylower,yupper,nxpoints,nypoints, \
     topography.write(outfile, topo_type=3)
 
 
-def fetch_topo_url(url, local_fname=None, force=None, verbose=False, 
+def fetch_topo_url(url, local_fname=None, force=None, verbose=False,
                         ask_user=False):
     """
     DEPRECATED:  Use *clawpack.clawutil.data.get_remote_file* instead (see note below).
@@ -188,7 +188,7 @@ def fetch_topo_url(url, local_fname=None, force=None, verbose=False,
 
     :Input:
         - *url* (str) URL including file name
-        - *local_fname* (str) name of local file to create.  
+        - *local_fname* (str) name of local file to create.
           If *local_fname == None*, take file name from URL
         - *force* (bool) If False, prompt user before downloading.
 
@@ -201,9 +201,9 @@ def fetch_topo_url(url, local_fname=None, force=None, verbose=False,
     If force==None then check for environment variable CLAW_TOPO_DOWNLOAD
     and if this exists use its value.  This is useful for the script
     python/run_examples.py that runs all examples so it won't stop to prompt.
-    
-    This routine has been deprecated in favor of 
-    *clawpack.clawutil.data.get_remote_file*.  All the functionality should be 
+
+    This routine has been deprecated in favor of
+    *clawpack.clawutil.data.get_remote_file*.  All the functionality should be
     the same but calls the other routine internally.
     """
 
@@ -215,10 +215,10 @@ def fetch_topo_url(url, local_fname=None, force=None, verbose=False,
         output_dir = os.path.dirname(local_fname)
         file_name = os.path.basename(local_fname)
 
-    clawpack.clawutil.data.get_remote_file(url, output_dir=output_dir, 
+    clawpack.clawutil.data.get_remote_file(url, output_dir=output_dir,
                                                 file_name=file_name,
-                                                force=force, 
-                                                verbose=verbose, 
+                                                force=force,
+                                                verbose=verbose,
                                                 ask_user=ask_user)
 
 
@@ -266,14 +266,14 @@ class Topography(object):
     A class representing a single topography file.
 
     :Properties:
-    
+
     Note: Modified to check the `grid_registration` when reading or writing
     topo files and properly deal with `llcorner` registration in which case
-    the x,y data should be offset by dx/2, dy/2 from the lower left corner 
+    the x,y data should be offset by dx/2, dy/2 from the lower left corner
     specified in the header of a DEM file.
 
     :Initialization:
-         - 
+         -
 
     :Examples:
 
@@ -372,7 +372,7 @@ class Topography(object):
     def extent(self):
         r"""Extent of the topography."""
         if self._extent is None:
-            self._extent = ( np.min(self.x), np.max(self.x), 
+            self._extent = ( np.min(self.x), np.max(self.x),
                              np.min(self.y), np.max(self.y) )
         return self._extent
     @extent.setter
@@ -385,9 +385,9 @@ class Topography(object):
         if self._delta is None:
             if self.unstructured:
 
-                # Calculate the smallest spacing between grid points            
-                dx = np.infty
-                dy = np.infty
+                # Calculate the smallest spacing between grid points
+                dx = np.inf
+                dy = np.inf
                 num_comparisons = self.x.shape[0] - 1
                 for i in range(self.x.shape[0]):
                     for j in range(num_comparisons):
@@ -399,24 +399,24 @@ class Topography(object):
             else:
                 # All other topography types should have equally spaced grid
                 # points in each direction
-                begin_delta = np.array([abs(self.x[1] - self.x[0]), 
+                begin_delta = numpy.array([abs(self.x[1] - self.x[0]),
                                            abs(self.y[1] - self.y[0])])
-                end_delta =   np.array([abs(self.x[-2] - self.x[-1]), 
+                end_delta =   numpy.array([abs(self.x[-2] - self.x[-1]),
                                            abs(self.y[-2] - self.y[-1])])
                 if not np.allclose(begin_delta, end_delta, 1e-8):
                     raise ValueError("Grid spacing delta not constant, ",
                                      "%s != %s." % (begin_delta, end_delta))
-                       
-                dx = np.round(begin_delta[0], 15) 
-                dy = np.round(begin_delta[1], 15) 
+
+                dx = np.round(begin_delta[0], 15)
+                dy = np.round(begin_delta[1], 15)
                 self._delta = (dx, dy)
         return self._delta
 
 
-    def __init__(self, path=None, topo_type=None, topo_func=None, 
+    def __init__(self, path=None, topo_type=None, topo_func=None,
                        unstructured=False, **kwargs):
         r"""Topography initialization routine.
-        
+
         See :class:`Topography` for more info.
 
         """
@@ -512,7 +512,7 @@ class Topography(object):
                 # arrays are already stored in self._X and self._Y
                 raise ValueError("Unstructured data does not allow for use of" \
                                  + " 2d arrays, first interpolate the data and" \
-                                 + " try to perform this operation again.") 
+                                 + " try to perform this operation again.")
 
             if self.path is not None:
                 # RJL: why do we expect 1d z?
@@ -583,8 +583,8 @@ class Topography(object):
                                      "create 2d coordinate arrays.")
                 self._X, self._Y = np.meshgrid(self._x, self._y)
 
-            
-            # If masking has been requested try to get the mask first from 
+
+            # If masking has been requested try to get the mask first from
             # self._Z and then self._z
             if mask:
                 if self._Z is None:
@@ -595,23 +595,23 @@ class Topography(object):
 
                 if isinstance(self._Z, np.ma.MaskedArray):
                     # Use Z's mask for the X and Y coordinates
-                    self._X = np.ma.MaskedArray(self._X, mask=self._Z.mask, 
+                    self._X = np.ma.MaskedArray(self._X, mask=self._Z.mask,
                                                                      copy=False)
-                    self._Y = np.ma.MaskedArray(self._Y, mask=self._Z.mask, 
+                    self._Y = np.ma.MaskedArray(self._Y, mask=self._Z.mask,
                                                                      copy=False)
 
 
-    def read(self, path=None, topo_type=None, unstructured=False, 
+    def read(self, path=None, topo_type=None, unstructured=False,
              mask=False, filter_region=None, force=False, stride=[1, 1],
              nc_params={}):
         r"""Read in the data from the object's *path* attribute.
 
-        Stores the resulting data in one of the sets of *x*, *y*, and *z* or 
-        *X*, *Y*, and *Z*.  
+        Stores the resulting data in one of the sets of *x*, *y*, and *z* or
+        *X*, *Y*, and *Z*.
 
         :Input:
          - *path* (str)  file to read
-         - *topo_type* (int) - GeoClaw format topo_type 
+         - *topo_type* (int) - GeoClaw format topo_type
          - *unstructured* (bool) - default is False for lat-long grids.
          - *mask* (bool) - whether to store as masked array for missing
            values (default if False)
@@ -619,7 +619,7 @@ class Topography(object):
          - *stride* (list) - List of strides for the x and y dimensions
            respectively.  Default is *[1, 1]*.  Note that this is only
            implemented for NetCDF reading currently.
-         - *nc_params* (dict) - 
+         - *nc_params* (dict) -
 
         The first three might have already been set when instatiating object.
 
@@ -642,7 +642,7 @@ class Topography(object):
         # still need to read it in, which that routine does not do.
         # Do we really want to support this?  Seems better for user
         # to fetch and store as desired filename and then read file.
-            
+
 
         if self.topo_type is None:
             if topo_type is not None:
@@ -704,7 +704,7 @@ class Topography(object):
             elif abs(self.topo_type) in [2,3]:
                 # Get header information
                 N = self.read_header()  # note this also sets self._extent
-                                        # self._x, self._y, self._delta, 
+                                        # self._x, self._y, self._delta,
                                         # and  self.grid_registration
 
                 if abs(self.topo_type) == 2:
@@ -714,7 +714,7 @@ class Topography(object):
                 elif abs(self.topo_type) == 3:
                     # Data is read in starting at the top right corner
                     self._Z = np.flipud(np.loadtxt(self.path, skiprows=6))
-        
+
                 if mask:
                     self._Z = np.ma.masked_values(self._Z, self.no_data_value, copy=False)
 
@@ -748,7 +748,7 @@ class Topography(object):
                     try:
                         self._x = nc_file.variables[x_var][::stride[0]]
                         self._y = nc_file.variables[y_var][::stride[1]]
-                        self._Z = nc_file.variables[z_var][::stride[0], 
+                        self._Z = nc_file.variables[z_var][::stride[0],
                                                            ::stride[1]]
                     except ValueError as e:
                         print("Unable to read in variables.  Check variable mappings.")
@@ -759,7 +759,7 @@ class Topography(object):
 
                 if mask:
                     self._Z = np.ma.masked_values(self._Z, self.no_data_value, copy=False)
-                    
+
             elif abs(self.topo_type) == 5:
                 # GeoTIFF
                 try:
@@ -777,24 +777,24 @@ class Topography(object):
                 dy = -transform[5]
 
                 self._Z = np.flipud(z)
-                self._x = np.linspace(x_origin, 
+                self._x = np.linspace(x_origin,
                                    x_origin + (z.shape[0] - 1) * dx, z.shape[0])
-                self._y = np.linspace(y_origin - (z.shape[1] - 1) * dy, 
+                self._y = np.linspace(y_origin - (z.shape[1] - 1) * dy,
                                    y_origin, z.shape[1])
 
 
             else:
                 raise IOError("Unrecognized topo_type: %s" % self.topo_type)
-                
+
             if self.topo_type < 0:
                 # positive Z means distance below sea level for these
                 # topo_type's, contrary to our convention, so negate:
                 self._Z = -self._Z
-                
+
             # Make sure these are set to None to force re-generating:
             self._X = None
             self._Y = None
-                
+
             # Perform region filtering
             if filter_region is not None:
                 # Find indices of region
@@ -823,7 +823,7 @@ class Topography(object):
         r"""Read in header of topography file at path.
 
         If a value returns np.nan then the value was not retrievable.  Note
-        that this routine can read in headers whose values and labels are 
+        that this routine can read in headers whose values and labels are
         swapped.
 
         """
@@ -860,7 +860,7 @@ class Topography(object):
                 yll = float(yline[value_index])
                 # drop 'y' character and convert remaining string to lower case:
                 y_registration = yline[label_index][1:].lower()
-                
+
                 if x_registration == y_registration:
                     self.grid_registration = x_registration
                     # expect registration in ['llcorner', 'llcenter', 'lower']
@@ -870,7 +870,7 @@ class Topography(object):
 
                 # parse line allowing possibility of dx and dy (or just dx=dy)
                 line = topo_file.readline()
-                tokens = line.split() 
+                tokens = line.split()
                 values = []
                 for token in tokens:
                     try:
@@ -887,8 +887,8 @@ class Topography(object):
                 else:
                     raise IOError("Cannot parse dx,dy line: %s" % line)
                 self._delta = (dx, dy)
-                    
-                        
+
+
                 self.no_data_value = float(topo_file.readline().split()[value_index])
 
                 x = np.linspace(xll, xll+(num_cells[0]-1)*dx, num_cells[0])
@@ -911,7 +911,7 @@ class Topography(object):
                     print('*** Warning: Unrecognized grid_registration: %s' \
                                     % self.grid_registration)
                     print('    Assuming x,y at grid points')
-                
+
                 # set extent based on data locations (not lower corner for 'llcorner')
                 self._extent = [self._x[0],self._x[-1],self._y[0],self._y[-1]]
 
@@ -944,18 +944,18 @@ class Topography(object):
             dy = -transform[5]
 
             # self._Z = np.flipud(z)
-            self._x = np.linspace(x_origin, 
-                                     x_origin + (self.z.shape[0] - 1) * dx, 
+            self._x = np.linspace(x_origin,
+                                     x_origin + (self.z.shape[0] - 1) * dx,
                                      self.z.shape[0])
-            self._y = np.linspace(y_origin - (self.z.shape[0] - 1) * dy, 
-                                     y_origin, 
+            self._y = np.linspace(y_origin - (self.z.shape[0] - 1) * dy,
+                                     y_origin,
                                      self.z.shape[1])
         else:
             raise IOError("Cannot read header for topo_type %s" % self.topo_type)
-            
+
         return num_cells
 
-    def write(self, path, topo_type=None, no_data_value=None, fill_value=None, 
+    def write(self, path, topo_type=None, no_data_value=None, fill_value=None,
                 header_style='geoclaw', Z_format="%15.7e", grid_registration=None):
         r"""Write out a topography file to path of type *topo_type*.
 
@@ -966,16 +966,16 @@ class Topography(object):
 
         :Input:
          - *path* (str)  - file to write
-         - *topo_type* (int) - GeoClaw format topo_type 
+         - *topo_type* (int) - GeoClaw format topo_type
            **Note:** this is second positional argument, agreeing with
            the read function in this class.  It was the third argument in
-           GeoClaw version 5.3.1 and earlier.  
+           GeoClaw version 5.3.1 and earlier.
          - *no_data_value* - values used to indicate missing data
          - *fill_value* (float) - value to use if filling a masked array
          - *header_style* (str) - indicates format of header lines
-             'geoclaw' or 'default'  ==> write value then label 
+             'geoclaw' or 'default'  ==> write value then label
                                      with grid_registration == 'lower' as default
-             'arcgis' or 'asc' ==> write label then value  
+             'arcgis' or 'asc' ==> write label then value
                                    with grid_registration == 'llcorner' as default
                                    (needed for .asc files in ArcGIS)
 
@@ -988,7 +988,7 @@ class Topography(object):
            etopo1 data is integers and so has a resolution of 1 meter.
            In this case a cropped or coarsened version might be written
            with `Z_format = "%7i"`, for example.
-         - *grid_registration* (str) - 'lower', 'llcorner', 'llcenter' 
+         - *grid_registration* (str) - 'lower', 'llcorner', 'llcenter'
                 or None for defaults described above.
 
         """
@@ -999,7 +999,7 @@ class Topography(object):
             # attribute to try to deterimine which to use, default to the path
             # version unless it did not work
             path_topo_type = determine_topo_type(path, default=-1)
-            
+
             if self.topo_type is not None and path_topo_type == -1:
                 topo_type = self.topo_type
             elif path_topo_type != -1:
@@ -1008,13 +1008,13 @@ class Topography(object):
                 # Default to 3 if all else fails
                 topo_type = 3
 
-        # Default to this object's no_data_value if the passed is None, 
-        # otherwise the argument will override the object's value or it will 
+        # Default to this object's no_data_value if the passed is None,
+        # otherwise the argument will override the object's value or it will
         # default to -99999 (default for the class)
         if no_data_value is None:
             no_data_value = self.no_data_value
 
-        # Check to see if masks have been applied to topography, if so 
+        # Check to see if masks have been applied to topography, if so
         # replace with fill_value (or  np.ma default value e.g. 1e+20)
         if isinstance(self.Z, np.ma.MaskedArray):
             if fill_value is not None:
@@ -1032,7 +1032,7 @@ class Topography(object):
             Z = np.where(np.isnan(Z), no_data_value, Z)
 
         # also fill self.z in the same way for unstructured?
-        
+
         if self.unstructured:
             with open(path, 'w') as outfile:
                 for (i, topo) in enumerate(self.z):
@@ -1088,7 +1088,7 @@ class Topography(object):
                     outfile.write('%10i                          nodata_value\n' % no_data_value)
                 elif header_style in ['arcgis','asc']:
                     outfile.write('ncols  %6i\n' % Z.shape[1])
-                    outfile.write('nrows  %6i\n' % Z.shape[0]) 
+                    outfile.write('nrows  %6i\n' % Z.shape[0])
                     outfile.write('%s  %22.15e\n' % (xlabel,xlower))
                     outfile.write('%s  %22.15e\n' % (ylabel,ylower))
                     outfile.write('cellsize %22.15e\n'  % self.delta[0])
@@ -1097,7 +1097,7 @@ class Topography(object):
                     raise ValueError("*** Unrecognized header_style")
 
                 # Write out topography data
-                Z_flipped = np.flipud(Z) 
+                Z_flipped = np.flipud(Z)
                 if topo_type == 2:
                     Z_format = Z_format + "\n"
                     for i in range(Z.shape[0]):
@@ -1114,7 +1114,7 @@ class Topography(object):
         elif topo_type == 4:
             # Write out netCDF4 topography
             import netCDF4
-            
+
             with netCDF4.Dataset(path, 'w') as outfile:
                 # Add root attributes
                 outfile.Conventions = "CF-1.6"
@@ -1127,7 +1127,7 @@ class Topography(object):
 
                 outfile.createDimension("lon", self.x.shape[0])
                 outfile.createDimension("lat", self.y.shape[0])
-                
+
                 lon = outfile.createVariable('lon', 'f8', ('lon',))
                 lon.standard_name = "longitude"
                 lon.long_name = "longitude"
@@ -1163,9 +1163,9 @@ class Topography(object):
             raise NotImplemented("Output type %s not implemented." % topo_type)
 
 
-    def plot(self, axes=None, contour_levels=None, contour_kwargs={}, 
-             limits=None, cmap=None, add_colorbar=True, 
-             plot_box=False, long_lat=True, fig_kwargs={}, data_break=0., 
+    def plot(self, axes=None, contour_levels=None, contour_kwargs={},
+             limits=None, cmap=None, add_colorbar=True,
+             plot_box=False, long_lat=True, fig_kwargs={}, data_break=0.,
              cb_kwargs={}):
         r"""Plot the topography.
 
@@ -1173,20 +1173,20 @@ class Topography(object):
          - *axes* (matplotlib.pyplot.axes) - If passed in, plot will be
            added to this axes.  Otherwise a new plot figure will be created
            (using *fig_kwargs*) and a new *axes* object created and returned.
-         - *contour_levels* (list) - levels for contour lines if these are 
+         - *contour_levels* (list) - levels for contour lines if these are
            to be added (default *None*).  Set to [0.] to plot shoreline.
          - *contour_kwargs* (dict) - keyword arguments to be passed to
            contour command, e.g. {'colors':'r', 'linestyles': '-'}.
            Default is empty dict.
-         - *limits* (list) - (min, max) of topo values for color map.  
+         - *limits* (list) - (min, max) of topo values for color map.
            Defaults to None, in which case (self.Z.min(), self.Z.max()) used.
          - *cmap* (matplotlib.colors.Colormap) - colormap, defaults to
            specialized map with blues for bathymetry and green/browns for topo.
          - *fig_kwargs* (dict) - keyword arguments to be passed to figure.
          - *plot_box* (bool or color specifier) - If evaluates to True, plot
-           a box around limits of this topo. 
+           a box around limits of this topo.
          - *long_lat* (bool) - If this is a longitude-latitude plot then set the
-           aspect of the plot to compensate for stretching.  If not then the 
+           aspect of the plot to compensate for stretching.  If not then the
            aspect is set to "equal".
          - *data_break* (float) - when default cmap is used, the value to use
            to break between water and land colormaps.
@@ -1214,7 +1214,7 @@ class Topography(object):
         if axes is None:
             fig = plt.figure(**fig_kwargs)
             axes = fig.add_subplot(111)
-        
+
         # Turn off annoying offset
         axes.ticklabel_format(style="plain", useOffset=False)
         for label in axes.get_xticklabels():
@@ -1245,7 +1245,7 @@ class Topography(object):
                 cmap = sea_cmap
                 norm = colors.Normalize(vmin=topo_extent[0], vmax=0.0)
             else:
-                cmap, norm = colormaps.add_colormaps((land_cmap, sea_cmap), 
+                cmap, norm = colormaps.add_colormaps((land_cmap, sea_cmap),
                                                      data_limits=topo_extent,
                                                      data_break=data_break)
         else:
@@ -1256,7 +1256,7 @@ class Topography(object):
             plot = axes.scatter(self.x, self.y, c=self.z, cmap=cmap, norm=norm,
                                                 marker=',', linewidths=(0.0,))
         else:
-            plot = plottools.pcolorcells(self.X, self.Y, self.Z, 
+            plot = plottools.pcolorcells(self.X, self.Y, self.Z,
                                          axes=axes, norm=norm, cmap=cmap)
         if add_colorbar:
             try:
@@ -1264,7 +1264,7 @@ class Topography(object):
                 cb_title = cb_kwargs.pop('title')
             except:
                 cb_title = None
-            
+
             cbar = plt.colorbar(plot, ax=axes, **cb_kwargs)
 
             if cb_title is not None:
@@ -1279,16 +1279,16 @@ class Topography(object):
             axes.contour(self.X, self.Y, self.Z, levels=contour_levels,
                  **contour_kwargs)
 
-        
+
         # expand extent to include full cells, which are centered at X,Y:
         x1 = self.x.min() - self.delta[0]/2.
         x2 = self.x.max() + self.delta[0]/2.
         y1 = self.y.min() - self.delta[1]/2.
         y2 = self.y.max() + self.delta[1]/2.
-        
+
         axes.set_xlim(x1,x2)
         axes.set_ylim(y1,y2)
-        
+
         if plot_box:
             # plot a box around this topography region
             if type(plot_box) is bool:
@@ -1298,7 +1298,7 @@ class Topography(object):
                 color = plot_box
             plt.plot([x1,x2,x2,x1,x1], [y1,y1,y2,y2,y1], color=color)
 
-        
+
         if long_lat:
             mean_lat = 0.5 * (region_extent[3] + region_extent[2])
             axes.set_aspect(1.0 / np.cos(np.pi / 180.0 * mean_lat))
@@ -1309,33 +1309,33 @@ class Topography(object):
 
 
     def interp_unstructured(self, fill_topo, extent=None, method='nearest',
-                                   delta=None, delta_limit=20.0, 
+                                   delta=None, delta_limit=20.0,
                                    no_data_value=-99999, buffer_length=100.0,
-                                   proximity_radius=100.0, 
+                                   proximity_radius=100.0,
                                    resolution_limit=2000):
         r"""Interpolate unstructured data on to regular grid.
 
         Function to interpolate the unstructured data in the topo object onto a
-        structured grid.  Utilizes a bounding box plus a buffer of size 
+        structured grid.  Utilizes a bounding box plus a buffer of size
         *buffer_length* (meters) containing all data unless *extent is not None*
         is *True*.  Then uses the fill topography *fill_topo* to fill in the
-        gaps in the unstructured data.  By default this is done by masking the 
-        fill data with the extents, the value *no_data_value* and if 
-        *proximity_radius* (meters) is not 0, by a radius of *proximity_radius* 
-        from all grid points in the object.  Stores the 
+        gaps in the unstructured data.  By default this is done by masking the
+        fill data with the extents, the value *no_data_value* and if
+        *proximity_radius* (meters) is not 0, by a radius of *proximity_radius*
+        from all grid points in the object.  Stores the
         result in the *self.X*, *self.Y* and *self.Z* object attributes.  The
         resolution of the final grid is determined by calculating the minimum
-        distance between all *x* and *y* data with a hard lower limit of 
+        distance between all *x* and *y* data with a hard lower limit of
         *delta_limit* (meters).
 
         Note that the function *scipy.interpolate.griddata* does not respect
-        masks so a call to *np.ma.MaskedArray.compressed()* must be made to 
+        masks so a call to *np.ma.MaskedArray.compressed()* must be made to
         remove the masked data.
 
         :Input:
          - *fill_topo* (list) - List of Topography objects to use as fill data
            in the projection.
-         - *extent* (tuple) - A tuple defining the rectangle of the sub-section.  
+         - *extent* (tuple) - A tuple defining the rectangle of the sub-section.
            Must be in the form (x lower,x upper,y lower, y upper).
          - *method* (string) - Method used for interpolation, valid methods are
            found in *scipy.interpolate.griddata*.  Default is *nearest*.
@@ -1343,9 +1343,9 @@ class Topography(object):
            rather than determining it from the data itself.  Defaults to *None*
            which causes the method to determine this value itself.
            Should be a 2-tuple of floats (delta_x, delta_y).
-         - *delta_limit* (float) - Limit of finest horizontal resolution, 
+         - *delta_limit* (float) - Limit of finest horizontal resolution,
            default is 20 meters.
-         - *no_data_value* (float) - Value to use if no data was found to fill in a 
+         - *no_data_value* (float) - Value to use if no data was found to fill in a
            missing value, ignored if `method = 'nearest'`. Default is `-99999`.
          - *buffer_length* (float) - Buffer around bounding box, only applicable
            when *extent* is None.  Default is `100.0` meters.
@@ -1363,35 +1363,35 @@ class Topography(object):
 
         # Convert meter inputs to degrees
         mean_latitude = np.mean(self.y)
-        buffer_degrees = util.dist_meters2latlong(buffer_length, 0.0, 
+        buffer_degrees = util.dist_meters2latlong(buffer_length, 0.0,
                                                   mean_latitude)[0]
-        delta_degrees = util.dist_meters2latlong(delta_limit, 0.0, 
+        delta_degrees = util.dist_meters2latlong(delta_limit, 0.0,
                                                  mean_latitude)[0]
         if proximity_radius > 0.0:
-            proximity_radius_deg = util.dist_meters2latlong(proximity_radius, 
+            proximity_radius_deg = util.dist_meters2latlong(proximity_radius,
                                                             0.0,
                                                             mean_latitude)[0]
-            
+
         # Calculate new grid coordinates
         if extent is None:
-            extent = [ np.min(self.x) - buffer_degrees, 
-                       np.max(self.x) + buffer_degrees, 
-                       np.min(self.y) - buffer_degrees, 
+            extent = [ np.min(self.x) - buffer_degrees,
+                       np.max(self.x) + buffer_degrees,
+                       np.min(self.y) - buffer_degrees,
                        np.max(self.y) + buffer_degrees ]
         if delta is None:
             delta_x = max( np.abs(self.x[1:] - self.x[:-1]).min(), delta_degrees)
             delta_y = max( np.abs(self.y[1:] - self.y[:-1]).min(), delta_degrees)
-        else:   
+        else:
             try:
                 delta_x, delta_y = delta   # tuple provided
             except:
                 delta_x = delta_y = delta  # assume float provided
-                
+
         N = ( np.ceil((extent[1] - extent[0]) / delta_x),
               np.ceil((extent[3] - extent[2]) / delta_y) )
         if not np.all(N[:] < np.ones((2)) * resolution_limit):
             ValueError("Calculated resolution too high, N=%s!" % str(N))
-        self._X, self._Y = np.meshgrid( 
+        self._X, self._Y = np.meshgrid(
                                      np.linspace(extent[0], extent[1], int(N[0])),
                                      np.linspace(extent[2], extent[3], int(N[1])))
 
@@ -1412,7 +1412,7 @@ class Topography(object):
                 extent_mask = np.logical_or(extent_mask,extent[1] < x_fill)
                 extent_mask = np.logical_or(extent_mask,extent[2] > y_fill)
                 extent_mask = np.logical_or(extent_mask,extent[3] < y_fill)
-                
+
                 # Create fill no-data value mask
                 no_data_mask = np.logical_or(extent_mask, z_fill == no_data_value)
 
@@ -1423,16 +1423,16 @@ class Topography(object):
                     indices = (~all_mask).nonzero()
                     for n in range(indices[0].shape[0]):
                         i = indices[0][n]
-                        all_mask[i] = np.any(np.sqrt((self.x - x_fill[i])**2 
+                        all_mask[i] = np.any(np.sqrt((self.x - x_fill[i])**2
                                                          + (self.y - y_fill[i])**2)
                                                      < proximity_radius_deg)
 
                 x_fill_masked = np.ma.masked_where(all_mask, x_fill)
                 y_fill_masked = np.ma.masked_where(all_mask, y_fill)
-                z_fill_masked = np.ma.masked_where(all_mask, z_fill)    
+                z_fill_masked = np.ma.masked_where(all_mask, z_fill)
 
                 # Add the fill bathymetry to points and values
-                fill_points = np.column_stack((x_fill_masked.compressed(), 
+                fill_points = np.column_stack((x_fill_masked.compressed(),
                                                   y_fill_masked.compressed()))
 
                 points = np.concatenate((fill_points, points))
@@ -1449,7 +1449,7 @@ class Topography(object):
                 extent_mask = np.logical_or(extent_mask,extent[1] < X_fill)
                 extent_mask = np.logical_or(extent_mask,extent[2] > Y_fill)
                 extent_mask = np.logical_or(extent_mask,extent[3] < Y_fill)
-                
+
                 # Create fill no-data value mask
                 no_data_mask = np.logical_or(extent_mask, Z_fill == no_data_value)
 
@@ -1457,18 +1457,18 @@ class Topography(object):
 
                 # Create proximity mask
                 if proximity_radius > 0.0:
-                
+
                     indices = (~all_mask).nonzero()
                     for n in range(indices[0].shape[0]):
                         i = indices[0][n]
                         j = indices[1][n]
-                        all_mask[i,j] = np.any(np.sqrt((self.x - X_fill[i,j])**2 
+                        all_mask[i,j] = np.any(np.sqrt((self.x - X_fill[i,j])**2
                                                            + (self.y - Y_fill[i,j])**2)
                                                      < proximity_radius_deg)
 
                 X_fill_masked = np.ma.masked_where(all_mask, X_fill)
                 Y_fill_masked = np.ma.masked_where(all_mask, Y_fill)
-                Z_fill_masked = np.ma.masked_where(all_mask, Z_fill)    
+                Z_fill_masked = np.ma.masked_where(all_mask, Z_fill)
 
                 # Add the fill bathymetry to points and values
                 fill_points = np.column_stack((X_fill_masked.compressed(),
@@ -1478,7 +1478,7 @@ class Topography(object):
                 values = np.concatenate((Z_fill_masked.compressed(), values))
 
         # Use specified interpolation
-        self._Z = interpolate.griddata(points, values, (self.X, self.Y), 
+        self._Z = interpolate.griddata(points, values, (self.X, self.Y),
                                                                   method=method)
 
         self._extent = extent
@@ -1492,13 +1492,13 @@ class Topography(object):
         Uses simple ray casting algorithm for speed so beware of corner cases!
 
         :Input:
-        
+
          - *polygon* (list) List of points that comprise the polygon.  Note that
            order of the points will effect if this works (positive versus negative
            winding order).  Points should be in counter-clockwise arrangement.
 
         :Returns:
-        
+
          - *X_mask* (np.ma.MaskedArray) Masked array of X coordinates where those
            points outside of the polygon have been masked.
          - *Y* (np.ndarray) Coordinates in y direction in a meshgrid type of
@@ -1526,7 +1526,7 @@ class Topography(object):
         for edge in edges:
             # Check for a vertical line
             if np.abs(edge[0][0] - edge[1][0]) < TOLERANCE:
-                x_intersect = edge[0][0]        
+                x_intersect = edge[0][0]
             else:
                 edge_slope = (edge[0][1] - edge[1][1]) / (edge[0][0] - edge[1][0])
                 x_intersect = (y - edge[0][1]) / edge_slope + edge[0][0]
@@ -1534,7 +1534,7 @@ class Topography(object):
             num_intersections += (min(edge[0][1], edge[1][1]) <= y) * \
                                  (max(edge[0][1], edge[1][1]) >= y) * \
                                  (x_intersect <= x)
-                                 
+
 
         # General intersection of two lines
         intersect = (np.mod(num_intersections, np.ones(x.shape) * 2) != 1)
@@ -1585,7 +1585,7 @@ class Topography(object):
          - *method* can be one of:
 
              - *fill* - Fill in all *no_data_value* locations with *value*
-             - *nearest* - Fill in *no_data_value* locations with 
+             - *nearest* - Fill in *no_data_value* locations with
                average of nearest neighbors.
 
         """
@@ -1622,12 +1622,12 @@ class Topography(object):
     def smooth_data(self, indices, r=1):
         r"""Filter topo data at *indices* by averaging surrounding data.
 
-        Surrounding data is considered within the ball of radius *r* in the 
+        Surrounding data is considered within the ball of radius *r* in the
         inf-norm.  Acts as a low-band pass filter and removes oscillatory data.
 
         :Input:
          - *indices* (list)
-         - *r* (int) 
+         - *r* (int)
 
         :Output:
          None
@@ -1636,7 +1636,7 @@ class Topography(object):
         index_range = [None, None]
         for index in indices:
             for n in range(2):
-                index_range[n] = list(range(max(0, index[n] - r), 
+                index_range[n] = list(range(max(0, index[n] - r),
                                        min(index[n] + r + 1, self.Z.shape[n])))
             num_points = 0
             summation = 0.0
@@ -1659,7 +1659,7 @@ class Topography(object):
          - This could be a special case of in_poly although that routine could
            leave the resulting topography as unstructured effectively.
         """
-        
+
         if self.unstructured:
             raise NotImplemented("*** Cannot currently crop unstructured topo")
 
@@ -1696,8 +1696,8 @@ class Topography(object):
     def make_shoreline_xy(self, sea_level=0):
         r"""
         Returns an array *shoreline_xy* with 2 columns containing x and y values
-        for all segements of the shoreline (defined to be the contour 
-        where self.z = sea_level) separated by [nan,nan] pairs.  
+        for all segements of the shoreline (defined to be the contour
+        where self.z = sea_level) separated by [nan,nan] pairs.
         This allows all shorelines to be quickly plotted via:
 
             >>> plot(shoreline_xy[:,0], shoreline_xy[:,1])
@@ -1706,7 +1706,7 @@ class Topography(object):
 
             >>> np.save(filename, shoreline_xy)
 
-        which is much smaller than the original topography file. 
+        which is much smaller than the original topography file.
         Reload via:
 
             >>> shoreline_xy = np.load(filename)
@@ -1717,7 +1717,7 @@ class Topography(object):
         x = self.x
         y = self.y
         Z = self.Z
-        c = plt.contour(x,y,Z,[sea_level])  
+        c = plt.contour(x,y,Z,[sea_level])
         # c is the level 0 contour as list of arrays, one for each segement
         # catenate these together separated by array([nan,nan]):
         shoreline_xy = c.allsegs[0][0]  # first segment
@@ -1745,7 +1745,7 @@ remote_topo_urls['strait_of_juan_de_fuca'] = \
 
 
 
-def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True, 
+def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
                 return_xarray=False, verbose=False):
 
     """
@@ -1753,7 +1753,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
 
      - *path* (str) - Path to the file to read, or url to remote file,
        or a key into the topotools.remote_topo_urls dictionary.
-     - *zvar* (str) - variable to read as Z=elevation. 
+     - *zvar* (str) - variable to read as Z=elevation.
        if None, will try 'Band1', 'z', 'elevation'.
      - *extent* - [x1,x2,y1,y2] for desired subset, or 'all' for entire file
      - *coarsen* (int) - factor to coarsen by, 1 by default.
@@ -1781,13 +1781,13 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         topo.plot()
 
         # to save topofile for input to GeoClaw:
-        topo.write('etopo_sample_2min.tt3', topo_type=3, Z_format='%.0f')  
+        topo.write('etopo_sample_2min.tt3', topo_type=3, Z_format='%.0f')
 
     This should give a 2-minute resolution DEM of the Western Washington coast.
     Note that etopo1 Z values are integers (vertical resolution is 1 meter)
     and using `Z_format='%.0f'` will save as integers to minimize file size.
     """
-    
+
     if return_xarray:
         try:
             import xarray
@@ -1809,7 +1809,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
 
     if return_xarray:
         f = xarray.open_dataset(path)
-    else: 
+    else:
         f = netCDF4.Dataset(path, 'r')
 
     if 'lon' in f.variables:
@@ -1830,10 +1830,10 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
 
     # for selecting subset based on extent, convert to arrays if netCDF4 used:
     #if not return_xarray:
-    
+
     x = np.asarray(x)
     y = np.asarray(y)
-    
+
     if zvar is None:
         if 'Band1' in f.variables:
             zvar = 'Band1'
@@ -1876,7 +1876,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
             Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
 
     Zs = np.asarray(Zs)
-    
+
     if verbose:
         print('Returning a DEM with shape = %s' \
                 % str(Zs.shape))
@@ -1890,7 +1890,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         topo = Topography()
         topo.set_xyZ(xs,ys,Zs)
         output = topo
-            
+
     if return_xarray:
         # Create a new xarray.Dataset with this subsampled, coarsened data:
         dims = (len(xs),len(ys))
@@ -1901,5 +1901,3 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
             output = (topo, xarray_ds)
 
     return output
-
-

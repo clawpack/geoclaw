@@ -267,7 +267,141 @@ def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
         ytrans[j] = yV
         
     return xtrans, ytrans
+
+
+# ==============================================================================
+#  Data Fetching and Mangling
+# ==============================================================================
+def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
+    r"""Determine names of dimensions/variables in the NetCDF file at *path*
+
+    Note that if a file has multiple matching variables that the first it finds
+    will be the one used.  It is best practice to provide the label if there
+    are multiple available, e.g. 'msl' (mean sealevel pressure) and 'sp'
+    (surface pressure) for pressure.
+
+    Default dimension mapping:
+     - "x": ["x", "longitude", "lon"]
+     - "y": ["y", "latitude", "lat"]
+     - "z": ["z"]
+     - "t": ["t", "time"]
+
+    Default variable mapping:
+     - "wind_u":   ["wind_x", "wind_u", "u10", "u"]
+     - "wind_v":   ["wind_y", "wind_v", "v10", "v"]
+     - "pressure": ["pressure", "msl", "sp"]
+     - "topo":     ["topo", "elevation", "z", "band1"]
+
+    :Input:
+     - path (Path)
+     - lookup_type (str)
+     - user_mapping (dict)
+     - verbose (bool)
+
+    :Output:
+     - (dict) 
+    """
+
+    import xarray as xr
+
+    # Open file and construct set of names
+    data = xr.open_dataset(path)
+    if 'dim' in lookup_type.lower():
+        _var_mapping = {"x": (False, ["x", "longitude", "lon"]), 
+                        "y": (False, ["y", "latitude", "lat"]),
+                        "z": (False, ["z"]),
+                        "t": (False, ["t", "time"])
+                       }
+        var_names = [var_name.lower() for var_name in data.dims]
+        # Assume that we only want ('x'), weird
+        if len(var_names) == 1:
+            _var_mapping.pop(['y', 'z', 't'])
+        # Assume that we only want ('x', 'y')
+        elif len(var_names) == 2:
+            _var_mapping.pop('z', 't')
+        # Assume that we have ('x', 'y', 't')
+        elif len(var_names) == 3:
+            _var_mapping.pop('z')
+        # Maybe a third or extraneous dimension is present?
+        elif len(var_names) == 4:
+            pass
+        else:
+            raise ValueError(f"{len(var_names)} present, not sure what to do.")
+    elif 'var' in lookup_type.lower():
+        _var_mapping = {"wind_u":   (False, ["wind_u", "wind_x", "u10", "u"]),
+                        "wind_v":   (False, ["wind_v", "wind_y", "v10", "v"]),
+                        "pressure": (False, ["pressure", "msl", "sp"]),
+                        "topo":     (False, ["topo", "elevation", "z", "band1"])
+               }
+        var_names = [var_name.lower() for var_name in data.keys()]
+    else:
+        raise ValueError(f"Unknown lookup type {lookup_type}")
+
+    # Use defaults here, checking to make sure they are in the dimension names
+    if user_mapping:
+        for (coord, names) in user_mapping.items():
+            if isinstance(names, str):
+                if names in var_names:
+                    _var_mapping[coord] = (True, names)
+            else:
+                for (i, name) in enumerate(names):
+                    if name in var_names:
+                        _var_mapping[coord] = (True, name)
+                        break
+
+    # Search for names in default names
+    for var_name in var_names:
+        for (coord, values) in _var_mapping.items():
+            if not values[0]:
+                if var_name.lower() in values[1]:
+                    _var_mapping[coord] = (True, var_name)
+                    break
+
+    # Check dims are matched, Cannot check for variable names
+    if 'dim' in lookup_type.lower():
+        for (coord, value) in _var_mapping.items():
+            if not value[0]:
+                raise ValueError(f"Could not find matching dim name in " +
+                                 f"{path.name} with dimensions {var_names}.")
+
+    # Construct final dictionary
+    var_names = {}
+    for (key, value) in _var_mapping.items():
+        if value[0]:
+            var_names[key] = value[-1]
+    return var_names
     
+
+def wrap_coords(input_path, output_path=None, force=False, dim_mapping=None):
+    r"""Wrap the x coordinates of a NetCDF file from [0, 360] to [-180, 180]
+
+    :Input:
+     - *input_path* (path) Path to input file.
+     - *output_path* (path) Path to output file.  Default is slightly modified
+       version of *input_path* with 'wrap' appended.
+     - *force* (bool) By default this routine will not overwrite a file that
+       alreaady exists.  The value *force = True* will overwrite the file.  
+       Default is False
+     - *dim_mapping* (dict) Dimension mapping for all dimensions in the NetCDF
+       file, not just 'x'.  Default is {}.
+    """
+
+    import xarray as xr
+
+    if not output_path:
+        output_path = (input_path.parent / 
+                                f"{input_path.stem}_wrap{input_path.suffix}")
+
+    if not output_path.exists() or force:
+        dim_mapping = get_netcdf_names(input_path, lookup_type='dim', 
+                                                       user_mapping=dim_mapping)
+        ds = xr.open_dataset(input_path)
+        lon_atrib = ds.coords[dim_mapping['x']].attrs
+        ds.coords[dim_mapping['x']] = \
+                                (ds.coords[dim_mapping['x']] + 180) % 360 - 180
+        wrapped_ds = ds.sortby(ds[dim_mapping['x']])
+        wrapped_ds.coords[dim_mapping['x']].attrs = lon_atrib
+        wrapped_ds.to_netcdf(output_path)
 
 
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
