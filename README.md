@@ -1,13 +1,16 @@
-# This repository hosts the GeoClaw code.
+# GeoClaw Package
+The GeoClaw version of Clawpack provides a specialized version of
+[Clawpack](https://www.clawpack.org) for various geophysical flow problems and 
+includes adaptive mesh refinement (AMR) based on 
+[AMRClaw](https://www.clawpack.org/amrclaw.html).
 
 See the main [clawpack/clawpack repository](https://github.com/clawpack/clawpack)
- README for more links.  
+README for more links.  
 
 See the [Documentation](https://www.clawpack.org/)
 for more details and installation instructions.
 
-
 **Links**
- - [Documentation for GeoClaw](https://www.clawpack.org/geoclaw.html)
- - [More description of GeoClaw and references](http://www.geoclaw.org)
- - [![Tests](https://github.com/clawpack/geoclaw/actions/workflows/testing.yml/badge.svg)](https://github.com/clawpack/geoclaw/actions/workflows/testing.yml)
+ - [Documentation](https://www.clawpack.org/geoclaw.html)
+ - [GeoClaw Web Site](https://www.geoclaw.org)
+ - ![Tests](https://github.com/clawpack/geoclaw/actions/workflows/testing.yml/badge.svg)

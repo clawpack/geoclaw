@@ -38,7 +38,7 @@ fgmax_plotdir = '_plots/fgmax_plots'
 
 os.system('mkdir -p %s' % fgmax_plotdir)
 def savefigp(fname):
-    global save_figs
+    # global save_figs
     if save_figs:
         fullname = '%s/%s' % (fgmax_plotdir, fname)
         savefig(fullname)

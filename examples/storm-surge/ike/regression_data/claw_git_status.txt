@@ -1,0 +1,117 @@
+Clawpack Git Status 
+Diffs can be found in /Users/mandli/Library/CloudStorage/Dropbox/src/clawpack/geoclaw/examples/storm-surge/ike/regression_data/claw_git_diffs.txt
+
+Fri, 01 Aug 2025 10:24:26 EDT
+$CLAW = /Users/mandli/Dropbox/src/clawpack
+$FC = not set
+
+
+===========
+clawpack
+===========
+/Users/mandli/Dropbox/src/clawpack/
+
+--- last commit ---
+98ba40b (HEAD -> master, tag: v5.12.0, clawpack/master, clawpack/HEAD) Merge pull request #264 from rjleveque/v5.12.0fix
+
+--- branch and status ---
+## master...clawpack/master
+ M amrclaw
+ M classic
+ M clawutil
+ M geoclaw
+ M pyclaw
+ M riemann
+ M visclaw
+
+
+===========
+classic
+===========
+/Users/mandli/Dropbox/src/clawpack/classic
+
+--- last commit ---
+a00219b (HEAD -> new-pytest-test-runner, mandli/new-pytest-test-runner) Change name of action to test
+
+--- branch and status ---
+## new-pytest-test-runner...clawpack/master [ahead 11]
+
+
+===========
+amrclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/amrclaw
+
+--- last commit ---
+3836645 (HEAD -> fix-auxloc-array-bound, mandli/fix-auxloc-array-bound) Add aux_loc to q grid output
+
+--- branch and status ---
+## fix-auxloc-array-bound...clawpack/master [ahead 1]
+
+
+===========
+clawutil
+===========
+/Users/mandli/Dropbox/src/clawpack/clawutil
+
+--- last commit ---
+f1030b6 (HEAD -> fix-negate-deprecation, mandli/fix-negate-deprecation) Switch negation ~ to not as ~ will be deprecated
+
+--- branch and status ---
+## fix-negate-deprecation...clawpack/master [ahead 1]
+
+
+===========
+pyclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/pyclaw
+
+--- last commit ---
+d08f2dd3 (HEAD -> improve-cli-gauge-comparison, mandli/improve-cli-gauge-comparison) Add short flag versions
+
+--- branch and status ---
+## improve-cli-gauge-comparison...clawpack/master [ahead 2]
+
+
+===========
+visclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/visclaw
+
+--- last commit ---
+2c12be9 (HEAD -> shorten-poll-interval, mandli/shorten-poll-interval) Shorten poll interval for process checking to 0.5 seconds
+
+--- branch and status ---
+## shorten-poll-interval...clawpack/master [ahead 1]
+
+
+===========
+riemann
+===========
+/Users/mandli/Dropbox/src/clawpack/riemann
+
+--- last commit ---
+bbe1ab3 (HEAD -> master, clawpack/master, clawpack/HEAD) Merge pull request #183 from dlgeorge/fix_riemann_conv
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+geoclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/geoclaw
+
+--- last commit ---
+5b392b6d (HEAD -> update-pytest, mandli/update-pytest) Merge remote-tracking branch 'clawpack/master' into update-pytest
+
+--- branch and status ---
+## update-pytest...clawpack/master [ahead 92]
+ M examples/multi-layer/plane_wave/qinit_module.f90
+ M examples/storm-surge/ike/regression_data/claw_git_diffs.txt
+ M examples/storm-surge/ike/regression_data/claw_git_status.txt
+ M examples/storm-surge/ike/regression_data/gauge00001.txt
+ M examples/storm-surge/ike/setrun.py
+ M examples/storm-surge/ike/test_ike.py
+ M examples/tsunami/chile2010/Makefile
+ M examples/tsunami/radial-ocean-island-fgmax/setrun.py

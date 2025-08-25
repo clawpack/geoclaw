@@ -1,0 +1,119 @@
+Clawpack Git Status 
+Diffs can be found in /Users/mandli/Library/CloudStorage/Dropbox/src/clawpack/geoclaw/examples/multi-layer/plane_wave/regression_data/claw_git_diffs.txt
+
+Mon, 28 Apr 2025 11:30:14 EDT
+$CLAW = /Users/mandli/Dropbox/src/clawpack
+$FC = gfortran
+
+
+===========
+clawpack
+===========
+/Users/mandli/Dropbox/src/clawpack/
+
+--- last commit ---
+6b7dbf6 (HEAD -> master, clawpack/master, clawpack/HEAD) Update pyclaw and riemann repositories for fwave lookup feature parity (#259)
+
+--- branch and status ---
+## master...clawpack/master
+ M amrclaw
+ M classic
+ M clawutil
+ M geoclaw
+ M pyclaw
+ M visclaw
+
+
+===========
+classic
+===========
+/Users/mandli/Dropbox/src/clawpack/classic
+
+--- last commit ---
+a4c0899 (HEAD -> add-test-badge, mandli/add-test-badge) Add better description and links to README
+
+--- branch and status ---
+## add-test-badge...clawpack/master [ahead 11]
+
+
+===========
+amrclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/amrclaw
+
+--- last commit ---
+0ab78cb (HEAD -> update-tests, mandli/update-tests) Minor updates to testing action
+
+--- branch and status ---
+## update-tests...clawpack/master [ahead 24]
+ M examples/acoustics_1d_adjoint/adjoint/test_acoustics_1d_adjoint_forward.py
+ M src/python/amrclaw/compare_gauges.py
+
+
+===========
+clawutil
+===========
+/Users/mandli/Dropbox/src/clawpack/clawutil
+
+--- last commit ---
+ec72bf7 (HEAD -> switch-repr-str, mandli/switch-repr-str) Clean up some of the new code and update
+
+--- branch and status ---
+## switch-repr-str...clawpack/master [ahead 2]
+
+
+===========
+pyclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/pyclaw
+
+--- last commit ---
+a978283a (HEAD -> master, clawpack/master, clawpack/HEAD) Update 2D SWEs regression data (#742)
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+visclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/visclaw
+
+--- last commit ---
+04c11f6 (HEAD -> master, clawpack/master, clawpack/HEAD) Remove Cygwin Code (#313)
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+riemann
+===========
+/Users/mandli/Dropbox/src/clawpack/riemann
+
+--- last commit ---
+c29dcab (HEAD -> master, clawpack/master, clawpack/HEAD) Merge pull request #181 from clawpack/set_fwave
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+geoclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/geoclaw
+
+--- last commit ---
+6c3fd6c9 (HEAD -> update-pytest, mandli/update-pytest) Switch over dtopo test to example
+
+--- branch and status ---
+## update-pytest...clawpack/master [ahead 31]
+RM tests/multilayer/regression_data/claw_git_status.txt -> examples/multi-layer/plane_wave/regression_data/claw_git_status.txt
+RM tests/multilayer/regression_data/gauge00000.txt -> examples/multi-layer/plane_wave/regression_data/gauge00000.txt
+RM tests/multilayer/regression_data/gauge00001.txt -> examples/multi-layer/plane_wave/regression_data/gauge00001.txt
+RM tests/multilayer/regression_data/gauge00002.txt -> examples/multi-layer/plane_wave/regression_data/gauge00002.txt
+RM tests/multilayer/regression_data/gauge00003.txt -> examples/multi-layer/plane_wave/regression_data/gauge00003.txt
+RM tests/multilayer/regression_data/gauge00004.txt -> examples/multi-layer/plane_wave/regression_data/gauge00004.txt
+R  tests/multilayer/regression_data/regression_data.txt -> examples/multi-layer/plane_wave/regression_data/regression_data.txt
+ M examples/multi-layer/plane_wave/setrun.py
+RM tests/multilayer/regression_tests.py -> examples/multi-layer/plane_wave/test_plane_wave_multilayer.py
