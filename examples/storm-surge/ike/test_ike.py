@@ -20,7 +20,7 @@ class IkeStormSurgeTest(test.GeoClawRegressionTest):
 
     # TODO: Need to enable wind and pressure field comparisons (4, 5, 6)), needs
     #       a PR for fixing aux gauge recording
-    def runTest(self, save=False, indices=(0, 1, 2, 3)):
+    def runTest(self, save=False, indices=(0, 1, 2, 3, 4, 5, 6)):
         r"""Storm Surge Regression Test
 
         :Input:
