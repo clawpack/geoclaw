@@ -8,7 +8,10 @@ To create new regression data use
 
 import sys
 import unittest
-import shutil
+import importlib
+from pathlib import Path
+import random
+import string
 
 import numpy as np
 
@@ -27,9 +30,16 @@ class ParticlesTest(test.GeoClawRegressionTest):
         """
 
         # Create topo and qinit
-        import maketopo
-        maketopo.maketopo(self.temp_path)
-        maketopo.makeqinit(self.temp_path)
+        maketopo_path = Path(self.test_path) / "maketopo.py"
+        mod_name = '_'.join(("maketopo",
+                             "".join(random.choices(string.ascii_letters
+                                                    + string.digits, k=32))))
+        spec = importlib.util.spec_from_file_location(mod_name, maketopo_path)
+        maketopo_module = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = maketopo_module
+        spec.loader.exec_module(maketopo_module)
+        maketopo_module.maketopo(self.temp_path)
+        maketopo_module.makeqinit(self.temp_path)
 
         # Write out data files
         self.load_rundata()

@@ -11,11 +11,13 @@ import os
 import sys
 import unittest
 import shutil
+import importlib
+import random
+import string
 
 import numpy as np
 
 import clawpack.geoclaw.test as test
-import clawpack.geoclaw.topotools as topotools
 
 from adjoint.test_chile2010_adjoint import Chile2010AdjointTest
 
@@ -35,10 +37,10 @@ class Chile2010AdjointForwardTest(test.GeoClawRegressionTest):
 
         # Run adjoint problem
         try:
-            adjoint_run = Chile2010AdjointTest()    
+            adjoint_run = Chile2010AdjointTest()
             adjoint_run.setUp()
             adjoint_run.runTest()
-            
+
             # Copy output to local directory
             adjoint_output = Path(self.temp_path) / "_adjoint_output"
 
@@ -49,9 +51,16 @@ class Chile2010AdjointForwardTest(test.GeoClawRegressionTest):
             adjoint_run.tearDown()
 
         # Make topo and dtopo
-        import maketopo
-        maketopo.get_topo(path=Path(self.temp_path))
-        maketopo.make_dtopo(path=Path(self.temp_path))
+        maketopo_path = Path(self.test_path) / "maketopo.py"
+        mod_name = '_'.join(("maketopo",
+                             "".join(random.choices(string.ascii_letters
+                                                    + string.digits, k=32))))
+        spec = importlib.util.spec_from_file_location(mod_name, maketopo_path)
+        maketopo_module = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = maketopo_module
+        spec.loader.exec_module(maketopo_module)
+        maketopo_module.get_topo(path=Path(self.temp_path))
+        maketopo_module.make_dtopo(path=Path(self.temp_path))
 
         # Write out data files
         self.load_rundata()
