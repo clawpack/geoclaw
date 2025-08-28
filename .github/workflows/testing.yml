@@ -15,21 +15,67 @@ env:
   CLAW: ${{ github.workspace }}
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  tests:
+    name: >
+      ${{ matrix.os }} - ${{ matrix.toolchain.compiler }} ${{ matrix.build }} - py ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true # Probably want to turn this off for a large matrix
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        build: [debug, opt]
+        python-version: [3.12]
+        toolchain:
+          - {compiler: gcc, version: 14}
+          - {compiler: gcc, version: 15}
+          # - {compiler: intel, version: '2025.0'}
+          # - {compiler: intel-classic, version: '2021.10'}
+          # - {compiler: nvidia-hpc, version: '25.1'} # does not build python
+          # - {compiler: lfortran, version: '0.45.0'} # lfortran not yet supported
+          # - {compiler: flang, version: '20.1.0'} # flang not yet supported
+        # include:
+        #   3.8 does not seem to work.
+        #   - os: ubuntu-latest
+        #     build: opt
+        #     python-version: 3.8
+        #     toolchain: {compiler: gcc, version: 14}
+        exclude:
+          - os: ubuntu-latest
+            toolchain: {compiler: gcc, version: 15}
+          - os: macos-latest
+            toolchain: {compiler: gcc, version: 14}
+
     steps:
-    - name: Set up Python 3.10
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: ${{ matrix.python-version }}
+
+    - name: Set up compilers
+      uses: fortran-lang/setup-fortran@v1
+      id: setup-fortran
+      with:
+        compiler: ${{ matrix.toolchain.compiler }}
+        version: ${{ matrix.toolchain.version }}
+
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install gfortran
-        sudo apt-get install liblapack-dev
-        sudo apt-get install libnetcdf-dev libnetcdff-dev
+        if [[ "${{ matrix.os }}" = "ubuntu-latest" ]]; then
+          sudo apt-get update
+          sudo apt-get install liblapack-dev
+          sudo apt-get install libnetcdf-dev libnetcdff-dev
+        elif [[ "${{ matrix.os }}" = "macos-latest" ]]; then
+          brew update
+          brew install netcdf netcdf-fortran
+        else
+          echo "${{ matrix.os }} not recognized."
+          exit 1
+        fi
+
+    - name: Install python dependencies
+      run: |
         python -m pip install --upgrade pip
-        pip install flake8 meson-python ninja pytest numpy 
+        pip install flake8 meson-python ninja pytest numpy
         pip install netCDF4 pandas xarray
 
     - name: Checkout Clawpack
@@ -42,7 +88,7 @@ jobs:
       uses: actions/checkout@v4.1.5
       with:
         path: geoclaw
-    
+
     - name: Install clawpack
       run: |
         cd ${CLAW}
@@ -55,12 +101,85 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    
+
     - name: Test with pytest
       run: |
+        if [ "${{ matrix.toolchain.compiler }}" = "gcc" ]; then
+          if [ "${{ matrix.build }}" = "debug" ]; then
+            export FFLAGS="-O0 -g -fcheck=all -fbacktrace -fbounds-check -ffpe-trap=invalid,zero,overflow -finit-real=nan -finit-integer=nan -Wall -Wunderflow -Wextra -Wconversion -Wuninitialized -Warray-bounds -Wshadow -Wno-unused-function -Wno-unused-variable -Wno-unused-parameter -Wno-unused-label -Wno-unused-but-set-variable"
+            export OMP_NUM_THREADS=1
+          elif [ "${{ matrix.build }}" = "opt" ]; then
+            export FFLAGS="-O1 -fopenmp -funroll-loops -finline-functions -ftree-vectorize -fstack-protector-strong -flto -march=native"
+            export OMP_NUM_THREADS=2
+          else
+            echo "Unknown build type: ${{ matrix.build }}"
+            exit 1
+          fi
+        elif [ "${{ matrix.toolchain.compiler }}" = "intel-classic" ]; then
+          if [ "${{ matrix.build }}" = "debug" ]; then
+            export FFLAGS="-O0 -debug all -check all -warn all,nodec,interfaces -gen_interfaces -traceback -fpe0 -ftrapuv -init=snan,arrays -check bounds"
+            export OMP_NUM_THREADS=1
+          elif [ "${{ matrix.build }}" = "opt" ]; then
+            export FFLAGS="-O -qopenmp -unroll -finline-functions -inline-forceinline -ipo -ip"
+            export OMP_NUM_THREADS=2
+          fi
+        elif [ "${{ matrix.toolchain.compiler }}" = "intel" ]; then
+          if [ "${{ matrix.build }}" = "debug" ]; then
+            export FFLAGS="-O0 -debug all -check all -warn all,nodec,interfaces -gen_interfaces -traceback -fpe0 -ftrapuv -init=snan,arrays -check bounds"
+            export OMP_NUM_THREADS=1
+          elif [ "${{ matrix.build }}" = "opt" ]; then
+            export FFLAGS="-O -qopenmp -unroll -finline-functions -inline-forceinline -ipo -ip"
+            export OMP_NUM_THREADS=2
+          else
+            echo "Unknown build type: ${{ matrix.build }}"
+            exit 1
+          fi
+        elif [ "${{ matrix.toolchain.compiler }}" = "nvidia-hpc" ]; then
+          echo "nvidia-hpc compiler not yet supported"
+          exit 1
+          if [ "${{ matrix.build }}" = "debug" ]; then
+            export FFLAGS="-g -O0 -check all -traceback"
+            export OMP_NUM_THREADS=1
+          elif [ "${{ matrix.build }}" = "opt" ]; then
+            export FFLAGS="-O1 -qopenmp"
+            export OMP_NUM_THREADS=2
+          else
+            echo "Unknown build type: ${{ matrix.build }}"
+            exit 1
+          fi
+        elif [ "${{ matrix.toolchain.compiler }}" = "flang" ]; then
+          echo "flang compiler not yet supported"
+          exit 1
+          if [ "${{ matrix.build }}" = "debug" ]; then
+            export FFLAGS=""
+            export OMP_NUM_THREADS=1
+          elif [ "${{ matrix.build }}" = "opt" ]; then
+            export FFLAGS=""
+            export OMP_NUM_THREADS=2
+          else
+            echo "Unknown build type: ${{ matrix.build }}"
+            exit 1
+          fi
+        elif [ "${{ matrix.toolchain.compiler }}" = "lfortran" ]; then
+          if [ "${{ matrix.build }}" = "debug" ]; then
+            export FFLAGS=""
+            export OMP_NUM_THREADS=1
+          elif [ "${{ matrix.build }}" = "opt" ]; then
+            export FFLAGS="--fast --openmp"
+            export OMP_NUM_THREADS=2
+          else
+            echo "Unknown build type: ${{ matrix.build }}"
+            exit 1
+          fi
+        else
+          echo "Unknown compiler: ${{ matrix.toolchain.compiler }}"
+          exit 1
+        fi
+        echo "FFLAGS: $FFLAGS"
+        echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
         cd ${CLAW}/geoclaw
         pytest --basetemp=./test_output
-    
+
     - name: Upload test results
       if: failure()
       uses: actions/upload-artifact@v4
@@ -68,4 +187,3 @@ jobs:
         name: test_results
         path: ${{ env.CLAW }}/geoclaw/*_output
         if-no-files-found: ignore
-
