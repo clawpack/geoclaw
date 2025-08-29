@@ -351,7 +351,7 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
                 xge = xge + 360.
             if x.min() < -180 or x.max() > 180:
                 # cannot deal with this case easily
-                print('+++ polygon spans date line, might not display properly')
+                print('*** polygon spans date line, might not display properly')
 
             v = "\n"
             for j in range(len(x)):
@@ -603,7 +603,7 @@ def poly2kml(xy,fname=None,name='poly',color='00FF00', width=3,
         xge = xge + 360.
     if x.min() < -180 or x.max() > 180:
         # cannot deal with this case easily
-        print('+++ polygon spans date line, might not display properly')
+        print('*** polygon spans date line, might not display properly')
 
     v = "\n"
     for j in range(len(x)):
@@ -737,21 +737,18 @@ def kml_footer():
 
 def kml_region(mapping, vertex_text=None):
 
-    print('+++ vertex_text = ', vertex_text)
     # if all x values are > 180 or all are < -180 shift the values for plotting
     if 'x3' in mapping:
         xge = np.array([mapping['x1'], mapping['x2'], mapping['x3'],mapping['x4']])
     else:
         xge = np.array([mapping['x1'], mapping['x2']])
-    print('+++ initial xge = ',xge)
     if xge.min() > 180:
         xge = xge - 360.
     if xge.max() < -180:
         xge = xge + 360.
     if xge.min() < -180 or xge.max() > 180:
         # cannot deal with this case easily
-        print('+++ kml_region spans date line, might not display properly')
-    print('+++ final xge = ',xge)
+        print('*** kml_region spans date line, might not display properly')
 
     mapping['x1'] = xge[0]
     mapping['x2'] = xge[1]
