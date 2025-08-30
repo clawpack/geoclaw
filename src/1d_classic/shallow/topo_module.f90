@@ -23,6 +23,7 @@ module topo_module
     real(kind=8), allocatable, dimension(:,:)  :: dz_dtopo, dz_cell
     real(kind=8) :: dt_max_dtopo
     logical :: topo_finalized
+    logical :: override_topo_order
 
 contains
 
@@ -54,10 +55,9 @@ contains
         write(6,*) '*** Currently require exactly 1 topofile'
         stop
     endif
-
+    read(iunit,*) override_topo_order
     read(iunit,*) topofname
     close(iunit)
-
     call read_topo_file(topofname)
 
     end subroutine read_topo_settings
@@ -74,7 +74,6 @@ contains
     integer, parameter :: iunit = 7
 
     open(unit=iunit, file=trim(fname), status='unknown',form='formatted')
-
     read(iunit,*) mx_topo
     allocate(xtopo(mx_topo), ztopo(mx_topo))
 
