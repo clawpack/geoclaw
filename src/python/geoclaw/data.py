@@ -29,6 +29,7 @@ Classes representing parameters for GeoClaw runs
 """
 
 import os
+from pathlib import Path
 import numpy as np
 import warnings
 
@@ -575,6 +576,43 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
         self.add_attribute("storm_file", None) # File containing data
 
+    def read(self, path: Path=Path("surge.data"), force: bool=False):
+        """Read surge data file"""
+
+        with Path(path).open() as data_file:
+            # Header
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+            data_file.readline()
+
+            self.wind_forcing = bool(data_file.readline())
+            self.drag_law = int(data_file.readline().split("=:")[0])
+            self.pressure_forcing = bool(data_file.readline().split("=:")[0])
+            self.rotation_override = data_file.readline().split("=:")[0]
+            data_file.readline()
+
+            self.wind_index = int(data_file.readline().split("=:")[0]) - 1
+            self.pressure_index = int(data_file.readline().split("=:")[0]) - 1
+            self.display_landfall_time = bool(data_file.readline().split("=:")[0])
+            data_file.readline()
+
+            # AMR parameters
+            self.wind_refine = self._parse_value(data_file.readline())
+            self.R_refine = self._parse_value(data_file.readline())
+            data_file.readline()
+
+            # Storm specification
+            self.storm_specification_type = int(data_file.readline().split("=:")[0])
+            line = data_file.readline().split("=:")[0]
+            if line[0] == "'":
+                self.storm_file = line.strip()[1:-1]
+            else:
+                raise IOError("Error reading storm file name.")
+
+
     def write(self, out_file='surge.data', data_source="setrun.py"):
         """Write out the data file to the path given"""
 
@@ -697,20 +735,13 @@ class FrictionData(clawpack.clawutil.data.ClawData):
             # Regions
             self.friction_regions = []
             for n in range(num_regions):
-                lower = self._convert_line(data_file.readline())
-                upper = self._convert_line(data_file.readline())
-                depths = self._convert_line(data_file.readline())
-                coeff = self._convert_line(data_file.readline())
+                lower = self._parse_value(data_file.readline())
+                upper = self._parse_value(data_file.readline())
+                depths = self._parse_value(data_file.readline())
+                coeff = self._parse_value(data_file.readline())
                 self.friction_regions.append([lower, upper, depths, coeff])
                 data_file.readline()
             self.friction_files = [] # Is not supported
-
-    def _convert_line(self, line):
-        values = []
-        for value in line.split("=:")[0].split(" "):
-            if len(value) > 1:
-                values.append(float(value))
-        return values
 
 
     def write(self, out_file='friction.data', data_source='setrun.py'):
@@ -911,4 +942,3 @@ class BoussData1D(clawpack.clawutil.data.ClawData):
         self.data_write('bouss_min_depth')
 
         self.close_data_file()
-
