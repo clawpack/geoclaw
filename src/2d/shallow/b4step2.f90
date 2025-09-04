@@ -57,9 +57,8 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep
     ! and reset by scaling (u,v) down to this value (preserving direction)
     ! Note: similar check is done in getmaxspeed
     ! This helps avoid too many dt reductions when flow off very steep topo
-    ! with delta B larger than fluid depth gives big speeds in Riemann solution 
+    ! with delta B larger than fluid depth gives big speeds in Riemann solution
     ! (shallow water equations aren't valid for flow off a cliff)
-
     do j=1-mbc,my+mbc
         do i=1-mbc,mx+mbc
             if (q(1,i,j) > 0.d0) then
@@ -87,8 +86,6 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep
             endif
         enddo
     enddo
-
-
 
     if (aux_finalized < 2 .and. actualstep) then
         ! topo arrays might have been updated by dtopo more recently than

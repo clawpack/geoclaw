@@ -84,10 +84,14 @@ c         coarsen by 2 in every direction
           call coarsen(valdub,midub,mjdub,auxdub,
      1                 valbgc,mi2tot,mj2tot,auxbgc,nvar,naux)
 
+c
+          call b4step2(nghost,nx,ny,nvar,valbgc,
+     1                 xlow,ylow,time,dt,naux,auxbgc,.true.)
+c
           call stepgrid(valbgc,fm,fp,gm,gp,
      1                mi2tot,mj2tot,nghost,
      2                dt2,dtnew2,hx2,hy2,nvar,
-     3                xlow,ylow,tpre,mptr,naux,auxbgc,.false.)
+     3                xlow,ylow,tpre,mptr,naux,auxbgc)
 c
 c         update counts for error estimation work
           evol = evol + (nx/2)*(ny/2)
