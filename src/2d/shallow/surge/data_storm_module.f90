@@ -6,12 +6,12 @@
 !
 ! ==============================================================================
 !                   Copyright (C) Clawpack Developers 2017
-!  Distributed under the terms of the Berkeley Software Distribution (BSD) 
+!  Distributed under the terms of the Berkeley Software Distribution (BSD)
 !  license
 !                     http://www.opensource.org/licenses/
 ! ==============================================================================
 module data_storm_module
-        
+
     implicit none
     save
 
@@ -45,6 +45,9 @@ module data_storm_module
 
     integer, private :: last_storm_index
 
+    ! Run-time storm modification settings
+    real(kind=8) :: wind_scaling, pressure_scaling
+
     ! Ramping settings
     integer :: window_type
     real(kind=8) :: window(4), ramp_width
@@ -63,7 +66,7 @@ contains
     ! Initializes the storm type for an HWRF type data derived storm that is
     ! saved as a netcdf format
     subroutine set_storm(storm_data_path, storm, storm_spec_type, log_unit)
-        
+
 #ifdef NETCDF
         use netcdf
 #endif
@@ -86,7 +89,7 @@ contains
 
         ! ASCII
         real(kind=8) :: sw_lon, sw_lat, dx, dy
-        
+
         ! NetCDF
         integer :: nc_fid, num_dims, num_vars, var_id
         character(len=16) :: name, dim_names(3), var_names(3)
@@ -105,12 +108,14 @@ contains
             read(data_unit, "(a)") storm%time_offset
             read(data_unit, "(i2)") file_format
             read(data_unit, "(i2)") num_data_files
+            read(data_unit, *) wind_scaling, pressure_scaling
             read(data_unit, "(i2)") window_type
             read(data_unit, *) ramp_width
 
             write(log_unit, "('time_offset = ',a)") storm%time_offset
-            write(log_unit, "('Format = ',i2)") file_format
-            write(log_unit, "('Num files = ',i2)") num_data_files
+            write(log_unit, "('format = ',i2)") file_format
+            write(log_unit, "('num files = ',i2)") num_data_files
+            write(log_unit, "('scaling = ',2d16.8)") wind_scaling, pressure_scaling
             write(log_unit, "('window_type = ',i2)") window_type
             write(log_unit, "('ramp_width = ',d16.8)") ramp_width
 
@@ -121,7 +126,7 @@ contains
                 read(data_unit, *)
             end if
             read(data_unit, *)
-            
+
             if (DEBUG) then
                 print "('time_offset = ',a)", storm%time_offset
                 print "('Format = ',i2)", file_format
@@ -201,13 +206,13 @@ contains
                                         storm, seconds_from_epoch(time(:, 1)))
 
                 case(2)
-#ifdef NETCDF                    
+#ifdef NETCDF
                     ! Open file and get file ID
                     ! :TODO: Only read in times that are between t0 and tfinal
                     print *, "Reading storm NetCDF file ", storm%paths(1)
                     call check_netcdf_error(nf90_open(storm%paths(1), nf90_nowrite, nc_fid))
                     ! Check dim/var number
-                    call check_netcdf_error(nf90_inquire(nc_fid, num_dims, num_vars)) 
+                    call check_netcdf_error(nf90_inquire(nc_fid, num_dims, num_vars))
                     if (num_dims /= 3 .and. num_vars /= 3) then
                         print *, "Invalid number of dimensions/variables."
                         print *, "  num_dims = ", num_dims
@@ -230,7 +235,7 @@ contains
                     allocate(storm%longitude(mx))
                     allocate(storm%latitude(my))
                     allocate(storm%time(mt))
-                    
+
                     write(log_unit, *) "Storm header info:"
                     write(log_unit, "('  mx,mx,mt = ', 3i4)") mx, my, mt
 
@@ -300,7 +305,7 @@ contains
     ! data structure
     subroutine read_OWI_ASCII_header(pressure_file, mx, my, mt, swlon, swlat, &
                                                     dy, dx)
-        
+
         use utility_module, only: seconds_from_epoch
 
         implicit none
@@ -321,7 +326,7 @@ contains
                                             "i4,i2,i2,i2,i2)"
         character(len=*), parameter :: time_info_format =       &
                                             "(t69,i4,i2,i2,i2,i2)"
-        
+
         ! Local
         integer, parameter :: OWI_unit = 156
         integer :: i, time(5, 2), total_time, dt
@@ -329,12 +334,12 @@ contains
 
         ! Read in start and end dates of file from first header line
         open(OWI_unit, file=pressure_file, status='old', action='read')
-       
+
         ! Total number of time in seconds of the dataset
-        read(OWI_unit, header_format) time(1:4, 1), time(1:4, 2) 
+        read(OWI_unit, header_format) time(1:4, 1), time(1:4, 2)
         total_time =   seconds_from_epoch(time(1:4, 2))           &
                      - seconds_from_epoch(time(1:4, 1))
-        
+
         ! Read second header from file to obtain array sizes and first timestep
         read(OWI_unit, full_info_format) my, mx, dx, dy, swlat, swlon, time(:, 1)
 
@@ -343,14 +348,14 @@ contains
             read(OWI_unit, *)
         end do
         read(OWI_unit, time_info_format) time(:, 2)
-        
+
         close(OWI_unit)
 
         dt = seconds_from_epoch(time(:, 2)) - seconds_from_epoch(time(:, 1))
         mt = (total_time / dt) + 1
 
-    end subroutine read_OWI_ASCII_header  
-    
+    end subroutine read_OWI_ASCII_header
+
 
     ! === read_OWI_ASCII =======================================================
     ! reads the data files and fills out the storm object and it's dataarrays
@@ -358,17 +363,17 @@ contains
                                                         swlat, swlon,       &
                                                         dx, dy, storm,      &
                                                         seconds_from_offset)
-        
+
         use utility_module, only: seconds_from_epoch
-        
+
         implicit none
-        
+
         ! Input arguments
         type(data_storm_type) :: storm
         character(len=*), intent(in) :: wind_file, pressure_file
-        integer, intent(in) :: my, mx, mt, seconds_from_offset 
+        integer, intent(in) :: my, mx, mt, seconds_from_offset
         real(kind=8), intent(in) :: swlat, swlon, dx, dy
-        
+
         ! Local storage
         integer, parameter :: wind_unit = 700, pressure_unit = 800
         integer :: i, j, n, time(5)
@@ -380,7 +385,7 @@ contains
         ! Skip file headers
         read(wind_unit, *)
         read(pressure_unit, *)
-        ! Loop over all timesteps 
+        ! Loop over all timesteps
         do n = 1, mt
             ! Read each time from the next array
             read(wind_unit, '(t69, i4,i2,i2,i2, i2)') time
@@ -388,9 +393,9 @@ contains
 
             read(wind_unit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
             read(wind_unit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,mx),j=1,my)
-            
+
             read(pressure_unit, *) ! Skip header line since we have it from above
-            read(pressure_unit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,mx),j=1,my) 
+            read(pressure_unit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,mx),j=1,my)
             ! Convert from Pa to hPa
             storm%pressure(:,:,n) = storm%pressure(:,:,n) * 100.0
         end do
@@ -405,7 +410,7 @@ contains
         do j = 1, mx
             storm%longitude(j) = swlon + j * dx
         end do
-        
+
     end subroutine read_OWI_ASCII
 
 
@@ -575,9 +580,11 @@ contains
                             ramp = 0.d0
                         end if
                         aux(pressure_index,i,j) =                              &
-                                    Pa + (aux(pressure_index,i,j) - Pa) * ramp
+                                    Pa + (aux(pressure_index,i,j) - Pa)        &
+                                                       * ramp * pressure_scaling
                         aux(wind_index:wind_index+1,i,j) =                     &
-                                    aux(wind_index:wind_index+1,i,j) * ramp
+                                    aux(wind_index:wind_index+1,i,j)           &
+                                                           * ramp * wind_scaling
 
                     else
                         aux(wind_index:wind_index + 1, i, j) = 0.d0
@@ -630,7 +637,7 @@ contains
     ! === interp_time ==========================================================
     ! Interpolate storm arrays to get current time
     subroutine interp_time(storm, t, wind_u, wind_v, pressure)
-        
+
         implicit none
         ! Subroutine IO
         type(data_storm_type), intent(in) :: storm
@@ -688,9 +695,9 @@ contains
     ! === spatial_intrp ========================================================
     ! Spatially interpolate interp_array onto (x,y) point
     pure real(kind=8) function spatial_interp(storm, x, y, interp_array) result(value)
-        
+
         implicit none
-        
+
         ! Subroutine I/O
         type(data_storm_type), intent(in) :: storm
         real(kind=8), intent(in) :: x, y, interp_array(size(storm%longitude),  &
@@ -731,7 +738,7 @@ contains
                 endif
 
                 value = interp_array(xidx_low, yidx_low)
-        
+
         else
             call find_nearest(storm, x - storm_dx, y - storm_dy, llon, llat,  xidx_low, yidx_low)
             call find_nearest(storm, x + storm_dx, y + storm_dy, ulon, ulat,  xidx_high, yidx_high)
@@ -740,15 +747,15 @@ contains
             q12 = interp_array(xidx_low, yidx_high)
             q21 = interp_array(xidx_high, yidx_low)
             q22 = interp_array(xidx_high, yidx_high)
-                        
+
             ! Calculate the value at the center of the box using bilinear interpolation
             value = (q11 * (ulon - x) * (ulat - y) + &
                      q21 * (x - llon) * (ulat - y) + &
                      q12 * (ulon - x) * (y - llat) + &
                      q22 * (x - llon) * (y - llat)) / ((ulon - llon) * (ulat - llat) + 0.00)
-            
+
         end if
-        
+
     end function spatial_interp
 
     ! === find_nearest =========================================================
