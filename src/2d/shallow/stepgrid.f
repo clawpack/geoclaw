@@ -2,7 +2,7 @@ c
 c -------------------------------------------------------------
 c
       subroutine stepgrid(q,fm,fp,gm,gp,mitot,mjtot,mbc,dt,dtnew,dx,dy,
-     &                  nvar,xlow,ylow,time,mptr,maux,aux,actualstep)
+     &                  nvar,xlow,ylow,time,mptr,maux,aux)
 c
 c
 c ::::::::::::::::::: STEPGRID ::::::::::::::::::::::::::::::::::::
@@ -28,7 +28,7 @@ c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
       use geoclaw_module
       use amr_module
-      use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids, 
+      use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids,
      &                        FGOUT_tcfmax, fgout_interp, fgout_grid,
      &                        FGOUT_ttol
       implicit double precision (a-h,o-z)
@@ -45,17 +45,16 @@ c      dimension work(mwork)
 
       logical :: debug = .false.
       logical :: dump = .false.
-      logical, intent (in) :: actualstep
       type(fgout_grid), pointer :: fgout
       logical :: fgout_interp_needed(FGOUT_num_grids)
       real(kind=8) :: fgout_tnext
 c
 #ifdef WHERE_AM_I
-      write(*,*) "     starting stepgrid grid ",mptr 
+      write(*,*) "     starting stepgrid grid ",mptr
 #endif
       FGOUT_tcfmax = -rinfinity
       level = node(nestlevel,mptr)
-      
+
 
       if (dump) then
          write(outunit,*)" at start of stepgrid: dumping grid ",mptr
@@ -127,7 +126,7 @@ c     Check if fgout interpolation needed before and after step:
               fgout_interp_needed(ng) = .false.
           else
               fgout_tnext = fgout%output_times(fgout%next_output_index)
-              fgout_interp_needed(ng) =  
+              fgout_interp_needed(ng) =
      &          ((fgout%x_low < xlowmbc + mx * dx) .and.
      &           (fgout%x_hi  > xlowmbc) .and.
      &           (fgout%y_low < ylowmbc + my * dy) .and.
@@ -145,14 +144,14 @@ c    &                fgout_tnext, tcf + FGOUT_ttol
 
 
 c::::::::::::::::::::::::fgout Output:::::::::::::::::::::::::::::::::
-c     This has been moved to tick.f, after advancing all patches on 
+c     This has been moved to tick.f, after advancing all patches on
 c     finest level.  No need to check on each patch separately.
 c::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 c      This call has been moved out to advanc
 c       call b4step2(mbc,mx,my,nvar,q,
 c     &              xlowmbc,ylowmbc,dx,dy,time,dt,maux,aux,actualstep)
-      
+
 c::::::::::::::::::::::::FGOUT DATA before step:::::::::::::::::::::::
 c     # fill in values at fgout points affected at time tc0
       do ng=1,FGOUT_num_grids
@@ -183,7 +182,7 @@ c
      &              q,aux,dx,dy,dt,cflgrid,
      &              fm,fp,gm,gp,rpn2,rpt2)
 c
-c            
+c
         mptr_level = node(nestlevel,mptr)
 
 c       write(outunit,811) mptr, mptr_level, cflgrid
@@ -314,9 +313,7 @@ c            write(*,545) i,j,(q(i,j,ivar),ivar=1,nvar)
       endif
 
 #ifdef WHERE_AM_I
-      write(*,*) "     ending   stepgrid grid ",mptr 
+      write(*,*) "     ending   stepgrid grid ",mptr
 #endif
       return
       end
-
-

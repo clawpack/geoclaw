@@ -2,7 +2,7 @@ c
 c -------------------------------------------------------------
 c
       subroutine stepgrid(q,fm,fp,gm,gp,mitot,mjtot,mbc,dt,dtnew,dx,dy,
-     &                  nvar,xlow,ylow,time,mptr,maux,aux,actualstep)
+     &                  nvar,xlow,ylow,time,mptr,maux,aux)
 c
 c
 c ::::::::::::::::::: STEPGRID ::::::::::::::::::::::::::::::::::::
@@ -47,7 +47,6 @@ c      dimension work(mwork)
 
       logical :: debug = .false.
       logical :: dump = .false.
-      logical, intent (in) :: actualstep
       type(fgout_grid), pointer :: fgout
       logical, allocatable :: fgout_interp_needed(:)
       real(kind=8) :: fgout_tnext
