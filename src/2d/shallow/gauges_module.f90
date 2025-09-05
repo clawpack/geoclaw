@@ -6,18 +6,18 @@
 !   subroutine set_gauges
 !     Called initially to read from gauges.data
 !   subroutine setbestsrc
-!     Called each time regridding is done to determine which patch to 
+!     Called each time regridding is done to determine which patch to
 !     use for interpolating to each gauge location.
 !   subroutine print_gauges
 !     Called each time step for each grid patch.
 !     Refactored dumpgauge routine to interpolate for all gauges on patch.
 !
 !     Note: by default all components of q are printed at each gauge.
-!     To print something different or a different precision, modify 
+!     To print something different or a different precision, modify
 !     format statement 100 and/or the write statement that uses it.
-!   
+!
 ! Note: Updated for Clawpack 5.3.0:
-!   - the dumpgauge and setbestsrc subroutines have been moved to this module 
+!   - the dumpgauge and setbestsrc subroutines have been moved to this module
 !     and the dumpgauge subroutine has been refactored and renamed print_gauges.
 !   - dumpgauge.f must be removed from Makefiles.
 !   - setbestsrc uses quicksort to sort gauge numbers and
@@ -27,9 +27,9 @@
 !     by a grid.  Instead loop over gauges specified by mbestg1, mbestg2.
 !
 ! Note: Updated for Clawpack 5.4.0
-!   - refactor so each gauge writes to its own file, and batches the writes instead of 
+!   - refactor so each gauge writes to its own file, and batches the writes instead of
 !     writing one at a time. This will remove the critical section and should speed up gauges a lot
-!   - When array is filled, that gauge will write to file and start over. 
+!   - When array is filled, that gauge will write to file and start over.
 !   - Need to save index so know position in array where left off
 !   - At checkpoint times, dump all gauges
 !
@@ -67,7 +67,7 @@ module gauges_module
         ! Last time recorded
         real(kind=8) :: last_time
 
-        ! Last time and final (x,y) written to file 
+        ! Last time and final (x,y) written to file
         ! (only needed for lagrangian gauges, for checkpointing)
         real(kind=8) :: t_last_written, x_last_written, y_last_written
 
@@ -129,7 +129,7 @@ contains
 
             read(UNIT,*) num_gauges
             allocate(gauges(num_gauges))
-            
+
             ! Initialize gauge source data
             allocate(mbestsrc(num_gauges))
             mbestsrc = 0
@@ -138,11 +138,11 @@ contains
             do i=1,num_gauges
                 read(UNIT, *) gauges(i)%gauge_num, gauges(i)%x, gauges(i)%y, &
                               gauges(i)%t_start, gauges(i)%t_end
-                ! note that for lagrangian gauges, the x,y values read here 
+                ! note that for lagrangian gauges, the x,y values read here
                 ! might be overwritten if this is a restart
                 gauges(i)%buffer_index = 1
                 ! keep track of last position for lagrangian gauges,
-                ! initialize here in case checkpoint happens before 
+                ! initialize here in case checkpoint happens before
                 ! ever writing this gauge:
                 gauges(i)%t_last_written = NEEDS_TO_BE_SET
                 gauges(i)%x_last_written = gauges(i)%x
@@ -228,7 +228,7 @@ contains
 
                 ! for restart, do not need to know if gauge file already exists,
                 ! so some code removed
-                
+
                 if (.not. restart) then
 
                     if (gauges(i)%file_format >= 2) then
@@ -244,7 +244,7 @@ contains
                          status='unknown', position='rewind', form='formatted')
                     ! will be closed after writing header below
                 endif
-                     
+
 
                 if (.not. restart) then
                     ! Write header to .txt file:
@@ -272,7 +272,7 @@ contains
                         if (gauges(i)%q_out_vars(n)) then
                             write(q_column(3 * index + 2:4 + 3 * index), "(i3)") n
                             index = index + 1
-                        end if  
+                        end if
                     end do
                     q_column(3 * index + 2:4 + 3 * index) = "],"
 
@@ -282,7 +282,7 @@ contains
                         if (gauges(i)%aux_out_vars(n)) then
                             write(aux_column(3 * index + 2:4 + 3 * index), "(i3)") n
                             index = index + 1
-                        end if  
+                        end if
                     end do
                     aux_column(3 * index + 2:4 + 3 * index) = "]"
 
@@ -299,7 +299,7 @@ contains
                         write(OUTGAUGEUNIT, '(a)') &
                             "# file format binary32, time series in .bin file"
                     endif
-                    
+
                    close(OUTGAUGEUNIT)
 
                endif  ! end of ascii header file
@@ -358,14 +358,14 @@ contains
            do 30 lev = lfine, 1, -1
             mptr = lstart(lev)
  20              if ((gauges(i)%x >= rnode(cornxlo,mptr)) .and. &
-                        (gauges(i)%x <= rnode(cornxhi,mptr)) .and. &  
+                        (gauges(i)%x <= rnode(cornxhi,mptr)) .and. &
                         (gauges(i)%y >= rnode(cornylo,mptr)) .and. &
                         (gauges(i)%y <= rnode(cornyhi,mptr)) ) then
                         mbestsrc(i) = mptr
                       !! best source found for this gauge, go to next one
                       !! we know its the best because we started at finest level
-                      go to 40  ! on to next gauge 
-                 else 
+                      go to 40  ! on to next gauge
+                 else
                 mptr = node(levelptr, mptr)
                     if (mptr .ne. 0) then
                        go to 20  ! try another grid
@@ -373,7 +373,7 @@ contains
                        go to 30  ! try next coarser level grids
             end if
                  end if
- 30        continue 
+ 30        continue
 
           if (mbestsrc(i) .eq. 0) then
               if ((gauges(i)%x < xlower) .or. (gauges(i)%x > xupper) .or. &
@@ -386,9 +386,9 @@ contains
                   print *, "    x,y = ",gauges(i)%x, gauges(i)%y
                 endif
               endif
- 40     continue 
+ 40     continue
 
-!!!  NO MORE qsort and mbestg arrays. 
+!!!  NO MORE qsort and mbestg arrays.
 !!! Each grid now loops over mbestsrc array to see which gauges it owns.
 
     end subroutine setbestsrc
@@ -400,19 +400,19 @@ contains
                              mptr)
 !
 !     This routine is called each time step for each grid patch, to output
-!     gauge values for all gauges for which this patch is the best one to 
-!     use (i.e. at the finest refinement level).  
+!     gauge values for all gauges for which this patch is the best one to
+!     use (i.e. at the finest refinement level).
 
 !     It is called after ghost cells have been filled from adjacent grids
-!     at the same level, so bilinear interpolation can be used to 
-!     to compute values at any gauge location that is covered by this grid.  
+!     at the same level, so bilinear interpolation can be used to
+!     to compute values at any gauge location that is covered by this grid.
 
 !     The grid patch is designated by mptr.
 !     We only want to set gauges i for which mbestsrc(i) == mptr.
 !     The array mbestsrc is reset after each regridding to indicate which
 !     grid patch is best to use for each gauge.
 
-!     This is a refactoring of dumpgauge.f from Clawpack 5.2 
+!     This is a refactoring of dumpgauge.f from Clawpack 5.2
 !     Loops over only the gauges to be handled by this grid, as specified
 !     by indices from mbestg1(mptr) to mbestg2(mptr)
 !     NO MORE mbestg1 and 2.  Loop through all gauges. No sorting too.
@@ -455,7 +455,7 @@ contains
 
         ! Main Gauge Loop ======================================================
         do i = 1, num_gauges
-            if (mptr .ne. mbestsrc(i)) cycle 
+            if (mptr .ne. mbestsrc(i)) cycle
             need_to_reset_patch = .false.  ! set to true if gauge in ghost cell
             if (tgrid < gauges(i)%t_start .or. tgrid > gauges(i)%t_end) then
                cycle
@@ -494,7 +494,7 @@ contains
                         write(6,602) gauges(i)%gauge_num
 602                     format("WARNING in output of Gauge Data: Gauge ", &
                              i6, " in ghost cells, will reset patch")
-                        ! Lagrangian gauge moved into ghost cells, 
+                        ! Lagrangian gauge moved into ghost cells,
                         ! so reset this gauge after updating
                         need_to_reset_patch = .true.
                         endif
@@ -506,48 +506,48 @@ contains
                 ycent  = ylow + (jindex - 0.5d0) * hy
                 xoff   = (gauges(i)%x - xcent) / hx
                 yoff   = (gauges(i)%y - ycent) / hy
-    
+
                 ! Gauge interpolation seems to work, so error test is commented out.
                 ! For debugging, use the code below...
-                !   Note: we expect 0 <= xoff, yoff <= 1 but if gauge is exactly 
+                !   Note: we expect 0 <= xoff, yoff <= 1 but if gauge is exactly
                 !   at center of cell these might be off by rounding error
-    
+
                 !if (xoff .lt. -1.d-4 .or. xoff .gt. 1.0001d0 .or. &
                 !    yoff .lt. -1.d-4 .or. yoff .gt. 1.0001d0) then
                 !   write(6,*) "*** print_gauges: Interpolation problem at gauge ",&
                 !               igauge(i)
                 !   write(6,*) "    xoff,yoff: ", xoff,yoff
                 !endif
-    
-    
-                ! Modified below from amrclaw/src/2d/gauges_module.f90 
+
+
+                ! Modified below from amrclaw/src/2d/gauges_module.f90
                 ! to interpolate only where all four cells are
                 ! wet, otherwise just take this cell value:
-    
-                ! Check for dry cells by comparing h to mod_dry_tolerance, which 
-                ! should be smaller than drytolerance to avoid oscillations since  
-                ! when h < drytolerance the velocities are zeroed out which can then 
+
+                ! Check for dry cells by comparing h to mod_dry_tolerance, which
+                ! should be smaller than drytolerance to avoid oscillations since
+                ! when h < drytolerance the velocities are zeroed out which can then
                 ! lead to increase in h again.
-    
+
                 mod_dry_tolerance = 0.1d0 * dry_tolerance
-    
-                h(1) = q(1, iindex, jindex) 
-                h(2) = q(1, iindex + 1, jindex) 
+
+                h(1) = q(1, iindex, jindex)
+                h(2) = q(1, iindex + 1, jindex)
                 h(3) = q(1, iindex, jindex + 1)
                 h(4) = q(1, iindex + 1,jindex + 1)
-                
+
                 endif
-        
+
             if ((.not. INTERPOLATE) .or.         &
                 (h(1) < mod_dry_tolerance) .or.  &
                 (h(2) < mod_dry_tolerance) .or.  &
                 (h(3) < mod_dry_tolerance) .or.  &
                 (h(4) < mod_dry_tolerance)) then
 
-                ! If never interpolating, or if 
+                ! If never interpolating, or if
                 ! one of the cells is dry, just use value from grid cell
                 ! that contains gauge rather than interpolating
-            
+
                 icell = int(1.d0 + (gauges(i)%x - xlow) / hx)
                 jcell = int(1.d0 + (gauges(i)%y - ylow) / hy)
 
@@ -556,11 +556,11 @@ contains
                 do n = 1, size(gauges(i)%q_out_vars, 1)
                     if (gauges(i)%q_out_vars(n)) then
                         var_index = var_index + 1
-                        var(var_index) = q(n, icell, jcell) 
+                        var(var_index) = q(n, icell, jcell)
                     end if
                 enddo
-                
-                ! Note here that we skip one of the var indices to accomodate 
+
+                ! Note here that we skip one of the var indices to accomodate
                 ! eta here.
                 var_index = var_index + 1
                 eta_index = var_index
@@ -578,7 +578,7 @@ contains
 
             else
                 ! Linear interpolation between four cells
-                ! Count for number of variables written to var    
+                ! Count for number of variables written to var
                 var_index = 0
             do n = 1, size(gauges(i)%q_out_vars, 1)
                 if (gauges(i)%q_out_vars(n)) then
@@ -590,12 +590,12 @@ contains
                           + xoff * yoff * q(n,iindex+1,jindex+1)
                     end if
                 end do
-                
-                ! Note here that we skip one of the var indices to accomodate 
+
+                ! Note here that we skip one of the var indices to accomodate
                 ! eta here.
                 var_index = var_index + 1
                 eta_index = var_index
-                
+
                 do n=1, size(gauges(i)%aux_out_vars, 1)
                     if (gauges(i)%aux_out_vars(n)) then
                         var_index = var_index + 1
@@ -640,43 +640,43 @@ contains
             do j = 1, gauges(i)%num_out_vars
                 if (abs(var(j)) < 1d-90) var(j) = 0.d0
             end do
-       
+
             if (gauges(i)%gtype == 2) then
                 ! Lagrangian gauge, update location
                 if (var(1) < dry_tolerance) then
                     ug = 0.d0
                     vg = 0.d0
-                  else
+                else
                     ug = var(2)/var(1)
                     vg = var(3)/var(1)
-                  endif
+                endif
                 if (coordinate_system == 1) then
                     ! x,y in meters, ug,vg in m/s
                     xg = gauges(i)%x + dt*ug
                     yg = gauges(i)%y + dt*vg
-                  else
+                else
                     ! x,y in degrees, ug,vg in m/s
                     xg = gauges(i)%x + dt*ug / (earth_radius*deg2rad &
                                              * cos(deg2rad*gauges(i)%y))
                     yg = gauges(i)%y + dt*vg / (earth_radius*deg2rad)
-                  endif
-                
-                ! Update location and store new xg,yg in place of hu,hv 
+                endif
+
+                ! Update location and store new xg,yg in place of hu,hv
                 gauges(i)%x = xg
                 gauges(i)%y = yg
                 var(2) = xg
                 var(3) = yg
-                endif
-                
-            ! save info for this time 
+            endif
+
+            ! save info for this time
             n = gauges(i)%buffer_index
-     
+
             gauges(i)%level(n) = level
             gauges(i)%data(1,n) = tgrid
             do j = 1, gauges(i)%num_out_vars
                 gauges(i)%data(1 + j, n) = var(j)
             end do
-            
+
             gauges(i)%buffer_index = n + 1
             if (gauges(i)%buffer_index > MAX_BUFFER) then
                 call print_gauges_and_reset_nextLoc(i)
@@ -721,7 +721,7 @@ contains
             gauges(gauge_num)%x_last_written = gauges(gauge_num)%data(3, j)
             gauges(gauge_num)%y_last_written = gauges(gauge_num)%data(4, j)
         endif
-        
+
         nvals = gauges(gauge_num)%num_out_vars + 1
         ntimes = gauges(gauge_num)%buffer_index - 1
 
@@ -755,14 +755,14 @@ contains
 
             open(unit=myunit, file=gauges(gauge_num)%file_name_bin, &
                  status='unknown', position='append',access='stream')
-            
+
             if (gauges(gauge_num)%file_format == 3) then
                 allocate(gdata4(nvals+1, ntimes))
                 gdata4(1, 1:ntimes) = real(gauges(gauge_num)%level(1:ntimes), kind=4)
                 gdata4(2:nvals+1, 1:ntimes) = &
                         real(gauges(gauge_num)%data(1:nvals,1:ntimes), kind=4)
                 write(myunit) gdata4
-                deallocate(gdata4)  
+                deallocate(gdata4)
             else
                 allocate(gdata8(nvals+1, ntimes))
                 gdata8(1, 1:ntimes) = real(gauges(gauge_num)%level(1:ntimes), kind=8)
@@ -781,7 +781,7 @@ contains
         ! close file
         close(myunit)
 
-        gauges(gauge_num)%buffer_index = 1                        
+        gauges(gauge_num)%buffer_index = 1
 
       end subroutine print_gauges_and_reset_nextLoc
 
