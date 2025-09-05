@@ -7,10 +7,8 @@ that will be read in by the Fortran code.
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-
 import os
+from pathlib import Path
 import datetime
 import shutil
 import gzip
@@ -27,7 +25,7 @@ def days2seconds(days):
 
 
 # Scratch directory for storing topo and storm files:
-scratch_dir = os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
+scratch_dir = Path(os.environ["CLAW"]) / 'geoclaw' / 'scratch'
 
 
 # ------------------------------
@@ -383,7 +381,7 @@ def setgeo(rundata):
     # the smaller domains
     clawutil.data.get_remote_file(
            "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2")
-    topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
+    topo_path = scratch_dir / 'gulf_caribbean.tt3'
     topo_data.topofiles.append([3, topo_path])
 
     # == fgout grids ==
@@ -410,28 +408,18 @@ def setgeo(rundata):
 
     # Storm parameters - Parameterized storm (Holland 1980)
     data.storm_specification_type = 'holland80'  # (type 1)
-    data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
-                                         'ike.storm'))
+    data.storm_file = scratch_dir / "ike.storm"
 
     # Convert ATCF data to GeoClaw format
-    clawutil.data.get_remote_file(
-                   "http://ftp.nhc.noaa.gov/atcf/archive/2008/bal092008.dat.gz")
-    atcf_path = os.path.join(scratch_dir, "bal092008.dat")
-    # Note that the get_remote_file function does not support gzip files which
-    # are not also tar files.  The following code handles this
-    with gzip.open(".".join((atcf_path, 'gz')), 'rb') as atcf_file,    \
-            open(atcf_path, 'w') as atcf_unzipped_file:
-        atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
-
-    # Uncomment/comment out to use the old version of the Ike storm file
-    # ike = Storm(path="old_ike.storm", file_format="ATCF")
-    ike = Storm(path=atcf_path, file_format="ATCF")
+    remote_url = "http://ftp.nhc.noaa.gov/atcf/archive/2008/bal092008.dat.gz"
+    ike = Storm(path=Path(clawutil.data.get_remote_file(remote_url)), 
+                file_format="ATCF")
 
     # Calculate landfall time - Need to specify as the file above does not
     # include this info (9/13/2008 ~ 7 UTC)
     ike.time_offset = datetime.datetime(2008, 9, 13, 7)
 
-    ike.write(data.storm_file, file_format='geoclaw')
+    ike.write(data.storm_file.resolve(), file_format='geoclaw')
 
     # =======================
     #  Set Variable Friction

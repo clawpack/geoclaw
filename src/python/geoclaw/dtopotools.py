@@ -3192,7 +3192,7 @@ class SubFault1d(SubFault):
         if strike not in [0, 180]:
             msg = "strike should be 0 for top at right or 180 for top at left\n"
             msg = msg + "    strike = %s not allowed in 1d" % strike
-            raise InputError(msg)
+            raise ValueError(msg)
 
         self.strike = strike
         r"""rake=90, so top at right if strike=0, at left if strike=180"""
@@ -3259,7 +3259,7 @@ class DTopography1d(object):
 
             dZvals = numpy.array(numpy.loadtxt(path, skiprows=6), ndmin=2)
             if dtopo_type==2:
-                dZ = reshape(dZvals,(mt,mx))
+                dZ = numpy.reshape(dZvals,(mt,mx))
             elif dtopo_type==3:
                 dZ = dZvals
 

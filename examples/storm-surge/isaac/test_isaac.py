@@ -6,6 +6,7 @@ Primarily tests all of the input formats GeoClaw handles
 
 from pathlib import Path
 import os
+import sys
 import gzip
 import unittest
 import pytest
@@ -22,7 +23,7 @@ days2seconds = lambda t: t * 60.0**2 * 24.0
 scratch_dir = Path(os.environ['CLAW']) / 'geoclaw' / 'scratch'
 
 # os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
-
+@pytest.mark.skip(reason="Generation of OWI files not available yet.")
 @pytest.mark.parametrize("data_file_format", 
                          ['geoclaw', 'owi_ascii', 'owi_netcdf'])
 def test_isaac_formats(data_file_format):
@@ -35,7 +36,7 @@ def test_isaac_formats(data_file_format):
 
 # :TODO: Restructure this to use pytest.mark.parameterize
 
-
+@pytest.mark.skip(reason="Generation of OWI files not available yet.")
 class IsaacStormSurgeRun(test.GeoClawRegressionTest):
     r"""Regression test for Hurrican Isaac storm surge"""
 
@@ -46,9 +47,6 @@ class IsaacStormSurgeRun(test.GeoClawRegressionTest):
         if file_format.lower() not in ["geoclaw", "owi_ascii", "owi_netcdf"]:
             raise ValueError(f"Invalid test file fromat {self.file_format}.")
         self.file_format = file_format
-
-    def setUp(self):
-
 
     def runTest(self, save=False):
 
@@ -87,12 +85,12 @@ class IsaacStormSurgeRun(test.GeoClawRegressionTest):
             isaac.data_file_format = 'NWS12'
             isaac.file_paths = [Path.cwd() / "isaac.PRE",
                                 Path.cwd() / "isaac.WIN"]
-            isaac.write(data.storm_file, file_format='OWI')
+            isaac.write(clawutil.data.storm_file, file_format='OWI')
         elif self.file_format.lower == "owi_netcdf":
             surge_data.storm_specification_type = 'OWI'
             isaac.data_file_format = "NWS13"
             isaac.file_paths = [self.test_path / "isaac.nc"]
-            isaac.write(data.storm_file, file_format='OWI')
+            isaac.write(clawutil.data.storm_file, file_format='OWI')
 
         self.write_rundata_objects()
 

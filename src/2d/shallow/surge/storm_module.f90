@@ -128,10 +128,9 @@ contains
         ! Locals
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
-        character(len=200) :: storm_file_path, line, wind_file_path, pressure_file_path
-        ! integer :: num_storm_files
-        ! character(len=200), allocatable, dimension(:) :: storm_files_array
-        ! character(len=12) :: landfall_time
+        character(len=256) :: storm_file_path, line
+        character(len=256) :: wind_file_path, pressure_file_path
+        
         if (.not.module_setup) then
 
             ! Open file

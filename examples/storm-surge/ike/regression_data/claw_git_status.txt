@@ -1,0 +1,118 @@
+Clawpack Git Status 
+Diffs can be found in /Users/mandli/Library/CloudStorage/Dropbox/src/clawpack/geoclaw/examples/storm-surge/ike/regression_data/claw_git_diffs.txt
+
+Thu, 28 Aug 2025 10:51:01 EDT
+$CLAW = /Users/mandli/Dropbox/src/clawpack
+$FC = gfortran
+
+
+===========
+clawpack
+===========
+/Users/mandli/Dropbox/src/clawpack/
+
+--- last commit ---
+5b1f5c2 (HEAD -> master, tag: v5.13.0, clawpack/master, clawpack/HEAD) Merge pull request #269 from rjleveque/v5.13.0
+
+--- branch and status ---
+## master...clawpack/master
+ M amrclaw
+ M classic
+ M geoclaw
+ M pyclaw
+ M visclaw
+
+
+===========
+classic
+===========
+/Users/mandli/Dropbox/src/clawpack/classic
+
+--- last commit ---
+220dfca (HEAD -> new-pytest-test-runner, mandli/new-pytest-test-runner) Change name of action to test
+
+--- branch and status ---
+## new-pytest-test-runner...clawpack/master [ahead 11]
+ M src/python/classic/test.py
+
+
+===========
+amrclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/amrclaw
+
+--- last commit ---
+250c6ee (HEAD -> fix-auxloc-array-bound, mandli/fix-auxloc-array-bound) Give up on more python versions
+
+--- branch and status ---
+## fix-auxloc-array-bound...clawpack/master [ahead 27, behind 2]
+ M .github/workflows/testing.yml
+
+
+===========
+clawutil
+===========
+/Users/mandli/Dropbox/src/clawpack/clawutil
+
+--- last commit ---
+5d37867 (HEAD -> master, tag: v5.13.0, clawpack/master, clawpack/HEAD) Merge pull request #184 from rjleveque/CoC
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+pyclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/pyclaw
+
+--- last commit ---
+449197ea (HEAD -> add-testing-matrix, mandli/add-testing-matrix) Try using current numpy
+
+--- branch and status ---
+## add-testing-matrix...clawpack/master [ahead 7]
+
+
+===========
+visclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/visclaw
+
+--- last commit ---
+f0f4b5c (HEAD -> add-print_gaugenos-none, mandli/add-print_gaugenos-none) Add some more handling of options
+
+--- branch and status ---
+## add-print_gaugenos-none...clawpack/master [ahead 2]
+
+
+===========
+riemann
+===========
+/Users/mandli/Dropbox/src/clawpack/riemann
+
+--- last commit ---
+3f529f0 (HEAD -> master, tag: v5.13.0, clawpack/master, clawpack/HEAD) Merge pull request #184 from rjleveque/CoC
+
+--- branch and status ---
+## master...clawpack/master
+
+
+===========
+geoclaw
+===========
+/Users/mandli/Dropbox/src/clawpack/geoclaw
+
+--- last commit ---
+04b84f33 (HEAD -> update-pytest) Turn on storm field testing in Ike
+
+--- branch and status ---
+## update-pytest...clawpack/master [ahead 101]
+ M examples/storm-surge/ike/regression_data/claw_git_status.txt
+ M examples/storm-surge/ike/regression_data/gauge00001.txt
+ M src/2d/bouss/advanc_splitRev2Calls.f
+ M src/2d/shallow/advanc.f
+ M src/2d/shallow/b4step2.f90
+ M src/2d/shallow/prepbigstep.f
+ M src/2d/shallow/prepregstep.f
+ M src/2d/shallow/surge/data_storm_module.f90
+ M src/python/geoclaw/surge/storm.py

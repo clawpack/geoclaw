@@ -49,7 +49,7 @@ if 1:
     plot(xgrid,0*zgrid,'b')
     ylim(-3500,300)
 #title('Bathymetry')
-xticks([-xs,0,xs],['$-\epsilon$','0','$\epsilon$'])
+xticks([-xs,0,xs],[r'$-\epsilon$','0',r'$\epsilon$'])
 xlim(xlimits)
 ylabel('meters')
 
@@ -71,8 +71,8 @@ for frameno in framenos:
     if t==0:
         title('t = 0')
     else:
-        title('t = %4.3f$ \epsilon$' % txs)
-    xticks([-xs,0,xs],['$-\epsilon$','0','$\epsilon$'])
+        title(r't = %4.3f$ \epsilon$' % txs)
+    xticks([-xs,0,xs],[r'$-\epsilon$','0',r'$\epsilon$'])
 
     hl = 3200.
     hr = 200.

@@ -234,7 +234,7 @@ def setrun(claw_pkg='geoclaw'):
     # Specify when checkpoint files should be created that can be
     # used to restart a computation.
 
-    clawdata.checkpt_style = 0 
+    clawdata.checkpt_style = 0
 
     if clawdata.checkpt_style == 0:
         # Do not checkpoint at all
@@ -383,7 +383,7 @@ def setgeo(rundata):
 
     # == fgout grids ==
     # new style as of v5.9.0 (old rundata.fixed_grid_data is deprecated)
-    # set rundata.fgout_data.fgout_grids to be a 
+    # set rundata.fgout_data.fgout_grids to be a
     # list of objects of class clawpack.geoclaw.fgout_tools.FGoutGrid:
     #rundata.fgout_data.fgout_grids = []
 
