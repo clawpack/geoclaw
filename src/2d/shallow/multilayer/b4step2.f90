@@ -1,14 +1,15 @@
-subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux)
+subroutine b4step2(mbc, mx, my, meqn, q, xlower, ylower, dx, dy, t, dt,        &
+                   maux, aux, actualstep)
 ! ============================================
-! 
+!
 ! # called before each call to step
 ! # use to set time-dependent aux arrays or perform other tasks.
-! 
+!
 ! This particular routine sets negative values of q(1,i,j) to zero,
 ! as well as the corresponding q(m,i,j) for m=1,meqn.
 ! This is for problems where q(1,i,j) is a depth.
 ! This should occur only because of rounding error.
-! 
+!
 ! Also calls movetopo if topography might be moving.
 
     use amr_module, only: xlowdomain => xlower
@@ -27,14 +28,15 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux)
 
     use multilayer_module, only: num_layers, KAPPA_UNIT, dry_tolerance
     use multilayer_module, only: check_richardson, richardson_tolerance
-    
+
     implicit none
-    
+
     ! Subroutine arguments
     integer, intent(in) :: mbc,mx,my,meqn,maux
     real(kind=8), intent(in) :: xlower, ylower, dx, dy, t, dt
     real(kind=8), intent(inout) :: q(meqn,1-mbc:mx+mbc,1-mbc:my+mbc)
     real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
+    logical, intent(in) :: actualstep
 
     ! Local storage
     integer :: index,i,j,k
@@ -58,14 +60,17 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux)
     end forall
 
     ! Move the topography if needed
-    if (aux_finalized < 2) then
+    if (aux_finalized < 2 .and. actualstep) then
         call setaux(mbc, mx, my, xlower, ylower, dx, dy, maux, aux)
-    endif 
+    endif
 
-    call set_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,t,aux)
+    ! Set wind and pressure aux variables for this grid
+    if (actualstep) then
+        call set_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,t,aux)
+    end if
 
     ! Check Richardson number -- Only implemented for 2 layers
-    if (num_layers == 2 .and. check_richardson) then
+    if (num_layers == 2 .and. check_richardson .and. actualstep) then
         do i=1,mx
             do j=1,my
                 dry_state = .false.
