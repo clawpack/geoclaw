@@ -1,5 +1,6 @@
 ! ============================================
-subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep)
+subroutine b4step2(mbc, mx, my, meqn, q, xlower, ylower, dx, dy, t, dt,        &
+                   maux, aux, actualstep)
 ! ============================================
 !
 ! # called before each call to step
@@ -36,7 +37,7 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep
     real(kind=8), intent(inout) :: xlower, ylower, dx, dy, t, dt
     real(kind=8), intent(inout) :: q(meqn,1-mbc:mx+mbc,1-mbc:my+mbc)
     real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
-    logical, intent (in) :: actualstep
+    logical, intent(in) :: actualstep
 
     ! Local storage
     integer :: index,i,j,k,dummy
@@ -57,9 +58,8 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep
     ! and reset by scaling (u,v) down to this value (preserving direction)
     ! Note: similar check is done in getmaxspeed
     ! This helps avoid too many dt reductions when flow off very steep topo
-    ! with delta B larger than fluid depth gives big speeds in Riemann solution 
+    ! with delta B larger than fluid depth gives big speeds in Riemann solution
     ! (shallow water equations aren't valid for flow off a cliff)
-
     do j=1-mbc,my+mbc
         do i=1-mbc,mx+mbc
             if (q(1,i,j) > 0.d0) then
@@ -88,8 +88,6 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep
         enddo
     enddo
 
-
-
     if (aux_finalized < 2 .and. actualstep) then
         ! topo arrays might have been updated by dtopo more recently than
         ! aux arrays were set unless at least 1 step taken on all levels
@@ -98,6 +96,8 @@ subroutine b4step2(mbc,mx,my,meqn,q,xlower,ylower,dx,dy,t,dt,maux,aux,actualstep
     endif
 
     ! Set wind and pressure aux variables for this grid
-    call set_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,t,aux)
+    if (actualstep) then
+        call set_storm_fields(maux,mbc,mx,my,xlower,ylower,dx,dy,t,aux)
+    end if
 
 end subroutine b4step2

@@ -30,7 +30,7 @@ c     not being able to dimension at maxthreads
 c
 c  ::::::::::::::; ADVANC :::::::::::::::::::::::::::::::::::::::::::
 c  integrate all grids at the input  'level' by one step of its delta(t)
-c  this includes:  setting the ghost cells 
+c  this includes:  setting the ghost cells
 c                  advancing the solution on the grid
 c                  adjusting fluxes for flux conservation step later
 c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -88,23 +88,23 @@ c save coarse level values if there is a finer level for wave fixup
 c
       time = rnode(timemult,lstart(level))
 c      call fgrid_advance(time,delt)
-      
+
       dtlevnew = rinfinity
       cfl_level = 0.d0    !# to keep track of max cfl seen on each level
 
       if (.not. topo_finalized) then
          call topo_update(time)
          endif
-c 
+c
       call system_clock(clock_startStepgrid,clock_rate)
       call cpu_time(cpu_startStepgrid)
-        
+
 c  set number of thrad to use. later will base on number of grids
 c     nt = 4
 c   ! $OMP PARALLEL DO num_threads(nt)
 
-!$OMP PARALLEL DO 
-!$OMP&            PRIVATE(j,mptr,nx,ny,mitot,mjtot)  
+!$OMP PARALLEL DO
+!$OMP&            PRIVATE(j,mptr,nx,ny,mitot,mjtot)
 !$OMP&            PRIVATE(mythread,dtnew,levSt)
 !$OMP&            SHARED(rvol,rvoll,level,nvar,mxnest,alloc,intrat)
 !$OMP&            SHARED(nghost,intratx,intraty,hx,hy,naux,listsp)
@@ -123,7 +123,7 @@ c
           call par_advanc(mptr,mitot,mjtot,nvar,naux,dtnew)
 !$OMP CRITICAL (newdt)
           dtlevnew = dmin1(dtlevnew,dtnew)
-!$OMP END CRITICAL (newdt)    
+!$OMP END CRITICAL (newdt)
 
       end do
 !$OMP END PARALLEL DO
@@ -223,9 +223,9 @@ c
 
 c     Call b4step2 here so that time dependent arrays can be filled properly
       locaux = node(storeaux,mptr)
-      call b4step2(nghost, nx, ny, nvar, alloc(locnew), 
-     &             rnode(cornxlo,mptr), rnode(cornylo,mptr), hx, hy, 
-     &             time, dt, naux, alloc(locaux))
+      call b4step2(nghost, nx, ny, nvar, alloc(locnew),
+     &             rnode(cornxlo,mptr), rnode(cornylo,mptr), hx, hy,
+     &             time, dt, naux, alloc(locaux), .true.)
 c
       if (node(ffluxptr,mptr) .ne. 0) then
          lenbc  = 2*(nx/intratx(level-1)+ny/intraty(level-1))
@@ -258,7 +258,7 @@ c
       call stepgrid(alloc(locnew),fm,fp,gm,gp,
      2            mitot,mjtot,nghost,
      3            delt,dtnew,hx,hy,nvar,
-     4            xlow,ylow,time,mptr,naux,alloc(locaux),.true.)
+     4            xlow,ylow,time,mptr,naux,alloc(locaux))
 
       if (node(cfluxptr,mptr) .ne. 0)
      2   call fluxsv(mptr,fm,fp,gm,gp,

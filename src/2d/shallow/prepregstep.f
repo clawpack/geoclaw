@@ -20,10 +20,14 @@ c
        xlow   = rnode(cornxlo,mptr) - nghost*hx
        ylow   = rnode(cornylo,mptr) - nghost*hy
 
+c     Need to check to make sure that this has the right values/signature
+       call b4step2(nghost, mitot, mjtot, nvar, valbig, xlow, ylow,
+     1              hx, hy, time, dt, naux, auxbig, .false.)
+
        call stepgrid(valbig,fm,fp,gm,gp,
      1               mitot,mjtot,nghost,
      2               dt,dtnew,hx,hy,nvar,
-     3               xlow,ylow,time,mptr,naux,auxbig,.false.)
+     3               xlow,ylow,time,mptr,naux,auxbig)
 c
 c     update counts for error estimation step
        evol   = evol + nx * ny

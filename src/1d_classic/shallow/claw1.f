@@ -6,7 +6,7 @@ c     ==============================================================
 c     ==============================================================
 c
 c  Solves a hyperbolic system of conservation laws in one space dimension
-c  of the general form 
+c  of the general form
 c
 c     capa * q_t + A q_x = psi
 c
@@ -24,7 +24,7 @@ c  --------------------------------------------------------
 c
 c  The user must supply the following subroutines:
 c
-c    bc1, rp1        subroutines specifying the boundary conditions and 
+c    bc1, rp1        subroutines specifying the boundary conditions and
 c                    Riemann solver.
 c                    These are described in greater detail below.
 c
@@ -44,7 +44,7 @@ c
 c  These routines must be declared EXTERNAL in the main program.
 c  For description of the calling sequences, see below.
 c
-c  Dummy routines b4step1.f and src1.f are available in 
+c  Dummy routines b4step1.f and src1.f are available in
 c       claw/clawpack/1d/lib
 c
 c
@@ -74,12 +74,12 @@ c    mx is the number of grid cells in the x-direction, in the
 c       physical domain.  In addition there are mbc grid cells
 c       along each edge of the grid that are used for boundary
 c       conditions.
-c 
-c    q(meqn, 1-mbc:mx+mbc) 
+c
+c    q(meqn, 1-mbc:mx+mbc)
 c        On input:  initial data at time tstart.
 c        On output: final solution at time tend.
 c        q(m,i) = value of mth component in the i'th cell.
-c        Values within the physical domain are in q(m,i) 
+c        Values within the physical domain are in q(m,i)
 c                for i = 1,2,...,mx
 c        mbc extra cells on each end are needed for boundary conditions
 c        as specified in the routine bc1.
@@ -102,7 +102,7 @@ c            capa(i), the "capacity" of the i'th cell, is assumed to be
 c            stored in aux(mcapa,i).
 c            In this case we require method(7).ge.mcapa.
 c
-c    dx = grid spacing in x.  
+c    dx = grid spacing in x.
 c         (for a computation in ax <= x <= bx,  set dx = (bx-ax)/mx.)
 c
 c    tstart = initial time.
@@ -110,7 +110,7 @@ c
 c    tend = Desired final time (on input).
 c              If tend<tstart, then claw1 returns after a single successful
 c                 time step has been taken (single-step mode).
-c              Otherwise, as many steps are taken as needed to reach tend, 
+c              Otherwise, as many steps are taken as needed to reach tend,
 c                 up to a maximum of nv(1).
 c         = Actual time reached (on output).
 c
@@ -152,13 +152,13 @@ c                       in the previous step.  Note that since this value
 c                       comes from the previous step, the Courant number will
 c                       not in general be exactly equal to the desired value
 c                       If the actual Courant number in the next step is
-c                       greater than 1, then this step is redone with a 
+c                       greater than 1, then this step is redone with a
 c                       smaller dt.
 c
 c         method(2) = 1 if Godunov's method is to be used, with no 2nd order
 c                       corrections.
 c                   = 2 if second order correction terms are to be added, with
-c                       a flux limiter as specified by mthlim.  
+c                       a flux limiter as specified by mthlim.
 c
 c         method(3)  is not used in one-dimension.
 c
@@ -223,7 +223,7 @@ c               (mx + 2*mbc) * (2 + 4*meqn + mwaves + meqn*mwaves)
 c            If mwork is too small then the program returns with info = 4
 c            and prints the necessary value of mwork to unit 6.
 c
-c            
+c
 c    info = output value yielding error information:
 c         = 0 if normal return.
 c         = 1 if mbc.lt.2
@@ -241,7 +241,7 @@ c
 c    User-supplied subroutines
 c    -------------------------
 c
-c    bc1 = subroutine that specifies the boundary conditions.  
+c    bc1 = subroutine that specifies the boundary conditions.
 c         This subroutine should extend the values of q from cells
 c         1:mx to the mbc ghost cells along each edge of the domain.
 c
@@ -290,7 +290,7 @@ c         If method(7)=maux > 0 then the auxiliary variables along this slice
 c         are passed in using auxl and auxr.  Again, in the standard routines
 c         auxl=auxr=aux in the call to rp1.
 c
-c          On output, 
+c          On output,
 c              wave(m,mw,i) is the m'th component of the jump across
 c                              wave number mw in the ith Riemann problem.
 c              s(mw,i) is the wave speed of wave number mw in the
@@ -307,7 +307,7 @@ c           Roe approximate Riemann solver.  An entropy fix can be included
 c           into the specification of amdq and apdq.
 c
 c    src1 = subroutine for the source terms that solves the equation
-c               capa * q_t = psi 
+c               capa * q_t = psi
 c           over time dt.
 c
 c           If method(5)=0 then the equation does not contain a source
@@ -338,7 +338,7 @@ c                step1.  Use to set time-dependent aux arrays or perform
 c                other tasks which must be done every time step.
 c
 c          The form of this subroutine is
-c      
+c
 c  -------------------------------------------------
 c      subroutine b4step1(mbc,mx,meqn,q,xlower,dx,time,dt,maux,aux)
 c      implicit double precision (a-h,o-z)
@@ -353,12 +353,12 @@ c =========================================================================
 c
 c  Copyright 1994 -- 2002 R. J. LeVeque
 c
-c  This software is made available for research and instructional use only. 
+c  This software is made available for research and instructional use only.
 c  You may copy and use this software without charge for these non-commercial
 c  purposes, provided that the copyright notice and associated text is
 c  reproduced on all copies.  For all other uses (including distribution of
-c  modified versions), please contact the author at the address given below. 
-c  
+c  modified versions), please contact the author at the address given below.
+c
 c  *** This software is made available "as is" without any assurance that it
 c  *** will work for your purposes.  The software may in fact have defects, so
 c  *** use the software at your own risk.
@@ -370,18 +370,18 @@ c  --------------------------------------
 c    Author:  Randall J. LeVeque
 c             Applied Mathematics
 c             Box 352420
-c             University of Washington, 
+c             University of Washington,
 c             Seattle, WA 98195-2420
 c             rjl@amath.washington.edu
 c =========================================================================
 c
 c
 c
-c            
+c
 c    ======================================================================
 c    Beginning of claw1 code
 c    ======================================================================
-c 
+c
 
       use gauges_module, only: num_gauges, update_gauges,
      &                         print_gauges_and_reset_nextLoc
@@ -435,7 +435,7 @@ c     # partition work array into pieces for passing into step1:
       i0wave = i0f + (mx + 2*mbc) * meqn
       i0s = i0wave + (mx + 2*mbc) * meqn * mwaves
       i0dtdx = i0s + (mx + 2*mbc) * mwaves
-      i0qwork = i0dtdx + (mx + 2*mbc) 
+      i0qwork = i0dtdx + (mx + 2*mbc)
       i0amdq = i0qwork + (mx + 2*mbc) * meqn
       i0apdq = i0amdq + (mx + 2*mbc) * meqn
       i0dtdx = i0apdq + (mx + 2*mbc) * meqn
@@ -463,7 +463,7 @@ c        #  (unless tend < tstart, which is a flag to take only a single step)
 c           # save old q in case we need to retake step with smaller dt:
             call copyq1(meqn,mbc,mx,q,work(i0qwork))
             endif
-c           
+c
    40    continue
          dt2 = dt / 2.d0
          thalf = t + dt2  !# midpoint in time for Strang splitting
@@ -532,8 +532,8 @@ c           # choose new time step if variable time step
                 endif
                 dtmin = dmin1(dt,dtmin)
                 dtmax = dmax1(dt,dtmax)
-                
-                    
+
+
               else
                 dt = dtv(2)
               endif
@@ -563,13 +563,13 @@ c                   # if fixed dt, give up and return
                     go to 900
                   endif
                endif
-               
+
          if (.not. topo_finalized) then
              ! modify topo using dtopo arrays:
              call topo_update(t)
              call setaux(mbc,mx,xlower,dx,maux,aux)
          endif
-      
+
 c
 c        # see if we are done:
          nv(2) = nv(2) + 1
@@ -578,7 +578,7 @@ c
   100    continue
 c
   900  continue
-c 
+c
 c      # return information
 c
        if (method(1).eq.1 .and. t.lt.tend .and. nv(2) .eq. maxn) then
@@ -602,5 +602,5 @@ c         # Courant number too large with fixed dt
           call print_gauges_and_reset_nextLoc(ii,meqn)
        end do
 
-       return 
+       return
        end
