@@ -2880,13 +2880,22 @@ class SiftFault(Fault):
 
     def _load_sift_unit_sources(self, longitude_shift=0.):
         r"""
-        Load SIFT unit source subfault data base.
-        File was downloaded from
+        Load SIFT unit source subfault data base from
             http://sift.pmel.noaa.gov/ComMIT/compressed/info_sz.dat
+        or use archived version
         """
 
-        unit_source_file = os.path.join(os.path.dirname(__file__), 'data',
-                                        'info_sz.dat.txt')
+        url = 'http://sift.pmel.noaa.gov/ComMIT/compressed/info_sz.dat'
+        known_hash = 'md5:b85f6b0407dfa7c6127d2fa85f84da82'
+        try:
+            import pooch
+            unit_source_file = pooch.retrieve(url, known_hash)
+        except:
+            print('*** Failed to retrieve %s' % url)
+            print('*** Using archived version from data directory')
+            unit_source_file = os.path.join(os.path.dirname(__file__), 'data',
+                                            'info_sz.dat.txt')
+
         self.input_units = {'length':'km', 'width':'km', 'depth':'km', 'slip':'m',
                  'mu':"dyne/cm^2"}
 
