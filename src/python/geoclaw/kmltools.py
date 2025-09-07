@@ -334,23 +334,36 @@ def regions2kml(rundata=None,fname='regions.kml',verbose=True,combined=True):
         mapping['width'] = 2
 
         if flagregion.spatial_region_type == 1:
-            x1,x2,y1,y2 = flagregion.spatial_region
-            x = [x1,x1,x2,x2,x1]
-            y = [y1,y2,y2,y1,y1]
+            #x1,x2,y1,y2 = flagregion.spatial_region
+            #x = [x1,x1,x2,x2,x1]
+            #y = [y1,y2,y2,y1,y1]
+            region_text = kml_region(mapping)  # mapping contains rectangle
         else:
+            # for Ruled Rectangles, must list all vertices:
             x,y = flagregion.spatial_region.vertices()
 
-        v = "\n"
-        for j in range(len(x)):
-            v = v + "%s,%s,%s\n" % (f2s(x[j]),f2s(y[j]),f2s(elev))
-        v = v + "%s,%s,%s\n" % (f2s(x[0]),f2s(y[0]),f2s(elev))
-        v.replace(' ','')
+            # if all x values are > 180 or all are < -180 shift the values
+            # for coordinates (original values still appear in description):
+            xge = np.array(x)
+            if xge.min() > 180:
+                xge = xge - 360.
+            if xge.max() < -180:
+                xge = xge + 360.
+            if x.min() < -180 or x.max() > 180:
+                # cannot deal with this case easily
+                print('*** polygon spans date line, might not display properly')
 
-        region_text = kml_region(mapping, v)
+            v = "\n"
+            for j in range(len(x)):
+                v = v + "%s,%s,%s\n" % (f2s(xge[j]),f2s(y[j]),f2s(elev))
+            v = v + "%s,%s,%s\n" % (f2s(xge[0]),f2s(y[0]),f2s(elev))
+            v.replace(' ','')
+
+            region_text = kml_region(mapping, v)
+
+        kml_text = kml_text + region_text
 
         fname = flagregion.name + '.kml'
-        region_text = kml_region(mapping, v)
-        kml_text = kml_text + region_text
 
         if not combined:
             kml_text = kml_text + kml_footer()
@@ -582,10 +595,20 @@ def poly2kml(xy,fname=None,name='poly',color='00FF00', width=3,
     mapping['color'] = color
     mapping['width'] = width
 
+    # if all x values are > 180 or all are < -180 shift the values for plotting
+    xge = np.array(x)
+    if xge.min() > 180:
+        xge = xge - 360.
+    if xge.max() < -180:
+        xge = xge + 360.
+    if x.min() < -180 or x.max() > 180:
+        # cannot deal with this case easily
+        print('*** polygon spans date line, might not display properly')
+
     v = "\n"
     for j in range(len(x)):
-        v = v + "%s,%s,%s\n" % (f2s(x[j]),f2s(y[j]),f2s(elev))
-    v = v + "%s,%s,%s\n" % (f2s(x[0]),f2s(y[0]),f2s(elev))
+        v = v + "%s,%s,%s\n" % (f2s(xge[j]),f2s(y[j]),f2s(elev))
+    v = v + "%s,%s,%s\n" % (f2s(xge[0]),f2s(y[0]),f2s(elev))
     v.replace(' ','')
 
     region_text = kml_region(mapping, v)
@@ -655,15 +678,29 @@ def gauges2kml(rundata=None, fname='gauges.kml', verbose=True):
     for rnum,gauge in enumerate(gauges):
         t1,t2 = gauge[3:5]
         x1,y1 = gauge[1:3]
+
+        # adjust point location for GE so -180 <= xge <= 180:
+        if x1 < -180:
+            xge = x1+360
+        elif x1 > 180:
+            xge = x1-360
+        else:
+            xge = x1
+
         gaugeno = gauge[0]
         if verbose:
-            print("Gauge %i: %s, %s  \n" % (gaugeno,f2s(x1),f2s(y1)) \
-                    + "  t1 = %s,  t2 = %s" % (f2s(t1),f2s(t2)))
+            if xge == x1:
+                print("Gauge %i: x = %s, y = %s  \n" % (gaugeno,f2s(x1),f2s(y1)) \
+                        + "  t1 = %s,  t2 = %s" % (f2s(t1),f2s(t2)))
+            else:
+                print("Gauge %i: x = %s (%s), y = %s  \n" \
+                        % (gaugeno,f2s(x1),f2s(xge),f2s(y1)) \
+                        + "  t1 = %s,  t2 = %s" % (f2s(t1),f2s(t2)))
         mapping = {}
         mapping['gaugeno'] = gaugeno
         mapping['t1'] = t1
         mapping['t2'] = t2
-        mapping['x1'] = x1
+        mapping['x1'] = xge
         mapping['y1'] = y1
         mapping['elev'] = elev
         mapping['name'] = 'Gauge %i' % rnum
@@ -699,6 +736,26 @@ def kml_footer():
 
 
 def kml_region(mapping, vertex_text=None):
+
+    # if all x values are > 180 or all are < -180 shift the values for plotting
+    if 'x3' in mapping:
+        xge = np.array([mapping['x1'], mapping['x2'], mapping['x3'],mapping['x4']])
+    else:
+        xge = np.array([mapping['x1'], mapping['x2']])
+    if xge.min() > 180:
+        xge = xge - 360.
+    if xge.max() < -180:
+        xge = xge + 360.
+    if xge.min() < -180 or xge.max() > 180:
+        # cannot deal with this case easily
+        print('*** kml_region spans date line, might not display properly')
+
+    mapping['x1'] = xge[0]
+    mapping['x2'] = xge[1]
+    if 'x3' in mapping:
+        mapping['x3'] = xge[2]
+        mapping['x4'] = xge[3]
+
 
     if vertex_text is None:
         if 'x3' in mapping:
