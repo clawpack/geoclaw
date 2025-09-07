@@ -53,7 +53,7 @@ def draw_box(ax, box, style='r-', fill=True):
 
     :Input:
      - *ax* (matplotlib.Axes) axes object to plot on
-     - *box* (list) set of coordinates defined box.  First two coordinates are 
+     - *box* (list) set of coordinates defined box.  First two coordinates are
        the lower left corner and the last two coordiantes are the upper corner.
      - *style* (str) string that will be used to specify the style of the lines.
        Default = *'r-'*.
@@ -177,13 +177,13 @@ def days_figure_title(cd, land_fall=0.0, new_time=False):
 
 
 def surge_afteraxes(current_data, track, land_fall=0.0, plot_direction=False,
-                    plot_track=False, style='ro', track_style='k', 
+                    plot_track=False, style='ro', track_style='k',
                     new_time=False, kwargs={}):
     """Default surge plotting after axes function
 
     Includes changing the title to something relative to landfall and plotting
-    the location of the storm eye according to the track object.  Optional 
-    plotting includes the direction of the storm with *plot_direction* and 
+    the location of the storm eye according to the track object.  Optional
+    plotting includes the direction of the storm with *plot_direction* and
     *plot_track* which plots the entire track of the storm.
     """
     track_data = track.get_track(current_data.frameno)
@@ -200,9 +200,9 @@ def surge_afteraxes(current_data, track, land_fall=0.0, plot_direction=False,
             # TO DO: Could add categorization but really should use storm object
             # for this
             for i in range(1, track._data.shape[0]):
-                ax.plot(track._data[i-1:i+1, 1], track._data[i-1:i+1, 2], 
+                ax.plot(track._data[i-1:i+1, 1], track._data[i-1:i+1, 2],
                         track_style)
-        
+
     days_figure_title(current_data, land_fall=land_fall, new_time=new_time)
 
 
@@ -506,7 +506,7 @@ def add_bathy_contours(plotaxes, contour_levels=None, color='k'):
 
 def add_storm_radii(plotaxes, track, radii=[100e3], color='r'):
     """Add radii to plots based on storm position"""
-    plotitem = plotaxes.new_plotitem(name="storm radius", 
+    plotitem = plotaxes.new_plotitem(name="storm radius",
                                      plot_type="2d_contour")
     plotitem.plot_var = lambda cd: storm_radius(cd, track)
     plotitem.contour_levels = radii
@@ -568,7 +568,7 @@ Easily plot the track and intensity of a storm using a mapping package.
     'black', 'violet', 'blue', 'yellow', 'orange', 'red']
     - *categorization* (str) Type of categorization, always use *"NHC"*
 - *legend_loc* (str) Location of legend. Available options are 'best' (0), 'upper right' (1),
-    'upper left'(2), 'lower left'(3), 'lower right'(4), 'right'(5), 'center left'(6), 'center right'(7), 
+    'upper left'(2), 'lower left'(3), 'lower right'(4), 'right'(5), 'center left'(6), 'center right'(7),
     'lower center'(8), 'upper center'(9), 'center'(10). Default is 'best'.
 
 :Output:
