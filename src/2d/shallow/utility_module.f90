@@ -52,16 +52,21 @@ contains
 
         search_buffer = trim(line(1:index(line,"=:") - 2))
 
-        do i=1,len_trim(search_buffer)
-            if (search_buffer(i:i) == " ") then
-                if (.not. found) then
-                    found = .true.
-                    count = count + 1
+        if (len_trim(search_buffer) == 0 .or.                                  &
+                trim(search_buffer) == "None") then
+            count = 0
+        else
+            do i=1,len_trim(search_buffer)
+                if (search_buffer(i:i) == " ") then
+                    if (.not. found) then
+                        found = .true.
+                        count = count + 1
+                    endif
+                else
+                    found = .false.
                 endif
-            else
-                found = .false.
-            endif
-        enddo
+            enddo
+        end if
 
     end function get_value_count
 
