@@ -294,10 +294,10 @@ contains
                           "# file format ascii, time series follow in this file"
                     else if (gauges(i)%file_format == 2) then
                         write(OUTGAUGEUNIT, '(a)') &
-                            "# file format binary64, time series in .bin file"
+                            "# file format binary32, time series in .bin file"
                     else if (gauges(i)%file_format == 3) then
                         write(OUTGAUGEUNIT, '(a)') &
-                            "# file format binary32, time series in .bin file"
+                            "# file format binary64, time series in .bin file"
                     endif
 
                    close(OUTGAUGEUNIT)
@@ -756,7 +756,7 @@ contains
             open(unit=myunit, file=gauges(gauge_num)%file_name_bin, &
                  status='unknown', position='append',access='stream')
 
-            if (gauges(gauge_num)%file_format == 3) then
+            if (gauges(gauge_num)%file_format == 2) then
                 allocate(gdata4(nvals+1, ntimes))
                 gdata4(1, 1:ntimes) = real(gauges(gauge_num)%level(1:ntimes), kind=4)
                 gdata4(2:nvals+1, 1:ntimes) = &
