@@ -646,25 +646,22 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                         description='(Display time relative to landfall)')
         self.data_write()
 
+        # AMR storm refinement criteria
+        # Handle older style of refinement for turning it off, F -> None
         if isinstance(self.wind_refine, bool):
             if not self.wind_refine:
-                self.data_write('wind_refine', value=False,
-                                description='(Refinement ratios)')
-        elif isinstance(self.wind_refine, type(None)):
-            self.data_write('wind_refine', value=False,
-                            description='(Refinement ratios)')
-        else:
-            self.data_write('wind_refine',description='(Refinement ratios)')
+                self.wind_refine = None
         if isinstance(self.R_refine, bool):
             if not self.R_refine:
-                self.data_write('R_refine', value=False,
-                                description='(Refinement ratios)')
-        elif isinstance(self.R_refine, type(None)):
-            self.data_write('R_refine', value=False,
-                            description='(Refinement ratios)')
-        else:
-            self.data_write('R_refine', description='(Refinement ratios)')
+                self.R_refine = None
         self.data_write()
+        
+        if isinstance(self.wind_refine, float):
+            self.wind_refine = [self.wind_refine]
+        self.data_write('wind_refine', description='(Wind speed refinement criteria)')
+        if isinstance(self.R_refine, float):
+            self.R_refine = [self.R_refine]
+        self.data_write('R_refine', description='(Wind speed refinement criteria)')
 
         # Storm specification
         # Handle deprecated member value
