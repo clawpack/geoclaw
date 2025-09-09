@@ -1716,6 +1716,7 @@ class Topography(object):
         x = self.x
         y = self.y
         Z = self.Z
+        fig = plt.figure()
         c = plt.contour(x,y,Z,[sea_level])
         # c is the level 0 contour as list of arrays, one for each segement
         # catenate these together separated by array([nan,nan]):
@@ -1723,6 +1724,7 @@ class Topography(object):
         for k in range(1,len(c.allsegs[0])):
             shoreline_xy = numpy.vstack((shoreline_xy, \
                            numpy.array([numpy.nan,numpy.nan]), c.allsegs[0][k]))
+        plt.close(fig)
         return shoreline_xy
 
 
