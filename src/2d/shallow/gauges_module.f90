@@ -749,10 +749,10 @@ contains
                       (gauges(gauge_num)%data(k, j), k=1,nvals)
             end do
 
-        else if (gauges(gauge_num)%file_format >= 2) then
+        else if (gauges(gauge_num)%file_format == 2 .or.    &
+                 gauges(gauge_num)%file_format == 3) then
 
             ! binary output
-
             open(unit=myunit, file=gauges(gauge_num)%file_name_bin, &
                  status='unknown', position='append',access='stream')
 
