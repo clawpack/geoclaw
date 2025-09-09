@@ -100,7 +100,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
             ! the storm and refine if we are
             if (storm_specification_type /= 0) then
                 R_eye = storm_location(t)
-                do m=1,size(R_refine,1)
+                do m=1,min(size(R_refine), mxnest)
                     if (coordinate_system == 2) then
                         ds = spherical_distance(x_c, y_c, R_eye(1), R_eye(2))
                     else
@@ -116,7 +116,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                 ! Refine based on wind speed
                 if (wind_forcing) then
                     wind_speed = sqrt(aux(wind_index,i,j)**2 + aux(wind_index+1,i,j)**2)
-                    do m=1,size(wind_refine,1)
+                    do m=1,min(size(wind_refine), mxnest)
                         if ((wind_speed > wind_refine(m)) .and. (level <= m)) then
                             amrflags(i,j) = DOFLAG
                             cycle x_loop
@@ -147,7 +147,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                     ! also have a per layer criteria since this is not
                     ! gradient based
                     speed = sqrt(q(2,i,j)**2 + q(3,i,j)**2) / q(1,i,j)
-                    do m=1,min(size(speed_tolerance),mxnest)
+                    do m=1,min(size(speed_tolerance), mxnest)
                         if (speed > speed_tolerance(m) .and. level <= m) then
                             amrflags(i,j) = DOFLAG
                             cycle x_loop

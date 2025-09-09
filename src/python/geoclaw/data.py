@@ -125,7 +125,7 @@ class RefinementData(clawpack.clawutil.data.ClawData):
 
         # Refinement controls
         self.add_attribute('wave_tolerance',1.0e-1)
-        self.add_attribute('speed_tolerance',[1.0e12]*6)
+        self.add_attribute('speed_tolerance', None)
         self.add_attribute('deep_depth',None)      # deprecated
         self.add_attribute('max_level_deep',None)  # deprecated
         self.add_attribute('variable_dt_refinement_ratios',False)
@@ -144,7 +144,7 @@ class RefinementData(clawpack.clawutil.data.ClawData):
             w = '\n  *** WARNING: max_level_deep parameter ignored as of v5.8.0'
             warnings.warn(w, UserWarning)
 
-        if not isinstance(self.speed_tolerance,list):
+        if isinstance(self.speed_tolerance, float):
             self.speed_tolerance = [self.speed_tolerance]
         self.data_write('speed_tolerance')
         self.data_write()
@@ -569,7 +569,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
 
         # AMR parameters
         self.add_attribute('wind_refine', [20.0,40.0,60.0])
-        self.add_attribute('R_refine', [60.0e3,40e3,20e3])
+        self.add_attribute('R_refine', [60.0e3, 40e3, 20e3])
 
         # Storm parameters
         self.add_attribute('storm_type', None)  # Backwards compatibility
