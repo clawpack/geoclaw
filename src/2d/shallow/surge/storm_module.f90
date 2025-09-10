@@ -177,22 +177,10 @@ contains
 
             ! AMR parameters
             read(unit,'(a)') line
-            if (line(1:1) == "F") then
-                allocate(wind_refine(1))
-                wind_refine(1) = huge(1.d0)
-            else
-                allocate(wind_refine(get_value_count(line)))
-                read(line,*) (wind_refine(i),i=1,size(wind_refine,1))
-            end if
+            allocate(wind_refine(get_value_count(line)))
             read(unit,'(a)') line
-            if (line(1:1) == "F") then
-                allocate(R_refine(1))
-                R_refine(1) = -huge(1.d0)
-            else
-                allocate(R_refine(get_value_count(line)))
-                read(line,*) (R_refine(i),i=1,size(R_refine,1))
-            end if
-            read(unit,*)
+            allocate(R_refine(get_value_count(line)))
+            read(unit, *)
 
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
