@@ -225,12 +225,12 @@ contains
                 write(6,*) '+++ nqout = ',fg%nqout
 
                 ! Allocate new fixed grid data arrays at early, late time:
-                ! dimension (10,:,:) to work for either GeoClaw or D-Claw
+                ! dimension (fg%time_index,:,:) to work for either GeoClaw or D-Claw
 
-                allocate(fg%early(10, fg%mx,fg%my))
+                allocate(fg%early(fg%time_index, fg%mx,fg%my))
                 fg%early = nan()
 
-                allocate(fg%late(10, fg%mx,fg%my))
+                allocate(fg%late(fg%time_index, fg%mx,fg%my))
                 fg%late = nan()
 
            enddo
@@ -445,7 +445,7 @@ contains
 
         ! Other locals
         integer :: i,j,m,iq,k,jq,num_eqn
-        real(kind=8) :: t0,tf,tau, qaug(10)
+        real(kind=8) :: t0,tf,tau, qaug(fgrid%time_index)
         real(kind=8), allocatable :: qeta(:,:,:)
         real(kind=4), allocatable :: qeta4(:,:,:)
         real(kind=8) :: h_early,h_late,topo_early,topo_late
