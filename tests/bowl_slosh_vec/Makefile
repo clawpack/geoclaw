@@ -7,10 +7,6 @@ CLAWMAKE = $(CLAW)/clawutil/src/Makefile.common
 #   make .help
 # at the unix prompt.
 
-# Define GEOCLAW_VEC as "1" to use the code with vectorized Riemann solvers.
-# The following compiler flags are suggested for vectorization (Intel Compiler):
-#   -O2 -fopenmp -align array64byte -xHost
-
 
 # Adjust these variables if desired:
 # ----------------------------------
@@ -22,10 +18,20 @@ OUTDIR = _output               # Directory for output
 SETPLOT_FILE = setplot.py      # File containing function to set plots
 PLOTDIR = _plots               # Directory for plots
 
+RESTART = False
+
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 
 # Compiler flags can be specified here or set as an environment variable
 FFLAGS ?= 
+
+FFLAGS += -O2 -fopenmp
+
+ifeq ($(FC), ifort)
+  FFLAGS += -align array64byte -xHost
+else
+  $(warning Warning: For vectorization the Intel Compiler is recommended)
+endif
 
 # ---------------------------------
 # package sources for this program:
@@ -43,37 +49,31 @@ include $(GEOLIB)/Makefile.geoclaw
 EXCLUDE_MODULES = \
 
 EXCLUDE_SOURCES = \
+  $(GEOLIB)/qad.f \
+  $(GEOLIB)/flux2fw.f \
+  $(GEOLIB)/step2.f \
+  $(AMRLIB)/inlinelimiter.f \
+  $(GEOLIB)/fgmax_interpolate0.f90 \
 
 # ----------------------------------------
 # List of custom sources for this program:
 # ----------------------------------------
 
-
 MODULES = \
 
-ifneq ($(GEOCLAW_VEC),1)
-  SOURCES = \
-    $(CLAW)/riemann/src/rpn2_geoclaw.f \
-    $(CLAW)/riemann/src/rpt2_geoclaw.f \
-    $(CLAW)/riemann/src/geoclaw_riemann_utils.f 
-else
-  EXCLUDE_SOURCES = \
-    $(GEOLIB)/qad.f \
-    $(GEOLIB)/flux2fw.f \
-    $(GEOLIB)/step2.f \
-    $(AMRLIB)/inlinelimiter.f
+# This is where this test differs mostly from the original bowl-slosh one: the source files
 
-  SOURCES = \
-    $(CLAW)/riemann/src/rpn2_geoclaw_vec.f90 \
-    $(CLAW)/riemann/src/rpt2_geoclaw_vec.f90 \
-    $(CLAW)/riemann/src/geoclaw_riemann_utils_vec.f90 \
-    $(GEOLIB)/qad_vec.f \
-    $(GEOLIB)/flux2fw_vec.f \
-    $(GEOLIB)/step2_vec.f90 \
-    $(GEOLIB)/inlinelimiter_vec.f
-endif
-
-
+SOURCES = \
+  qinit.f90 \
+  $(GEOLIB)/fgmax_interpolate.f90 \
+  $(CLAW)/riemann/src/rpn2_geoclaw_vec.f90 \
+  $(CLAW)/riemann/src/rpt2_geoclaw_vec.f90 \
+  $(CLAW)/riemann/src/geoclaw_riemann_utils_vec.f90 \
+  $(GEOLIB)/qad_vec.f \
+  $(GEOLIB)/flux2fw_vec.f \
+  $(GEOLIB)/step2_vec.f90 \
+  $(GEOLIB)/inlinelimiter_vec.f
+    
 #-------------------------------------------------------------------
 # Include Makefile containing standard definitions and make options:
 include $(CLAWMAKE)
@@ -81,7 +81,7 @@ include $(CLAWMAKE)
 # Construct the topography data
 .PHONY: topo all
 topo:
-	$(CLAW_PYTHON) maketopo.py
+	python maketopo.py
 
 all: 
 	$(MAKE) topo
