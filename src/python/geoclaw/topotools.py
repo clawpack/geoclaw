@@ -1647,11 +1647,41 @@ class Topography(object):
                 self.Z[index[0], index[1]] = summation / num_points
 
 
-    def crop(self, filter_region=None, coarsen=1):
+    def crop(self, filter_region=None, coarsen=1, buffer=0, align=None):
         r"""Crop region to *filter_region*
 
         Create a new Topography object that is identical to this one but cropped
         to the region specified by filter_region
+
+        :Input:
+
+            - *filter_region* (tuple): (x1,x2,y1,y2) desired new extent
+            - *coarsen* (int): coarsening factor (by subsampling)
+            - *buffer* (int): when possible, have at least this many points
+                                outside the filter_region on each side
+            - *align* (tuple): (xalign,yalign): alignment when coarsening
+
+        Setting *buffer > 0* may be useful to insure that the
+        computational domain lies entirely inside a cropped topo file
+        (In GeoClaw, cell-centered topo values B are computed by integrating
+        topo file values that are viewed as pointwise values, so topo
+        point values are needed out to the domain edges.)
+
+        When subsampling with *coarsen > 1*, the *align* parameter may be
+        useful to insure that the subsampling starts at an appropriate
+        index.  For example, if the original topo has
+
+            topo.x = [0, 0.5, 1, 1.5, 2, 2.5]
+
+        then coarsening by 2 would result in 
+    
+            newtopo.x = [0, 1, 2]   # if align[0] is an integer
+        or
+            newtopo.x = [0.5, 1.5, 2.5]   # if align[0] is an integer + 0.5
+
+        Often in GeoClaw, if the original topofile is aligned with
+        integer longitudes and latitudes, for example, then we want 
+        any subsampled topo to have the same property.
 
         :TODO:
          - Currently this does not work for unstructured data, could in principle
@@ -1664,18 +1694,54 @@ class Topography(object):
 
         if filter_region is None:
             # only want to coarsen, so this is entire region:
-            filter_region = [self.x[0],self.x[-1],self.y[0],self.y[-1]]
+            #filter_region = [self.x[0],self.x[-1],self.y[0],self.y[-1]]
+            filter_region = self.extent
 
-        # Find indices of region
-        region_index = [None, None, None, None]
-        region_index[0] = (self.x >= filter_region[0]).nonzero()[0][0]
-        region_index[1] = (self.x <= filter_region[1]).nonzero()[0][-1] + 1
-        region_index[2] = (self.y >= filter_region[2]).nonzero()[0][0]
-        region_index[3] = (self.y <= filter_region[3]).nonzero()[0][-1] + 1
+        xlower,xupper,ylower,yupper = filter_region
+
+        dx,dy = self.delta
+        dx_new = dx*coarsen
+        dy_new = dy*coarsen
+
+        # Find indices of topo arrays in filter_region:
+        try:
+            ilower = (self.x >= filter_region[0]).nonzero()[0][0]
+            iupper = (self.x <= filter_region[1]).nonzero()[0][-1]
+            jlower = (self.y >= filter_region[2]).nonzero()[0][0]
+            jupper = (self.y <= filter_region[3]).nonzero()[0][-1]
+        except:
+            print('*** filter_region does not overlap topo')
+            return None
+
+        # shift indices if needed for alignment:
+        if (coarsen > 1) and (align is not None):
+            xs = numpy.array([self.x[ilower + i] for i in range(coarsen)])
+            offsets = (xs - align[0]) / dx_new
+            offsets_frac = offsets - numpy.round(offsets)
+            ioffset = numpy.argmin(abs(offsets_frac))
+            ilower = ilower + ioffset
+            iupper = iupper - numpy.remainder(iupper-ilower, coarsen)
+            #print(f'+++ shifted ilower by ioffset={ioffset} to {ilower}')
+
+            ys = numpy.array([self.y[jlower + j] for j in range(coarsen)])
+            offsets = (ys - align[1]) / dy_new
+            offsets_frac = offsets - numpy.round(offsets)
+            joffset = numpy.argmin(abs(offsets_frac))
+            jlower = jlower + joffset
+            jupper = jupper - numpy.remainder(jupper-jlower, coarsen)
+            #print(f'+++ shifted jlower by joffset={joffset} to {jlower}')
+
+        # buffer, checking limits of arrays:
+        ilower = numpy.maximum(0, ilower - buffer*coarsen)
+        jlower = numpy.maximum(0, jlower - buffer*coarsen)
+        iupper = numpy.minimum(len(self.x)-1, iupper + buffer*coarsen) + 1
+        jupper = numpy.minimum(len(self.y)-1, jupper + buffer*coarsen) + 1
+
+        # Create new topography object:
         newtopo = Topography()
 
-        newtopo._x = self._x[region_index[0]:region_index[1]:coarsen]
-        newtopo._y = self._y[region_index[2]:region_index[3]:coarsen]
+        newtopo._x = self._x[ilower:iupper:coarsen]
+        newtopo._y = self._y[jlower:jupper:coarsen]
 
         # Force regeneration of 2d coordinate arrays and extent if needed
         newtopo._X = None
@@ -1683,13 +1749,35 @@ class Topography(object):
         newtopo._extent = None
 
         # Modify Z array as well
-        newtopo._Z = self._Z[region_index[2]:region_index[3]:coarsen,
-                          region_index[0]:region_index[1]:coarsen]
+        newtopo._Z = self._Z[jlower:jupper:coarsen, ilower:iupper:coarsen]
 
         newtopo.unstructured = self.unstructured
         newtopo.topo_type = self.topo_type
 
         # print "Cropped to %s by %s array"  % (len(newtopo.x),len(newtopo.y))
+
+        if 0:
+            # debugging checks:
+            xlower_outside = (xlower - newtopo.x[0]) / dx_new
+            ylower_outside = (ylower - newtopo.y[0]) / dy_new
+            xupper_outside = (newtopo.x[-1] - xupper) / dx_new
+            yupper_outside = (newtopo.y[-1] - yupper) / dy_new
+
+            print(f'+++ fractions of cells outside should be between' \
+                  + f' {buffer-1} and {buffer} since buffer={buffer}:')
+            # note: the statement above is not true if filter_region extends
+            # to or beyond the edges of the original topo self.extent
+            print(f'+++ xlower_outside={xlower_outside},' \
+                  + f' xupper_outside={xupper_outside}')
+            print(f'+++ ylower_outside={ylower_outside},' \
+                  + f' yupper_outside={yupper_outside}')
+
+            if align is not None:
+                xalign = (newtopo.x[0] - align[0])/dx_new
+                yalign = (newtopo.y[0] - align[1])/dy_new
+                print(f'+++ x alignment: {xalign} should be integer')
+                print(f'+++ y alignment: {yalign} should be integer')
+
         return newtopo
 
     def make_shoreline_xy(self, sea_level=0):
