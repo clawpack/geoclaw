@@ -1824,6 +1824,10 @@ remote_topo_urls = {}
 remote_topo_urls['etopo1'] = \
     'https://www.ngdc.noaa.gov/thredds/dodsC/global/ETOPO1_Ice_g_gmt4.nc'
 
+# global 30 arcsecond topography from etopo 2022:
+remote_topo_urls['etopo22_30sec'] = \
+    'https://www.ngdc.noaa.gov/thredds/dodsC/global/ETOPO2022/30s/30s_bed_elev_netcdf/ETOPO_2022_v1_30s_N90W180_bed.nc'
+
 # some 1/3 arcsecond coastal modeling DEMs:
 server = 'https://www.ngdc.noaa.gov/thredds/dodsC/regional/'
 remote_topo_urls['astoria'] = server + 'astoria_13_mhw_2012.nc'
@@ -1835,7 +1839,7 @@ remote_topo_urls['strait_of_juan_de_fuca'] = \
 
 
 def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
-                return_xarray=False, verbose=False):
+                return_xarray=False, buffer=0, align=None, verbose=False):
 
     """
     :Input:
@@ -1850,6 +1854,9 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
        default is True
      - *return_xarray* (bool) - if True, return an xarray.Dataset object.
        default is False
+     - *buffer* (int): when possible, have at least this many points
+                        outside the filter_region on each side
+     - *align* (tuple): (xalign,yalign): alignment when coarsening
 
     :Output:
      - topo and/or xarray_ds depending on what was requested.
@@ -1930,37 +1937,79 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
             print('*** f.variables = ',f.variables)
             raise ValueError("*** Unrecognized zvar in netCDF file")
 
+
     if extent == 'all':
-        if coarsen==1:
-            xs = x
-            ys = y
-            Zs = f.variables[zvar]
-        else:
-            xs = x[::coarsen]
-            ys = y[::coarsen]
-            Zs = f.variables[zvar][::coarsen,::coarsen]
+        ilower = 0
+        iupper = len(x) - 1
+        jlower = 0
+        jupper = len(y) - 1
     else:
         x1,x2,y1,y2 = extent
         # find indices of x,y arrays for points lying within extent:
         iindex = numpy.where(numpy.logical_and(x >= x1, x <= x2))[0]
         jindex = numpy.where(numpy.logical_and(y >= y1, y <= y2))[0]
-        i1 = iindex[0]
-        i2 = iindex[-1] + 1
-        j1 = jindex[0]
-        j2 = jindex[-1] + 1
+        ilower = iindex[0]
+        iupper = iindex[-1]
+        jlower = jindex[0]
+        jupper = jindex[-1]
+        
+    dx_new = coarsen * (x[1] - x[0])
+    dy_new = coarsen * (y[1] - y[0])
+        
+    # shift indices if needed for alignment:
+    if (coarsen > 1) and (align is not None):
+        xs = numpy.array([x[ilower + i] for i in range(coarsen)])
+        offsets = (xs - align[0]) / dx_new
+        offsets_frac = offsets - numpy.round(offsets)
+        ioffset = numpy.argmin(abs(offsets_frac))
+        ilower = ilower + ioffset
+        iupper = iupper - numpy.remainder(iupper-ilower, coarsen)
+        print(f'+++ shifted ilower by ioffset={ioffset} to {ilower}')
 
-        # create new xarray object with this (possibly coarsened) subset:
+        ys = numpy.array([y[jlower + j] for j in range(coarsen)])
+        offsets = (ys - align[1]) / dy_new
+        offsets_frac = offsets - numpy.round(offsets)
+        joffset = numpy.argmin(abs(offsets_frac))
+        jlower = jlower + joffset
+        jupper = jupper - numpy.remainder(jupper-jlower, coarsen)
+        print(f'+++ shifted jlower by joffset={joffset} to {jlower}')
 
-        if coarsen==1:
-            xs = x[i1:i2]
-            ys = y[j1:j2]
-            Zs = f.variables[zvar][j1:j2,i1:i2]
-        else:
-            xs = x[i1:i2:coarsen]
-            ys = y[j1:j2:coarsen]
-            Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
+    # buffer, checking limits of arrays:
+    i1 = numpy.maximum(0, ilower - buffer*coarsen)
+    j1 = numpy.maximum(0, jlower - buffer*coarsen)
+    i2 = numpy.minimum(len(x)-1, iupper + buffer*coarsen) + 1
+    j2 = numpy.minimum(len(y)-1, jupper + buffer*coarsen) + 1
+
+    xs = x[i1:i2:coarsen]
+    ys = y[j1:j2:coarsen]
+    Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
 
     Zs = array(Zs)
+
+    if 1:
+        # debugging checks:
+        xlower,xupper,ylower,yupper = extent
+        dx_new = xs[1] - xs[0]
+        dy_new = ys[1] - ys[0]
+        xlower_outside = (xlower - xs[0]) / dx_new
+        ylower_outside = (ylower - ys[0]) / dy_new
+        xupper_outside = (xs[-1] - xupper) / dx_new
+        yupper_outside = (ys[-1] - yupper) / dy_new
+
+        print(f'+++ fractions of cells outside should be between' \
+              + f' {buffer-1} and {buffer} since buffer={buffer}:')
+        # note: the statement above is not true if filter_region extends
+        # to or beyond the edges of the original topo self.extent
+        print(f'+++ xlower_outside={xlower_outside},' \
+              + f' xupper_outside={xupper_outside}')
+        print(f'+++ ylower_outside={ylower_outside},' \
+              + f' yupper_outside={yupper_outside}')
+
+        if align is not None:
+            xalign = (xs[0] - align[0])/dx_new
+            yalign = (ys[0] - align[1])/dy_new
+            print(f'+++ x alignment: {xalign} should be integer')
+            print(f'+++ y alignment: {yalign} should be integer')
 
     if verbose:
         print('Returning a DEM with shape = %s' \
@@ -1969,6 +2018,11 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
                 % (xs[0], xs[-1], (xs[1]-xs[0])))
         print('y ranges from %.5f to %.5f with dy = %.8f' \
                 % (ys[0], ys[-1], (ys[1]-ys[0])))
+        if align is not None:
+            xalign = (xs[0] - align[0])/dx_new
+            yalign = (ys[0] - align[1])/dy_new
+            print(f'aligned in x as requested if {xalign} is an integer')
+            print(f'aligned in y as requested if {yalign} is an integer')
     output = None
 
     if return_topo:
