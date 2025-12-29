@@ -994,7 +994,7 @@ class Topography(object):
 
         # Determine topo type if not specified
         if topo_type is None:
-            # Look at the the suffix of the path and the object's topo_type
+            # Look at the suffix of the path and the object's topo_type
             # attribute to try to deterimine which to use, default to the path
             # version unless it did not work
             path_topo_type = determine_topo_type(path, default=-1)
@@ -1659,7 +1659,7 @@ class Topography(object):
             - *coarsen* (int): coarsening factor (by subsampling)
             - *buffer* (int): when possible, have at least this many points
                                 outside the filter_region on each side
-            - *align* (tuple): (xalign,yalign): alignment when coarsening
+            - *align* (tuple): (xalign,yalign) = desired alignment if coarsening
 
         Setting *buffer > 0* may be useful to insure that the
         computational domain lies entirely inside a cropped topo file
@@ -1676,12 +1676,23 @@ class Topography(object):
         then coarsening by 2 would result in 
     
             newtopo.x = [0, 1, 2]   # if align[0] is an integer
+
         or
+
             newtopo.x = [0.5, 1.5, 2.5]   # if align[0] is an integer + 0.5
 
         Often in GeoClaw, if the original topofile is aligned with
         integer longitudes and latitudes, for example, then we want 
         any subsampled topo to have the same property.
+
+        In general, it tries to choose a starting index so that
+
+            (newtopo.x[0] - align[0]) / dx_new
+
+        is an integer, where *dx_new* is the spacing of points in the
+        new topo after coarsening.  This may not be possible, since it
+        depends on the alignment of the original topography, in which
+        case it will choose the index for which the misalignment is minimized.
 
         :TODO:
          - Currently this does not work for unstructured data, could in principle
@@ -1856,7 +1867,8 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
        default is False
      - *buffer* (int): when possible, have at least this many points
                         outside the filter_region on each side
-     - *align* (tuple): (xalign,yalign): alignment when coarsening
+     - *align* (tuple): (xalign,yalign) = desired alignment if coarsening
+                        See the doc string for Topography.crop()
 
     :Output:
      - topo and/or xarray_ds depending on what was requested.
