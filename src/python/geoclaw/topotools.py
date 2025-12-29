@@ -1986,7 +1986,7 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
 
     Zs = array(Zs)
 
-    if 1:
+    if 0:
         # debugging checks:
         xlower,xupper,ylower,yupper = extent
         dx_new = xs[1] - xs[0]
