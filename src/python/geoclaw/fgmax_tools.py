@@ -42,6 +42,8 @@ class FGmaxGrid(object):
                              # when point_style==0, distinct from header file
         self.write_xy_fname = False # controls whether xy_fname is created
                                     # by self.write_input_data, or only header
+        self.indexing = None   # for 2D arrays, set to 'ij' or 'xy'
+                               # when read_output() is called for convenience
 
         # Other possible GeoClaw inputs:
         self.x = None
@@ -116,6 +118,7 @@ class FGmaxGrid(object):
         print('Reading input for fgno=%i, point_style = %i ' \
                 % (self.fgno, self.point_style))
         if point_style == 0:
+            # list of arbitrary points:
             self.npts = npts = int(fgmax_input[7].split()[0])
             if npts == 0:
                 self.xy_fname = fgmax_input[8][1:-2]  # strip quotes
@@ -138,12 +141,14 @@ class FGmaxGrid(object):
                 self.X = numpy.array(X)
                 self.Y = numpy.array(Y)
         elif point_style == 1:
+            # 1D transect of npts equally spaced points on a line:
             self.npts = npts = int(fgmax_input[7].split()[0])
             self.x1 = float(fgmax_input[8].split()[0])
             self.y1 = float(fgmax_input[8].split()[1])
             self.x2 = float(fgmax_input[9].split()[0])
             self.y2 = float(fgmax_input[9].split()[1])
         elif point_style == 2:
+            # 2D uniform grid of points:
             self.nx = nx = int(fgmax_input[7].split()[0])
             self.ny = ny = int(fgmax_input[7].split()[1])
             self.x1 = float(fgmax_input[8].split()[0])
@@ -151,6 +156,10 @@ class FGmaxGrid(object):
             self.x2 = float(fgmax_input[9].split()[0])
             self.y2 = float(fgmax_input[9].split()[1])
         elif point_style == 3:
+            # 2D grid of points on a ruled quadrilateral:
+            # specify corners 1,2,3,4 and
+            #   number of points n12 on edge from corner 1 to 2
+            #   number of points n23 on edge from corner 2 to 3
             self.n12 = n12 = int(fgmax_input[7].split()[0])
             self.n23 = n23 = int(fgmax_input[7].split()[1])
             self.x1 = float(fgmax_input[8].split()[0])
@@ -162,17 +171,11 @@ class FGmaxGrid(object):
             self.x4 = float(fgmax_input[11].split()[0])
             self.y4 = float(fgmax_input[11].split()[1])
         elif point_style == 4:
+            # points are a subset of a uniform grid, as specified by a
+            # mask array stored as a topo file with topo_type==3
+            # path to this file:
             self.xy_fname = fgmax_input[7][1:-2]  # strip quotes
-            ## Need to read in topotype 3 file and set self.npts
-            # xy = numpy.loadtxt(self.xy_fname, skiprows=1)
-            # self.X = xy[:,0]
-            # self.Y = xy[:,1]
-            # if xy.shape[1] > 2:
-            #     self.Z = xy[:,2]  # in case DEM values also stored in input file
-            # else:
-            #     self.Z = None
-            # self.npts = npts = len(self.X)
-            # print('Read %i x,y points from \n    %s' % (npts, self.xy_fname))
+
 
 
     def write_to_fgmax_data(self, fid):
@@ -354,32 +357,42 @@ class FGmaxGrid(object):
             else:
                 raise ValueError('for point_style==4, require xy_fname')
 
-    def read_output(self, fgno=None, outdir=None, verbose=True, 
+    def read_output(self, fgno=None, outdir=None, verbose=True,
                     indexing='ij'):
         r"""
         Read the GeoClaw results on the fgmax grid numbered *fgno*.
-        
+
+        The *indexing* parameter is only used if self.point_style in [2,3,4],
+        in which case 2D arrays X, Y, h, etc are created from the fgmax
+        data, which is always initially read as a list of points.
+
         indexing='ij' gives backward compatibility.
            X[i,j],Y[i,j] corresponds to point x[i],y[j]
 
         Alternatively, can set indexing=='xy' so that X,Y and other
         arrays have same layout as topo arrays:
            X[j,i],Y[j,i] corresponds to point x[i],y[j]
-        This is useful if you want to save the fgmax results in same format as 
+        This is useful if you want to save the fgmax results in same format as
         topofiles, using topotools.Topography.write().
-           
+
         """
 
-        if indexing == 'xy':
-            reshape_order = 'C'
-        elif indexing == 'ij':
-            reshape_order = 'F'
-        else:
-            raise InputError("*** indexing must by 'xy' or 'ij'")
-            
         if self.point_style is None:
             raise InputError("*** point_style is not set, need to read input?")
         point_style = self.point_style
+
+        if point_style in [2,3,4]:
+
+            if indexing == 'xy':
+                reshape_order = 'C'
+            elif indexing == 'ij':
+                reshape_order = 'F'
+            else:
+                raise InputError("*** indexing must by 'xy' or 'ij'")
+
+            self.indexing = indexing  # make available to user
+
+
 
         if fgno is not None:
             self.fgno = fgno
@@ -507,8 +520,8 @@ class FGmaxGrid(object):
         self.B = B
         self.h = h
 
-        # do not set these, leave for user to do as desired:
         if 0:
+            # do not set these, leave for user to do as desired:
             self.B0 = B  ## SHOULD MODIFY BY dz!
 
             if self.force_dry_init is not None:
@@ -517,10 +530,9 @@ class FGmaxGrid(object):
                 self.h_onshore = ma.masked_where(self.B0 < 0., self.h)
 
         if point_style==4:
-            #print('Returning lists, convert to masked arrays based on input grid')
-            #print('   using to_arrays() function')
             try:
-                self.ps4_to_arrays(verbose=verbose)
+                # create 2D arrays using file self.xy_fname as mask:
+                self.ps4_to_arrays(indexing=indexing,verbose=verbose)
             except:
                 print('*** Problem converting from 1d lists to 2d arrays,\n' \
                       + '    Trying to map onto grid specified by:\n    ', \
@@ -550,14 +562,15 @@ class FGmaxGrid(object):
         y2 = self.Y.max()
         return [x1,x2,y1,y2]
 
-    def ps4_to_arrays(self, verbose=True):
+    def ps4_to_arrays(self, indexing='ij', verbose=True):
         """
         for point_style==4, convert lists of fgmax values into masked arrays
         based on the topo_style==3 file self.xy_fname that was used to specify
         the fgmax points in the GeoClaw run.
         """
-
+        from clawpack.geoclaw import topotools
         from numpy import ma
+
         assert self.point_style==4, '*** Requires point_style==4'
 
         if self.X.ndim==2 or self.Y.ndim==2:
@@ -571,7 +584,6 @@ class FGmaxGrid(object):
             print('Will map fgmax points onto masked arrays defined by file:')
             print('     %s' % self.xy_fname)
 
-        from clawpack.geoclaw import topotools
         pts_chosen = topotools.Topography(path=self.xy_fname, topo_type=3)
         X = pts_chosen.X
         Y = pts_chosen.Y
@@ -579,14 +591,23 @@ class FGmaxGrid(object):
         x1 = X.min()
         y1 = Y.min()
 
+        dx = X[0,1] - X[0,0]
+        dy = Y[1,0] - Y[0,0]
+
+        if verbose:
+            print('Deduced dx = %g, dy = %g'  % (dx,dy))
+
+
+        if indexing == 'ij':
+            # arrays X,Y,mask all have indexing == 'xy' since
+            # topotools reads topofile in this way, so transpose:
+            X = X.T
+            Y = Y.T
+            mask = mask.T
+
         # possible arrays from GeoClaw output to convert:
         zarrays = ['level','B','h','h_time','s','s_time','hs','hs_time',\
                    'hss','hss_time','hmin','hmin_time','arrival_time']
-
-        dx = X[0,1] - X[0,0]
-        dy = Y[1,0] - Y[0,0]
-        if verbose:
-            print('Deduced dx = %g, dy = %g'  % (dx,dy))
 
         for attr in zarrays:
             z_1d = getattr(self, attr, None)
@@ -597,7 +618,10 @@ class FGmaxGrid(object):
                 for k in range(len(x_1d)):
                     i = int(round((x_1d[k]-x1)/dx))
                     j = int(round((y_1d[k]-y1)/dy))
-                    Z[j,i] = z_1d[k]
+                    if indexing == 'xy':
+                        Z[j,i] = z_1d[k]
+                    else:
+                        Z[i,j] = z_1d[k]
                 if 0:
                     if not numpy.alltrue(mask == Z.mask):
                         print('*** converting to arrays gave unexpected mask for')
@@ -685,4 +709,3 @@ def adjust_fgmax_grid(x1_desired, x2_desired, x1_domain, dx,
         #print "fg.y1 = %17.12f" % y1_new
         #print "fg.y2 = %17.12f" % y2_new
     return x1_new, x2_new, nx, y1_new, y2_new, ny
-
