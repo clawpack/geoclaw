@@ -527,6 +527,32 @@ class DTopography(object):
 
         return abs(self.dZ).max()
 
+    def dtopo_function_xyt(self):
+        """
+        Create a function of (x,y,t) that returns dZ interpolated to a
+        point (or x,y,t can each be a numpy array), using linear interpolation.  
+        The function created:
+            returns the final dZ if t > self.times.max()
+            returns 0 if t < self.times.min() or x,y outside the dtopo extent
+
+        :Outputs:
+            *dtopo_func*:  The function
+
+        """
+        from scipy.interpolate import RegularGridInterpolator
+
+        # so final dZ used for t>dtopo.times.max():
+        times = numpy.hstack((self.times, numpy.inf))
+
+        dZT = self.dZ.T  # so indices refer to (x,y,t) rather than (t,y,x)
+        dZT2 = numpy.concat((dZT, dZT[:,:,-1:]), axis=2)
+        dtopo_func1 = RegularGridInterpolator((self.x, self.y, times), dZT2,
+                        method='linear', bounds_error=False, fill_value=0.)
+        # simplify so can call dtopo_func(x,y,t) rather needing tuple as input
+        dtopo_func = lambda x,y,t: dtopo_func1((x,y,t))
+        return dtopo_func
+
+
 
     def plot_dZ_colors(self, t, axes=None, cmax_dZ=None, dZ_interval=None,
                        colorbar_ticksize=10,colorbar_labelsize=10,
