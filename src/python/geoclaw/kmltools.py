@@ -584,6 +584,10 @@ def poly2kml(xy,fname=None,name='poly',color='00FF00', width=3,
     mapping = {}
     mapping['x'] = x
     mapping['y'] = y
+    mapping['x1'] = x.min()
+    mapping['x2'] = x.max()
+    mapping['y1'] = y.min()
+    mapping['y2'] = y.max()
     mapping['elev'] = elev
     mapping['name'] = name
     d = "  Polygon with %i vertices" % len(x)
@@ -1111,20 +1115,38 @@ def make_input_data_kmls(rundata=None, combined=False, dtopo_contours=False):
     for f in topofiles:
         topo_file_name = f[-1]
         topo_type = f[0]
-        topo2kml(topo_file_name, topo_type)
+        if os.path.isfile(topo_file_name):
+            try:
+                topo2kml(topo_file_name, topo_type)
+            except:
+                print('*** problem reading topofile, proper topo_type?')
+                print('    ', topo_file_name)
+        else:
+            print('*** topo file not found, not making kml for: ')
+            print('    ', topo_file_name)
 
     dtopofiles = rundata.dtopo_data.dtopofiles
     for f in dtopofiles:
         dtopo_file_name = f[-1]
         dtopo_type = f[0]
-        dtopo2kml(dtopo_file_name, dtopo_type)
-        if dtopo_contours:
-            # also make a kmz file showing dtopo contours (takes a bit longer)
-            fname_kmz = os.path.split(dtopo_file_name)[-1]
-            fname_kmz = os.path.splitext(fname_kmz)[0]  # w/o path or extension
-            fname_kmz = fname_kmz + '_contours.kmz'
-            dtopo_contours2kmz(dtopo_file_name, dtopo_type=dtopo_type,
-                               dZ_interval=1, fname_kmz=fname_kmz,verbose=False)
+        if os.path.isfile(dtopo_file_name):
+            try:
+                dtopo2kml(dtopo_file_name, dtopo_type)
+            except:
+                print('*** problem reading dtopofile, proper dtopo_type?')
+                print('    ', dtopo_file_name)
+            if dtopo_contours:
+                # also make a kmz file showing dtopo contours
+                # (takes a bit longer, so not done by default)
+                fname_kmz = os.path.split(dtopo_file_name)[-1]
+                fname_kmz = os.path.splitext(fname_kmz)[0]  # w/o path,extension
+                fname_kmz = fname_kmz + '_contours.kmz'
+                dtopo_contours2kmz(dtopo_file_name, dtopo_type=dtopo_type,
+                                   dZ_interval=1, fname_kmz=fname_kmz,
+                                   verbose=False)
+        else:
+            print('*** dtopo file not found, not making kml for: ')
+            print('    ', dtopo_file_name)
 
 
 def pcolorcells_for_kml(X, Y, Z, png_filename=None, dpc=2, max_inches=15.,
