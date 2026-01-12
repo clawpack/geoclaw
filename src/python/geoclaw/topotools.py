@@ -1673,8 +1673,8 @@ class Topography(object):
 
             topo.x = [0, 0.5, 1, 1.5, 2, 2.5]
 
-        then coarsening by 2 would result in 
-    
+        then coarsening by 2 would result in
+
             newtopo.x = [0, 1, 2]   # if align[0] is an integer
 
         or
@@ -1682,7 +1682,7 @@ class Topography(object):
             newtopo.x = [0.5, 1.5, 2.5]   # if align[0] is an integer + 0.5
 
         Often in GeoClaw, if the original topofile is aligned with
-        integer longitudes and latitudes, for example, then we want 
+        integer longitudes and latitudes, for example, then we want
         any subsampled topo to have the same property.
 
         In general, it tries to choose a starting index so that
@@ -1883,7 +1883,9 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         extent = [-126,-122,46,49]
         path = 'etopo1'
         topo = topotools.read_netcdf(path, extent=extent, coarsen=2, \
-                                     verbose=True)
+                                     buffer=1, align=(-126,46), verbose=True)
+
+        # results in topo.x = array([-126.03333333, -126., ...])
 
         # to plot:
         topo.plot()
@@ -1894,6 +1896,11 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     This should give a 2-minute resolution DEM of the Western Washington coast.
     Note that etopo1 Z values are integers (vertical resolution is 1 meter)
     and using `Z_format='%.0f'` will save as integers to minimize file size.
+
+    Note that the newer etopo 2022 30 arcsecond DEM can be sampled using
+    path = 'etopo22_30sec', but this topo is aligned differently with e.g.
+    x = -126. falling half way between points. Also note that Z values in the
+    newer dataset are no longer integers.
     """
 
     from numpy import array
@@ -1964,10 +1971,10 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         iupper = iindex[-1]
         jlower = jindex[0]
         jupper = jindex[-1]
-        
+
     dx_new = coarsen * (x[1] - x[0])
     dy_new = coarsen * (y[1] - y[0])
-        
+
     # shift indices if needed for alignment:
     if (coarsen > 1) and (align is not None):
         xs = numpy.array([x[ilower + i] for i in range(coarsen)])
