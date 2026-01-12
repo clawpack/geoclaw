@@ -994,7 +994,7 @@ class Topography(object):
 
         # Determine topo type if not specified
         if topo_type is None:
-            # Look at the the suffix of the path and the object's topo_type
+            # Look at the suffix of the path and the object's topo_type
             # attribute to try to deterimine which to use, default to the path
             # version unless it did not work
             path_topo_type = determine_topo_type(path, default=-1)
@@ -1647,11 +1647,52 @@ class Topography(object):
                 self.Z[index[0], index[1]] = summation / num_points
 
 
-    def crop(self, filter_region=None, coarsen=1):
+    def crop(self, filter_region=None, coarsen=1, buffer=0, align=None):
         r"""Crop region to *filter_region*
 
         Create a new Topography object that is identical to this one but cropped
         to the region specified by filter_region
+
+        :Input:
+
+            - *filter_region* (tuple): (x1,x2,y1,y2) desired new extent
+            - *coarsen* (int): coarsening factor (by subsampling)
+            - *buffer* (int): when possible, have at least this many points
+                                outside the filter_region on each side
+            - *align* (tuple): (xalign,yalign) = desired alignment if coarsening
+
+        Setting *buffer > 0* may be useful to insure that the
+        computational domain lies entirely inside a cropped topo file
+        (In GeoClaw, cell-centered topo values B are computed by integrating
+        topo file values that are viewed as pointwise values, so topo
+        point values are needed out to the domain edges.)
+
+        When subsampling with *coarsen > 1*, the *align* parameter may be
+        useful to insure that the subsampling starts at an appropriate
+        index.  For example, if the original topo has
+
+            topo.x = [0, 0.5, 1, 1.5, 2, 2.5]
+
+        then coarsening by 2 would result in
+
+            newtopo.x = [0, 1, 2]   # if align[0] is an integer
+
+        or
+
+            newtopo.x = [0.5, 1.5, 2.5]   # if align[0] is an integer + 0.5
+
+        Often in GeoClaw, if the original topofile is aligned with
+        integer longitudes and latitudes, for example, then we want
+        any subsampled topo to have the same property.
+
+        In general, it tries to choose a starting index so that
+
+            (newtopo.x[0] - align[0]) / dx_new
+
+        is an integer, where *dx_new* is the spacing of points in the
+        new topo after coarsening.  This may not be possible, since it
+        depends on the alignment of the original topography, in which
+        case it will choose the index for which the misalignment is minimized.
 
         :TODO:
          - Currently this does not work for unstructured data, could in principle
@@ -1664,18 +1705,54 @@ class Topography(object):
 
         if filter_region is None:
             # only want to coarsen, so this is entire region:
-            filter_region = [self.x[0],self.x[-1],self.y[0],self.y[-1]]
+            #filter_region = [self.x[0],self.x[-1],self.y[0],self.y[-1]]
+            filter_region = self.extent
 
-        # Find indices of region
-        region_index = [None, None, None, None]
-        region_index[0] = (self.x >= filter_region[0]).nonzero()[0][0]
-        region_index[1] = (self.x <= filter_region[1]).nonzero()[0][-1] + 1
-        region_index[2] = (self.y >= filter_region[2]).nonzero()[0][0]
-        region_index[3] = (self.y <= filter_region[3]).nonzero()[0][-1] + 1
+        xlower,xupper,ylower,yupper = filter_region
+
+        dx,dy = self.delta
+        dx_new = dx*coarsen
+        dy_new = dy*coarsen
+
+        # Find indices of topo arrays in filter_region:
+        try:
+            ilower = (self.x >= filter_region[0]).nonzero()[0][0]
+            iupper = (self.x <= filter_region[1]).nonzero()[0][-1]
+            jlower = (self.y >= filter_region[2]).nonzero()[0][0]
+            jupper = (self.y <= filter_region[3]).nonzero()[0][-1]
+        except:
+            print('*** filter_region does not overlap topo')
+            return None
+
+        # shift indices if needed for alignment:
+        if (coarsen > 1) and (align is not None):
+            xs = numpy.array([self.x[ilower + i] for i in range(coarsen)])
+            offsets = (xs - align[0]) / dx_new
+            offsets_frac = offsets - numpy.round(offsets)
+            ioffset = numpy.argmin(abs(offsets_frac))
+            ilower = ilower + ioffset
+            iupper = iupper - numpy.remainder(iupper-ilower, coarsen)
+            #print(f'+++ shifted ilower by ioffset={ioffset} to {ilower}')
+
+            ys = numpy.array([self.y[jlower + j] for j in range(coarsen)])
+            offsets = (ys - align[1]) / dy_new
+            offsets_frac = offsets - numpy.round(offsets)
+            joffset = numpy.argmin(abs(offsets_frac))
+            jlower = jlower + joffset
+            jupper = jupper - numpy.remainder(jupper-jlower, coarsen)
+            #print(f'+++ shifted jlower by joffset={joffset} to {jlower}')
+
+        # buffer, checking limits of arrays:
+        ilower = numpy.maximum(0, ilower - buffer*coarsen)
+        jlower = numpy.maximum(0, jlower - buffer*coarsen)
+        iupper = numpy.minimum(len(self.x)-1, iupper + buffer*coarsen) + 1
+        jupper = numpy.minimum(len(self.y)-1, jupper + buffer*coarsen) + 1
+
+        # Create new topography object:
         newtopo = Topography()
 
-        newtopo._x = self._x[region_index[0]:region_index[1]:coarsen]
-        newtopo._y = self._y[region_index[2]:region_index[3]:coarsen]
+        newtopo._x = self._x[ilower:iupper:coarsen]
+        newtopo._y = self._y[jlower:jupper:coarsen]
 
         # Force regeneration of 2d coordinate arrays and extent if needed
         newtopo._X = None
@@ -1683,13 +1760,35 @@ class Topography(object):
         newtopo._extent = None
 
         # Modify Z array as well
-        newtopo._Z = self._Z[region_index[2]:region_index[3]:coarsen,
-                          region_index[0]:region_index[1]:coarsen]
+        newtopo._Z = self._Z[jlower:jupper:coarsen, ilower:iupper:coarsen]
 
         newtopo.unstructured = self.unstructured
         newtopo.topo_type = self.topo_type
 
         # print "Cropped to %s by %s array"  % (len(newtopo.x),len(newtopo.y))
+
+        if 0:
+            # debugging checks:
+            xlower_outside = (xlower - newtopo.x[0]) / dx_new
+            ylower_outside = (ylower - newtopo.y[0]) / dy_new
+            xupper_outside = (newtopo.x[-1] - xupper) / dx_new
+            yupper_outside = (newtopo.y[-1] - yupper) / dy_new
+
+            print(f'+++ fractions of cells outside should be between' \
+                  + f' {buffer-1} and {buffer} since buffer={buffer}:')
+            # note: the statement above is not true if filter_region extends
+            # to or beyond the edges of the original topo self.extent
+            print(f'+++ xlower_outside={xlower_outside},' \
+                  + f' xupper_outside={xupper_outside}')
+            print(f'+++ ylower_outside={ylower_outside},' \
+                  + f' yupper_outside={yupper_outside}')
+
+            if align is not None:
+                xalign = (newtopo.x[0] - align[0])/dx_new
+                yalign = (newtopo.y[0] - align[1])/dy_new
+                print(f'+++ x alignment: {xalign} should be integer')
+                print(f'+++ y alignment: {yalign} should be integer')
+
         return newtopo
 
     def make_shoreline_xy(self, sea_level=0):
@@ -1736,6 +1835,10 @@ remote_topo_urls = {}
 remote_topo_urls['etopo1'] = \
     'https://www.ngdc.noaa.gov/thredds/dodsC/global/ETOPO1_Ice_g_gmt4.nc'
 
+# global 30 arcsecond topography from etopo 2022:
+remote_topo_urls['etopo22_30sec'] = \
+    'https://www.ngdc.noaa.gov/thredds/dodsC/global/ETOPO2022/30s/30s_bed_elev_netcdf/ETOPO_2022_v1_30s_N90W180_bed.nc'
+
 # some 1/3 arcsecond coastal modeling DEMs:
 server = 'https://www.ngdc.noaa.gov/thredds/dodsC/regional/'
 remote_topo_urls['astoria'] = server + 'astoria_13_mhw_2012.nc'
@@ -1747,7 +1850,7 @@ remote_topo_urls['strait_of_juan_de_fuca'] = \
 
 
 def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
-                return_xarray=False, verbose=False):
+                return_xarray=False, buffer=0, align=None, verbose=False):
 
     """
     :Input:
@@ -1762,6 +1865,10 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
        default is True
      - *return_xarray* (bool) - if True, return an xarray.Dataset object.
        default is False
+     - *buffer* (int): when possible, have at least this many points
+                        outside the filter_region on each side
+     - *align* (tuple): (xalign,yalign) = desired alignment if coarsening
+                        See the doc string for Topography.crop()
 
     :Output:
      - topo and/or xarray_ds depending on what was requested.
@@ -1776,7 +1883,9 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
         extent = [-126,-122,46,49]
         path = 'etopo1'
         topo = topotools.read_netcdf(path, extent=extent, coarsen=2, \
-                                     verbose=True)
+                                     buffer=1, align=(-126,46), verbose=True)
+
+        # results in topo.x = array([-126.03333333, -126., ...])
 
         # to plot:
         topo.plot()
@@ -1787,6 +1896,11 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
     This should give a 2-minute resolution DEM of the Western Washington coast.
     Note that etopo1 Z values are integers (vertical resolution is 1 meter)
     and using `Z_format='%.0f'` will save as integers to minimize file size.
+
+    Note that the newer etopo 2022 30 arcsecond DEM can be sampled using
+    path = 'etopo22_30sec', but this topo is aligned differently with e.g.
+    x = -126. falling half way between points. Also note that Z values in the
+    newer dataset are no longer integers.
     """
 
     from numpy import array
@@ -1842,37 +1956,79 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
             print('*** f.variables = ',f.variables)
             raise ValueError("*** Unrecognized zvar in netCDF file")
 
+
     if extent == 'all':
-        if coarsen==1:
-            xs = x
-            ys = y
-            Zs = f.variables[zvar]
-        else:
-            xs = x[::coarsen]
-            ys = y[::coarsen]
-            Zs = f.variables[zvar][::coarsen,::coarsen]
+        ilower = 0
+        iupper = len(x) - 1
+        jlower = 0
+        jupper = len(y) - 1
     else:
         x1,x2,y1,y2 = extent
         # find indices of x,y arrays for points lying within extent:
         iindex = numpy.where(numpy.logical_and(x >= x1, x <= x2))[0]
         jindex = numpy.where(numpy.logical_and(y >= y1, y <= y2))[0]
-        i1 = iindex[0]
-        i2 = iindex[-1] + 1
-        j1 = jindex[0]
-        j2 = jindex[-1] + 1
+        ilower = iindex[0]
+        iupper = iindex[-1]
+        jlower = jindex[0]
+        jupper = jindex[-1]
 
-        # create new xarray object with this (possibly coarsened) subset:
+    dx_new = coarsen * (x[1] - x[0])
+    dy_new = coarsen * (y[1] - y[0])
 
-        if coarsen==1:
-            xs = x[i1:i2]
-            ys = y[j1:j2]
-            Zs = f.variables[zvar][j1:j2,i1:i2]
-        else:
-            xs = x[i1:i2:coarsen]
-            ys = y[j1:j2:coarsen]
-            Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
+    # shift indices if needed for alignment:
+    if (coarsen > 1) and (align is not None):
+        xs = numpy.array([x[ilower + i] for i in range(coarsen)])
+        offsets = (xs - align[0]) / dx_new
+        offsets_frac = offsets - numpy.round(offsets)
+        ioffset = numpy.argmin(abs(offsets_frac))
+        ilower = ilower + ioffset
+        iupper = iupper - numpy.remainder(iupper-ilower, coarsen)
+        print(f'+++ shifted ilower by ioffset={ioffset} to {ilower}')
+
+        ys = numpy.array([y[jlower + j] for j in range(coarsen)])
+        offsets = (ys - align[1]) / dy_new
+        offsets_frac = offsets - numpy.round(offsets)
+        joffset = numpy.argmin(abs(offsets_frac))
+        jlower = jlower + joffset
+        jupper = jupper - numpy.remainder(jupper-jlower, coarsen)
+        print(f'+++ shifted jlower by joffset={joffset} to {jlower}')
+
+    # buffer, checking limits of arrays:
+    i1 = numpy.maximum(0, ilower - buffer*coarsen)
+    j1 = numpy.maximum(0, jlower - buffer*coarsen)
+    i2 = numpy.minimum(len(x)-1, iupper + buffer*coarsen) + 1
+    j2 = numpy.minimum(len(y)-1, jupper + buffer*coarsen) + 1
+
+    xs = x[i1:i2:coarsen]
+    ys = y[j1:j2:coarsen]
+    Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
 
     Zs = array(Zs)
+
+    if 0:
+        # debugging checks:
+        xlower,xupper,ylower,yupper = extent
+        dx_new = xs[1] - xs[0]
+        dy_new = ys[1] - ys[0]
+        xlower_outside = (xlower - xs[0]) / dx_new
+        ylower_outside = (ylower - ys[0]) / dy_new
+        xupper_outside = (xs[-1] - xupper) / dx_new
+        yupper_outside = (ys[-1] - yupper) / dy_new
+
+        print(f'+++ fractions of cells outside should be between' \
+              + f' {buffer-1} and {buffer} since buffer={buffer}:')
+        # note: the statement above is not true if filter_region extends
+        # to or beyond the edges of the original topo self.extent
+        print(f'+++ xlower_outside={xlower_outside},' \
+              + f' xupper_outside={xupper_outside}')
+        print(f'+++ ylower_outside={ylower_outside},' \
+              + f' yupper_outside={yupper_outside}')
+
+        if align is not None:
+            xalign = (xs[0] - align[0])/dx_new
+            yalign = (ys[0] - align[1])/dy_new
+            print(f'+++ x alignment: {xalign} should be integer')
+            print(f'+++ y alignment: {yalign} should be integer')
 
     if verbose:
         print('Returning a DEM with shape = %s' \
@@ -1881,6 +2037,11 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
                 % (xs[0], xs[-1], (xs[1]-xs[0])))
         print('y ranges from %.5f to %.5f with dy = %.8f' \
                 % (ys[0], ys[-1], (ys[1]-ys[0])))
+        if align is not None:
+            xalign = (xs[0] - align[0])/dx_new
+            yalign = (ys[0] - align[1])/dy_new
+            print(f'aligned in x as requested if {xalign} is an integer')
+            print(f'aligned in y as requested if {yalign} is an integer')
     output = None
 
     if return_topo:
