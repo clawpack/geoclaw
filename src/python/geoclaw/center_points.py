@@ -2,18 +2,23 @@
 The function adjust_xy will center a point in a finite volume grid cell of
 a given resolution on a given domain.
 
-This can be used in particular to take adjust an approximate point
+This can be used in particular to adjust an approximate point
 (x_desired, y_desired) where you want a computational gauge, to obtain
 a point that lies exactly in the center of a grid cell at a given resolution.
 This eliminates the need to interpolate between cell values in GeoClaw output,
 which has issues for cells near the shoreline as described at
 https://www.clawpack.org/nearshore_interp.html
 
+Can also be used to center fgmax or fgout points. In this case, center one
+point from the uniform grid. Then, assuming the grid has the same resolution as
+the specified dx,dy, all of the points on the grid should be aligned with
+centers of the finite volume grid at that resolution.
+
 Functions:
 
  - adjust: utility function to adjust in one dimension (x or y)
  - adjust_xy: the function to call to center a point in both x and y.
- - test: a simple example
+ - test_adjust_xy: a simple example
 
 """
 
@@ -22,13 +27,12 @@ import numpy as np
 def adjust(z_desired, z_edge, dz, verbose=False):
     """
     Given a desired location z (either x or y) for a gauge or other point
-    of interest, adjust the location is it is offset (integer + 1/2)*dz
-    from z_edge, an arbitrary edge location (e.g. an edge of the
-    computational domain or any point offset integer*dz from the domain edge).
+    of interest, adjust the location it is offset (integer + 1/2)*dz
+    from z_edge, an arbitrary edge location (e.g. an edge of the computational
+    domain, or any point offset by integer*dz from the domain edge).
     This will put the new location in the center of a finite volume cell
     provided this point is in a patch with resolution dz.
     """
-    # z represents either x or y
     i = np.round((z_desired-z_edge - 0.5*dz)/dz)
     z_centered = z_edge + (i+0.5)*dz
     if verbose:
@@ -37,6 +41,9 @@ def adjust(z_desired, z_edge, dz, verbose=False):
         print("adjusted from %15.9f" % z_desired)
         print("           to %15.9f" % z_centered)
         print("   shifted by %15.9f = %.3f*dz" % (zshift,zfrac))
+        print("   (z_centered - z_edge)/dz should be int+0.5: ", \
+                (z_centered - z_edge)/dz)
+        print(f'   z_desired = {z_desired}; z_centered = {z_centered:.12f}; z_edge = {z_edge:.12f};  dz = {dz:.12f}')
     return z_centered
 
 def adjust_xy(x_desired, y_desired, x_edge, y_edge, dx, dy, verbose=False):
@@ -63,8 +70,13 @@ def adjust_xy(x_desired, y_desired, x_edge, y_edge, dx, dy, verbose=False):
 
     - xc,yc: centered points that lie within dx/2, dy/2 of the desired
       location(s) and with (xc - x_edge)/dx and (yc - y_edge)/dy
-      equal to an integer + 0.5,
+      equal to an integer + 0.5.
+
+      Returns numpy arrays if inputs are lists or arrays, 
+      floats if inputs are scalar
     """
+
+    return_scalar = np.isscalar(x_desired)
 
     # convert single values or lists/tuples to numpy arrays
     x_desired = np.array(x_desired, ndmin=1)
@@ -81,32 +93,37 @@ def adjust_xy(x_desired, y_desired, x_edge, y_edge, dx, dy, verbose=False):
         x_centered.append(x)
         y_centered.append(y)
 
-    if len(x_centered) == 1:
+    if return_scalar:
         return float(x_centered[0]), float(y_centered[0])
     else:
         return np.array(x_centered), np.array(y_centered)
 
-def test():
+def test_adjust_xy():
 
     x_desired = [-122.01, -122.02]
     y_desired = [47.001, 47.002]
 
     # grid resolution on which to center point:
-    dx = 1/(3*3600.)
+    dx = dy = 1/(3*3600.)
 
     # lower left edge of computational domain:
     x_edge = -123.
     y_edge = 45.
 
+    print('x_edge = ',x_edge)
+    print('y_edge = ',y_edge)
+    print('dx = ',dx)
+    print('dy = ',dy)
     print('Desired x = ',x_desired)
     print('Desired y = ',y_desired)
 
-    xc,yc = adjust_xy(x_desired,y_desired,x_edge,y_edge,dx,dx,verbose=True)
+    xc,yc = adjust_xy(x_desired,y_desired,x_edge,y_edge,dx,dy,verbose=True)
 
     print('Centered x = ',xc)
     print('Offsets in x in units of 1/3 arcsec: ', (xc-x_edge)*3*3600)
     print('Centered y = ',yc)
     print('Offsets in y in units of 1/3 arcsec: ', (yc-y_edge)*3*3600)
 
+
 if __name__ == '__main__':
-    test()
+    test_adjust_xy()
