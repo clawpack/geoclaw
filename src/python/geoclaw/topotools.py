@@ -1827,16 +1827,14 @@ class Topography(object):
         return shoreline_xy
 
 
-    def make_function(self, method='linear', bounds_error=False,
-                      fill_value=numpy.nan):
+    def make_function(self, interp_kwargs={}):
         """
         Create a function of (x,y) that returns the topo Z interpolated to a
         point (or to a 1D transect or 2D grid of points).
 
         :Inputs:
-            *method* (str): interpolation method passed to RegularGridInterpolator
-            *bounds_error* (bool): passed to RegularGridInterpolator
-            *fill_value*: passed to RegularGridInterpolator
+            *interp_kwargs*: dictionary of parameter values to be passed to
+                             RegularGridInterpolator.  See defaults below.
 
         :Outputs:
             *topo_func*:  The function created
@@ -1847,10 +1845,16 @@ class Topography(object):
         """
         from scipy.interpolate import RegularGridInterpolator
 
+        if 'method' not in interp_kwargs.keys():
+            interp_kwargs['method'] = 'linear'
+        if 'bounds_error' not in interp_kwargs.keys():
+            interp_kwargs['bounds_error'] = False
+        if 'fill_value' not in interp_kwargs.keys():
+            interp_kwargs['fill_value'] = numpy.nan
+
         ZT = self.Z.T  # so indices refer to (x,y) rather than (y,x)
         topo_func1 = RegularGridInterpolator((self.x, self.y), ZT,
-                        method=method, bounds_error=bounds_error,
-                        fill_value=fill_value)
+                                             **interp_kwargs)
 
         def topo_func(x,y):
             """

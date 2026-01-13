@@ -527,7 +527,7 @@ class DTopography(object):
 
         return abs(self.dZ).max()
 
-    def make_function(self, method='linear'):
+    def make_function(self, interp_kwargs={}):
         """
         Create a function of (x,y,t) that returns dZ interpolated to a
         point (or to a 1D transect or 2D grid of points if t is scalar,
@@ -538,7 +538,8 @@ class DTopography(object):
             returns 0 if t < self.times.min() or x,y outside the dtopo extent
 
         :Inputs:
-            *method*: interpolation method passed to RegularGridInterpolator
+            *interp_kwargs*: dictionary of parameter values to be passed to
+                             RegularGridInterpolator.  See defaults below.
 
         :Outputs:
             *dtopo_func*:  The function
@@ -548,15 +549,20 @@ class DTopography(object):
         """
         from scipy.interpolate import RegularGridInterpolator
 
+        if 'method' not in interp_kwargs.keys():
+            interp_kwargs['method'] = 'linear'
+        if 'bounds_error' not in interp_kwargs.keys():
+            interp_kwargs['bounds_error'] = False
+        if 'fill_value' not in interp_kwargs.keys():
+            interp_kwargs['fill_value'] = 0.
+
         # so final dZ used for t>dtopo.times.max():
         times = numpy.hstack((self.times, numpy.inf))
 
         dZT = self.dZ.T  # so indices refer to (x,y,t) rather than (t,y,x)
         dZT2 = numpy.concat((dZT, dZT[:,:,-1:]), axis=2)
         dtopo_func1 = RegularGridInterpolator((self.x, self.y, times), dZT2,
-                                              method=method,
-                                              bounds_error=False,
-                                              fill_value=0.)
+                                              **interp_kwargs)
 
 
         def dtopo_func(x,y,t):
