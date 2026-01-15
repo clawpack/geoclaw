@@ -229,8 +229,8 @@ contains
                 ! If override_topo_order is .true. then the order that the files were
                 ! specified is used directly
                 if (override_topo_order) then
-                    do i=mtopofiles, 1, -1
-                        mtopoorder(i) = i
+                    do i=1,mtopofiles
+                        mtopoorder(i) = mtopofiles + 1 - i
                     end do
                 else
                     do i=1,mtopofiles
