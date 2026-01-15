@@ -311,7 +311,7 @@ def setplot(plotdata=None):
     # Scatter plot of surface for radially symmetric
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='Scatter', figno=200)
-    plotfigure.show = False
+    plotfigure.show = True
     # Note: will not look very good unless more of domain is refined
 
     # Set up for axes in this figure:
@@ -348,30 +348,26 @@ def setplot(plotdata=None):
     plotaxes.ylimits = [-3, 3]
     plotaxes.title = 'Scatter plot of surface'
 
-    def q_vs_surface(current_data):
-        from numpy import sqrt
+    def r_surface_and_vel(current_data):
+        from numpy import sqrt, nan
         x = current_data.x
         y = current_data.y
-        r = sqrt(x**2 + y**2)
-        return r,geoplot.surface(current_data)
-
-    def velocity(current_data):
-        from numpy import sqrt,nan
         h = current_data.q[0,:,:]
         u = current_data.q[1,:,:]/h
         v = current_data.q[2,:,:]/h
+        eta = current_data.q[3,:,:]
         vel = sqrt(u**2 + v**2)
         vel[h<0.001] = nan
-
-        return vel
+        eta[h<0.001] = nan
+        r = sqrt(x**2 + y**2)
+        return r,eta,vel
 
     # Set up for item on these axes:
     plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
-    plotitem.map_2d_to_1d = q_vs_surface
+    plotitem.map_2d_to_1d = r_surface_and_vel
     plotitem.plotstyle = 'o'
 
-
-    plotitem.color_var = velocity
+    plotitem.color_var = True
     plotitem.size = 1,
     plotitem.alpha = 1.
     plotitem.plot_cmap = "viridis"
