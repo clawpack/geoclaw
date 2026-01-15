@@ -35,6 +35,7 @@ def setplot(plotdata=None):
 
 
     from clawpack.visclaw import colormaps, geoplot
+    import matplotlib as mpl
 
     plotdata.clearfigures()  # clear any old figures,axes,items data
 
@@ -334,6 +335,58 @@ def setplot(plotdata=None):
     plotitem.amr_color=['b','r','g']
     plotaxes.afteraxes = "import pylab; pylab.legend(['Level 1','Level 2'])"
     
+    #-----------------------------------------
+    # Scatter plot of surface or depth colored by velocity
+    #-----------------------------------------
+    plotfigure = plotdata.new_plotfigure(name='Scatter-Velocity', figno=201)
+    plotfigure.show = True
+    # Note: will not look very good unless more of domain is refined
+
+    # Set up for axes in this figure:
+    plotaxes = plotfigure.new_plotaxes()
+    plotaxes.xlimits = [0., 100.]
+    plotaxes.ylimits = [-3, 3]
+    plotaxes.title = 'Scatter plot of surface'
+
+    def q_vs_surface(current_data):
+        from numpy import sqrt
+        x = current_data.x
+        y = current_data.y
+        r = sqrt(x**2 + y**2)
+        return r,geoplot.surface(current_data)
+
+    def velocity(current_data):
+        from numpy import sqrt,nan
+        h = current_data.q[0,:,:]
+        u = current_data.q[1,:,:]/h
+        v = current_data.q[2,:,:]/h
+        vel = sqrt(u**2 + v**2)
+        vel[h<0.001] = nan
+
+        return vel
+
+    # Set up for item on these axes:
+    plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
+    plotitem.map_2d_to_1d = q_vs_surface
+    plotitem.plotstyle = 'o'
+
+
+    plotitem.color_var = velocity
+    plotitem.size = 1,
+    plotitem.alpha = 1.
+    plotitem.plot_cmap = "viridis"
+    plotitem.plot_norm = mpl.colors.LogNorm(vmin=0.01, vmax=2, clip=True)
+    plotitem.add_colorbar = True
+    plotitem.colorbar_kwargs = {
+        "shrink": 0.5,
+        "location": "right",
+        "orientation": "vertical",
+    }
+    plotitem.colorbar_label = "X-coordinate"
+    plotitem.amr_data_show = [True, False, False, False]
+
+
+
 
     #-----------------------------------------
     
