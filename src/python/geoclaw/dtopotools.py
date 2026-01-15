@@ -527,6 +527,83 @@ class DTopography(object):
 
         return abs(self.dZ).max()
 
+    def make_function(self, interp_kwargs={}):
+        """
+        Create a function of (x,y,t) that returns dZ interpolated to a
+        point (or to a 1D transect or 2D grid of points if t is scalar,
+        or a time series at a single point (x,y)).
+
+        The function created:
+            returns the final dZ for times t > self.times.max()
+            returns 0 if t < self.times.min() or x,y outside the dtopo extent
+
+        :Inputs:
+            *interp_kwargs*: dictionary of parameter values to be passed to
+                             RegularGridInterpolator.  See defaults below.
+
+        :Outputs:
+            *dtopo_func*:  The function
+
+        See the docstring in dtopo_func below for details on what shapes
+        its arguments (x,y,t) can be.
+        """
+        from scipy.interpolate import RegularGridInterpolator
+
+        if 'method' not in interp_kwargs.keys():
+            interp_kwargs['method'] = 'linear'
+        if 'bounds_error' not in interp_kwargs.keys():
+            interp_kwargs['bounds_error'] = False
+        if 'fill_value' not in interp_kwargs.keys():
+            interp_kwargs['fill_value'] = 0.
+
+        # so final dZ used for t>dtopo.times.max():
+        times = numpy.hstack((self.times, numpy.inf))
+
+        dZT = self.dZ.T  # so indices refer to (x,y,t) rather than (t,y,x)
+        dZT2 = numpy.concat((dZT, dZT[:,:,-1:]), axis=2)
+        dtopo_func1 = RegularGridInterpolator((self.x, self.y, times), dZT2,
+                                              **interp_kwargs)
+
+
+        def dtopo_func(x,y,t):
+            """
+            Function that interpolates from dtopo to (x,y,t).  This function
+            simplifies the function created by RegularGridInterpolator
+            so the user can call topo_func(x,y,t) rather needing a tuple as
+            input, and checks inputs for allowed shapes:
+
+            x,y,t can all be scalars, in which case a scalar is returned.
+            If t is a scalar, the dtopo is interpolated to this time, and:
+                If one of x,y is a 1D array, the other can be:
+                    a 1D array of the same length or
+                    a scalar (which is equivalent to providing a 1D array of the
+                              right length with the scalar value repeated).
+                If x,y are both 2D arrays, they should have the same shape.
+                If at least one of x,y is an array, an array of the same shape
+                is returned.
+
+            If t is a 1D array, then (x,y) should be a scalar and a time series
+            at this one point is returned.
+            """
+
+            import numpy as np
+            err_msg = f'*** unexpected combination of shapes for x, y, and t'
+            if np.isscalar(t):
+                if np.isscalar(x):
+                    assert np.isscalar(y) or y.ndim == 1, err_msg
+                elif np.isscalar(y):
+                    assert np.isscalar(x) or x.ndim == 1, err_msg
+                else:
+                    assert x.shape == y.shape, err_msg
+            else:
+                assert np.isscalar(x) and np.isscalar(y), err_msg
+
+            return dtopo_func1((x,y,t))
+
+        return dtopo_func
+
+
+
 
     def plot_dZ_colors(self, t, axes=None, cmax_dZ=None, dZ_interval=None,
                        colorbar_ticksize=10,colorbar_labelsize=10,

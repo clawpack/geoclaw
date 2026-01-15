@@ -1827,6 +1827,66 @@ class Topography(object):
         return shoreline_xy
 
 
+    def make_function(self, interp_kwargs={}):
+        """
+        Create a function of (x,y) that returns the topo Z interpolated to a
+        point (or to a 1D transect or 2D grid of points).
+
+        :Inputs:
+            *interp_kwargs*: dictionary of parameter values to be passed to
+                             RegularGridInterpolator.  See defaults below.
+
+        :Outputs:
+            *topo_func*:  The function created
+
+        See the docstring in topo_func below for details on what shapes
+        its arguments (x,y) can be.
+
+        """
+        from scipy.interpolate import RegularGridInterpolator
+
+        if 'method' not in interp_kwargs.keys():
+            interp_kwargs['method'] = 'linear'
+        if 'bounds_error' not in interp_kwargs.keys():
+            interp_kwargs['bounds_error'] = False
+        if 'fill_value' not in interp_kwargs.keys():
+            interp_kwargs['fill_value'] = numpy.nan
+
+        ZT = self.Z.T  # so indices refer to (x,y) rather than (y,x)
+        topo_func1 = RegularGridInterpolator((self.x, self.y), ZT,
+                                             **interp_kwargs)
+
+        def topo_func(x,y):
+            """
+            Function that interpolates from topo to (x,y).  This function
+            simplifies the function created by RegularGridInterpolator
+            so the user can call topo_func(x,y) rather needing a tuple as
+            input, and checks inputs for allowed shapes:
+
+            x,y can both be scalars, in which case a scalar is returned.
+            If one of x,y is a 1D array, the other can be:
+                a 1D array of the same length or
+                a scalar (which is equivalent to providing a 1D array of the
+                          right length with the scalar value repeated).
+            If both are 2D arrays, they should have the same shape.
+
+            If at least one of x,y is an array, an array of the same shape
+            is returned.
+            """
+
+            import numpy as np
+            err_msg = f'*** unexpected combination of shapes for x and y'
+            if np.isscalar(x):
+                assert np.isscalar(y) or y.ndim == 1, err_msg
+            elif np.isscalar(y):
+                assert np.isscalar(x) or x.ndim == 1, err_msg
+            else:
+                assert x.shape == y.shape, err_msg
+            return topo_func1((x,y))
+
+        return topo_func
+
+
 
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
 remote_topo_urls = {}
