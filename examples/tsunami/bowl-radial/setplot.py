@@ -332,8 +332,10 @@ def setplot(plotdata=None):
         return r,q
     plotitem.map_2d_to_1d = q_vs_radius
     plotitem.plotstyle = 'o'
+    plotitem.kwargs = {'markersize':1}
+
     plotitem.amr_color=['b','r','g']
-    plotaxes.afteraxes = "import pylab; pylab.legend(['Level 1','Level 2'])"
+    plotaxes.afteraxes = "import pylab; pylab.legend(['Level 1','Level 2', 'Level 3'])"
     
     #-----------------------------------------
     # Scatter plot of surface or depth colored by velocity
@@ -366,10 +368,8 @@ def setplot(plotdata=None):
     plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
     plotitem.map_2d_to_1d = r_surface_and_vel
     plotitem.plotstyle = 'o'
-
-    plotitem.color_var = True
-    plotitem.size = 1,
-    plotitem.alpha = 1.
+    plotitem.kwargs = {'markersize':2, 'alpha': 0.7}
+    plotitem.map_color = True
     plotitem.plot_cmap = "viridis"
     plotitem.plot_norm = mpl.colors.LogNorm(vmin=0.01, vmax=2, clip=True)
     plotitem.add_colorbar = True
@@ -378,7 +378,7 @@ def setplot(plotdata=None):
         "location": "right",
         "orientation": "vertical",
     }
-    plotitem.colorbar_label = "X-coordinate"
+    plotitem.colorbar_label = "Depth-averaged velocity"
     plotitem.amr_data_show = [True, False, False, False]
 
 
