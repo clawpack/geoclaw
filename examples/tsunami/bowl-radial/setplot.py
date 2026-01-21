@@ -35,6 +35,7 @@ def setplot(plotdata=None):
 
 
     from clawpack.visclaw import colormaps, geoplot
+    import matplotlib as mpl
 
     plotdata.clearfigures()  # clear any old figures,axes,items data
 
@@ -310,7 +311,7 @@ def setplot(plotdata=None):
     # Scatter plot of surface for radially symmetric
     #-----------------------------------------
     plotfigure = plotdata.new_plotfigure(name='Scatter', figno=200)
-    plotfigure.show = False
+    plotfigure.show = True
     # Note: will not look very good unless more of domain is refined
 
     # Set up for axes in this figure:
@@ -331,9 +332,60 @@ def setplot(plotdata=None):
         return r,q
     plotitem.map_2d_to_1d = q_vs_radius
     plotitem.plotstyle = 'o'
+    plotitem.kwargs = {'markersize':1}
+
     plotitem.amr_color=['b','r','g']
-    plotaxes.afteraxes = "import pylab; pylab.legend(['Level 1','Level 2'])"
+    plotaxes.afteraxes = "import pylab; pylab.legend(['Level 1','Level 2', 'Level 3'])"
     
+    #-----------------------------------------
+    # Scatter plot of surface or depth colored by velocity
+    #-----------------------------------------
+    plotfigure = plotdata.new_plotfigure(name='Scatter-Velocity', figno=201)
+    plotfigure.show = True
+    # Note: will not look very good unless more of domain is refined
+
+    # Set up for axes in this figure:
+    plotaxes = plotfigure.new_plotaxes()
+    plotaxes.xlimits = [0., 100.]
+    plotaxes.ylimits = [-3, 3]
+    plotaxes.title = 'Scatter plot of surface'
+
+    def r_surface_and_vel(current_data):
+        from numpy import sqrt, nan, divide, zeros
+        x = current_data.x
+        y = current_data.y
+        h = current_data.q[0,:,:]
+        dry_tol = 1e-3
+        u = divide(current_data.q[1,:,:], h,
+                   where=h>dry_tol, out=zeros(h.shape))
+        v = divide(current_data.q[2,:,:], h,
+                   where=h>dry_tol, out=zeros(h.shape))
+        eta = current_data.q[3,:,:]
+        vel = sqrt(u**2 + v**2)
+        vel[h<dry_tol] = nan
+        eta[h<dry_tol] = nan
+        r = sqrt(x**2 + y**2)
+        return r,eta,vel
+
+    # Set up for item on these axes:
+    plotitem = plotaxes.new_plotitem(plot_type='1d_from_2d_data')
+    plotitem.map_2d_to_1d = r_surface_and_vel
+    plotitem.plotstyle = 'o'
+    plotitem.kwargs = {'markersize':2, 'alpha': 0.7}
+    plotitem.map_color = True
+    plotitem.plot_cmap = "viridis"
+    plotitem.plot_norm = mpl.colors.LogNorm(vmin=0.01, vmax=2, clip=True)
+    plotitem.add_colorbar = True
+    plotitem.colorbar_kwargs = {
+        "shrink": 0.5,
+        "location": "right",
+        "orientation": "vertical",
+    }
+    plotitem.colorbar_label = "Depth-averaged velocity"
+    plotitem.amr_data_show = [True, False, False, False]
+
+
+
 
     #-----------------------------------------
     
