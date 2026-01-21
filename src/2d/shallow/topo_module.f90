@@ -99,9 +99,10 @@ contains
 
         ! Locals
         integer, parameter :: iunit = 7
-        integer :: i,j,finer_than,rank
+        integer :: i,j,finer_than,rank,irank,jrank,krank,idtopo
         real(kind=8) :: area_i,area_j
-        real(kind=8) :: area, area_domain
+        real(kind=8) :: area, area_domain, area_maxj
+        real(kind=8), allocatable :: areatopo(:)
         if (.not.module_setup) then
 
             ! Open and begin parameter file output
@@ -134,10 +135,15 @@ contains
                     return
                 endif
 
-                mtopofiles = mtopofiles + num_dtopo
-                write(GEO_PARM_UNIT,*) '   mtopofiles = ',mtopofiles-num_dtopo
-                
-                ! Read and allocate data parameters for each file
+                ! modified topo ordering algorithm for v5.14.0:
+                ! don't increment mtopofiles by num_dtopo until
+                ! after the initial ordering is done
+
+                write(GEO_PARM_UNIT,*) '   mtopofiles = ',mtopofiles
+
+                ! Allocate arrays for each file,
+                ! including space for the topo_for_dtopo array:
+                mtopofiles = mtopofiles + num_dtopo  ! increment for allocates
                 allocate(mxtopo(mtopofiles),mytopo(mtopofiles))
                 allocate(xlowtopo(mtopofiles),ylowtopo(mtopofiles))
                 allocate(tlowtopo(mtopofiles),xhitopo(mtopofiles),yhitopo(mtopofiles))
@@ -146,8 +152,10 @@ contains
                 allocate(i0topo(mtopofiles),mtopo(mtopofiles),mtopoorder(mtopofiles))
                 allocate(topoID(mtopofiles),topotime(mtopofiles),topo0save(mtopofiles))
                 allocate(i0topo0(mtopofiles),topo0ID(mtopofiles))
+                allocate(areatopo(mtopofiles))
+                mtopofiles = mtopofiles - num_dtopo  ! decrement after allocates
 
-                do i=1,mtopofiles - num_dtopo
+                do i=1,mtopofiles
                     read(iunit,*) topofname(i)
                     read(iunit,*) itopotype(i)
 
@@ -163,14 +171,15 @@ contains
                         dxtopo(i),dytopo(i))
                     topoID(i) = i
                     mtopo(i) = int(mxtopo(i), 8) * int(mytopo(i), 8)
+                    areatopo(i) = dxtopo(i)*dytopo(i)
                 enddo
 
                 ! adding extra topo arrays corresponding spatially to dtopo
                 ! arrays will be part of time dependent topowork as with all others.
                 ! the state of these arrays at t=0 will be stored in topo0work
                 topo0save(:)= 0
-                do i= mtopofiles - num_dtopo + 1, mtopofiles
-                   j = i - mtopofiles + num_dtopo
+                do j=1,num_dtopo
+                   i = mtopofiles + j
                    itopotype(i) = dtopotype(j)
                    mxtopo(i) = mxdtopo(j)
                    mytopo(i) = mydtopo(j)
@@ -184,12 +193,13 @@ contains
                    topoID(i) = i
                    topotime(i) = -huge(1.0)
                    topo0save(i) = 1
+                   areatopo(i) = dxtopo(i)*dytopo(i)
                 enddo
 
                 ! Indexing into work array
                 i0topo(1)=1
-                if (mtopofiles > 1) then
-                    do i=2,mtopofiles
+                if (mtopofiles+num_dtopo > 1) then
+                    do i=2,mtopofiles+num_dtopo
                         i0topo(i)=i0topo(i-1) + mtopo(i-1)
                     enddo
                 endif
@@ -198,13 +208,13 @@ contains
                 mtoposize = sum(mtopo)
                 allocate(topowork(mtoposize))
 
-                do i=1,mtopofiles - num_dtopo
+                do i=1,mtopofiles
                     topoID(i) = i
                     topotime(i) = -huge(1.0)
                     call read_topo_file(mxtopo(i),mytopo(i),itopotype(i),topofname(i), &
                         xlowtopo(i),ylowtopo(i),topowork(i0topo(i):i0topo(i)+mtopo(i)-1))
                     ! set topo0save(i) = 1 if this topo file intersects any
-                    ! dtopo file.  This approach to setting topo0save is changed from 
+                    ! dtopo file.  This approach to setting topo0save is changed from
                     ! v5.4.1, where it only checked if some dtopo point lies within the
                     ! topo grid, which might not happen for small scale topo
                     do j=mtopofiles - num_dtopo + 1, mtopofiles
@@ -220,43 +230,95 @@ contains
                     enddo
                 enddo
 
-                ! topography order...This determines which order to process topography
+                ! topography order...
+                ! This determines which order to process topography when
+                ! computing the cell-averaged value for each grid cell.
                 !
                 ! The finest topography will be given priority in any region
-                ! mtopoorder(rank) = i means that i'th topography file has rank rank,
+                ! mtopoorder(rank) = i means that i'th topography file has rank,
                 ! where the file with rank=1 is the finest and considered first.
                 !
-                ! If override_topo_order is .true. then the order that the files were
-                ! specified is used directly
+                ! First order only the original topo, not the topo_for_dtopo
+
+
                 if (override_topo_order) then
+                    ! use order that the files were specified directly:
                     do i=1,mtopofiles
+                        ! first file listed should have lowest priority
                         mtopoorder(i) = mtopofiles + 1 - i
                     end do
                 else
+                    ! order by resolution, as determined by areatopo = dx*dy:
                     do i=1,mtopofiles
-                        finer_than = 0
+                        finer_than = 0  ! how many others is file i finer than?
                         do j=1,mtopofiles
                             if (j /= i) then
-                                area_i=dxtopo(i)*dytopo(i)
-                                area_j=dxtopo(j)*dytopo(j)
-                                if (area_i < area_j) finer_than = finer_than + 1
-                                ! if two files have the same resolution, order is
-                                ! arbitrarily chosen
-                                if ((area_i == area_j).and.(j < i)) then
+                                area_i = areatopo(i)
+                                area_j = areatopo(j)
+                                if (abs(area_i - area_j) &
+                                        < 0.01d0*min(area_i,area_j)) then
+                                    ! areas nearly equal, check order in setrun:
+                                    if (j<i) then
+                                        ! file i appears after j in setrun:
+                                        finer_than = finer_than + 1
+                                    endif
+                                else if (area_i < area_j) then
+                                    ! area_i clearly less than area_j:
                                     finer_than = finer_than + 1
                                 endif
                             endif
                         enddo
-                        ! ifinerthan tells how many other files, file i is finer than
+                        ! finer_than tells how many other files i is finer than
                         rank = mtopofiles - finer_than
                         mtopoorder(rank) = i
                     enddo
                 end if
 
+                ! now insert topo_for_dtopo arrays into ordering:
+
+                do i=1,num_dtopo
+                    idtopo = mtopofiles + i  ! file number of topo_for_dtopo
+                    ! initialize topo_for_dtopo at lowest priority:
+                    irank = mtopofiles + i
+                    mtopoorder(irank) = irank
+
+                    ! now bump up in priority as long as its cell area dx*dy
+                    ! remains smaller than the maximum cell area of all
+                    ! higher priority (lower rank) topos:
+
+                    do jrank=mtopofiles+i-1, 1, -1
+                        ! compute max area dx*dy over the top jrank topofiles
+                        area_maxj = areatopo(mtopoorder(1))
+                        do krank=2,jrank
+                            area_maxj = max(area_maxj, &
+                                            areatopo(mtopoorder(krank)))
+                        enddo
+
+                        if (areatopo(idtopo) < 0.99d0*area_maxj) then
+                            ! better resolution than first jrank, bump it up
+                            ! (fudge factor so it must be clearly better)
+                            irank = irank - 1
+                            mtopoorder(irank+1) = mtopoorder(irank) ! shift
+                            mtopoorder(irank) = mtopofiles + i      ! insert
+                        endif
+                    enddo
+                enddo
+
+                ! update mtopofiles to include topo_for_dtopo as well:
+                mtopofiles = mtopofiles + num_dtopo
+
                 write(GEO_PARM_UNIT,*) ' '
-                write(GEO_PARM_UNIT,*) '  Ranking of topography files', &
-                    '  finest to coarsest: ', &
-                    (mtopoorder(rank),rank=1,mtopofiles)
+                write(GEO_PARM_UNIT,*) 'Ranking of topography files', &
+                    '  (including topo_for_dtopo) finest to coarsest: '
+                write(GEO_PARM_UNIT,*) '   (filenumber is order they appear in'&
+                                    // ' setrun.py, topofiles first)'
+                write(GEO_PARM_UNIT,*) ' '
+
+  301           format('rank = ',i3,'  filenumber = ',i3,'  dx*dy = ',e16.6)
+                do rank=1,mtopofiles
+                    write(GEO_PARM_UNIT,301) rank, mtopoorder(rank), &
+                            areatopo(mtopoorder(rank))
+                enddo
                 write(GEO_PARM_UNIT,*) ' '
 
                 !set values in topo array for dtopo generated topo
@@ -489,7 +551,7 @@ contains
                         topo(i) = topo_temp
                     endif
                 enddo
-                
+
                 close(unit=iunit)
 
             ! ================================================================
@@ -504,7 +566,7 @@ contains
                 do i=1,5
                     read(iunit,*)
                 enddo
-                
+
                 read(iunit,'(a)') str
                 call parse_values(str, n, values)
                 no_data_value = values(1)
@@ -558,33 +620,33 @@ contains
                 endif
 
                 close(unit=iunit)
-            
+
             ! NetCDF
             case(4)
 #ifdef NETCDF
-                ! Open file    
+                ! Open file
                 call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
-                
+
                 ! Get number of dimensions and vars
                 call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, &
                     num_vars))
-                
+
                 ! get x and y dimension info
                 call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
                     mx_tot, y_dim_id, y_dim_name, my_tot)
-                    
+
                 allocate(xlocs(mx_tot),ylocs(my_tot))
-                
+
                 call check_netcdf_error(nf90_get_var(nc_file, x_dim_id, xlocs, start=(/ 1 /), count=(/ mx_tot /)))
                 call check_netcdf_error(nf90_get_var(nc_file, y_dim_id, ylocs, start=(/ 1 /), count=(/ my_tot /)))
                 xstart = minloc(xlocs, mask=(xlocs.eq.xll))
                 ystart = minloc(ylocs, mask=(ylocs.eq.yll))
                 deallocate(xlocs,ylocs)
-                
+
                 z_var_id = -1
                 do n=1, num_vars
                     call check_netcdf_error(nf90_inquire_variable(nc_file, n, var_name, var_type, num_dims, dim_ids))
-                    
+
                     ! Assume dim names are same as var ids
                     if (var_name == x_dim_name) then
                         x_var_name = var_name
@@ -605,14 +667,14 @@ contains
 
                 ! Load in data
                 ! TODO: Provide striding into data if need be
-                
+
                 ! only try to access data if theres overlap with the domain
                 if ((mx > 0) .and. (my > 0)) then
                     if (z_dim_ids(1) == x_dim_id) then
                         allocate(nc_buffer(mx, my))
                     else if (z_dim_ids(1) == y_dim_id) then
                         allocate(nc_buffer(my, mx))
-                    else 
+                    else
                         stop " NetCDF z variable has dimensions that don't align with x and y"
                     end if
 
@@ -849,23 +911,23 @@ contains
                     xll = xll + 0.5d0*dx
                     write(6,*) '*** in file: ',trim(fname)
                     write(6,*) '    Shifting xllcorner by 0.5*dx to cell center'
-                    endif 
+                    endif
 
                 if (yll_registered) then
                     yll = yll + 0.5d0*dy
                     write(6,*) '*** in file: ',trim(fname)
                     write(6,*) '    Shifting yllcorner by 0.5*dy to cell center'
-                    endif 
+                    endif
 
 
                 xhi = xll + (mx-1)*dx
                 yhi = yll + (my-1)*dy
-                
+
             ! NetCDF
             case(4)
 #ifdef NETCDF
 
-                ! Open file    
+                ! Open file
                 call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
 
                 ! NetCDF4 GEBCO topography, should conform to CF metadata
@@ -902,7 +964,7 @@ contains
                     num_vars))
                 call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
                     mx, y_dim_id, y_dim_name, my)
-                
+
                 ! allocate vector to hold lon and lat vals and vector for var ids
                 allocate(xlocs(mx),ylocs(my),x_in_dom(mx),y_in_dom(my),var_ids(num_vars))
 
@@ -956,19 +1018,19 @@ contains
 
                 call check_netcdf_error(nf90_get_var(nc_file, x_var_id, xlocs, start=(/ 1 /), count=(/ mx /)))
                 call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, start=(/ 1 /), count=(/ my /)))
-                
+
                 dx = xlocs(2) - xlocs(1)
                 dy = ylocs(2) - ylocs(1)
-                
+
                 ! find which locs are within domain (with a dx/dy buffer around domain + ghost cells)
                 x_in_dom = (xlocs.gt.(xlower-dx-hxposs(1)*nghost)) .and. (xlocs.lt.(xupper+dx+hxposs(1)*nghost))
                 y_in_dom = (ylocs.gt.(ylower-dy-hyposs(1)*nghost)) .and. (ylocs.lt.(yupper+dy+hyposs(1)*nghost))
-                
+
                 xll = minval(xlocs, mask=x_in_dom)
                 yll = minval(ylocs, mask=y_in_dom)
                 xhi = maxval(xlocs, mask=x_in_dom)
                 yhi = maxval(ylocs, mask=y_in_dom)
-                
+
                 ! adjust mx, my
                 mx = count(x_in_dom)
                 my = count(y_in_dom)
@@ -1103,7 +1165,7 @@ contains
             mdtopo(i) = mxdtopo(i) * mydtopo(i) * mtdtopo(i)
         enddo
 
-        read(iunit,*) dt_max_dtopo  
+        read(iunit,*) dt_max_dtopo
         !  largest allowable dt while dtopo is moving
 
 
@@ -1320,12 +1382,12 @@ contains
     end subroutine read_dtopo_header
 
 
-    
+
 
 recursive subroutine topoarea(x1,x2,y1,y2,m,area)
 
     ! Compute the area of overlap of topo with the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
+    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m)
     ! (coarse to fine).
 
     ! The main call to this subroutine has corners of a physical domain for
@@ -1333,16 +1395,16 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
     ! domain by all topo arrays.  Used to check inputs and insure topo
     ! covers domain.
 
-    ! The recursive strategy is to first compute the area using only topo 
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
+    ! The recursive strategy is to first compute the area using only topo
+    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
     ! and then apply corrections due to adding topo array mtopoorder(m).
-     
+
     ! Corrections are needed if the new topo array intersects the grid cell.
     ! Let the intersection be (x1m,x2m) x (y1m,y2m).
     ! Two corrections are needed, first to subtract out the area over
     ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
     ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the area over this same region using 
+    ! and then adding in the area over this same region using
     ! topo array mtopoorder(m).
 
     ! Based on the recursive routine rectintegral that integrates
@@ -1360,7 +1422,7 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
         y1m,y2m, area1,area2,area_m
     integer :: mfid, indicator
     integer(kind=8) :: i0
-    real(kind=8), external :: topointegral  
+    real(kind=8), external :: topointegral
 
 
     mfid = mtopoorder(m)
@@ -1382,12 +1444,12 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
              y1m,y2m, x1,x2,y1,y2, &
              xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
 
-        
+
         if (area_m > 0) then
-        
+
             ! correction to subtract out from previous set of topo grids:
             call topoarea(x1m,x2m,y1m,y2m,m+1,area2)
-    
+
             ! adjust integral due to corrections for new topo grid:
             area = area1 - area2 + area_m
         else
@@ -1397,31 +1459,31 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
 
 end subroutine topoarea
 
-    
+
 
 recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
 
     ! Compute the integral of topo over the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
+    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m)
     ! (coarse to fine).
 
-    ! The main call to this subroutine has corners of a grid cell for the 
-    ! rectangle and m = 1 in order to compute the integral over the cell 
+    ! The main call to this subroutine has corners of a grid cell for the
+    ! rectangle and m = 1 in order to compute the integral over the cell
     ! using all topo arrays.
 
-    ! The recursive strategy is to first compute the integral using only topo 
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
+    ! The recursive strategy is to first compute the integral using only topo
+    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
     ! and then apply corrections due to adding topo array mtopoorder(m).
-     
+
     ! Corrections are needed if the new topo array intersects the grid cell.
     ! Let the intersection be (x1m,x2m) x (y1m,y2m).
     ! Two corrections are needed, first to subtract out the integral over
     ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
     ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the integral over this same region using 
+    ! and then adding in the integral over this same region using
     ! topo array mtopoorder(m).
 
-    ! Note that the function topointegral returns the integral over the 
+    ! Note that the function topointegral returns the integral over the
     ! rectangle based on a single topo array, and that routine calls
     ! bilinearintegral.
 
@@ -1438,7 +1500,7 @@ recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
         y1m,y2m, int1,int2,int3
     integer :: mfid, indicator
     integer(kind=8) :: i0
-    real(kind=8), external :: topointegral  
+    real(kind=8), external :: topointegral
 
 
     mfid = mtopoorder(m)
@@ -1470,17 +1532,17 @@ recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
              y1m,y2m, x1,x2,y1,y2, &
              xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
 
-        
+
         if (area > 0) then
-        
+
             ! correction to subtract out from previous set of topo grids:
             call rectintegral(x1m,x2m,y1m,y2m,m+1,int2)
-    
+
             ! correction to add in for new topo grid:
             int3 = topointegral(x1m,x2m, y1m,y2m, &
                         xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
                         dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
-    
+
             ! adjust integral due to corrections for new topo grid:
             integral = int1 - int2 + int3
         else
@@ -1490,7 +1552,7 @@ recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
 
 end subroutine rectintegral
 
-    
+
 
 subroutine intersection(indicator,area,xintlo,xinthi, &
            yintlo,yinthi,x1lo,x1hi,y1lo,y1hi,x2lo,x2hi,y2lo,y2hi)
