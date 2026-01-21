@@ -101,7 +101,7 @@ contains
         integer, parameter :: iunit = 7
         integer :: i,j,finer_than,rank,irank,jrank,krank,idtopo
         real(kind=8) :: area_i,area_j
-        real(kind=8) :: area, area_domain, area_maxj
+        real(kind=8) :: area, area_domain, area_maxj, area_tol
         real(kind=8), allocatable :: areatopo(:)
         if (.not.module_setup) then
 
@@ -240,6 +240,7 @@ contains
                 !
                 ! First order only the original topo, not the topo_for_dtopo
 
+                area_tol = 1.d-3  ! relative tol for deciding if areas agree
 
                 if (override_topo_order) then
                     ! use order that the files were specified directly:
@@ -256,7 +257,7 @@ contains
                                 area_i = areatopo(i)
                                 area_j = areatopo(j)
                                 if (abs(area_i - area_j) &
-                                        < 0.01d0*min(area_i,area_j)) then
+                                        < area_tol*min(area_i,area_j)) then
                                     ! areas nearly equal, check order in setrun:
                                     if (j<i) then
                                         ! file i appears after j in setrun:
@@ -294,9 +295,9 @@ contains
                                             areatopo(mtopoorder(krank)))
                         enddo
 
-                        if (areatopo(idtopo) < 0.99d0*area_maxj) then
+                        if (areatopo(idtopo) < (1.d0-area_tol)*area_maxj) then
                             ! better resolution than first jrank, bump it up
-                            ! (fudge factor so it must be clearly better)
+                            ! (with fudge factor so it must be clearly better)
                             irank = irank - 1
                             mtopoorder(irank+1) = mtopoorder(irank) ! shift
                             mtopoorder(irank) = mtopofiles + i      ! insert
