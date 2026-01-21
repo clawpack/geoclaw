@@ -351,16 +351,19 @@ def setplot(plotdata=None):
     plotaxes.title = 'Scatter plot of surface'
 
     def r_surface_and_vel(current_data):
-        from numpy import sqrt, nan
+        from numpy import sqrt, nan, divide, zeros
         x = current_data.x
         y = current_data.y
         h = current_data.q[0,:,:]
-        u = current_data.q[1,:,:]/h
-        v = current_data.q[2,:,:]/h
+        dry_tol = 1e-3
+        u = divide(current_data.q[1,:,:], h,
+                   where=h>dry_tol, out=zeros(h.shape))
+        v = divide(current_data.q[2,:,:], h,
+                   where=h>dry_tol, out=zeros(h.shape))
         eta = current_data.q[3,:,:]
         vel = sqrt(u**2 + v**2)
-        vel[h<0.001] = nan
-        eta[h<0.001] = nan
+        vel[h<dry_tol] = nan
+        eta[h<dry_tol] = nan
         r = sqrt(x**2 + y**2)
         return r,eta,vel
 
