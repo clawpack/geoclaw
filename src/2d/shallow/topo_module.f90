@@ -214,7 +214,7 @@ contains
                     call read_topo_file(mxtopo(i),mytopo(i),itopotype(i),topofname(i), &
                         xlowtopo(i),ylowtopo(i),topowork(i0topo(i):i0topo(i)+mtopo(i)-1))
                     ! set topo0save(i) = 1 if this topo file intersects any
-                    ! dtopo file.  This approach to setting topo0save is changed from
+                    ! dtopo file.  This approach to setting topo0save is changed from 
                     ! v5.4.1, where it only checked if some dtopo point lies within the
                     ! topo grid, which might not happen for small scale topo
                     do j=mtopofiles - num_dtopo + 1, mtopofiles
@@ -552,7 +552,7 @@ contains
                         topo(i) = topo_temp
                     endif
                 enddo
-
+                
                 close(unit=iunit)
 
             ! ================================================================
@@ -567,7 +567,7 @@ contains
                 do i=1,5
                     read(iunit,*)
                 enddo
-
+                
                 read(iunit,'(a)') str
                 call parse_values(str, n, values)
                 no_data_value = values(1)
@@ -621,33 +621,33 @@ contains
                 endif
 
                 close(unit=iunit)
-
+            
             ! NetCDF
             case(4)
 #ifdef NETCDF
-                ! Open file
+                ! Open file    
                 call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
-
+                
                 ! Get number of dimensions and vars
                 call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, &
                     num_vars))
-
+                
                 ! get x and y dimension info
                 call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
                     mx_tot, y_dim_id, y_dim_name, my_tot)
-
+                    
                 allocate(xlocs(mx_tot),ylocs(my_tot))
-
+                
                 call check_netcdf_error(nf90_get_var(nc_file, x_dim_id, xlocs, start=(/ 1 /), count=(/ mx_tot /)))
                 call check_netcdf_error(nf90_get_var(nc_file, y_dim_id, ylocs, start=(/ 1 /), count=(/ my_tot /)))
                 xstart = minloc(xlocs, mask=(xlocs.eq.xll))
                 ystart = minloc(ylocs, mask=(ylocs.eq.yll))
                 deallocate(xlocs,ylocs)
-
+                
                 z_var_id = -1
                 do n=1, num_vars
                     call check_netcdf_error(nf90_inquire_variable(nc_file, n, var_name, var_type, num_dims, dim_ids))
-
+                    
                     ! Assume dim names are same as var ids
                     if (var_name == x_dim_name) then
                         x_var_name = var_name
@@ -668,14 +668,14 @@ contains
 
                 ! Load in data
                 ! TODO: Provide striding into data if need be
-
+                
                 ! only try to access data if theres overlap with the domain
                 if ((mx > 0) .and. (my > 0)) then
                     if (z_dim_ids(1) == x_dim_id) then
                         allocate(nc_buffer(mx, my))
                     else if (z_dim_ids(1) == y_dim_id) then
                         allocate(nc_buffer(my, mx))
-                    else
+                    else 
                         stop " NetCDF z variable has dimensions that don't align with x and y"
                     end if
 
@@ -912,23 +912,23 @@ contains
                     xll = xll + 0.5d0*dx
                     write(6,*) '*** in file: ',trim(fname)
                     write(6,*) '    Shifting xllcorner by 0.5*dx to cell center'
-                    endif
+                    endif 
 
                 if (yll_registered) then
                     yll = yll + 0.5d0*dy
                     write(6,*) '*** in file: ',trim(fname)
                     write(6,*) '    Shifting yllcorner by 0.5*dy to cell center'
-                    endif
+                    endif 
 
 
                 xhi = xll + (mx-1)*dx
                 yhi = yll + (my-1)*dy
-
+                
             ! NetCDF
             case(4)
 #ifdef NETCDF
 
-                ! Open file
+                ! Open file    
                 call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
 
                 ! NetCDF4 GEBCO topography, should conform to CF metadata
@@ -965,7 +965,7 @@ contains
                     num_vars))
                 call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
                     mx, y_dim_id, y_dim_name, my)
-
+                
                 ! allocate vector to hold lon and lat vals and vector for var ids
                 allocate(xlocs(mx),ylocs(my),x_in_dom(mx),y_in_dom(my),var_ids(num_vars))
 
@@ -1019,19 +1019,19 @@ contains
 
                 call check_netcdf_error(nf90_get_var(nc_file, x_var_id, xlocs, start=(/ 1 /), count=(/ mx /)))
                 call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, start=(/ 1 /), count=(/ my /)))
-
+                
                 dx = xlocs(2) - xlocs(1)
                 dy = ylocs(2) - ylocs(1)
-
+                
                 ! find which locs are within domain (with a dx/dy buffer around domain + ghost cells)
                 x_in_dom = (xlocs.gt.(xlower-dx-hxposs(1)*nghost)) .and. (xlocs.lt.(xupper+dx+hxposs(1)*nghost))
                 y_in_dom = (ylocs.gt.(ylower-dy-hyposs(1)*nghost)) .and. (ylocs.lt.(yupper+dy+hyposs(1)*nghost))
-
+                
                 xll = minval(xlocs, mask=x_in_dom)
                 yll = minval(ylocs, mask=y_in_dom)
                 xhi = maxval(xlocs, mask=x_in_dom)
                 yhi = maxval(ylocs, mask=y_in_dom)
-
+                
                 ! adjust mx, my
                 mx = count(x_in_dom)
                 my = count(y_in_dom)
@@ -1166,7 +1166,7 @@ contains
             mdtopo(i) = mxdtopo(i) * mydtopo(i) * mtdtopo(i)
         enddo
 
-        read(iunit,*) dt_max_dtopo
+        read(iunit,*) dt_max_dtopo  
         !  largest allowable dt while dtopo is moving
 
 
@@ -1383,12 +1383,12 @@ contains
     end subroutine read_dtopo_header
 
 
-
+    
 
 recursive subroutine topoarea(x1,x2,y1,y2,m,area)
 
     ! Compute the area of overlap of topo with the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m)
+    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
     ! (coarse to fine).
 
     ! The main call to this subroutine has corners of a physical domain for
@@ -1396,16 +1396,16 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
     ! domain by all topo arrays.  Used to check inputs and insure topo
     ! covers domain.
 
-    ! The recursive strategy is to first compute the area using only topo
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
+    ! The recursive strategy is to first compute the area using only topo 
+    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
     ! and then apply corrections due to adding topo array mtopoorder(m).
-
+     
     ! Corrections are needed if the new topo array intersects the grid cell.
     ! Let the intersection be (x1m,x2m) x (y1m,y2m).
     ! Two corrections are needed, first to subtract out the area over
     ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
     ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the area over this same region using
+    ! and then adding in the area over this same region using 
     ! topo array mtopoorder(m).
 
     ! Based on the recursive routine rectintegral that integrates
@@ -1423,7 +1423,7 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
         y1m,y2m, area1,area2,area_m
     integer :: mfid, indicator
     integer(kind=8) :: i0
-    real(kind=8), external :: topointegral
+    real(kind=8), external :: topointegral  
 
 
     mfid = mtopoorder(m)
@@ -1445,12 +1445,12 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
              y1m,y2m, x1,x2,y1,y2, &
              xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
 
-
+        
         if (area_m > 0) then
-
+        
             ! correction to subtract out from previous set of topo grids:
             call topoarea(x1m,x2m,y1m,y2m,m+1,area2)
-
+    
             ! adjust integral due to corrections for new topo grid:
             area = area1 - area2 + area_m
         else
@@ -1460,31 +1460,31 @@ recursive subroutine topoarea(x1,x2,y1,y2,m,area)
 
 end subroutine topoarea
 
-
+    
 
 recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
 
     ! Compute the integral of topo over the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m)
+    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
     ! (coarse to fine).
 
-    ! The main call to this subroutine has corners of a grid cell for the
-    ! rectangle and m = 1 in order to compute the integral over the cell
+    ! The main call to this subroutine has corners of a grid cell for the 
+    ! rectangle and m = 1 in order to compute the integral over the cell 
     ! using all topo arrays.
 
-    ! The recursive strategy is to first compute the integral using only topo
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
+    ! The recursive strategy is to first compute the integral using only topo 
+    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
     ! and then apply corrections due to adding topo array mtopoorder(m).
-
+     
     ! Corrections are needed if the new topo array intersects the grid cell.
     ! Let the intersection be (x1m,x2m) x (y1m,y2m).
     ! Two corrections are needed, first to subtract out the integral over
     ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
     ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the integral over this same region using
+    ! and then adding in the integral over this same region using 
     ! topo array mtopoorder(m).
 
-    ! Note that the function topointegral returns the integral over the
+    ! Note that the function topointegral returns the integral over the 
     ! rectangle based on a single topo array, and that routine calls
     ! bilinearintegral.
 
@@ -1501,7 +1501,7 @@ recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
         y1m,y2m, int1,int2,int3
     integer :: mfid, indicator
     integer(kind=8) :: i0
-    real(kind=8), external :: topointegral
+    real(kind=8), external :: topointegral  
 
 
     mfid = mtopoorder(m)
@@ -1533,17 +1533,17 @@ recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
              y1m,y2m, x1,x2,y1,y2, &
              xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
 
-
+        
         if (area > 0) then
-
+        
             ! correction to subtract out from previous set of topo grids:
             call rectintegral(x1m,x2m,y1m,y2m,m+1,int2)
-
+    
             ! correction to add in for new topo grid:
             int3 = topointegral(x1m,x2m, y1m,y2m, &
                         xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
                         dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
-
+    
             ! adjust integral due to corrections for new topo grid:
             integral = int1 - int2 + int3
         else
@@ -1553,7 +1553,7 @@ recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
 
 end subroutine rectintegral
 
-
+    
 
 subroutine intersection(indicator,area,xintlo,xinthi, &
            yintlo,yinthi,x1lo,x1hi,y1lo,y1hi,x2lo,x2hi,y2lo,y2hi)
