@@ -1256,7 +1256,7 @@ class Topography(object):
                                                 marker=',', linewidths=(0.0,))
         else:
             plot = plottools.pcolorcells(self.X, self.Y, self.Z,
-                                         axes=axes, norm=norm, cmap=cmap)
+                                         ax=axes, norm=norm, cmap=cmap)
         if add_colorbar:
             try:
                 # this kwarg can't be passed directly:
