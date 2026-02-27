@@ -995,22 +995,26 @@ contains
                     end if
 
                     ! Assume dim names are same as var ids
-                    if (var_name == x_dim_name) then
+                    if (trim(var_name) == trim(x_dim_name)) then
                         x_var_name = var_name
                         call check_netcdf_error(nf90_inq_varid(nc_file, x_var_name, x_var_id))
                         ! x_var_id = vid
                         ! x_var_name = var_name
-                    else if (var_name == y_dim_name) then
+                    else if (trim*var_name) == trim*y_dim_name)) then
                         y_var_name = var_name
                         call check_netcdf_error(nf90_inq_varid(nc_file, y_var_name, y_var_id))
                         ! y_var_id = vid
                         ! y_var_name = var_name
                     ! Assume that this is the topography data
                     else if (num_dims == 2) then
-                        z_var_name = var_name
-                        call check_netcdf_error(nf90_inq_varid(nc_file, z_var_name, z_var_id))
-                        ! z_var_id = vid
-                        ! z_var_name = var_name
+                        ! dim_ids contains dimension IDs; compare them to x_dim_id/y_dim_id (dim IDs)
+                        if ((dim_ids(1) == y_dim_id .and. dim_ids(2) == x_dim_id) .or. &
+                            (dim_ids(1) == x_dim_id .and. dim_ids(2) == y_dim_id)) then
+                            z_var_name = var_name
+                            call check_netcdf_error(nf90_inq_varid(nc_file, z_var_name, z_var_id))
+                            ! z_var_id = vid
+                            ! z_var_name = var_name
+                        end if
                     else
                         if (verbose) then
                             print *, "Not using var_id ", vid
