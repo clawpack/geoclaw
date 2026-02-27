@@ -638,10 +638,17 @@ contains
                     
                 allocate(xlocs(mx_tot),ylocs(my_tot))
                 
-                call check_netcdf_error(nf90_get_var(nc_file, x_dim_id, xlocs, start=(/ 1 /), count=(/ mx_tot /)))
-                call check_netcdf_error(nf90_get_var(nc_file, y_dim_id, ylocs, start=(/ 1 /), count=(/ my_tot /)))
-                xstart = minloc(xlocs, mask=(xlocs.eq.xll))
-                ystart = minloc(ylocs, mask=(ylocs.eq.yll))
+                ! NOTE: x_dim_id/y_dim_id are DIMENSION ids, not VARIABLE ids.
+                ! We must read coordinate variables via their varids.
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(x_dim_name), x_var_id))
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(y_dim_name), y_var_id))
+
+                call check_netcdf_error(nf90_get_var(nc_file, x_var_id, xlocs))
+                call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs))
+
+                ! Use nearest index rather than float equality
+                xstart = minloc(abs(xlocs - xll), dim=1)
+                ystart = minloc(abs(ylocs - yll), dim=1)
                 deallocate(xlocs,ylocs)
                 
                 z_var_id = -1
