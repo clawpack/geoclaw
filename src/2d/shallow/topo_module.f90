@@ -1000,7 +1000,7 @@ contains
                         call check_netcdf_error(nf90_inq_varid(nc_file, x_var_name, x_var_id))
                         ! x_var_id = vid
                         ! x_var_name = var_name
-                    else if (trim*var_name) == trim*y_dim_name)) then
+                    else if (trim(var_name) == trim(y_dim_name)) then
                         y_var_name = var_name
                         call check_netcdf_error(nf90_inq_varid(nc_file, y_var_name, y_var_id))
                         ! y_var_id = vid
