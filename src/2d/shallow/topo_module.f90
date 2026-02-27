@@ -827,7 +827,7 @@ contains
         integer(kind=4), allocatable :: var_ids(:)
         character(len=64) :: var_name, x_var_name, y_var_name, z_var_name
         character(len=64) :: x_dim_name, y_dim_name
-        integer(kind=4) :: x_var_id, y_var_id, z_var_id, x_dim_id, y_dim_id
+        integer(kind=4) :: vid, x_var_id, y_var_id, z_var_id, x_dim_id, y_dim_id
 
         verbose = .false.
 
@@ -988,31 +988,32 @@ contains
                 end if
 
                 do n=1, num_vars
-                    call check_netcdf_error(nf90_inquire_variable(nc_file, n, var_name, var_type, num_dims, dim_ids))
+                    vid = var_ids(n)
+                    call check_netcdf_error(nf90_inquire_variable(nc_file, vid, var_name, var_type, num_dims, dim_ids))
                     if (verbose) then
-                        print *, n, ": ", var_name, "|", var_type, "|", num_dims, "|", dim_ids
+                        print *, vid, ": ", var_name, "|", var_type, "|", num_dims, "|", dim_ids
                     end if
 
                     ! Assume dim names are same as var ids
                     if (var_name == x_dim_name) then
                         x_var_name = var_name
                         call check_netcdf_error(nf90_inq_varid(nc_file, x_var_name, x_var_id))
-                        ! x_var_id = n
+                        ! x_var_id = vid
                         ! x_var_name = var_name
                     else if (var_name == y_dim_name) then
                         y_var_name = var_name
                         call check_netcdf_error(nf90_inq_varid(nc_file, y_var_name, y_var_id))
-                        ! y_var_id = n
+                        ! y_var_id = vid
                         ! y_var_name = var_name
                     ! Assume that this is the topography data
                     else if (num_dims == 2) then
                         z_var_name = var_name
                         call check_netcdf_error(nf90_inq_varid(nc_file, z_var_name, z_var_id))
-                        ! z_var_id = n
+                        ! z_var_id = vid
                         ! z_var_name = var_name
                     else
                         if (verbose) then
-                            print *, "Not using var_id ", n
+                            print *, "Not using var_id ", vid
                         end if
                     end if
 
