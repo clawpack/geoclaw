@@ -634,7 +634,7 @@ contains
                 
                 ! get x and y dimension info
                 call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
-                    mx_tot, y_dim_id, y_dim_name, my_tot)
+                     x_var_id, mx_tot, y_dim_id, y_dim_name, y_var_id, my_tot)
                     
                 allocate(xlocs(mx_tot),ylocs(my_tot))
                 
@@ -971,7 +971,7 @@ contains
                 call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, &
                     num_vars))
                 call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
-                    mx, y_dim_id, y_dim_name, my)
+                            x_var_id, mx, y_dim_id, y_dim_name, y_var_id, my)
                 
                 ! allocate vector to hold lon and lat vals and vector for var ids
                 allocate(xlocs(mx),ylocs(my),x_in_dom(mx),y_in_dom(my),var_ids(num_vars))
@@ -1615,28 +1615,35 @@ end subroutine intersection
 
     end subroutine check_netcdf_error
 
-    subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &
-        y_dim_id, y_dim_name, my)
+    subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, x_var_id, mx, &
+                                y_dim_id, y_dim_name, y_var_id, my)
         use netcdf
         implicit none
         integer, intent(in) :: nc_file, ndims
-        integer, intent(out) :: x_dim_id, y_dim_id, mx, my
-        character (len = *), intent(out) :: x_dim_name, y_dim_name
-        integer :: m_tmp, n
-        character(20) :: dim_name_tmp
+        integer, intent(out) :: x_dim_id, y_dim_id, x_var_id, y_var_id, mx, my
+        character(len=*), intent(out) :: x_dim_name, y_dim_name
 
-        ! get indices to start at for reading netcdf within domain
-        do n=1, ndims
-            call check_netcdf_error(nf90_inquire_dimension(nc_file, &
-                n, dim_name_tmp, m_tmp))
-            if (ANY((/ 'LON      ','LONGITUDE','X        ' /) == Upper(dim_name_tmp))) then
-                x_dim_name = dim_name_tmp
-                mx = m_tmp
-                x_dim_id = n
-            else if (ANY((/ 'LAT     ','LATITUDE','Y       ' /) == Upper(dim_name_tmp))) then
-                y_dim_name = dim_name_tmp
-                my = m_tmp
-                y_dim_id = n
+        integer :: m_tmp, dimid
+        character(len=20) :: dim_name_tmp
+
+        x_dim_id = -1; y_dim_id = -1
+        x_var_id = -1; y_var_id = -1
+        mx = -1; my = -1
+
+        do dimid = 1, ndims
+            call check_netcdf_error(nf90_inquire_dimension(nc_file, dimid, dim_name_tmp, m_tmp))
+
+            dim_name_tmp = trim(Upper(dim_name_tmp))
+            if (dim_name_tmp == 'LON' .or. dim_name_tmp == 'LONGITUDE' .or. dim_name_tmp =='X') then
+                x_dim_name = trim(dim_name_tmp)
+                x_dim_id   = dimid
+                mx         = m_tmp
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(x_dim_name), x_var_id))
+            else if (dim_name_tmp == 'LAT' .or. dim_name_tmp == 'LATITUDE' .or. dim_name_tmp =='Y') then
+                y_dim_name = trim(dim_name_tmp)
+                y_dim_id   = dimid
+                my         = m_tmp
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(y_dim_name), y_var_id))
             end if
         end do
     end subroutine get_dim_info
