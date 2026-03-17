@@ -167,7 +167,8 @@ jobs:
         cd ${CLAW}/geoclaw
         # Temporarily only run a subset of tests to speed up CI. We can add more tests back in as we optimize the test suite.
         pytest \
-          tests/test_units.py
+          tests/test_units.py \
+          examples/tsunami/bowl-slosh/test_bowl_slosh.py
 
     - name: Upload test results
       if: failure()
