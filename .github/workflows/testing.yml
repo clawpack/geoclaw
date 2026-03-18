@@ -169,7 +169,7 @@ jobs:
         pytest \
           tests/test_units.py \
           examples/tsunami/bowl-slosh/test_bowl_slosh.py \
-          examples/storm-surge/test_storm_surge.py
+          examples/storm-surge/ike/test_ike.py
 
     - name: Upload test results
       if: failure()
