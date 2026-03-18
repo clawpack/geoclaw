@@ -6,6 +6,7 @@ import numpy as np
 
 from clawpack.geoclaw.units import units, convert
 
+@pytest.mark.python
 def test_conversions(verbose=False):
     r"""Test unit conversions."""
 

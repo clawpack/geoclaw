@@ -168,7 +168,8 @@ jobs:
         # Temporarily only run a subset of tests to speed up CI. We can add more tests back in as we optimize the test suite.
         pytest \
           tests/test_units.py \
-          examples/tsunami/bowl-slosh/test_bowl_slosh.py
+          examples/tsunami/bowl-slosh/test_bowl_slosh.py \
+          examples/storm-surge/test_storm_surge.py
 
     - name: Upload test results
       if: failure()

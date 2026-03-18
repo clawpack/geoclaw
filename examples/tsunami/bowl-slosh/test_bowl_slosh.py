@@ -14,6 +14,7 @@ import clawpack.geoclaw.test as test
 import clawpack.geoclaw.fgmax_tools as fgmax_tools
 import clawpack.geoclaw.topotools as topotools
 
+@pytest.mark.regression
 def test_bowl_slosh(tmp_path: Path, save: bool):
     """Bowl-Slosh regression test for GeoClaw"""
 
