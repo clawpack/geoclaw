@@ -13,6 +13,7 @@ import clawpack.geoclaw.topotools as topotools
 # Local test directory and bundled test data
 testdir = Path(__file__).parent
 data_dir = testdir / "data"
+etopo1_extent = [-125.0, -124.0, 48.0, 48.5]
 
 # Test topography functions
 def topo_bowl(x, y):
@@ -184,8 +185,6 @@ def test_get_remote_file_remote(tmp_path):
     ))
     try:
         clawpack.clawutil.data.get_remote_file(url, output_dir=tmp_path, force=True)
-    except AssertionError:
-        raise
     except URLError:
         pytest.skip(f"Remote fetch failed for {url}. Skipping remote test.")
     
@@ -212,6 +211,63 @@ def test_get_remote_file_remote(tmp_path):
     )
     assert np.allclose(download_topo.Z, test_topo.Z), (
         f"Downloaded file does not match {test_path}"
+    )
+
+
+# --- ETOPO1 integration tests and helpers ---
+
+def _read_etopo1_topography(coarsen=10, return_xarray=False):
+    """Read a small ETOPO1 subset for integration testing."""
+    try:
+        return topotools.read_netcdf(
+            "etopo1",
+            extent=etopo1_extent,
+            coarsen=coarsen,
+            return_xarray=return_xarray,
+            verbose=True,
+        )
+    except (OSError, RuntimeError):
+        pytest.skip("Reading ETOPO1 failed; check whether the remote server is available.")
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+@pytest.mark.remote
+def test_etopo1_topography():
+    """Integration test for reading a remote ETOPO1 subset via topotools."""
+    pytest.importorskip("netCDF4")
+
+    topo1 = _read_etopo1_topography(coarsen=1)
+    topo10 = _read_etopo1_topography(coarsen=10)
+
+    testdata_path = data_dir / "etopo1_10min.asc"
+    topo10input = topotools.Topography()
+    topo10input.read(testdata_path, topo_type=3)
+
+    assert topo1.Z.size > topo10.Z.size
+    assert topo10.Z.shape == topo10input.Z.shape
+    assert np.allclose(topo10.Z, topo10input.Z), (
+        "topo10.Z does not agree with archived data"
+    )
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+@pytest.mark.remote
+def test_etopo1_xarray():
+    """Integration test for the xarray-returning ETOPO1 reader path."""
+    pytest.importorskip("xarray")
+
+    topo10, topo10_xarray = _read_etopo1_topography(coarsen=10, return_xarray=True)
+
+    testdata_path = data_dir / "etopo1_10min.asc"
+    topo10input = topotools.Topography()
+    topo10input.read(testdata_path, topo_type=3)
+
+    assert topo10.Z.shape == topo10input.Z.shape
+    assert topo10_xarray["z"].shape == topo10input.Z.shape
+    assert np.allclose(topo10_xarray["z"], topo10input.Z), (
+        "topo10_xarray['z'] does not agree with archived data"
     )
 
 
@@ -381,6 +437,29 @@ def plot_kahului(output_dir):
     plt.close(fig)
 
 
+def plot_etopo1(output_dir):
+    """Create optional diagnostic plots for the remote ETOPO1 integration tests."""
+    plt = _import_pyplot()
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    pytest.importorskip("netCDF4")
+    topo1 = _read_etopo1_topography(coarsen=1)
+    topo10 = _read_etopo1_topography(coarsen=10)
+
+    fig = plt.figure(figsize=(12, 5))
+    ax1 = fig.add_subplot(1, 2, 1)
+    topo1.plot(axes=ax1)
+    ax1.set_title("1 minute ETOPO1 data")
+
+    ax2 = fig.add_subplot(1, 2, 2)
+    topo10.plot(axes=ax2)
+    ax2.set_title("10 minute ETOPO1 data")
+
+    fig.savefig(output_dir / "etopo1_test_plot.png")
+    plt.close(fig)
+
+
 @pytest.mark.python
 def test_plot_kahului():
     r"""Smoke test plotting for a file-backed Topography object."""
@@ -431,6 +510,7 @@ if __name__ == "__main__":
             plot_unstructured_topo_baseline(output_dir)
             plot_topo_bowl_hill(output_dir)
             plot_kahului(output_dir)
+            plot_etopo1(output_dir)
         else:
             print("Usage: python test_topotools.py [save|plot] [output_dir]")
             print("Run remote tests via pytest, e.g.: pytest -m remote tests/test_topotools.py")
