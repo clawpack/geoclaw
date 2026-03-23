@@ -169,6 +169,7 @@ jobs:
         pytest \
           tests/test_units.py \
           tests/test_util.py \
+          tests/test_topotools.py \
           examples/tsunami/bowl-slosh/test_bowl_slosh.py \
           examples/storm-surge/ike/test_ike.py
 
