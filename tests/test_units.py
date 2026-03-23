@@ -7,19 +7,19 @@ import numpy as np
 from clawpack.geoclaw.units import units, convert
 
 @pytest.mark.python
-def test_conversions(verbose=False):
-    r"""Test unit conversions."""
+@pytest.mark.parametrize("measurement_type, measurement_units", units.items())
+def test_conversions(measurement_type, measurement_units):
+    """Test unit conversions."""
 
-    for (measurement_type, measurement_units) in units.items():
-        value = np.pi
-        units_list = list(units[measurement_type].keys())
-        for i in range(len(units_list)):
-            if verbose:
-                print("%s (%s) -> (%s)" % (value, units_list[i - 1], 
-                                                  units_list[i]))
-            value = convert(value, units_list[i - 1], units_list[i])
-        np.testing.assert_allclose([value], [np.pi],
-                      err_msg="Measurement type %s failed." % measurement_type)
+    value = np.pi
+    units_list = list(measurement_units.keys())
+    for i in range(len(units_list)):
+        value = convert(value, units_list[i - 1], units_list[i])
+    np.testing.assert_allclose(
+        value,
+        np.pi,
+        err_msg=f"Measurement type {measurement_type} failed.",
+        )
 
 if __name__ == "__main__":
     pytest.main([__file__])
