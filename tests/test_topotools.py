@@ -304,7 +304,6 @@ def plot_topo_bowl_hill(output_dir):
 
 
 @pytest.mark.python
-@pytest.mark.plot
 def test_plot_topo_bowl_hill(tmp_path):
     """Smoke test Topography.plot on the bowl-hill example."""
     plt = _import_pyplot()
@@ -352,7 +351,6 @@ def plot_kahului(output_dir):
 
 
 @pytest.mark.python
-@pytest.mark.plot
 def test_plot_kahului(tmp_path):
     r"""Smoke test plotting for a file-backed Topography object."""
     plt = _import_pyplot()
