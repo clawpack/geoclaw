@@ -146,19 +146,10 @@ def test_read_write_topo_bowl_hill(tmp_path, topo_type):
 @pytest.mark.python
 @pytest.mark.netcdf
 def test_netcdf(tmp_path):
-    r"""Test Python NetCDF formatted topography reading"""
+    r"""Test NetCDF topography I/O using a checked-in local fixture."""
 
     try:
-        # Fetch comparison data
-        url = "".join((
-            'https://raw.githubusercontent.com/rjleveque/geoclaw/',
-            '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/',
-            'geoclaw/tests/kahului_sample_1s.tt2'
-        ))
-        clawpack.clawutil.data.get_remote_file(url, output_dir=tmp_path, force=True)
-
-        # Paths
-        local_path = tmp_path / Path(url).name
+        local_path = data_dir / "kahului_sample_1s.tt2"
         nc_path = tmp_path / "test.nc"
 
         # Write out NetCDF version of file
@@ -170,99 +161,58 @@ def test_netcdf(tmp_path):
         nc_topo = topotools.Topography(path=nc_path)
         nc_topo.read()
 
-        # Compare arrays - use tolerance based on 30 arcsecond accuracy
         assert np.allclose(ascii_topo.x, nc_topo.x), "Flat x-arrays did not match."
         assert np.allclose(ascii_topo.y, nc_topo.y), "Flat y-arrays did not match."
-        assert np.allclose(ascii_topo.Z, nc_topo.Z), "Flat y-arrays did not match."
+        assert np.allclose(ascii_topo.Z, nc_topo.Z), "Flat Z-arrays did not match."
 
-    except AssertionError:
-        raise
     except ImportError:
         pytest.skip("Skipping test since NetCDF support not found.")
     except RuntimeError:
         pytest.skip("NetCDF topography test skipped due to runtime failure.")
-    except URLError:
-        pytest.skip("Could not fetch remote file, skipping test.")
 
 
+# Remote/network integration test: keep opt-in and out of the default suite.
 @pytest.mark.python
 @pytest.mark.remote
-def test_get_remote_file(tmp_path):
-    """Test the ability to fetch a remote file from the web."""
+def test_get_remote_file_remote(tmp_path):
+    """Opt-in integration test for fetching a known remote topography file."""
 
+    url = "".join((
+        'https://raw.githubusercontent.com/rjleveque/geoclaw/',
+        '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/',
+        'geoclaw/tests/kahului_sample_1s.tt2'
+    ))
     try:
-        url = "".join((
-            'https://raw.githubusercontent.com/rjleveque/geoclaw/',
-            '5f675256c043e59e5065f9f3b5bdd41c2901702c/src/python/',
-            'geoclaw/tests/kahului_sample_1s.tt2'
-        ))
         clawpack.clawutil.data.get_remote_file(url, output_dir=tmp_path, force=True)
-
-        local_path = tmp_path / Path(url).name
-        download_topo = topotools.Topography(path=local_path)
-
-        test_path = data_dir / Path(url).name
-        test_topo = topotools.Topography(path=test_path)
-
-        assert np.allclose(download_topo.Z, test_topo.Z), \
-            f"Downloaded file does not match {test_path}"
     except AssertionError:
         raise
     except URLError:
-        pytest.skip("Could not fetch remote file, skipping test.")
+        pytest.skip(f"Remote fetch failed for {url}. Skipping remote test.")
+    
+    local_path = tmp_path / Path(url).name
+    assert local_path.exists(), (
+        f"Expected file {local_path} not found after fetch attempt."
+    )
+    download_topo = topotools.Topography(path=local_path)
 
+    test_path = data_dir / Path(url).name
+    test_topo = topotools.Topography(path=test_path)
 
-@pytest.mark.python
-def test_unstructured_topo(save=False, plot=False):
-    scipy = pytest.importorskip("scipy")
-    assert scipy is not None
-
-    # Create random test data
-    def func(x, y):
-        return x * (1 - x) * np.cos(4 * np.pi * x) * np.sin(4 * np.pi * y**2) ** 2
-
-    fill_topo = topotools.Topography()
-    fill_topo.x = np.linspace(0, 1, 100)
-    fill_topo.y = np.linspace(0, 1, 200)
-    fill_topo.Z = func(fill_topo.X, fill_topo.Y)
-
-    points = np.loadtxt(data_dir / "unstructured_points.txt")
-    values = func(points[:, 0], points[:, 1])
-
-    # Create topography object
-    topo = topotools.Topography(unstructured=True)
-    topo.x = points[:, 0]
-    topo.y = points[:, 1]
-    topo.z = values
-
-    if plot:
-        import matplotlib.pyplot as plt
-
-        fig = plt.figure(figsize=(16, 6))
-        axes = fig.add_subplot(1, 3, 1)
-        fill_topo.plot(axes=axes)
-        axes.set_title("True Field")
-        axes = fig.add_subplot(1, 3, 2)
-        topo.plot(axes=axes, region_extent=[0, 1, 0, 1])
-        axes.set_title("Unstructured Field")
-
-    topo.interp_unstructured(fill_topo, extent=[0, 1, 0, 1], delta=(1e-2, 1e-2))
-    assert not topo.unstructured
-
-    # Load (and save) test data and make the comparison
-    test_data_path = data_dir / "unstructured_test_data.tt3"
-    if save:
-        topo.write(test_data_path, Z_format="%22.15e")
-
-    compare_data = topotools.Topography(path=test_data_path)
-
-    assert np.allclose(compare_data.Z, topo.Z)
-
-    if plot:
-        axes = fig.add_subplot(1, 3, 3)
-        topo.plot(axes=axes)
-        axes.set_title("Interpolated Field")
-        plt.show()
+    assert download_topo.x.shape == test_topo.x.shape, (
+        f"Downloaded x-array has wrong shape."
+    )
+    assert download_topo.y.shape == test_topo.y.shape,  (
+        f"Downloaded y-array has wrong shape."
+    )
+    assert download_topo.Z.shape == test_topo.Z.shape,  (
+        f"Downloaded Z-array has wrong shape."
+    )
+    assert np.allclose(download_topo.Z[:3, :3], test_topo.Z[:3, :3]), (
+        f"Downloaded file does not match {test_path} in corner values."
+    )
+    assert np.allclose(download_topo.Z, test_topo.Z), (
+        f"Downloaded file does not match {test_path}"
+    )
 
 
 def _import_pyplot():
@@ -272,6 +222,87 @@ def _import_pyplot():
     import matplotlib.pyplot as plt
 
     return plt
+
+
+def _make_unstructured_topo():
+    """Construct a representative unstructured topography for interpolation tests."""
+    # Create random test data
+    f = lambda x, y: x * (1 - x) * np.cos(4 * np.pi * x) \
+                                 * np.sin(4 * np.pi * y**2) ** 2
+
+    fill_topo = topotools.Topography()
+    fill_topo.x = np.linspace(0, 1, 100)
+    fill_topo.y = np.linspace(0, 1, 200)
+    fill_topo.Z = f(fill_topo.X, fill_topo.Y)
+
+    points = np.loadtxt(data_dir / "unstructured_points.txt")
+    values = f(points[:, 0], points[:, 1])
+
+    # Create topography object
+    topo = topotools.Topography(unstructured=True)
+    topo.x = points[:, 0]
+    topo.y = points[:, 1]
+    topo.z = values
+
+    return fill_topo, topo
+
+
+@pytest.mark.python
+def test_unstructured_topo():
+    """Test interpolation from unstructured points onto a regular grid."""
+    # Check to see if scipy is available and skip if not, since it's required
+    # for interpolation.
+    pytest.importorskip("scipy")
+
+    fill_topo, topo = _make_unstructured_topo()
+    topo.interp_unstructured(fill_topo, extent=[0, 1, 0, 1], delta=(1e-2, 1e-2))
+    assert not topo.unstructured
+    assert np.isfinite(topo.Z).all()
+    
+    compare_scalar = topo.Z[50, 50]
+    assert np.isfinite(compare_scalar)
+
+    test_data_path = data_dir / "unstructured_test_data.tt3"
+    compare_data = topotools.Topography(path=test_data_path)
+    assert np.allclose(compare_data.Z[50, 50], compare_scalar)
+    assert np.allclose(compare_data.Z, topo.Z)
+
+
+def save_unstructured_test_data(output_dir):
+    """Utility function to save unstructured interpolation test data."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fill_topo, topo = _make_unstructured_topo()
+    topo.interp_unstructured(fill_topo, extent=[0, 1, 0, 1], delta=(1e-2, 1e-2))
+    test_data_path = output_dir / "unstructured_test_data.tt3"
+    topo.write(test_data_path, Z_format="%22.15e")
+
+
+def plot_unstructured_topo_baseline(output_dir):
+    """Create optional diagnostic plots for the unstructured interpolation."""
+    plt = _import_pyplot()
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fill_topo, topo = _make_unstructured_topo()
+    topo.interp_unstructured(fill_topo, extent=[0, 1, 0, 1], delta=(1e-2, 1e-2))
+
+    fig = plt.figure(figsize=(16, 6))
+    axes = fig.add_subplot(1, 3, 1)
+    fill_topo.plot(axes=axes)
+    axes.set_title("True Field")
+
+    axes = fig.add_subplot(1, 3, 2)
+    topo.plot(axes=axes, region_extent=[0, 1, 0, 1])
+    axes.set_title("Unstructured Field")
+
+    axes = fig.add_subplot(1, 3, 3)
+    topo.plot(axes=axes)
+    axes.set_title("Interpolated Field")
+
+    fig.savefig(output_dir / "unstructured_interpolation.png")
+    plt.close(fig)
 
 
 def _make_bowl_hill_topography():
@@ -304,7 +335,7 @@ def plot_topo_bowl_hill(output_dir):
 
 
 @pytest.mark.python
-def test_plot_topo_bowl_hill(tmp_path):
+def test_plot_topo_bowl_hill():
     """Smoke test Topography.plot on the bowl-hill example."""
     plt = _import_pyplot()
     topo = _make_bowl_hill_topography()
@@ -351,7 +382,7 @@ def plot_kahului(output_dir):
 
 
 @pytest.mark.python
-def test_plot_kahului(tmp_path):
+def test_plot_kahului():
     r"""Smoke test plotting for a file-backed Topography object."""
     plt = _import_pyplot()
 
@@ -391,9 +422,17 @@ def test_plot_kahului(tmp_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "plot":
-        output_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(".") / "plot_output"
-        plot_topo_bowl_hill(output_dir)
-        plot_kahului(output_dir)
+    if len(sys.argv) > 1:
+        if sys.argv[1].lower() == "save":
+            output_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(".") / "unstructured_test_data"
+            save_unstructured_test_data(output_dir)
+        elif sys.argv[1].lower() == "plot":
+            output_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(".") / "plot_output"
+            plot_unstructured_topo_baseline(output_dir)
+            plot_topo_bowl_hill(output_dir)
+            plot_kahului(output_dir)
+        else:
+            print("Usage: python test_topotools.py [save|plot] [output_dir]")
+            print("Run remote tests via pytest, e.g.: pytest -m remote tests/test_topotools.py")
     else:
         pytest.main([__file__])
