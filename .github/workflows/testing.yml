@@ -171,6 +171,7 @@ jobs:
           tests/test_util.py \
           tests/test_topotools.py \
           tests/test_storm.py \
+          tests/test_dtopotools.py \
           examples/tsunami/bowl-slosh/test_bowl_slosh.py \
           examples/storm-surge/ike/test_ike.py
 
