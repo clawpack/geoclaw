@@ -497,7 +497,7 @@ class Storm(object):
         num_lines = len(data_block)
 
         # Parse data block
-        self.t = np.empty(num_lines, dtype=np.datetime64)
+        self.t = np.empty(num_lines, dtype="datetime64[s]")
         self.event = np.empty(num_lines, dtype=str)
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
@@ -511,12 +511,13 @@ class Storm(object):
                 break
             data = [value.strip() for value in line.split(",")]
 
-            # Create time
-            self.t[i] = np.datetime64(f"{data[0][:4]}"      +
-                                      f"-{data[0][4:6]}"    +
-                                      f"-{data[0][6:8]}"    +
-                                      f"T{data[1][:2]}"     +
-                                      f":{data[1][2:]}")
+            # Create time from YYYYMMDD and HHMM fields
+            self.t[i] = np.datetime64(
+                f"{data[0][:4]}"
+                f"-{data[0][4:6]}"
+                f"-{data[0][6:8]}"
+                f"T{data[1][:2]}:{data[1][2:]}"
+            )
 
             # If an event is occuring record it.  If landfall then use as an
             # offset.   Note that if there are multiple landfalls the last one
@@ -792,7 +793,7 @@ class Storm(object):
         assert(num_lines == len(data_block))
 
         # Parse data block
-        self.t = np.empty(num_lines, dtype=np.datetime64)
+        self.t = np.empty(num_lines, dtype="datetime64[s]")
         self.event = np.empty(num_lines, dtype=str)
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
@@ -805,11 +806,15 @@ class Storm(object):
                 break
             data = [value.strip() for value in line.split()]
 
-            # Create time
-            self.t[i] = np.datetime64(f"{data[0][:2]}"      +
-                                      f"-{data[0][2:4]}"    +
-                                      f"-{data[0][4:6]}"    +
-                                      f"T{data[0][6:]}")
+            # Create time from JMA yymmddhh field
+            year = int(data[0][:2])
+            year += 1900 if year >= 51 else 2000
+            self.t[i] = np.datetime64(
+                f"{year:04d}"
+                f"-{data[0][2:4]}"
+                f"-{data[0][4:6]}"
+                f"T{data[0][6:8]}:00"
+            )
 
             # Classification, note that this is not the category of the storm
             self.classification[i] = int(data[1])
@@ -870,7 +875,7 @@ class Storm(object):
         #  max_wind_radius  - convert from km to m - 1000.0
         #  Central_pressure - convert from mbar to Pa - 100.0
         #  Radius of last isobar contour - convert from km to m - 1000.0
-        self.t = np.empty(num_lines, dtype=np.datetime64)
+        self.t = np.empty(num_lines, dtype="datetime64[s]")
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
         self.max_wind_speed = np.empty(num_lines)
@@ -888,11 +893,13 @@ class Storm(object):
                 self.basin = TCVitals_Basins[data[1][2:]]
                 self.ID = int(data[1][:2])
 
-            # Create time
-            self.t[i] = np.datetime64(f"{data[0][:2]}"      +
-                                      f"-{data[0][2:4]}"    +
-                                      f"-{data[0][4:6]}"    +
-                                      f"T{data[0][6:]}")
+            # Create time from YYYYMMDD and HHMM fields
+            self.t[i] = np.datetime64(
+                f"{data[3][:4]}"
+                f"-{data[3][4:6]}"
+                f"-{data[3][6:8]}"
+                f"T{data[4][:2]}:{data[4][2:]}"
+            )
 
             # Parse eye location - longitude/latitude order
             if data[5][-1] == 'N':
@@ -1063,7 +1070,15 @@ class Storm(object):
 
             # Time
             if not isinstance(self.time_offset, float):
-                data[-1][0] = (self.t[n] - self.time_offset).total_seconds()
+                delta = self.t[n] - self.time_offset
+                if hasattr(delta, "total_seconds"):
+                    data[-1][0] = float(delta.total_seconds())
+                else:
+                    if hasattr(delta, "values"):
+                        delta = delta.values
+                    if isinstance(delta, np.ndarray):
+                        delta = delta.item()
+                    data[-1][0] = float(pd.to_timedelta(delta).total_seconds())
             else:
                 data[-1][0] = self.t[n] - self.time_offset
             # Eye-location
