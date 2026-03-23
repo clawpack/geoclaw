@@ -4,14 +4,14 @@ import datetime
 import os.path
 import shutil
 import tempfile
+import pytest
 
-from nose.tools import raises
 import numpy as np
 
 import clawpack.geoclaw.util as util
 from clawpack.geoclaw.util import NOAA_API_URL, fetch_noaa_tide_data
 
-
+@pytest.mark.python
 class TestFetchNoaaTideData:
     station = '1234567'
     begin_date = datetime.datetime(2000, 10, 30, 12, 0)
@@ -90,7 +90,6 @@ class TestFetchNoaaTideData:
                              cache_dir=cache_dir)
         assert d == None, '*** expected d == None'
 
-    @raises(ValueError)
     def test_date_time_range_mismatch(self):
         cache_dir = os.path.join(self.temp_dir,
                                  self.test_date_time_range_mismatch.__name__)
@@ -118,8 +117,9 @@ class TestFetchNoaaTideData:
         self._monkey_patch_urlopen(mock_read_response)
 
         # should raise ValueError
-        fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
-                             cache_dir=cache_dir)
+        with pytest.raises(ValueError):
+            fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
+                                 cache_dir=cache_dir)
 
     def test_missing_values(self):
         cache_dir = os.path.join(self.temp_dir,

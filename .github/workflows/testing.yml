@@ -168,6 +168,7 @@ jobs:
         # Temporarily only run a subset of tests to speed up CI. We can add more tests back in as we optimize the test suite.
         pytest \
           tests/test_units.py \
+          tests/test_util.py \
           examples/tsunami/bowl-slosh/test_bowl_slosh.py \
           examples/storm-surge/ike/test_ike.py
 
