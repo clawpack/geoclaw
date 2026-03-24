@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import clawpack.geoclaw.surge.storm as storm
+import clawpack.geoclaw.util as util
 
 # Local test directory and bundled storm test data
 testdir = Path(__file__).parent
@@ -25,6 +26,29 @@ FILE_FORMAT_TESTS = ["atcf",
                                  reason=("IBTrACS GeoClaw output does not ,"
                                          "currently match baseline")))
 ]
+
+DATA_FILE_FORMAT_MAP = {
+    1: ["ascii", 1, "nws12", "owi"],
+    2: ["netcdf", 2, "nws13"],
+}
+
+
+def create_netcdf_storm_file(path):
+    """Create a small deterministic NetCDF storm dataset for testing."""
+    xr = pytest.importorskip("xarray")
+    size = (3, 5, 3)
+    coords = [
+        ("longitude", np.linspace(-1.0, 1.0, size[0])),
+        ("latitude", np.linspace(-2.0, 2.0, size[1])),
+        ("valid_time", np.linspace(0.0, 2.0, size[2])),
+    ]
+
+    values = np.arange(np.prod(size), dtype=float).reshape(size)
+    wind_x = xr.DataArray(values, coords=coords)
+    wind_y = xr.DataArray(values + 100.0, coords=coords)
+    pressure = xr.DataArray(values + 1000.0, coords=coords)
+    ds = xr.Dataset({"u": wind_x, "v": wind_y, "pressure": pressure})
+    ds.to_netcdf(path)
 
 
 def check_geoclaw(paths, check_header=False):
@@ -140,6 +164,67 @@ def save_storm_test_data(output_dir):
         if fill_rad is not None:
             write_kwargs["storm_radius_fill"] = fill_rad
         test_storm.write(check_path, **write_kwargs)
+
+
+@pytest.mark.python
+@pytest.mark.parametrize("file_format", ["ascii", "netcdf"])
+def test_data_storm_roundtrip(file_format, tmp_path):
+    """Test round-trip read/write of data-driven storm metadata."""
+    storm_path = tmp_path / "test.storm"
+    data_storm = storm.Storm()
+    data_storm.time_offset = np.datetime64("2012-08-29")
+    data_storm.file_format = file_format
+    data_storm.window_type = 1
+    data_storm.ramp_width = 3
+
+    if file_format == "ascii":
+        data_storm.file_paths = [
+            Path("storm_1.PRE"),
+            Path("storm_1.WIN"),
+            Path("storm_2.PRE"),
+            Path("storm_2.WIN"),
+        ]
+        data_storm.write(storm_path, file_format="data")
+        read_storm = storm.Storm(storm_path, file_format="data")
+    else:
+        data_storm.file_paths = [tmp_path / "storm.nc"]
+        create_netcdf_storm_file(data_storm.file_paths[0])
+        data_storm.write(
+            storm_path,
+            file_format="data",
+            dim_mapping={"t": "valid_time"},
+        )
+        read_storm = storm.Storm(storm_path, file_format="data")
+
+    assert data_storm.time_offset == read_storm.time_offset
+    assert data_storm.file_format in DATA_FILE_FORMAT_MAP[read_storm.file_format]
+    assert data_storm.window_type == read_storm.window_type
+    assert data_storm.ramp_width == read_storm.ramp_width
+    assert len(data_storm.file_paths) == len(read_storm.file_paths)
+    for i, path in enumerate(data_storm.file_paths):
+        assert read_storm.file_paths[i] == path
+
+
+@pytest.mark.python
+def test_netccdf_var_mapping(tmp_path):
+    """Test NetCDF dimension and variable name discovery for data storms."""
+    storm_data_file = tmp_path / "storm.nc"
+    create_netcdf_storm_file(storm_data_file)
+
+    dim_mapping = util.get_netcdf_names(
+        storm_data_file,
+        lookup_type="dim",
+        verbose=True,
+        user_mapping={"t": "valid_time"},
+    )
+    var_mapping = util.get_netcdf_names(
+        storm_data_file,
+        lookup_type="var",
+        verbose=True,
+    )
+
+    assert dim_mapping == {"x": "longitude", "y": "latitude", "t": "valid_time"}
+    assert var_mapping == {"wind_u": "u", "wind_v": "v", "pressure": "pressure"}
 
 
 if __name__ == "__main__":
