@@ -46,6 +46,13 @@ jobs:
             toolchain: {compiler: gcc, version: 14}
 
     steps:
+    - name: Install system dependencies
+      if: ${{ matrix.toolchain.compiler != 'intel' && matrix.toolchain.compiler != 'intel-classic' }}
+      run: |
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          sudo apt-get update
+          sudo apt-get install -y libblas-dev liblapack-dev
+        fi
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6.2.0
       with:
@@ -61,7 +68,7 @@ jobs:
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 meson-python ninja pytest numpy pandas
+        pip install flake8 meson-python ninja pytest numpy pandas xarray
         
     - name: Checkout Clawpack
       uses: actions/checkout@v6.0.2
@@ -166,7 +173,7 @@ jobs:
         echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
         cd ${CLAW}/geoclaw
         # Temporarily only run a subset of tests to speed up CI. We can add more tests back in as we optimize the test suite.
-        pytest \
+        pytest --basetemp=${CLAW}/geoclaw/.pytest_tmp -vv \
           tests/test_units.py \
           tests/test_util.py \
           tests/test_topotools.py \
@@ -174,13 +181,13 @@ jobs:
           tests/test_dtopotools.py \
           examples/tsunami/bowl-slosh/test_bowl_slosh.py \
           examples/storm-surge/ike/test_ike.py \
-          examples/multi-layer/plane_wave/test_plane_wave_multilayer.py \
+          examples/multi-layer/plane_wave/test_plane_wave_multilayer.py
           # examples/storm-surge/isaac/test_isaac.py
 
     - name: Upload test results
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v6
       with:
-        name: test_results
-        path: ${{ env.CLAW }}/geoclaw/*_output
+        name: test_results_${{ matrix.os }}_${{ matrix.toolchain.compiler }}_${{ matrix.build }}
+        path: ${{ env.CLAW }}/geoclaw/.pytest_tmp
         if-no-files-found: ignore
