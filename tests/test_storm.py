@@ -206,7 +206,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
 
 
 @pytest.mark.python
-def test_netccdf_var_mapping(tmp_path):
+def test_netcdf_var_mapping(tmp_path):
     """Test NetCDF dimension and variable name discovery for data storms."""
     storm_data_file = tmp_path / "storm.nc"
     create_netcdf_storm_file(storm_data_file)
@@ -225,6 +225,72 @@ def test_netccdf_var_mapping(tmp_path):
 
     assert dim_mapping == {"x": "longitude", "y": "latitude", "t": "valid_time"}
     assert var_mapping == {"wind_u": "u", "wind_v": "v", "pressure": "pressure"}
+
+
+@pytest.mark.python
+@pytest.mark.parametrize(
+    "speeds_knots, expected_categories",
+    [
+        (np.array([20, 50, 70, 90, 100, 120, 140]), 
+         np.array([-1,  0,  1,  2,   3,   4,   5])),
+    ],
+)
+def test_storm_category_nhc(speeds_knots, expected_categories):
+    """Test NHC categorization from known wind speeds."""
+    s = storm.Storm()
+    s.max_wind_speed = speeds_knots * 0.514444  # convert knots to m/s
+
+    categories = s.category(categorization="NHC")
+
+    print(f"{categories}")
+    print(f"{expected_categories}")
+
+    assert np.array_equal(categories, expected_categories)
+
+
+@pytest.mark.python
+@pytest.mark.parametrize(
+    "speed_knots, expected_category, expected_name",
+    [
+        (20, -1, "Tropical Depression"),
+        (50, 0, "Tropical Storm"),
+        (80, 1, "Category 1 Hurricane"),
+    ],
+)
+def test_storm_category_names(speed_knots, expected_category, expected_name):
+    """Test NHC category-name output."""
+    s = storm.Storm()
+    s.max_wind_speed = np.array([speed_knots]) * 0.514444  # convert knots to m/s
+
+    categories, names = s.category(categorization="NHC", cat_names=True)
+
+    assert categories[0] == expected_category
+    assert expected_name in names[0]
+
+
+@pytest.mark.python
+def test_storm_plot_smoke(tmp_path):
+    """Smoke test for Storm.plot (no assertions, just ensure it runs)."""
+    plt = pytest.importorskip("matplotlib.pyplot")
+
+    s = storm.Storm()
+
+    # Minimal valid track
+    s.t = np.array([
+        np.datetime64("2020-01-01"),
+        np.datetime64("2020-01-02"),
+    ])
+    s.eye_location = np.array([
+        [-90.0, 25.0],
+        [-89.5, 25.5],
+    ])
+
+    fig, ax = plt.subplots()
+    s.plot(ax)
+
+    # Save to tmp_path just to ensure backend works
+    fig.savefig(tmp_path / "storm_plot.png")
+    plt.close(fig)
 
 
 if __name__ == "__main__":

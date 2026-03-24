@@ -1537,12 +1537,12 @@ class Storm(object):
             # NHC uses knots
             speeds = units.convert(self.max_wind_speed, "m/s", "knots")
             category = (np.zeros(speeds.shape) +
-                        (speeds < 30) * -1 +
+                        (speeds < 34) * -1 +
                         (speeds >= 64) * (speeds < 83) * 1 +
                         (speeds >= 83) * (speeds < 96) * 2 +
                         (speeds >= 96) * (speeds < 113) * 3 +
-                        (speeds >= 113) * (speeds < 135) * 4 +
-                        (speeds >= 135) * 5)
+                        (speeds >= 113) * (speeds < 137) * 4 +
+                        (speeds >= 137) * 5)
             cat_map = {-1: "Tropical Depression",
                        0: "Tropical Storm",
                        1: "Category 1 Hurricane",
