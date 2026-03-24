@@ -1,29 +1,16 @@
 # Include flags for LAPACK linking
 UNAME = $(shell uname)
 ifeq ($(UNAME), Darwin)
-  ifndef LFLAGS
-    LFLAGS = -framework accelerate $(FFLAGS)
-  else
-    LFLAGS += -framework accelerate $(FFLAGS)
-  endif
+  LFLAGS += -framework Accelerate
 else ifeq ($(UNAME), Linux)
   ifeq ($(FC), ifort)
-    # Created using Intel MKL Link Line Advisor
-    # Please refer to 
-    # http://software.intel.com/en-us/articles/intel-mkl-link-line-advisor/
-    # for other installation types
     FFLAGS += -I$(MKLROOT)/include
-    ifndef LFLAGS                                                                                                                                    
-      LFLAGS =  -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_core.a $(MKLROOT)/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm $(FFLAGS)
-    else
-      LFLAGS +=  -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_ilp64.a $(MKLROOT)/lib/intel64/libmkl_core.a $(MKLROOT)/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm $(FFLAGS)
-    endif
+    LFLAGS += -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a \
+              $(MKLROOT)/lib/intel64/libmkl_core.a \
+              $(MKLROOT)/lib/intel64/libmkl_sequential.a \
+              -Wl,--end-group -lpthread -lm
   else ifeq ($(FC), gfortran)
-    ifndef LFLAGS
-      LFLAGS = -llapack $(FFLAGS)
-    else
-      LFLAGS += -llapack $(FFLAGS)
-    endif
+    LFLAGS += -llapack
   endif
 endif
 
