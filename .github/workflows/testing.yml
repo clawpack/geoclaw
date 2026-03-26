@@ -180,6 +180,7 @@ jobs:
           tests/test_storm.py \
           tests/test_dtopotools.py \
           examples/tsunami/bowl-slosh/test_bowl_slosh.py \
+          examples/particles/test_particles.py \
           examples/storm-surge/ike/test_ike.py \
           examples/multi-layer/plane_wave/test_plane_wave_multilayer.py \
           examples/tsunami/dtopo/test_dtopo.py
