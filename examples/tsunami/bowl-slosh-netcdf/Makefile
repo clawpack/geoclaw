@@ -22,9 +22,11 @@ PLOTDIR = _plots               # Directory for plots
 # Environment variable FC should be set to fortran compiler, e.g. gfortran
 
 # Compiler flags can be specified here or set as an environment variable
-FFLAGS += -DNETCDF -lnetcdf -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib
-LFLAGS += $(FFLAGS) -lnetcdff
-
+ifeq ($(HAVE_NETCDF), no)
+  $(error This example requires NetCDF support, but none was found.)
+endif
+FFLAGS += -DNETCDF $(NETCDF_FFLAGS)
+LFLAGS += $(NETCDF_LFLAGS)
 
 # ---------------------------------
 # package sources for this program:
@@ -68,4 +70,3 @@ all:
 	$(MAKE) topo
 	$(MAKE) .plots
 	$(MAKE) .htmls
-
