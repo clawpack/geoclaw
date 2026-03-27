@@ -416,14 +416,7 @@ def setgeo(rundata):
 
     if data.storm_specification_type == 'holland80':
         # Convert ATCF data to GeoClaw format
-        clawutil.data.get_remote_file(
-                       "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-        atcf_path = scratch_dir / "bal092012.dat"
-        # Note that the get_remote_file function does not support gzip files which
-        # are not also tar files.  The following code handles this
-        with gzip.open(atcf_path.with_suffix(".dat.gz"), 'rb') as atcf_file,    \
-                open(atcf_path, 'w') as atcf_unzipped_file:
-            atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
+        atcf_path = (Path() / "bal092012.dat").resolve()
 
         # Uncomment/comment out to use the old version of the Ike storm file
         isaac.read(path=atcf_path, file_format="ATCF")
