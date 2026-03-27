@@ -51,7 +51,10 @@ jobs:
       run: |
         if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
           sudo apt-get update
-          sudo apt-get install -y libblas-dev liblapack-dev
+          sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+          brew update
+          brew install netcdf-fortran
         fi
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6.2.0
@@ -189,7 +192,7 @@ jobs:
 
     - name: Upload test results
       if: failure()
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: test_results_${{ matrix.os }}_${{ matrix.toolchain.compiler }}_${{ matrix.build }}
         path: ${{ env.CLAW }}/geoclaw/.pytest_tmp
