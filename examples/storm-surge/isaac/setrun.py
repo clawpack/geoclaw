@@ -411,7 +411,7 @@ def setgeo(rundata):
     data.storm_file = (Path() / 'isaac.storm').resolve()
     
     isaac = Storm()
-    atcf_path = (Path() / "bal092012.dat").resolve()
+    atcf_path = (Path(__file__).parent / "bal092012.dat").resolve()
     isaac.read(path=atcf_path, file_format="ATCF")
     # Calculate landfall time - Need to specify as the file above does not
     # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)

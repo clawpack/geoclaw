@@ -118,20 +118,20 @@ def write_owi_wind(
 )
 def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
     """Regression test for Isaac storm surge using several storm-input modes."""
-    example_dir = Path(__file__).parent
-    runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
+    runner = test.GeoClawTestRunner(tmp_path, test_path=Path(__file__).parent)
 
     runner.set_data()
     # TODO: Decide on time range for Isaac test; this is currently set to match
     # the Isaac test, but may need to be adjusted.
     runner.rundata.clawdata.t0 = days2seconds(-1)
     runner.rundata.clawdata.tfinal = days2seconds(-0.5)
+    runner.rundata.clawdata.num_output_times = 1
 
     surge_data = runner.rundata.surge_data
     surge_data.storm_file = tmp_path / "isaac.storm"
 
     # Use a committed local ATCF file as the canonical Isaac source.
-    atcf_path = example_dir / "bal092012.dat"
+    atcf_path = runner.test_path / "bal092012.dat"
 
     isaac = Storm(path=atcf_path, file_format="ATCF")
     isaac.time_offset = np.datetime64("2012-08-29")
@@ -142,8 +142,8 @@ def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
     elif data_file_format == "owi_ascii":
         surge_data.storm_specification_type = "data"
         isaac.file_format = "NWS12"
-        isaac.file_paths = [example_dir / "isaac.PRE", 
-                            example_dir / "isaac.WIN"]
+        isaac.file_paths = [runner.test_path / "isaac.PRE", 
+                            runner.test_path / "isaac.WIN"]
         
         isaac.write(surge_data.storm_file, file_format="data")
 
@@ -182,8 +182,7 @@ def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
     assert Path(surge_data.storm_file).exists()
 
     # Check storm files are correct
-    check_path = example_dir / "regression_data" / data_file_format
-    print(save)
+    check_path = runner.test_path / "regression_data" / data_file_format
     runner.check_files_equal(surge_data.storm_file, check_path / "isaac.storm", 
                              save=save)
 
