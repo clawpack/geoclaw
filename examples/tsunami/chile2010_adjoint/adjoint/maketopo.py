@@ -1,79 +1,83 @@
-"""
-    Download topo and dtopo files needed for this example.
-    
-    Call functions with makeplots==True to create plots of topo, slip, and dtopo.
-"""
+"""Download topo and create qinit data for the Chile 2010 adjoint example."""
 
-from __future__ import print_function
-import os,sys
+from pathlib import Path
+import os
+
+import numpy as np
+
 import clawpack.clawutil.data
 from clawpack.geoclaw import topotools
-from numpy import *
+from clawpack.geoclaw.util import haversine
+
 
 try:
-    CLAW = os.environ['CLAW']
-except:
-    raise Exception("*** Must first set CLAW enviornment variable")
+    CLAW = os.environ["CLAW"]
+except KeyError as exc:
+    raise RuntimeError("*** Must first set CLAW environment variable") from exc
 
-# Scratch directory for storing topo and dtopo files:
-scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
-
-
-# Initial data for adjoint is Gaussian hump around this location:
-# DART 32412 location:
-xcenter = -86.392
-ycenter = -17.975
+# Scratch directory for storing topo and dtopo files.
+scratch_dir = Path(CLAW) / "geoclaw" / "scratch"
 
 
-def get_topo(makeplots=False):
-    """
-    Retrieve the topo file from the GeoClaw repository.
-    """
-    from clawpack.geoclaw import topotools
-    topo_fname = 'etopo10min120W60W60S0S.asc'
-    url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
-    clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
-            file_name=topo_fname, verbose=True)
+def get_topo(output_dir: Path | None = None, makeplots: bool = False) -> None:
+    """Retrieve the topo file from the GeoClaw repository."""
+    topo_name = "etopo10min120W60W60S0S.asc"
+    url = f"http://depts.washington.edu/clawpack/geoclaw/topo/etopo/{topo_name}"
+
+    if output_dir is None:
+        output_dir = scratch_dir
+    else:
+        output_dir = Path(output_dir)
+
+    clawpack.clawutil.data.get_remote_file(
+        url,
+        output_dir=output_dir,
+        file_name=topo_name,
+        verbose=True,
+    )
 
     if makeplots:
-        from matplotlib import pyplot as plt
-        topo = topotools.Topography(os.path.join(scratch_dir,topo_fname), 
-                                    topo_type=2)
+        import matplotlib.pyplot as plt
+
+        topo = topotools.Topography(output_dir / topo_name, topo_type=2)
         topo.plot()
-        fname = os.path.splitext(topo_fname)[0] + '.png'
-        plt.savefig(fname)
-        print("Created ",fname)
+        figure_path = Path(topo_name).with_suffix(".png")
+        plt.savefig(figure_path)
+        print(f"Created {figure_path}")
 
 
-def makeqinit():
-    """
-        Create qinit data file
-    """
+def makeqinit(output_dir: Path | None = None, center: tuple[float, float] = (-86.392, -17.975)) -> None:
+    """Create the qinit data file."""
     
-    nxpoints = 201
-    nypoints = 201
+    # Default value Initial data for adjoint is Gaussian hump around this
+    # location DART 32412 location
     
-    xlower = xcenter - 1.5
-    xupper = xcenter + 1.5
-    ylower = ycenter - 1.5
-    yupper = ycenter + 1.5
-    
-    outfile= "hump.xyz"     
-    topotools.topo1writer(outfile,qinit,xlower,xupper,ylower,yupper,nxpoints,nypoints)
 
-def qinit(x,y):
-    from numpy import where
-    from clawpack.geoclaw.util import haversine
+    if output_dir is None:
+        output_dir = Path()
+    else:
+        output_dir = Path(output_dir)
 
-    #radius = 1.0e0
-    #ze = sqrt((x-xcenter)**2 + (y-ycenter)**2)
-    #z = where(ze<radius, 1.0e0, 0.e0)
+    output_file = output_dir / "hump.xyz"
+    topotools.topo1writer(
+        str(output_file),
+        lambda x, y: qinit(x, y, center),
+        center[0] - 1.5,
+        center[0] + 1.5,
+        center[1] - 1.5,
+        center[1] + 1.5,
+        201,
+        201,
+    )
 
-    # Gaussian using distance in meters:
-    r = haversine(x,y,xcenter,ycenter)
-    z = exp(-(r/20e3)**2)
+
+def qinit(x, y, center):
+    """Return a Gaussian hump centered at the target DART buoy location."""
+    r = haversine(x, y, center[0], center[1])
+    z = np.exp(-((r / 20e3) ** 2))
     return z
 
-if __name__=='__main__':
-    get_topo(False)
+
+if __name__ == "__main__":
+    get_topo()
     makeqinit()

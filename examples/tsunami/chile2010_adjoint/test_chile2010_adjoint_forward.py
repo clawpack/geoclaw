@@ -1,105 +1,90 @@
 #!/usr/bin/env python
+"""Pytest regression test for the Chile 2010 forward-adjoint example."""
 
-r"""chile2010_adjoint regression test for GeoClaw
-
-To create new regression data use
-    `python regression_tests.py True`
-"""
-
-from __future__ import absolute_import
-import os
+from pathlib import Path
+import importlib.util
+import random
+import string
 import sys
-import unittest
-import shutil
-
-import numpy
+import pytest
 
 import clawpack.geoclaw.test as test
-import clawpack.geoclaw.topotools as topotools
-from clawpack.clawutil.test import wip
 
+def _load_adjoint_test_module(adjoint_path: Path):
+    """Load the example-local test module under a unique module name."""
+    test_path = adjoint_path / "test_chile2010_adjoint.py"
+    mod_name = "_".join(
+        (
+            "test_chile2010_adjoint",
+            "".join(random.choices(string.ascii_letters + string.digits, k=32)),
+        )
+    )
+    spec = importlib.util.spec_from_file_location(mod_name, test_path)
+    test_module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = test_module
+    spec.loader.exec_module(test_module)
+    return test_module
 
-try:
-    CLAW = os.environ['CLAW']
-except:
-    raise Exception("*** Must first set CLAW enviornment variable")
+def _load_maketopo_module(example_dir: Path):
+    """Load the example-local maketopo module under a unique module name."""
+    maketopo_path = example_dir / "maketopo.py"
+    mod_name = "_".join(
+        (
+            "maketopo",
+            "".join(random.choices(string.ascii_letters + string.digits, k=32)),
+        )
+    )
+    spec = importlib.util.spec_from_file_location(mod_name, maketopo_path)
+    maketopo_module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = maketopo_module
+    spec.loader.exec_module(maketopo_module)
+    return maketopo_module
 
-# Scratch directory for storing topo and dtopo files:
-scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
+@pytest.mark.regression
+@pytest.mark.tsunami
+@pytest.mark.remote
+def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
+    """Regression test for the Chile 2010 forward run using adjoint output."""
+    example_path = Path(__file__).parent
+    adjoint_path = example_path / "adjoint"
+    adjoint_output = tmp_path / "_adjoint_output"
 
-thisfile = os.path.realpath(__file__)
-testdir = os.path.split(thisfile)[0]
+    runner = test.GeoClawTestRunner(tmp_path, test_path=example_path)
 
+    # Run adjoint test to create output for forward test to use
+    adjoint_setup = _load_adjoint_test_module(adjoint_path)
+    test.run_example_for_test(test.GeoClawTestRunner, adjoint_output, adjoint_path, 
+                              configure_runner=adjoint_setup.set_adjoint_data)
 
-class Chile2010AdjointTest(test.GeoClawRegressionTest):
+    # Create topo and qinit inputs
+    maketopo_module = _load_maketopo_module(runner.test_path)
+    maketopo_module.get_topo(tmp_path)
+    maketopo_module.make_dtopo(tmp_path)
 
-    r"""Chile2010AdjointTest regression test for GeoClaw"""
+    runner.set_data()
 
-    def setUp(self):
+    runner.rundata.clawdata.num_output_times = 2
+    runner.rundata.clawdata.tfinal = 3600.0
 
-        super(Chile2010AdjointTest, self).setUp()
+    runner.rundata.amrdata.flag2refine_tol = 0.0005
 
-        start_dir = os.getcwd()
-        test_adjoint_path = os.path.join(self.test_path, 'adjoint')
-        temp_adjoint_path = os.path.join(self.temp_path, 'adjoint')
-        #print('+++ test_adjoint_path = ',test_adjoint_path)
-        #print('+++ temp_adjoint_path = ',temp_adjoint_path)
+    runner.rundata.regiondata.regions = []
+    
+    runner.rundata.regiondata.regions.append([1, 3, 0., 1e9, -220,0,-90,90])
+    runner.rundata.regiondata.regions.append([3, 3, 0., 10., -77,-67,-40,-30])
+    runner.rundata.regiondata.regions.append([3, 3, 0., 200., -85,-70,-38,-25])
 
-        shutil.copytree(test_adjoint_path, temp_adjoint_path)
+    runner.rundata.flagregiondata.flagregions = []
 
-        # run adjoint code
-        os.chdir(temp_adjoint_path)
-        #print('+++ Running adjoint in directory ',os.getcwd())
-        #print('+++   contents: ', os.listdir('.'))
-        os.system('make -s topo')
-        os.system('make -s data')
-        os.system('make -s new')
-        os.system('make .output > output.txt')
-        #print('+++   contents of _output: ', os.listdir('_output'))
+    runner.rundata.gaugedata.gauges = [[1, -76, -36., 0., 1.e10]]
 
-        # set up forward code
-        shutil.copy(os.path.join(self.test_path, "maketopo.py"),
-                                 self.temp_path)
-        os.chdir(self.temp_path)
-        #print('+++ Running forward in directory ',os.getcwd())
-        #print('+++   contents: ', os.listdir())
-        os.system('python maketopo.py')
-        #print('+++   scratch directory: ', scratch_dir)
-        #print('+++   contents of scratch: ', os.listdir(scratch_dir))
-        os.chdir(start_dir)
+    runner.rundata.adjointdata.adjoint_outdir = adjoint_output
+    runner.write_data()
 
+    runner.build_executable()
+    runner.run_code()
 
-    def runTest(self, save=False, indices=(2, 3)):
-        r"""Test chile2010_adjoint example
+    runner.check_gauge(save=save, gauge_id=1)
 
-        Note that this stub really only runs the code and performs no tests.
-
-        """
-
-        # Write out data files
-        self.load_rundata()
-        temp_adjoint_path = os.path.join(self.temp_path, 'adjoint')
-        self.rundata.adjointdata.adjoint_outdir = \
-             os.path.join(temp_adjoint_path, '_output')
-        self.write_rundata_objects()
-
-        # Run code
-        self.run_code()
-
-        # Perform tests
-        self.check_gauges(save=save, gauge_id=1, indices=(2, 3))
-        self.success = True
-
-
-if __name__=="__main__":
-    if len(sys.argv) > 1:
-        if bool(sys.argv[1]):
-            # Fake the setup and save out output
-            test = Chile2010AdjointTest()
-            try:
-                test.setUp()
-                test.runTest(save=True)
-            finally:
-                test.tearDown()
-            sys.exit(0)
-    unittest.main()
+if __name__ == "__main__":
+    raise SystemExit(pytest.main([__file__]))

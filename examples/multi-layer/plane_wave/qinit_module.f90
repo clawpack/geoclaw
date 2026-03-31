@@ -45,9 +45,9 @@ contains
         character(len=*), optional, intent(in) :: fname
         
         ! File handling
-        character(len=150) :: qinit_fname
+        character(len=512) :: qinit_fname
         integer, parameter :: unit = 7
-        character(len=150) :: x
+        character(len=512) :: x
         
         if (.not.module_setup) then
 
