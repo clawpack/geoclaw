@@ -69,7 +69,7 @@ contains
     use grid_module, only: mbc,mx
     implicit none
 
-    character(len=150), intent(in) :: fname
+    character(len=512), intent(in) :: fname
     integer :: i,ibc
     integer, parameter :: iunit = 7
 
@@ -241,7 +241,7 @@ contains
     implicit none
 
     integer, intent(in) :: dtopotype
-    character(len=150), intent(in) :: fname
+    character(len=512), intent(in) :: fname
     integer :: i, k, status, dtopo_size, ibc
     integer, parameter :: iunit = 7
     real(kind=8) :: t0,tf,t,x,x1,x2,dt_dtopo

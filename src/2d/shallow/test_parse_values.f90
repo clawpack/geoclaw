@@ -10,7 +10,8 @@ program test_parse_values
     use topo_module, only: read_topo_header
 
     implicit none
-    character(len=150) str,fname
+    character(len=512) :: fname
+    character(len=150) :: str
     integer :: n,i,topo_type,mx,my
     real(kind=8) :: values(16), xll,yll,xhi,yhi,dx,dy
 

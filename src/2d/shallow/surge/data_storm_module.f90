@@ -39,7 +39,7 @@ module data_storm_module
         integer, allocatable :: time(:)
 
         ! Paths to data
-        character(len=256), allocatable :: paths(:)
+        character(len=512), allocatable :: paths(:)
 
     end type data_storm_type
 

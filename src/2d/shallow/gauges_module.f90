@@ -58,8 +58,8 @@ module gauges_module
         integer :: gauge_num
         integer :: gdata_bytes
 
-        character(len=24) :: file_name      ! for header (and data if 'ascii')
-        character(len=24) :: file_name_bin  ! used if file_format='binary'
+        character(len=512) :: file_name      ! for header (and data if 'ascii')
+        character(len=512) :: file_name_bin  ! used if file_format='binary'
 
         ! Location in time and space
         real(kind=8) :: x, y, t_start, t_end

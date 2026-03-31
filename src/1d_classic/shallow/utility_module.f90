@@ -17,7 +17,7 @@ contains
 
         character(len=*), intent(in) :: line
 
-        character(len=200) :: search_buffer
+        character(len=512) :: search_buffer
         integer :: i
         logical :: found
 
@@ -66,7 +66,7 @@ contains
     real(kind=8), intent(out) :: values(10)
 
     integer :: pos2,nw,i,e
-    character(len=80) :: word(10), str2
+    character(len=128) :: word(10), str2
     real(kind=8) :: x
 
     ! First break into words / tokens based on white space.  

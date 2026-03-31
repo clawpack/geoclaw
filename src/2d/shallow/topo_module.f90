@@ -13,7 +13,7 @@ module topo_module
 
     ! Topography file data
     integer :: test_topography
-    character(len=150), allocatable :: topofname(:)
+    character(len=512), allocatable :: topofname(:)
     integer :: mtopofiles
     integer(kind=8) :: mtoposize
     real(kind=8), allocatable :: xlowtopo(:), ylowtopo(:), tlowtopo(:)
@@ -499,7 +499,7 @@ contains
 
         ! Arguments
         integer, intent(in) :: mx,my,topo_type
-        character(len=150), intent(in) :: fname
+        character(len=512), intent(in) :: fname
         real(kind=8), intent(inout) :: topo(1:int(mx, 8)*int(my, 8))
         real(kind=8), intent(in) :: xll,yll
 
@@ -794,7 +794,7 @@ contains
         implicit none
 
         ! Input and Output
-        character(len=150), intent(in) :: fname
+        character(len=*), intent(in) :: fname
         integer, intent(in) :: topo_type
         integer, intent(out) :: mx, my
         real(kind=8), intent(out) :: xll, yll, xhi, yhi, dx, dy

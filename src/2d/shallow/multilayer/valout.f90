@@ -39,7 +39,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     integer :: index, grid_ptr, num_cells(2), num_grids, q_loc, aux_loc
     real(kind=8) :: lower_corner(2), delta(2)
     logical :: out_aux
-    character(len=11) :: file_name(5)
+    character(len=512) :: file_name(5)
 
     real(kind=8) :: h(num_layers), hu(num_layers), hv(num_layers)
     real(kind=8) :: eta(num_layers)
