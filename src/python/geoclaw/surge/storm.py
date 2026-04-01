@@ -1674,7 +1674,7 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
         raise e
 
     fill_da = xr.DataArray(getattr(storm_fill, var),
-                           coords={'t': getattr(storm_fill, 't')},
+                           coords={'t': np.asarray(getattr(storm_fill, 't'))},
                            dims=('t',))
 
     # convert -1 to nan
@@ -1699,7 +1699,7 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
 
     # next, try just interpolating other ibtracs values
     targ_da = xr.DataArray(getattr(storm_targ, var),
-                           coords={'t': getattr(storm_targ, 't')},
+                           coords={'t': np.asarray(getattr(storm_targ, 't'))},
                            dims=('t',))
     targ_da = targ_da.where(targ_da > 0, np.nan)
     if targ_da.notnull().any():
