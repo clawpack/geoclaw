@@ -71,7 +71,8 @@ jobs:
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 meson-python ninja pytest numpy pandas xarray netCDF4
+        pip install flake8 meson-python ninja pytest numpy pandas xarray 
+        pip install scipy netCDF4
         
     - name: Checkout Clawpack
       uses: actions/checkout@v6.0.2
