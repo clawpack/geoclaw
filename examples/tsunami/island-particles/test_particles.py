@@ -1,30 +1,10 @@
 """Pytest regression test for the GeoClaw particles example."""
 
 from pathlib import Path
-import importlib.util
-import random
-import string
-import sys
-
 import pytest
 
 import clawpack.geoclaw.test as test
-
-
-def _load_maketopo_module(example_dir: Path):
-    """Load the example-local maketopo module under a unique module name."""
-    maketopo_path = example_dir / "maketopo.py"
-    mod_name = "_".join(
-        (
-            "maketopo",
-            "".join(random.choices(string.ascii_letters + string.digits, k=32)),
-        )
-    )
-    spec = importlib.util.spec_from_file_location(mod_name, maketopo_path)
-    maketopo_module = importlib.util.module_from_spec(spec)
-    sys.modules[mod_name] = maketopo_module
-    spec.loader.exec_module(maketopo_module)
-    return maketopo_module
+from clawpack.clawutil.test import load_local_module
 
 
 @pytest.mark.regression
@@ -35,7 +15,7 @@ def test_particles(tmp_path: Path) -> None:
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
 
     # Create topo and qinit inputs
-    maketopo_module = _load_maketopo_module(example_dir)
+    maketopo_module = load_local_module(example_dir)
     maketopo_module.maketopo(tmp_path)
     maketopo_module.makeqinit(tmp_path)
 
