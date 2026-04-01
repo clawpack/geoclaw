@@ -19,8 +19,6 @@ def set_adjoint_data(runner):
     maketopo_module.get_topo(runner.temp_path)
     maketopo_module.makeqinit(runner.temp_path, center=(-76., -36.))
     
-    runner.set_data()
-
     runner.rundata.clawdata.num_cells[0] = 240
     runner.rundata.clawdata.num_cells[1] = 240
     runner.rundata.clawdata.num_output_times = 4
