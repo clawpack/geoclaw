@@ -108,6 +108,37 @@ def write_owi_wind(
             _write_owi_values(fobj, v_field)
 
 
+def _check_geoclaw_storm_descriptor(generated_path: Path, regression_path: Path) -> None:
+    """Compare two GeoClaw storm files semantically using Storm readers."""
+    generated = Storm(path=generated_path, file_format="geoclaw")
+    regression = Storm(path=regression_path, file_format="geoclaw")
+
+    assert generated.time_offset == regression.time_offset
+    assert generated.t.shape == regression.t.shape
+    np.testing.assert_array_equal(generated.t, regression.t)
+    np.testing.assert_allclose(generated.eye_location, regression.eye_location)
+    np.testing.assert_allclose(generated.max_wind_speed, regression.max_wind_speed)
+    np.testing.assert_allclose(generated.max_wind_radius, regression.max_wind_radius)
+    np.testing.assert_allclose(generated.central_pressure, regression.central_pressure)
+    np.testing.assert_allclose(generated.storm_radius, regression.storm_radius)
+
+
+def _check_data_storm_descriptor(generated_path: Path, regression_path: Path) -> None:
+    """Compare two data-derived storm descriptor files using Storm readers."""
+    generated = Storm(path=generated_path, file_format="data")
+    regression = Storm(path=regression_path, file_format="data")
+
+    assert generated.time_offset == regression.time_offset
+    assert generated.file_format == regression.file_format
+    assert len(generated.file_paths) == len(regression.file_paths)
+    np.testing.assert_allclose(generated.scaling, regression.scaling)
+    assert generated.window_type == regression.window_type
+    np.testing.assert_allclose(generated.ramp_width, regression.ramp_width)
+    assert [path.name for path in generated.file_paths] == [
+        path.name for path in regression.file_paths
+    ]
+
+
 # @pytest.mark.slow
 
 @pytest.mark.regression
@@ -181,10 +212,15 @@ def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
 
     assert Path(surge_data.storm_file).exists()
 
-    # Check storm files are correct
+    # Check storm descriptor files semantically.
     check_path = runner.test_path / "regression_data" / data_file_format
-    runner.check_files_equal(surge_data.storm_file, check_path / "isaac.storm", 
-                             save=save)
+    regression_storm_file = check_path / "isaac.storm"
+    if data_file_format == "holland80":
+        _check_geoclaw_storm_descriptor(surge_data.storm_file, regression_storm_file)
+    elif data_file_format == "owi_ascii":
+        _check_data_storm_descriptor(surge_data.storm_file, regression_storm_file)
+    else:
+        raise ValueError(f"Unsupported data_file_format={data_file_format}")
 
     # Run geoclaw
     runner.build_executable()

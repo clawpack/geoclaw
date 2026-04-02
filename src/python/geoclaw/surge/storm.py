@@ -324,9 +324,11 @@ class Storm(object):
         self.eye_location = np.empty((num_forecasts, 2))
         assert(num_casts == num_forecasts)
         if isinstance(self.time_offset, np.datetime64):
-            self.t = np.array([self.time_offset
-                               + np.timedelta64(data[i, 0], "s")
-                               for i in range(num_forecasts)])
+            # GeoClaw storm files write elapsed time as floating-point seconds,
+            # so construct timedeltas with sub-second support rather than
+            # passing floats directly to ``np.timedelta64``.
+            time_deltas = pd.to_timedelta(data[:, 0], unit="s").to_numpy()
+            self.t = self.time_offset + time_deltas
         else:
             self.t = data[:, 0]
         self.eye_location[:, 0] = data[:, 1]
