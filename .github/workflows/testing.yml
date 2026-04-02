@@ -177,7 +177,7 @@ jobs:
         echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
         cd ${CLAW}/geoclaw
         # Temporarily only run a subset of tests to speed up CI. We can add more tests back in as we optimize the test suite.
-        pytest --basetemp=${CLAW}/geoclaw/.pytest_tmp -vv \
+        pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv \
           tests/test_units.py \
           tests/test_util.py \
           tests/test_topotools.py \
@@ -198,5 +198,5 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: test_results_${{ matrix.os }}_${{ matrix.toolchain.compiler }}_${{ matrix.build }}
-        path: ${{ env.CLAW }}/geoclaw/.pytest_tmp
+        path: ${{ env.CLAW }}/geoclaw/pytest_tmp
         if-no-files-found: ignore
