@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 import clawpack.geoclaw.test as test
-from clawpack.clawutil.test import load_local_module
+from clawpack.clawutil.util import fullpath_import
 
 
 @pytest.mark.regression
@@ -15,7 +15,7 @@ def test_particles(tmp_path: Path) -> None:
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
 
     # Create topo and qinit inputs
-    maketopo_module = load_local_module(example_dir)
+    maketopo_module = fullpath_import(example_dir / "maketopo.py")
     maketopo_module.maketopo(tmp_path)
     maketopo_module.makeqinit(tmp_path)
 
