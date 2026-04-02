@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import clawpack.clawutil.test as clawtest
+from clawpack.clawutil.util import fullpath_import
 import clawpack.geoclaw.test as test
 
 def set_adjoint_data(runner):
@@ -15,7 +15,7 @@ def set_adjoint_data(runner):
     this to generate the necessary files.
     """
     # Create topo and qinit inputs
-    maketopo_module = clawtest.load_local_module(runner.test_path / "maketopo.py")
+    maketopo_module = fullpath_import(runner.test_path / "maketopo.py")
     maketopo_module.get_topo(runner.temp_path)
     maketopo_module.makeqinit(runner.temp_path, center=(-76., -36.))
     
