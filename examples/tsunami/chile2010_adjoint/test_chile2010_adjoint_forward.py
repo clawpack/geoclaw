@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import clawpack.clawutil.test as clawtest
+import clawpack.clawutil.util as util
 import clawpack.geoclaw.test as test
 
 @pytest.mark.regression
@@ -21,7 +22,7 @@ def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_path)
 
     # Run adjoint test to create output for forward test to use
-    adjoint_setup = clawtest.load_local_module(adjoint_path / "test_chile2010_adjoint.py")
+    adjoint_setup = util.fullpath_import(adjoint_path / "test_chile2010_adjoint.py")
     clawtest.run_example_for_test(
         test.GeoClawTestRunner,
         adjoint_output,
@@ -30,7 +31,7 @@ def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
     )
 
     # Create topo and qinit inputs
-    maketopo_module = clawtest.load_local_module(runner.test_path / "maketopo.py")
+    maketopo_module = util.fullpath_import(runner.test_path / "maketopo.py")
     maketopo_module.get_topo(tmp_path, verbose=True)
     maketopo_module.make_dtopo(tmp_path)
 
