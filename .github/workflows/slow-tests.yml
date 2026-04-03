@@ -63,10 +63,10 @@ jobs:
 
     - name: Run Slow Tests
       run: |
+        cd ${CLAW}/geoclaw
         source .github/scripts/set_test_env.sh slow "${{ matrix.toolchain.compiler }}" "${{ matrix.build }}"
         echo "FFLAGS: $FFLAGS"
         echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
-        cd ${CLAW}/geoclaw
         pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s -o addopts="" \
           -m "slow"
 
