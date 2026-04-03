@@ -193,4 +193,4 @@ def test_surge_data_roundtrip(tmp_path):
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    raise SystemExit(pytest.main([__file__]))

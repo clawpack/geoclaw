@@ -72,4 +72,4 @@ def test_bowl_slosh(tmp_path: Path, save: bool):
     runner.check_fgmax(save=save)
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    raise SystemExit(pytest.main([__file__]))
