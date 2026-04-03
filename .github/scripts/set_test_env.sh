@@ -16,7 +16,7 @@ if [[ -z "${test_group}" || -z "${compiler}" || -z "${build}" ]]; then
 fi
 
 case "${test_group}" in
-  regression)
+  regression|slow)
     case "${compiler}" in
       gcc)
         case "${build}" in
