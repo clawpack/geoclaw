@@ -58,7 +58,7 @@ def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
     runner.build_executable()
     runner.run_code()
 
-    runner.check_gauge(save=save, gauge_id=1, save=save)
+    runner.check_gauge(save=save, gauge_id=1)
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
