@@ -46,7 +46,7 @@ def _make_bowl_netcdf_topography(output_dir: Path) -> None:
 
 @pytest.mark.regression
 @pytest.mark.netcdf
-def test_bowl_slosh_netcdf(tmp_path: Path) -> None:
+def test_bowl_slosh_netcdf(tmp_path: Path, save: bool) -> None:
     """Regression test for bowl-slosh using NetCDF topography input."""
     pytest.importorskip("netCDF4")
 
@@ -67,7 +67,7 @@ def test_bowl_slosh_netcdf(tmp_path: Path) -> None:
     runner.build_executable()
     runner.run_code()
 
-    runner.check_gauge(gauge_id=1, indices=(2, 3), rtol=1.0e-4, atol=1.0e-4)
+    runner.check_gauge(gauge_id=1, indices=(2, 3), rtol=1.0e-4, atol=1.0e-4, save=save)
 
 
 if __name__ == "__main__":

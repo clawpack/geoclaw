@@ -9,7 +9,7 @@ from clawpack.clawutil.util import fullpath_import
 
 @pytest.mark.regression
 @pytest.mark.xfail(reason="Particles regression test is currently failing due to unknown changes and need to be re-validated.")
-def test_particles(tmp_path: Path) -> None:
+def test_particles(tmp_path: Path, save: bool) -> None:
     """Regression test for the GeoClaw particles example."""
     example_dir = Path(__file__).parent
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
@@ -42,8 +42,8 @@ def test_particles(tmp_path: Path) -> None:
     runner.run_code()
 
     # Check gauge outputs
-    runner.check_gauge(gauge_id=1, indices=(1, 2))
-    runner.check_gauge(gauge_id=2, indices=(1, 2))
+    runner.check_gauge(gauge_id=1, indices=(1, 2), save=save)
+    runner.check_gauge(gauge_id=2, indices=(1, 2), save=save)
 
 
 if __name__ == "__main__":

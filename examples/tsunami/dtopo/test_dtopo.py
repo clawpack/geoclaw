@@ -64,7 +64,7 @@ def _make_dtopography_files(example_dir: Path, output_dir: Path) -> None:
 
 @pytest.mark.regression
 @pytest.mark.xfail(reason="Test is failing due to what appears to be a slight mismatch in the gauge.")
-def test_dtopo(tmp_path: Path) -> None:
+def test_dtopo(tmp_path: Path, save=save) -> None:
     """Regression test for the GeoClaw dtopography example."""
     example_dir = Path(__file__).parent
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
@@ -77,13 +77,14 @@ def test_dtopo(tmp_path: Path) -> None:
     runner.build_executable()
     runner.run_code()
 
-    runner.check_gauge(gauge_id=1, indices=(2, 3))
+    runner.check_gauge(gauge_id=1, indices=(2, 3), save=save)
     runner.check_gauge(
         gauge_id=2,
         regression_gauge_id=1,
         indices=(2, 3),
         rtol=1.0e-6,
         atol=1.0e-6,
+        save=save,
     )
 
 
