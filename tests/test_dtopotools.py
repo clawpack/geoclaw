@@ -405,4 +405,4 @@ if __name__ == "__main__":
         else:
             print("Usage: python test_dtopotools.py [save|plot] [output_dir]")
     else:
-        pytest.main([__file__])
+        raise SystemExit(pytest.main([__file__]))

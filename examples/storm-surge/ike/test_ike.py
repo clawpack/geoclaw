@@ -67,4 +67,4 @@ def test_ike(case: dict, tmp_path: Path, save: bool):
         pass
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    raise SystemExit(pytest.main([__file__]))

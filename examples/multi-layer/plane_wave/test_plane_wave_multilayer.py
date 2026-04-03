@@ -78,4 +78,4 @@ def test_multilayer_plane_wave(tmp_path: Path, save: bool):
         runner.check_gauge(gauge_id=gauge_id, indices=(6, 7), atol=1e-5, save=save)
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    raise SystemExit(pytest.main([__file__]))

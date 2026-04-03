@@ -22,4 +22,4 @@ def test_conversions(measurement_type, measurement_units):
         )
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    raise SystemExit(pytest.main([__file__]))

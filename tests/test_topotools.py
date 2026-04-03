@@ -515,4 +515,4 @@ if __name__ == "__main__":
             print("Usage: python test_topotools.py [save|plot] [output_dir]")
             print("Run remote tests via pytest, e.g.: pytest -m remote tests/test_topotools.py")
     else:
-        pytest.main([__file__])
+        raise SystemExit(pytest.main([__file__]))

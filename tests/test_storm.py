@@ -298,4 +298,4 @@ if __name__ == "__main__":
         output_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else data_dir
         save_storm_test_data(output_dir)
     else:
-        pytest.main([__file__])
+        raise SystemExit(pytest.main([__file__]))
