@@ -55,12 +55,15 @@ def test_ike(case: dict, tmp_path: Path, save: bool):
     runner.run_code()
 
     # Check results
+    check_path = runner.test_path / "regression_data" / f"{case['amr_levels_max']}_levels"
     if case["amr_levels_max"] == 2:
-        runner.check_gauge(save=save, gauge_id=2)
-        runner.check_gauge(save=save, gauge_id=3)
+        runner.check_gauge(save=save, gauge_id=2, regression_path=check_path)
+        runner.check_gauge(save=save, gauge_id=3, regression_path=check_path)
     else:
-        # No regression data for finer test, just check that the results are
-        # reasonable (e.g. that we get some surge at the gauges and it runs)
+        # For the finer test, we need to figure out somewhere to put the
+        # regression data still
+        # runner.check_gauge(save=save, gauge_id=2, regression_path=check_path)
+        # runner.check_gauge(save=save, gauge_id=3, regression_path=check_path)
         pass
 
 if __name__ == "__main__":
