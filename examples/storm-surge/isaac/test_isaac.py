@@ -164,7 +164,7 @@ def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
     # Use a committed local ATCF file as the canonical Isaac source.
     atcf_path = runner.test_path / "bal092012.dat"
 
-    isaac = Storm(path=atcf_path, file_format="ATCF", verbose=True)
+    isaac = Storm(path=atcf_path, file_format="ATCF")
     isaac.time_offset = np.datetime64("2012-08-29")
     
     if data_file_format == "holland80":

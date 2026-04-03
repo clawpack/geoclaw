@@ -415,14 +415,6 @@ class Storm(object):
 
         # Take forecast period TAU into consideration
         df['DATE'] = df["YYYYMMDDHH"] + df["TAU"]
-        if verbose:
-            print("[read_atcf] raw rows:", len(df))
-            print("[read_atcf] unique DATE count before filtering:",
-                  df["DATE"].nunique())
-            print("[read_atcf] first DATE values before filtering:")
-            print(df[["DATE", "TAU", "LAT", "LON", "VMAX", "MSLP", "TY"]]
-                    .head(20)
-                    .to_string(index=False))
         df = df[["DATE", "TAU", "TY", "LAT", "LON", "VMAX", "MSLP",
                  "ROUTER", "RMW", "RAD", "RAD1", "RAD2", "RAD3", "RAD4", ]]
         df = df.sort_values(by=["DATE", "TAU"]).reset_index(drop=True)
@@ -433,13 +425,6 @@ class Storm(object):
             df[c] = df[c].where(df[c] != 0, np.nan)  # value 0 means NaN
             df[c] = df.groupby("DATE")[c].bfill()
         df = df.groupby("DATE").first()
-        if verbose:
-            print("[read_atcf] unique DATE count after groupby-first:",
-                  len(df))
-            print("[read_atcf] first DATE values after groupby-first:")
-            print(df[["TY", "LAT", "LON", "VMAX", "MSLP", "ROUTER", "RMW"]]
-                    .head(20)
-                    .to_string())
 
         # Wind profile (occasionally missing for older ATCF storms)
         # Wind speeds and their radii
@@ -475,9 +460,6 @@ class Storm(object):
         self.wind_speeds[:, 1] = units.convert(
             self.wind_speeds[:, 1], 'nmi', 'm')
 
-        if verbose:
-            print("[read_atcf] final storm time count:", len(self.t))
-            print("[read_atcf] first storm times:", self.t[:20])
         self.file_paths.append(path)
         self.file_format = "atcf"
 
@@ -1046,9 +1028,9 @@ class Storm(object):
         # or skip it
         num_casts = 0
         data = []
+
         for n in range(len(self.t)):
-            if self.t[n] == self.t[n - 1]:
-                # Skip this time
+            if n > 0 and self.t[n] == self.t[n - 1]:
                 continue
 
             # Check each value we need for this time to make sure it is valid
@@ -1111,6 +1093,7 @@ class Storm(object):
             data[-1][5] = self.central_pressure[n]
             # Outer storm radius
             data[-1][6] = self.storm_radius[n]
+
 
         # Write out file
         format_string = ("{:19,.8e} " * 7)[:-1] + "\n"
