@@ -169,7 +169,7 @@ def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
     
     if data_file_format == "holland80":
         surge_data.storm_specification_type = "holland80"
-        isaac.write(surge_data.storm_file, file_format="geoclaw")
+        isaac.write(surge_data.storm_file, file_format="geoclaw", verbose=True)
     elif data_file_format == "owi_ascii":
         surge_data.storm_specification_type = "data"
         isaac.file_format = "NWS12"
