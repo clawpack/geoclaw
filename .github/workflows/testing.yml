@@ -99,7 +99,11 @@ jobs:
     #     # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
     #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Test with pytest
+    - name: Run Python Unit Tests
+      run: |
+        pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s -m "python"
+
+    - name: Run Regression Tests
       run: |
         if [ "${{ matrix.toolchain.compiler }}" = "gcc" ]; then
           if [ "${{ matrix.build }}" = "debug" ]; then
@@ -176,21 +180,7 @@ jobs:
         echo "FFLAGS: $FFLAGS"
         echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
         cd ${CLAW}/geoclaw
-        # Temporarily only run a subset of tests to speed up CI. We can add more tests back in as we optimize the test suite.
-        pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s \
-          tests/test_units.py \
-          tests/test_util.py \
-          tests/test_topotools.py \
-          tests/test_storm.py \
-          tests/test_dtopotools.py \
-          examples/tsunami/bowl-slosh/test_bowl_slosh.py \
-          examples/tsunami/island-particles/test_particles.py \
-          examples/tsunami/dtopo/test_dtopo.py \
-          examples/tsunami/bowl-slosh-netcdf/test_bowl_slosh_netcdf.py \
-          examples/tsunami/chile2010_adjoint/test_chile2010_adjoint_forward.py \
-          examples/storm-surge/ike/test_ike.py \
-          examples/storm-surge/isaac/test_isaac.py \
-          examples/multi-layer/plane_wave/test_plane_wave_multilayer.py
+        pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s -m "regression and not slow"
 
     - name: Upload test results
       if: failure()
