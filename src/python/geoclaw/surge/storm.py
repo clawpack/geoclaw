@@ -1014,6 +1014,12 @@ class Storm(object):
             500 km.
         """
 
+        # Get around the mutable-default-argument problem for the fill_dict
+        if fill_dict is None:
+            fill_dict = {}
+        else:
+            fill_dict = dict(fill_dict)
+
         # If a filling function is not provided we will provide some defaults
         fill_dict.update({"storm_radius": lambda t, storm: 500e3})
         # Handle older interface that had specific fill functions
