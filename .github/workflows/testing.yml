@@ -17,28 +17,46 @@ env:
 jobs:
   python-tests:
     name: >
-      python - ${{ matrix.os }} - py ${{ matrix.python-version }}
+      python - ${{ matrix.os }} - ${{ matrix.toolchain.compiler }} - py ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ['3.12', '3.13']
+        include:
+          - os: ubuntu-latest
+            python-version: '3.12'
+            toolchain: {compiler: gcc, version: 14}
+          - os: ubuntu-latest
+            python-version: '3.13'
+            toolchain: {compiler: gcc, version: 14}
+          - os: macos-latest
+            python-version: '3.12'
+            toolchain: {compiler: gcc, version: 15}
+          - os: macos-latest
+            python-version: '3.13'
+            toolchain: {compiler: gcc, version: 15}
 
     steps:
     - name: Install system dependencies
       run: |
         if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
           sudo apt-get update
-          # sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
+          sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
         elif [ "${{ matrix.os }}" == "macos-latest" ]; then
           brew update
-          # brew install netcdf-fortran
+          brew install netcdf-fortran
         fi
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: Set up compilers
+      uses: fortran-lang/setup-fortran@v1.9.0
+      id: setup-fortran
+      with:
+        compiler: ${{ matrix.toolchain.compiler }}
+        version: ${{ matrix.toolchain.version }}
 
     - name: Install python dependencies
       run: |
@@ -80,7 +98,7 @@ jobs:
       if: failure()
       uses: actions/upload-artifact@v7
       with:
-        name: test_results_python_${{ matrix.os }}_py${{ matrix.python-version }}
+        name: test_results_python_${{ matrix.os }}_${{ matrix.toolchain.compiler }}_py${{ matrix.python-version }}
         path: ${{ env.CLAW }}/geoclaw/pytest_tmp
         if-no-files-found: ignore
 
