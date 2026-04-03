@@ -178,7 +178,7 @@ jobs:
         cd ${CLAW}/geoclaw
         # Temporarily only run a subset of tests to speed up CI. We can add more tests back in as we optimize the test suite.
         pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s \
-          examples/storm-surge/isaac/test_isaac.py -k holland80\
+          examples/storm-surge/isaac/test_isaac.py
           # tests/test_units.py \
           # tests/test_util.py \
           # tests/test_topotools.py \
