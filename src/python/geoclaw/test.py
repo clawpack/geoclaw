@@ -1,84 +1,53 @@
 r"""
-Execute nosetests in all subdirectories, to run a series of quick
-regression tests.
+Defines the GeoClaw Clawpack Test Runner class for running PyTest based
+regression tests in GeoClaw.
 
-Sends output and result/errors to separate files to simplify checking
-results and looking for errors.
+Refer to the documentation for PyTest to manage output and reporting.
 """
 
-from __future__ import absolute_import
+from pathlib import Path
+from typing import Optional
 import os
-import glob
+import numpy as np
 
-import numpy
+import clawpack.clawutil.test as test
+import clawpack.geoclaw.fgmax_tools as fgmax_tools
 
-import clawpack.clawutil.test
-import clawpack.pyclaw.util
-
-# Clean library files whenever this module is used
+# Set environment variable to avoid warning about missing CLAW variable
 if "CLAW" in os.environ:
     CLAW = os.environ["CLAW"]
 else:
     raise ValueError("Need to set CLAW environment variable.")
 
-for lib_path in [os.path.join(CLAW,"amrclaw","src","2d"),
-                 os.path.join(CLAW,"geoclaw","src","2d","shallow"),
-                 os.path.join(CLAW,"geoclaw","src","2d","shallow","multilayer"),
-                 os.path.join(CLAW,"geoclaw","src","2d","shallow","surge")]:
-    for path in glob.glob(os.path.join(lib_path,"*.o")):
-        os.remove(path)
-    for path in glob.glob(os.path.join(lib_path,"*.mod")):
-        os.remove(path)
-
-
-class GeoClawRegressionTest(clawpack.clawutil.test.ClawpackRegressionTest):
-
-    r"""Base GeoClaw regression test setup derived from ClawpackRegressionTest
+class GeoClawTestRunner(test.ClawpackTestRunner):
+    r"""Class for running GeoClaw regression tests.
 
     """
 
-    __doc__ += clawpack.pyclaw.util.add_parent_doc(
-                                  clawpack.clawutil.test.ClawpackRegressionTest)
+    def __init__(self, path: Path, test_path: Optional[Path]=None):
+        super(GeoClawTestRunner, self).__init__(path, test_path=test_path)
+        self.executable_name = "xgeoclaw"
 
-
-    def build_executable(self, executable_name="xgeoclaw"):
-        r"""Build executable by running `make .exe` in test directory.
-
-        Moves the resulting executable to the temporary directory.
-
-
-        """
-
-        super(GeoClawRegressionTest, self).build_executable(
-                                                executable_name=executable_name)
-
-
-    def check_fgmax(self, fgno=1, save=False):
+    def check_fgmax(self, fgno: int=1, save: bool=False, tolerance: float=1e-14):
         r"""Basic test to assert fgmax equality
         Currently just records sum of fg.h and of fg.s.
 
-        :Input:
-         - *save* (bool) - If *True* will save the output from this test to 
-           the file *regresion_data.txt*.  Default is *False*.
+        :TODO: Add documentation
         """
-
-        from clawpack.geoclaw import fgmax_tools
-
         fg = fgmax_tools.FGmaxGrid()
-        fname = os.path.join(self.temp_path, 'fgmax_grids.data')
+        fname = self.temp_path / 'fgmax_grids.data'
         fg.read_fgmax_grids_data(fgno, fname)
         fg.read_output(outdir=self.temp_path)
 
-        data_sum = numpy.array([fg.h.sum(), fg.s.sum()])
+        data_sum = np.array([fg.h.sum(), fg.s.sum()])
 
         # Get (and save) regression comparison data
-        regression_data_file = os.path.join(self.test_path, "regression_data",
+        regression_data_file = (self.test_path/ "regression_data" /
                 "regression_data_fgmax.txt")
         if save:
-            numpy.savetxt(regression_data_file, data_sum)
-        regression_sum = numpy.loadtxt(regression_data_file)
+            np.savetxt(regression_data_file, data_sum)
+        regression_sum = np.loadtxt(regression_data_file)
 
         # Compare data
-        tolerance = 1e-14
-        assert numpy.allclose(data_sum, regression_sum, tolerance), \
+        assert np.allclose(data_sum, regression_sum, tolerance), \
                 "\n data: %s, \n expected: %s" % (data_sum, regression_sum)

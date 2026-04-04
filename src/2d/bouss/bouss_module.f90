@@ -110,7 +110,7 @@ contains
     integer, intent(in) :: naux
     
     integer iunit,i
-    character(len=25) fname
+    character(len=512) fname
     real(kind=8) :: eps
 
 #ifdef WHERE_AM_I

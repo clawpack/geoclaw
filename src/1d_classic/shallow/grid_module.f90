@@ -42,7 +42,7 @@ subroutine set_grid(mx,dx)
     real(kind=8), intent(in) :: dx
 
     character(len=9) :: fname_grid
-    character(len=150) :: fname_celledges
+    character(len=512) :: fname_celledges
     integer, parameter :: iunit = 7
     integer :: i,j,mb
     real(kind=8) :: rim,rip,ric,c0i,cmi,cpi,r

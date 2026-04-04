@@ -1,0 +1,14 @@
+# Data Derived Storm
+2012-08-29T00:00:00  # Time Offset
+1                    # File format
+2                    # Number of files
+1.0 1.0              # Scaling
+0                    # Window type
+1.0                  # Ramp width
+None                 # Window
+
+# Format Data Information
+
+# File paths
+/Users/mandli/Library/CloudStorage/Dropbox/src/clawpack/geoclaw/examples/storm-surge/isaac/isaac.PRE
+/Users/mandli/Library/CloudStorage/Dropbox/src/clawpack/geoclaw/examples/storm-surge/isaac/isaac.WIN

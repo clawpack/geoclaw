@@ -406,33 +406,24 @@ def setgeo(rundata):
     data.R_refine = xr.DataArray([60.0e3, 40e3, 20e3])
 
     # Storm parameters - Parameterized storm (Holland 1980)
-    # data.storm_specification_type = 'holland80'
-    data.storm_specification_type = 'data'
+    data.storm_specification_type = 'holland80'
+    # data.storm_specification_type = 'data'
     data.storm_file = (Path() / 'isaac.storm').resolve()
+    
     isaac = Storm()
+    atcf_path = (Path(__file__).parent / "bal092012.dat").resolve()
+    isaac.read(path=atcf_path, file_format="ATCF")
     # Calculate landfall time - Need to specify as the file above does not
     # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
     isaac.time_offset = np.datetime64("2012-08-29T00:00")
 
     if data.storm_specification_type == 'holland80':
-        # Convert ATCF data to GeoClaw format
-        clawutil.data.get_remote_file(
-                       "http://ftp.nhc.noaa.gov/atcf/archive/2012/bal092012.dat.gz")
-        atcf_path = scratch_dir / "bal092012.dat"
-        # Note that the get_remote_file function does not support gzip files which
-        # are not also tar files.  The following code handles this
-        with gzip.open(atcf_path.with_suffix(".dat.gz"), 'rb') as atcf_file,    \
-                open(atcf_path, 'w') as atcf_unzipped_file:
-            atcf_unzipped_file.write(atcf_file.read().decode('ascii'))
-
-        # Uncomment/comment out to use the old version of the Ike storm file
-        isaac.read(path=atcf_path, file_format="ATCF")
-
         isaac.write(data.storm_file, file_format='geoclaw')
 
     elif data.storm_specification_type == "data":
         # ASCII
         isaac.file_format = 'NWS12'
+        isaac.file_paths = []
         isaac.file_paths.append((Path() / "isaac.PRE").resolve())
         isaac.file_paths.append((Path() / "isaac.WIN").resolve())
 

@@ -598,11 +598,12 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             self.pressure_index = int(data_file.readline().split("=:")[0]) - 1
             self.display_landfall_time = bool(data_file.readline().split("=:")[0])
             data_file.readline()
+            data_file.readline() # TODO: Extra empty line, should fix
 
             # AMR parameters
-            self.wind_refine = self._parse_value(data_file.readline())
-            self.R_refine = self._parse_value(data_file.readline())
-            data_file.readline()
+            self.wind_refine = self._parse_value(data_file.readline().split("=:")[0])
+            self.R_refine = self._parse_value(data_file.readline().split("=:")[0])
+            # data_file.readline()
 
             # Storm specification
             self.storm_specification_type = int(data_file.readline().split("=:")[0])

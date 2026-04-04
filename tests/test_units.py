@@ -1,24 +1,25 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import numpy
+import pytest
+import numpy as np
 
 from clawpack.geoclaw.units import units, convert
 
+@pytest.mark.python
+@pytest.mark.parametrize("measurement_type, measurement_units", units.items())
+def test_conversions(measurement_type, measurement_units):
+    """Test unit conversions."""
 
-def test_conversions(verbose=False):
-    r"""Test unit conversions."""
+    value = np.pi
+    units_list = list(measurement_units.keys())
+    for i in range(len(units_list)):
+        value = convert(value, units_list[i - 1], units_list[i])
+    np.testing.assert_allclose(
+        value,
+        np.pi,
+        err_msg=f"Measurement type {measurement_type} failed.",
+        )
 
-    for (measurement_type, measurement_units) in units.items():
-        value = numpy.pi
-        units_list = list(units[measurement_type].keys())
-        for i in range(len(units_list)):
-            if verbose:
-                print("%s (%s) -> (%s)" % (value, units_list[i - 1], 
-                                                  units_list[i]))
-            value = convert(value, units_list[i - 1], units_list[i])
-        numpy.testing.assert_allclose([value], [numpy.pi],
-                      err_msg="Measurement tyep %s failed." % measurement_type)
-
-if __name__ == '__main__':
-    test_conversions(verbose=True)
+if __name__ == "__main__":
+    raise SystemExit(pytest.main([__file__]))

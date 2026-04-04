@@ -1,0 +1,79 @@
+name: Slow tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+env:
+  CLAW: ${{ github.workspace }}
+
+jobs:
+  slow-tests:
+    name: >
+      slow - ${{ matrix.os }} - ${{ matrix.toolchain.compiler }} ${{ matrix.build }} - py ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        build: [opt]
+        python-version: ['3.12']
+        toolchain:
+          - {compiler: gcc, version: 14}
+
+    steps:
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6.2.0
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Set up compilers
+      uses: fortran-lang/setup-fortran@v1.9.0
+      id: setup-fortran
+      with:
+        compiler: ${{ matrix.toolchain.compiler }}
+        version: ${{ matrix.toolchain.version }}
+
+    - name: Install python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 meson-python ninja pytest numpy pandas xarray
+        pip install scipy netCDF4
+
+    - name: Checkout Clawpack
+      uses: actions/checkout@v6.0.2
+      with:
+        repository: clawpack/clawpack
+        submodules: true
+
+    - name: Checkout GeoClaw branch
+      uses: actions/checkout@v6.0.2
+      with:
+        path: geoclaw
+
+    - name: Install clawpack python
+      run: |
+        pip install --no-build-isolation --editable .
+
+    - name: Run Slow Tests
+      run: |
+        cd ${CLAW}/geoclaw
+        source .github/scripts/set_test_env.sh slow "${{ matrix.toolchain.compiler }}" "${{ matrix.build }}"
+        echo "FFLAGS: $FFLAGS"
+        echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
+        pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s -o addopts="" \
+          -m "slow"
+
+    - name: Upload test results
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: test_results_slow_${{ matrix.os }}_${{ matrix.toolchain.compiler }}_${{ matrix.build }}
+        path: ${{ env.CLAW }}/geoclaw/pytest_tmp
+        if-no-files-found: ignore

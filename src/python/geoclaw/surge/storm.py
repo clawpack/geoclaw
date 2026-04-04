@@ -324,9 +324,11 @@ class Storm(object):
         self.eye_location = np.empty((num_forecasts, 2))
         assert(num_casts == num_forecasts)
         if isinstance(self.time_offset, np.datetime64):
-            self.t = np.array([self.time_offset
-                               + np.timedelta64(data[i, 0], "s")
-                               for i in range(num_forecasts)])
+            # GeoClaw storm files write elapsed time as floating-point seconds,
+            # so construct timedeltas with sub-second support rather than
+            # passing floats directly to ``np.timedelta64``.
+            time_deltas = pd.to_timedelta(data[:, 0], unit="s").to_numpy()
+            self.t = self.time_offset + time_deltas
         else:
             self.t = data[:, 0]
         self.eye_location[:, 0] = data[:, 1]
@@ -497,7 +499,7 @@ class Storm(object):
         num_lines = len(data_block)
 
         # Parse data block
-        self.t = np.empty(num_lines, dtype=np.datetime64)
+        self.t = np.empty(num_lines, dtype="datetime64[s]")
         self.event = np.empty(num_lines, dtype=str)
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
@@ -511,12 +513,13 @@ class Storm(object):
                 break
             data = [value.strip() for value in line.split(",")]
 
-            # Create time
-            self.t[i] = np.datetime64(f"{data[0][:4]}"      +
-                                      f"-{data[0][4:6]}"    +
-                                      f"-{data[0][6:8]}"    +
-                                      f"T{data[1][:2]}"     +
-                                      f":{data[1][2:]}")
+            # Create time from YYYYMMDD and HHMM fields
+            self.t[i] = np.datetime64(
+                f"{data[0][:4]}"
+                f"-{data[0][4:6]}"
+                f"-{data[0][6:8]}"
+                f"T{data[1][:2]}:{data[1][2:]}"
+            )
 
             # If an event is occuring record it.  If landfall then use as an
             # offset.   Note that if there are multiple landfalls the last one
@@ -792,7 +795,7 @@ class Storm(object):
         assert(num_lines == len(data_block))
 
         # Parse data block
-        self.t = np.empty(num_lines, dtype=np.datetime64)
+        self.t = np.empty(num_lines, dtype="datetime64[s]")
         self.event = np.empty(num_lines, dtype=str)
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
@@ -805,11 +808,15 @@ class Storm(object):
                 break
             data = [value.strip() for value in line.split()]
 
-            # Create time
-            self.t[i] = np.datetime64(f"{data[0][:2]}"      +
-                                      f"-{data[0][2:4]}"    +
-                                      f"-{data[0][4:6]}"    +
-                                      f"T{data[0][6:]}")
+            # Create time from JMA yymmddhh field
+            year = int(data[0][:2])
+            year += 1900 if year >= 51 else 2000
+            self.t[i] = np.datetime64(
+                f"{year:04d}"
+                f"-{data[0][2:4]}"
+                f"-{data[0][4:6]}"
+                f"T{data[0][6:8]}:00"
+            )
 
             # Classification, note that this is not the category of the storm
             self.classification[i] = int(data[1])
@@ -870,7 +877,7 @@ class Storm(object):
         #  max_wind_radius  - convert from km to m - 1000.0
         #  Central_pressure - convert from mbar to Pa - 100.0
         #  Radius of last isobar contour - convert from km to m - 1000.0
-        self.t = np.empty(num_lines, dtype=np.datetime64)
+        self.t = np.empty(num_lines, dtype="datetime64[s]")
         self.classification = np.empty(num_lines, dtype=str)
         self.eye_location = np.empty((num_lines, 2))
         self.max_wind_speed = np.empty(num_lines)
@@ -888,11 +895,13 @@ class Storm(object):
                 self.basin = TCVitals_Basins[data[1][2:]]
                 self.ID = int(data[1][:2])
 
-            # Create time
-            self.t[i] = np.datetime64(f"{data[0][:2]}"      +
-                                      f"-{data[0][2:4]}"    +
-                                      f"-{data[0][4:6]}"    +
-                                      f"T{data[0][6:]}")
+            # Create time from YYYYMMDD and HHMM fields
+            self.t[i] = np.datetime64(
+                f"{data[3][:4]}"
+                f"-{data[3][4:6]}"
+                f"-{data[3][6:8]}"
+                f"T{data[4][:2]}:{data[4][2:]}"
+            )
 
             # Parse eye location - longitude/latitude order
             if data[5][-1] == 'N':
@@ -1005,6 +1014,12 @@ class Storm(object):
             500 km.
         """
 
+        # Get around the mutable-default-argument problem for the fill_dict
+        if fill_dict is None:
+            fill_dict = {}
+        else:
+            fill_dict = dict(fill_dict)
+
         # If a filling function is not provided we will provide some defaults
         fill_dict.update({"storm_radius": lambda t, storm: 500e3})
         # Handle older interface that had specific fill functions
@@ -1019,9 +1034,9 @@ class Storm(object):
         # or skip it
         num_casts = 0
         data = []
+
         for n in range(len(self.t)):
-            if self.t[n] == self.t[n - 1]:
-                # Skip this time
+            if n > 0 and self.t[n] == self.t[n - 1]:
                 continue
 
             # Check each value we need for this time to make sure it is valid
@@ -1063,7 +1078,15 @@ class Storm(object):
 
             # Time
             if not isinstance(self.time_offset, float):
-                data[-1][0] = (self.t[n] - self.time_offset).total_seconds()
+                delta = self.t[n] - self.time_offset
+                if hasattr(delta, "total_seconds"):
+                    data[-1][0] = float(delta.total_seconds())
+                else:
+                    if hasattr(delta, "values"):
+                        delta = delta.values
+                    if isinstance(delta, np.ndarray):
+                        delta = delta.item()
+                    data[-1][0] = float(pd.to_timedelta(delta).total_seconds())
             else:
                 data[-1][0] = self.t[n] - self.time_offset
             # Eye-location
@@ -1076,6 +1099,7 @@ class Storm(object):
             data[-1][5] = self.central_pressure[n]
             # Outer storm radius
             data[-1][6] = self.storm_radius[n]
+
 
         # Write out file
         format_string = ("{:19,.8e} " * 7)[:-1] + "\n"
@@ -1522,12 +1546,12 @@ class Storm(object):
             # NHC uses knots
             speeds = units.convert(self.max_wind_speed, "m/s", "knots")
             category = (np.zeros(speeds.shape) +
-                        (speeds < 30) * -1 +
+                        (speeds < 34) * -1 +
                         (speeds >= 64) * (speeds < 83) * 1 +
                         (speeds >= 83) * (speeds < 96) * 2 +
                         (speeds >= 96) * (speeds < 113) * 3 +
-                        (speeds >= 113) * (speeds < 135) * 4 +
-                        (speeds >= 135) * 5)
+                        (speeds >= 113) * (speeds < 137) * 4 +
+                        (speeds >= 137) * 5)
             cat_map = {-1: "Tropical Depression",
                        0: "Tropical Storm",
                        1: "Category 1 Hurricane",
@@ -1659,7 +1683,7 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
         raise e
 
     fill_da = xr.DataArray(getattr(storm_fill, var),
-                           coords={'t': getattr(storm_fill, 't')},
+                           coords={'t': np.asarray(getattr(storm_fill, 't'))},
                            dims=('t',))
 
     # convert -1 to nan
@@ -1684,7 +1708,7 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
 
     # next, try just interpolating other ibtracs values
     targ_da = xr.DataArray(getattr(storm_targ, var),
-                           coords={'t': getattr(storm_targ, 't')},
+                           coords={'t': np.asarray(getattr(storm_targ, 't'))},
                            dims=('t',))
     targ_da = targ_da.where(targ_da > 0, np.nan)
     if targ_da.notnull().any():

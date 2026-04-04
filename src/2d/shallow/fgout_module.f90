@@ -412,7 +412,7 @@ contains
 
         ! I/O
         integer, parameter :: unit = 87
-        character(len=15) :: fg_filename
+        character(len=512) :: fg_filename
         character(len=8) :: cfgno, cframeno
         character(len=8) :: file_format
         integer :: grid_number,ipos,idigit,out_number,columns

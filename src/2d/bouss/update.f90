@@ -32,7 +32,7 @@ subroutine update (level, nvar, naux)
     real(kind=8) :: hu4sum, hv5sum, hu4f, hv5f, hu4c, hv5c  ! components 4,5
     real(kind=8) :: hf, bf, huf, hvf, etaf, hav, hc, huc, hvc, capa, etaav
     real(kind=8) :: capac
-    character(len=80) :: String
+    character(len=100) :: String
 
     lget = level
 

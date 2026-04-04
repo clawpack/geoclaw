@@ -8,49 +8,56 @@ but now they are explicit below.
 Call functions with makeplots==True to create plots of topo, slip, and dtopo.
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
+from pathlib import Path
 import os
 
+import numpy as np
+
 import clawpack.clawutil.data
+import clawpack.geoclaw.topotools as topotools
+import clawpack.geoclaw.dtopotools as dtopotools
 
 try:
-    CLAW = os.environ['CLAW']
+    CLAW = Path(os.environ['CLAW'])
 except:
     raise Exception("*** Must first set CLAW enviornment variable")
 
 # Scratch directory for storing topo and dtopo files:
-scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
+scratch_dir = CLAW / 'geoclaw' / 'scratch'
 
-def get_topo(makeplots=False):
+def get_topo(path=None, verbose=False, makeplots=False):
     """
     Retrieve the topo file from the GeoClaw repository.
     """
-    from clawpack.geoclaw import topotools
+
+    if not path:
+        path = scratch_dir
+
     topo_fname = 'etopo10min120W60W60S0S.asc'
     url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
-    clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
-            file_name=topo_fname, verbose=True)
+    clawpack.clawutil.data.get_remote_file(url, output_dir=path, 
+            file_name=topo_fname, verbose=verbose)
 
     if makeplots:
-        from matplotlib import pyplot as plt
-        topo = topotools.Topography(os.path.join(scratch_dir,topo_fname), topo_type=2)
+        import matplotlib.pyplot as plt
+        topo = topotools.Topography(path / topo_fname, topo_type=2)
         topo.plot()
-        fname = os.path.splitext(topo_fname)[0] + '.png'
+        fname = topo_fname.with_suffix('.png')
         plt.savefig(fname)
-        print("Created ",fname)
-
+        if verbose:
+            print("Created ", fname)
 
     
-def make_dtopo(makeplots=False):
+def make_dtopo(path=None, verbose=False, makeplots=False):
     """
     Create dtopo data file for deformation of sea floor due to earthquake.
     Uses the Okada model with fault parameters and mesh specified below.
     """
-    from clawpack.geoclaw import dtopotools
-    import numpy
+    
+    if not path:
+        path = scratch_dir
 
-    dtopo_fname = os.path.join(scratch_dir, "dtopo_usgs100227.tt3")
+    dtopo_fname = path / "dtopo_usgs100227.tt3"
 
     # Specify subfault parameters for this simple fault model consisting
     # of a single subfault:
@@ -70,25 +77,27 @@ def make_dtopo(makeplots=False):
     fault = dtopotools.Fault()
     fault.subfaults = [usgs_subfault]
 
-    print("Mw = ",fault.Mw())
+    if verbose:
+        print("Mw = ",fault.Mw())
 
-    if os.path.exists(dtopo_fname):
-        print("*** Not regenerating dtopo file (already exists): %s" \
-                    % dtopo_fname)
+    if dtopo_fname.exists():
+        if verbose:
+            print("Not regenerating dtopo file (already exists): " + 
+                  f"{dtopo_fname}")
     else:
-        print("Using Okada model to create dtopo file")
+        if verbose:
+            print("Using Okada model to create dtopo file")
 
-        x = numpy.linspace(-77, -67, 100)
-        y = numpy.linspace(-40, -30, 100)
+        x = np.linspace(-77, -67, 100)
+        y = np.linspace(-40, -30, 100)
         times = [1.]
 
         fault.create_dtopography(x,y,times)
         dtopo = fault.dtopo
         dtopo.write(dtopo_fname, dtopo_type=3)
 
-
     if makeplots:
-        from matplotlib import pyplot as plt
+        import matplotlib.pyplot as plt
         if fault.dtopo is None:
             # read in the pre-existing file:
             print("Reading in dtopo file...")
@@ -103,11 +112,12 @@ def make_dtopo(makeplots=False):
         ax1.set_xlim(x.min(),x.max())
         ax1.set_ylim(y.min(),y.max())
         dtopo.plot_dZ_colors(1.,axes=ax2)
-        fname = os.path.splitext(os.path.split(dtopo_fname)[-1])[0] + '.png'
+        fname = dtopo_fname.with_suffix('.png')
         plt.savefig(fname)
-        print("Created ",fname)
+        if verbose:
+            print("Created ",fname)
 
 
 if __name__=='__main__':
-    get_topo(False)
-    make_dtopo(False)
+    get_topo()
+    make_dtopo()
