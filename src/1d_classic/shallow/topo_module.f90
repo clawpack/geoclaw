@@ -36,7 +36,7 @@ contains
 
     ! Locals
     integer, parameter :: iunit = 7
-    character (len=150) :: topofname
+    character (len=512) :: topofname
 
     if (present(file_name)) then
         call opendatafile(iunit, file_name)
@@ -58,7 +58,7 @@ contains
     read(iunit,*) override_topo_order
     read(iunit,*) topofname
     close(iunit)
-    call read_topo_file(topofname)
+    call read_topo_file(trim(topofname))
 
     end subroutine read_topo_settings
 
@@ -69,7 +69,7 @@ contains
     use grid_module, only: mbc,mx
     implicit none
 
-    character(len=512), intent(in) :: fname
+    character(len=*), intent(in) :: fname
     integer :: i,ibc
     integer, parameter :: iunit = 7
 
@@ -218,7 +218,7 @@ contains
         read(iunit,*) dtopofname, dtopotype
         read(iunit,*) dt_max_dtopo
         close(iunit)
-        call read_dtopo_file(dtopofname,dtopotype)
+        call read_dtopo_file(trim(dtopofname),dtopotype)
         topo_finalized = .false.
 
     else if (ndtopofiles > 1) then
@@ -241,7 +241,7 @@ contains
     implicit none
 
     integer, intent(in) :: dtopotype
-    character(len=512), intent(in) :: fname
+    character(len=*), intent(in) :: fname
     integer :: i, k, status, dtopo_size, ibc
     integer, parameter :: iunit = 7
     real(kind=8) :: t0,tf,t,x,x1,x2,dt_dtopo
