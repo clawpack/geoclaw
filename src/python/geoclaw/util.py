@@ -21,8 +21,10 @@ Module provides provides utility functions.
 import io
 import os
 import os.path
+from pathlib import Path
 
-import numpy
+import numpy as np
+
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -71,7 +73,7 @@ def dist_latlong2meters(dx, dy, latitude=0.0):
     """
 
     dym = Rearth * DEG2RAD * dy
-    dxm = Rearth * numpy.cos(latitude * DEG2RAD) * dx * DEG2RAD
+    dxm = Rearth * np.cos(latitude * DEG2RAD) * dx * DEG2RAD
 
     return dxm,dym
 
@@ -86,7 +88,7 @@ def dist_meters2latlong(dx, dy, latitude=0.0):
 
     """
 
-    dxd = dx / (Rearth * numpy.cos(latitude * DEG2RAD)) * RAD2DEG
+    dxd = dx / (Rearth * np.cos(latitude * DEG2RAD)) * RAD2DEG
     dyd = dy * RAD2DEG / Rearth
 
     return dxd, dyd
@@ -122,8 +124,8 @@ def haversine(x0, y0, x1=None, y1=None, units='degrees'):
     dy = y1 - y0
 
     # angle subtended by two points, using Haversine formula:
-    dsigma = 2.0 * numpy.arcsin( numpy.sqrt( numpy.sin(0.5 * dy)**2   \
-            + numpy.cos(y0) * numpy.cos(y1) * numpy.sin(0.5 * dx)**2))
+    dsigma = 2.0 * np.arcsin( np.sqrt( np.sin(0.5 * dy)**2   \
+            + np.cos(y0) * np.cos(y1) * np.sin(0.5 * dx)**2))
 
     return Rearth * dsigma
 
@@ -145,8 +147,8 @@ def inv_haversine(d,x1,y1,y2,Rsphere=Rearth,units='degrees'):
     elif units != 'radians':
         raise Exception("unrecognized units")
     dsigma = d / Rsphere
-    cos_dsigma = (numpy.cos(dsigma) - numpy.sin(y1)*numpy.sin(y2)) / (numpy.cos(y1)*numpy.cos(y2))
-    dx = numpy.arccos(cos_dsigma)
+    cos_dsigma = (np.cos(dsigma) - np.sin(y1)*np.sin(y2)) / (np.cos(y1)*np.cos(y2))
+    dx = np.arccos(cos_dsigma)
     if units=='degrees':
         dx = dx * RAD2DEG
     return dx
@@ -182,8 +184,8 @@ def bearing(x0, y0, x1, y1, units='degrees', bearing_units='degrees'):
 
     dx = x1 - x0
     dy = y1 - y0
-    xx = numpy.cos(y0)*numpy.sin(y1) - numpy.sin(y0)*numpy.cos(y1)*numpy.cos(dx)
-    yy = numpy.sin(dx) * numpy.cos(y1)
+    xx = np.cos(y0)*np.sin(y1) - np.sin(y0)*np.cos(y1)*np.cos(dx)
+    yy = np.sin(dx) * np.cos(y1)
     b = atan2(yy, xx)   # in radians from North (between -pi and pi)
 
     beta = (degrees(b) + 360) % 360  # convert to degrees clockwise from North
@@ -217,7 +219,7 @@ def gctransect(x1,y1,x2,y2,npts,coords='W',units='degrees',Rearth=Rearth):
          https://math.stackexchange.com/questions/1783746
 
     """
-    from numpy import pi,sin,cos,arcsin,sqrt,arctan2,array,dot,zeros,linspace
+    from np import pi,sin,cos,arcsin,sqrt,arctan2,array,dot,zeros,linspace
     
     assert coords in ['E','W'], '*** coords must be E or W'
     assert units in ['radians','degrees'], '*** units must be degrees or radians'
@@ -278,7 +280,9 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     Note that if a file has multiple matching variables that the first it finds
     will be the one used.  It is best practice to provide the label if there
     are multiple available, e.g. 'msl' (mean sealevel pressure) and 'sp'
-    (surface pressure) for pressure.
+    (surface pressure) for pressure.  Please note a couple of things:
+    - Variable names are not checked for consistency with dimensions
+    - Case is not important, so 'lon' and 'LON' are treated the same.
 
     Default dimension mapping:
      - "x": ["x", "longitude", "lon"]
@@ -289,7 +293,7 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     Default variable mapping:
      - "wind_u":   ["wind_x", "wind_u", "u10", "u"]
      - "wind_v":   ["wind_y", "wind_v", "v10", "v"]
-     - "pressure": ["pressure", "msl", "sp"]
+     - "pressure": ["pressure", "msl", "sp", "p"]
      - "topo":     ["topo", "elevation", "z", "band1"]
 
     :Input:
@@ -303,7 +307,7 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     """
 
     import xarray as xr
-
+    
     # Open file and construct set of names
     data = xr.open_dataset(path)
     if 'dim' in lookup_type.lower():
@@ -315,10 +319,12 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
         var_names = [var_name.lower() for var_name in data.dims]
         # Assume that we only want ('x'), weird
         if len(var_names) == 1:
-            _var_mapping.pop(['y', 'z', 't'])
+            for key in ['y', 'z', 't']:
+                _var_mapping.pop(key)
         # Assume that we only want ('x', 'y')
         elif len(var_names) == 2:
-            _var_mapping.pop('z', 't')
+            for key in ['z', 't']:
+                _var_mapping.pop(key)
         # Assume that we have ('x', 'y', 't')
         elif len(var_names) == 3:
             _var_mapping.pop('z')
@@ -330,23 +336,23 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     elif 'var' in lookup_type.lower():
         _var_mapping = {"wind_u":   (False, ["wind_u", "wind_x", "u10", "u"]),
                         "wind_v":   (False, ["wind_v", "wind_y", "v10", "v"]),
-                        "pressure": (False, ["pressure", "msl", "sp"]),
+                        "pressure": (False, ["pressure", "msl", "sp", "p"]),
                         "topo":     (False, ["topo", "elevation", "z", "band1"])
                }
         var_names = [var_name.lower() for var_name in data.keys()]
     else:
         raise ValueError(f"Unknown lookup type {lookup_type}")
-
+    
     # Use defaults here, checking to make sure they are in the dimension names
     if user_mapping:
         for (coord, names) in user_mapping.items():
             if isinstance(names, str):
-                if names in var_names:
-                    _var_mapping[coord] = (True, names)
+                if names.lower() in var_names:
+                    _var_mapping[coord.lower()] = (True, names)
             else:
                 for (i, name) in enumerate(names):
-                    if name in var_names:
-                        _var_mapping[coord] = (True, name)
+                    if name.lower() in var_names:
+                        _var_mapping[coord.lower()] = (True, name)
                         break
 
     # Search for names in default names
@@ -356,7 +362,7 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
                 if var_name.lower() in values[1]:
                     _var_mapping[coord] = (True, var_name)
                     break
-
+    
     # Check dims are matched, Cannot check for variable names
     if 'dim' in lookup_type.lower():
         for (coord, value) in _var_mapping.items():
@@ -372,36 +378,70 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     return var_names
     
 
-def wrap_coords(input_path, output_path=None, force=False, dim_mapping=None):
-    r"""Wrap the x coordinates of a NetCDF file from [0, 360] to [-180, 180]
+def wrap_coords(input_path, output_path=None, *, lon_min=-180.0, 
+                            period=360.0, force=False, dim_mapping=None):
+    r"""Wrap the longitude (x) coordinate of a NetCDF file into a desired interval.
 
-    :Input:
-     - *input_path* (path) Path to input file.
-     - *output_path* (path) Path to output file.  Default is slightly modified
-       version of *input_path* with 'wrap' appended.
-     - *force* (bool) By default this routine will not overwrite a file that
-       alreaady exists.  The value *force = True* will overwrite the file.  
-       Default is False
-     - *dim_mapping* (dict) Dimension mapping for all dimensions in the NetCDF
-       file, not just 'x'.  Default is {}.
+    Generalizes the common [0, 360) -> [-180, 180) conversion to any period window.
+    The wrap is:
+
+        lon_wrapped = ((lon - lon_min) % period) + lon_min
+
+    After wrapping, the dataset is sorted by longitude.
+
+    Parameters
+    ----------
+    input_path : pathlib.Path or str
+        Path to input NetCDF file.
+    output_path : pathlib.Path or str, optional
+        Path to output file. Default is *input_path* with "_wrap" appended.
+    lon_min : float, default -180
+        Lower bound of the target wrapping interval (inclusive).
+        Examples:
+          - -180 for [-180, 180)
+          - 0 for [0, 360)
+          - -360 for [-360, 0)
+    period : float, default 360
+        Period for wrapping. Use 360 for degrees.
+    force : bool, default False
+        Overwrite output if it exists.
+    dim_mapping : dict, optional
+        Dimension mapping for all dimensions in the NetCDF file, not just 'x'.
+
+    Notes
+    -----
+    - This wraps coordinates but does not duplicate data beyond one period.
+      For domains that need “more negative than -180”, wrapping into [-360, 0)
+      is usually the right move (rather than trying to extend/duplicate).
     """
-
+    
     import xarray as xr
 
-    if not output_path:
-        output_path = (input_path.parent / 
-                                f"{input_path.stem}_wrap{input_path.suffix}")
+    if dim_mapping is None:
+        dim_mapping = {}
 
-    if not output_path.exists() or force:
-        dim_mapping = get_netcdf_names(input_path, lookup_type='dim', 
-                                                       user_mapping=dim_mapping)
-        ds = xr.open_dataset(input_path)
-        lon_atrib = ds.coords[dim_mapping['x']].attrs
-        ds.coords[dim_mapping['x']] = \
-                                (ds.coords[dim_mapping['x']] + 180) % 360 - 180
-        wrapped_ds = ds.sortby(ds[dim_mapping['x']])
-        wrapped_ds.coords[dim_mapping['x']].attrs = lon_atrib
-        wrapped_ds.to_netcdf(output_path)
+    if not output_path:
+        output_path = (input_path.parent /
+                       f"{input_path.stem}_wrap{input_path.suffix}")
+
+    if output_path.exists() and not force:
+        return
+
+    dim_mapping = get_netcdf_names(input_path, lookup_type='dim',
+                                   user_mapping=dim_mapping)
+
+    ds = xr.open_dataset(input_path)
+
+    x_name = dim_mapping['x']   # should map to 'lon' for GEBCO
+    lon_attrs = ds.coords[x_name].attrs
+
+    lon = ds.coords[x_name].astype('float64')
+    ds.coords[x_name] = ((lon - lon_min) % period) + lon_min
+
+    wrapped_ds = ds.sortby(ds[x_name])
+    wrapped_ds.coords[x_name].attrs = lon_attrs
+
+    wrapped_ds.to_netcdf(output_path)
 
 
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
@@ -433,9 +473,9 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
       - verbose (bool): whether to output informational messages
 
     :Returns:
-      - date_time (numpy.ndarray): times corresponding to retrieved data
-      - water_level (numpy.ndarray): preliminary or verified water levels
-      - prediction (numpy.ndarray): tide predictions
+      - date_time (np.ndarray): times corresponding to retrieved data
+      - water_level (np.ndarray): preliminary or verified water levels
+      - prediction (np.ndarray): tide predictions
     """
     # use geoclaw scratch directory for caching by default
     if cache_dir is None:
@@ -510,7 +550,7 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
 
     def parse(data, col_idx, col_types, header):
         # read data into structured array, skipping header row if present
-        a = numpy.genfromtxt(data, usecols=col_idx, dtype=col_types,
+        a = np.genfromtxt(data, usecols=col_idx, dtype=col_types,
                              skip_header=int(header), delimiter=',',
                              missing_values='')
 
@@ -545,7 +585,7 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
 
     # ensure that date/time ranges are the same
     if (date_time is not None) and (date_time2 is not None):
-        if not numpy.array_equal(date_time, date_time2):
+        if not np.array_equal(date_time, date_time2):
             raise ValueError('Received data for different times')
 
     return date_time, water_level, prediction
