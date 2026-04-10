@@ -200,14 +200,23 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     tfile = [tfile[0], tfile[-1]] # drop minlevel,maxlevel,t1,t2
                 elif len(tfile) == 2:
                     pass  # now expect only topo_type, filename
+                elif len(tfile) == 3:
+                    pass  # [topo_type, filename, TopoMetadata] for NetCDF type 4
                 else:
                     raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
 
                 # if path is relative in setrun, assume it's relative to the
                 # same directory that out_file comes from
-                fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
+                fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[1]))
                 self._out_file.write("\n'%s' \n " % fname)
                 self._out_file.write("%3i   # topo_type\n" % tfile[0])
+
+                # For type-4 (NetCDF) entries that carry a TopoMetadata object,
+                # write the descriptor key=value block consumed by
+                # read_netcdf_descriptor in topo_module.f90.
+                if tfile[0] == 4 and len(tfile) == 3 and tfile[2] is not None:
+                    from clawpack.geoclaw.netcdf_utils import DescriptorWriter
+                    DescriptorWriter.write_topo_descriptor(self._out_file, tfile[2])
         elif self.test_topography == 1:
             self.data_write(name='topo_location',description='(Bathymetry jump location)')
             self.data_write(name='topo_left',description='(Depth to left of bathy_location)')

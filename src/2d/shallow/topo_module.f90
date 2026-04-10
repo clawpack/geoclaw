@@ -39,6 +39,20 @@ module topo_module
     ! NetCDF4 support
     real(kind=4), parameter :: CONVENTION_REQUIREMENT = 1.0
 
+    ! NetCDF descriptor fields — one slot per topo file, populated from the
+    ! key=value block in topo.data by read_netcdf_descriptor (type 4 only).
+    character(len=64), allocatable :: nc_var_name(:)     ! topo variable name
+    character(len=64), allocatable :: nc_lon_name(:)     ! longitude coord name
+    character(len=64), allocatable :: nc_lat_name(:)     ! latitude coord name
+    character(len=32), allocatable :: nc_lat_order(:)    ! 'N_to_S' or 'S_to_N'
+    character(len=32), allocatable :: nc_dim_order(:)    ! e.g. 'lat,lon'
+    character(len=8),  allocatable :: nc_fill_action(:)  ! 'abort' or 'warn'
+    integer,           allocatable :: nc_lon_convention(:) ! 180 or 360
+    real(kind=8),      allocatable :: nc_fill_value(:)   ! fill/nodata sentinel
+    real(kind=8),      allocatable :: nc_crop_bounds(:,:) ! (4, n): lon0,lon1,lat0,lat1
+    logical,           allocatable :: nc_has_fill(:)     ! fill_value was specified
+    logical,           allocatable :: nc_has_crop(:)     ! crop_bounds was specified
+
     ! dtopo variables
     ! Work array
     real(kind=8), allocatable :: dtopowork(:)
@@ -153,11 +167,38 @@ contains
                 allocate(topoID(mtopofiles),topotime(mtopofiles),topo0save(mtopofiles))
                 allocate(i0topo0(mtopofiles),topo0ID(mtopofiles))
                 allocate(areatopo(mtopofiles))
+
+                ! NetCDF descriptor arrays — allocated for all files; only
+                ! filled in for type 4 entries by read_netcdf_descriptor.
+                allocate(nc_var_name(mtopofiles), nc_lon_name(mtopofiles))
+                allocate(nc_lat_name(mtopofiles), nc_lat_order(mtopofiles))
+                allocate(nc_dim_order(mtopofiles), nc_fill_action(mtopofiles))
+                allocate(nc_lon_convention(mtopofiles), nc_fill_value(mtopofiles))
+                allocate(nc_crop_bounds(4, mtopofiles))
+                allocate(nc_has_fill(mtopofiles), nc_has_crop(mtopofiles))
+                nc_var_name      = ''
+                nc_lon_name      = ''
+                nc_lat_name      = ''
+                nc_lat_order     = 'S_to_N'
+                nc_dim_order     = 'lat,lon'
+                nc_fill_action   = 'abort'
+                nc_lon_convention = 180
+                nc_fill_value    = 0.0d0
+                nc_crop_bounds   = 0.0d0
+                nc_has_fill      = .false.
+                nc_has_crop      = .false.
+
                 mtopofiles = mtopofiles - num_dtopo  ! decrement after allocates
 
                 do i=1,mtopofiles
                     read(iunit,*) topofname(i)
                     read(iunit,*) itopotype(i)
+
+                    ! For NetCDF files, read the optional key=value descriptor
+                    ! block that follows the topo_type line.
+                    if (abs(itopotype(i)) == 4) then
+                        call read_netcdf_descriptor(iunit, i)
+                    end if
 
                     write(GEO_PARM_UNIT,*) '   '
                     write(GEO_PARM_UNIT,*) '   ',topofname(i)
@@ -168,7 +209,7 @@ contains
                     endif
                     call read_topo_header(topofname(i),itopotype(i),mxtopo(i), &
                         mytopo(i),xlowtopo(i),ylowtopo(i),xhitopo(i),yhitopo(i), &
-                        dxtopo(i),dytopo(i))
+                        dxtopo(i),dytopo(i), i)
                     topoID(i) = i
                     mtopo(i) = int(mxtopo(i), 8) * int(mytopo(i), 8)
                     areatopo(i) = dxtopo(i)*dytopo(i)
@@ -212,7 +253,7 @@ contains
                     topoID(i) = i
                     topotime(i) = -huge(1.0)
                     call read_topo_file(mxtopo(i),mytopo(i),itopotype(i),topofname(i), &
-                        xlowtopo(i),ylowtopo(i),topowork(i0topo(i):i0topo(i)+mtopo(i)-1))
+                        xlowtopo(i),ylowtopo(i),topowork(i0topo(i):i0topo(i)+mtopo(i)-1), i)
                     ! set topo0save(i) = 1 if this topo file intersects any
                     ! dtopo file.  This approach to setting topo0save is changed from 
                     ! v5.4.1, where it only checked if some dtopo point lies within the
@@ -486,7 +527,7 @@ contains
     !  Read topo file.
     ! ========================================================================
 
-    subroutine read_topo_file(mx,my,topo_type,fname,xll,yll,topo)
+    subroutine read_topo_file(mx,my,topo_type,fname,xll,yll,topo,topo_idx)
 
 #ifdef NETCDF
         use netcdf
@@ -502,6 +543,7 @@ contains
         character(len=512), intent(in) :: fname
         real(kind=8), intent(inout) :: topo(1:int(mx, 8)*int(my, 8))
         real(kind=8), intent(in) :: xll,yll
+        integer, intent(in), optional :: topo_idx
 
         ! Locals
         integer, parameter :: iunit = 19, miss_unit = 17
@@ -515,7 +557,6 @@ contains
         ! NetCDF Support
         character(len=64) :: direction, x_dim_name, x_var_name, y_dim_name, &
             y_var_name, z_var_name, var_name
-        ! character(len=1) :: axis_string
         real(kind=8), allocatable :: nc_buffer(:, :), xlocs(:), ylocs(:)
         integer(kind=4) :: x_var_id, y_var_id, z_var_id, x_dim_id, y_dim_id
         integer(kind=4) :: xstart(1), ystart(1), mx_tot, my_tot
@@ -625,108 +666,136 @@ contains
             ! NetCDF
             case(4)
 #ifdef NETCDF
-                ! Open file    
+                ! Open file
                 call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
-                
-                ! Get number of dimensions and vars
-                call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, &
-                    num_vars))
-                
-                ! get x and y dimension info
-                call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
-                    mx_tot, y_dim_id, y_dim_name, my_tot)
-                    
-                allocate(xlocs(mx_tot),ylocs(my_tot))
-                
-                call check_netcdf_error(nf90_get_var(nc_file, x_dim_id, xlocs, start=(/ 1 /), count=(/ mx_tot /)))
-                call check_netcdf_error(nf90_get_var(nc_file, y_dim_id, ylocs, start=(/ 1 /), count=(/ my_tot /)))
-                xstart = minloc(xlocs, mask=(xlocs.eq.xll))
-                ystart = minloc(ylocs, mask=(ylocs.eq.yll))
-                deallocate(xlocs,ylocs)
-                
-                z_var_id = -1
-                do n=1, num_vars
-                    call check_netcdf_error(nf90_inquire_variable(nc_file, n, var_name, var_type, num_dims, dim_ids))
-                    
-                    ! Assume dim names are same as var ids
-                    if (var_name == x_dim_name) then
-                        x_var_name = var_name
-                        call check_netcdf_error(nf90_inq_varid(nc_file, x_var_name, x_var_id))
-                    else if (var_name == y_dim_name) then
-                        y_var_name = var_name
-                        call check_netcdf_error(nf90_inq_varid(nc_file, y_var_name, y_var_id))
-                    else if (num_dims == 2) then
-                        z_var_name = var_name
-                        z_dim_ids = dim_ids
-                        call check_netcdf_error(nf90_inq_varid(nc_file, z_var_name, z_var_id))
-                    end if
 
-                end do
-                if (z_var_id == -1) then
-                    stop "Unable to find topography data!"
+                call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, num_vars))
+
+                ! ----------------------------------------------------------------
+                ! Dimension discovery: descriptor or fallback heuristic.
+                ! ----------------------------------------------------------------
+                if (present(topo_idx) .and. &
+                        len_trim(nc_lon_name(topo_idx)) > 0) then
+                    call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                        trim(nc_lon_name(topo_idx)), x_dim_id))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                        x_dim_id, x_dim_name, mx_tot))
+                    call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                        trim(nc_lat_name(topo_idx)), y_dim_id))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                        y_dim_id, y_dim_name, my_tot))
+                else
+                    call get_dim_info(nc_file, num_dims_tot, x_dim_id, &
+                        x_dim_name, mx_tot, y_dim_id, y_dim_name, my_tot)
                 end if
 
-                ! Load in data
-                ! TODO: Provide striding into data if need be
-                
-                ! only try to access data if theres overlap with the domain
+                allocate(xlocs(mx_tot), ylocs(my_tot))
+                call check_netcdf_error(nf90_get_var(nc_file, x_dim_id, xlocs, &
+                    start=(/ 1 /), count=(/ mx_tot /)))
+                call check_netcdf_error(nf90_get_var(nc_file, y_dim_id, ylocs, &
+                    start=(/ 1 /), count=(/ my_tot /)))
+
+                ! Apply lon convention shift so xstart matches the shifted xll
+                ! computed in read_topo_header.
+                if (present(topo_idx)) then
+                    if (nc_lon_convention(topo_idx) == 360) then
+                        where (xlocs > 180.0d0) xlocs = xlocs - 360.0d0
+                    end if
+                end if
+
+                xstart = minloc(xlocs, mask=(xlocs == xll))
+                ystart = minloc(ylocs, mask=(ylocs == yll))
+                deallocate(xlocs, ylocs)
+
+                ! ----------------------------------------------------------------
+                ! Find the topo data variable: descriptor or first 2-D variable.
+                ! ----------------------------------------------------------------
+                if (present(topo_idx) .and. &
+                        len_trim(nc_var_name(topo_idx)) > 0) then
+                    call check_netcdf_error(nf90_inq_varid(nc_file, &
+                        trim(nc_var_name(topo_idx)), z_var_id))
+                    call check_netcdf_error(nf90_inquire_variable(nc_file, &
+                        z_var_id, var_name, var_type, num_dims, z_dim_ids))
+                else
+                    z_var_id = -1
+                    do n = 1, num_vars
+                        call check_netcdf_error(nf90_inquire_variable(nc_file, &
+                            n, var_name, var_type, num_dims, dim_ids))
+                        if (var_name /= x_dim_name .and. &
+                            var_name /= y_dim_name .and. num_dims == 2) then
+                            z_var_id = n
+                            z_dim_ids = dim_ids
+                            exit
+                        end if
+                    end do
+                    if (z_var_id == -1) then
+                        print *, "ERROR: Unable to find topo variable in ", trim(fname)
+                        stop
+                    end if
+                end if
+
+                ! ----------------------------------------------------------------
+                ! Load data into topo array (only if region overlaps domain).
+                ! ----------------------------------------------------------------
                 if ((mx > 0) .and. (my > 0)) then
                     if (z_dim_ids(1) == x_dim_id) then
                         allocate(nc_buffer(mx, my))
                     else if (z_dim_ids(1) == y_dim_id) then
                         allocate(nc_buffer(my, mx))
-                    else 
-                        stop " NetCDF z variable has dimensions that don't align with x and y"
+                    else
+                        print *, "ERROR: NetCDF z variable dimensions do not align with x/y"
+                        stop
                     end if
 
-                    call check_netcdf_error(nf90_get_var(nc_file, z_var_id, nc_buffer, &
-                                                start = (/ xstart(1), ystart(1) /), &
-                                                count = (/ mx, my /)))
+                    call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
+                        nc_buffer, start=(/ xstart(1), ystart(1) /), &
+                        count=(/ mx, my /)))
 
-                    ! check for lon/lat ordering of z variable
+                    ! Transpose into GeoClaw topo array (N-to-S row order).
                     if (z_dim_ids(1) == x_dim_id) then
                         do j = 0, int(my, 8) - 1
-                            topo(j * int(mx, 8) + 1:(j + 1) * int(mx, 8)) = nc_buffer(:, my - j)
+                            topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(:, my - j)
                         end do
-                    else if (z_dim_ids(1) == y_dim_id) then
+                    else
                         do j = 0, int(my, 8) - 1
-                            topo(j * int(mx, 8) + 1:(j + 1) * int(mx, 8)) = nc_buffer(my - j, :)
+                            topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(my - j, :)
                         end do
                     end if
                     deallocate(nc_buffer)
 
-                    ! do j=1, my
-                    !     i = i - 1
-                    !     topo((i - 1) * mx + 1:)
-                    ! print *, mx, my
-                    ! do j=1, my
-                    !     row_index = row_index - 1
-                    !     print *, row_index
-                    !     print *, (row_index-1)*mx + 1, (row_index-1)*mx + mx
-                    !     ! call check_netcdf_error(nf90_get_var(nc_file, z_var_id,    &
-                    !             ! topo))
-                    !     ! call check_netcdf_error(nf90_get_var(nc_file, z_var_id,  &
-                    !     !       topo((row_index-1)*mx + 1:(row_index-1)*mx + mx),  &
-                    !     !                 start = (/ 1, j /), count=(/ mx, 1 /)))
-                    !     call check_netcdf_error(nf90_get_var(nc_file, z_var_id,  &
-                    !           nc_buffer, start = (/ 1, j /), count=(/ mx, 1 /)))
-                    !     topo((row_index - 1) * mx + 1:(row_index - 1) * mx + mx) = &
-                    !             nc_buffer
-                    ! end do
+                    ! ----------------------------------------------------------------
+                    ! Fill-value check (descriptor only).
+                    ! Python has already verified no fill values in the crop region,
+                    ! but we keep this as a safety net for edge-case mismatches.
+                    ! ----------------------------------------------------------------
+                    if (present(topo_idx) .and. nc_has_fill(topo_idx)) then
+                        do i = 1, mtot
+                            if (abs(topo(i) - nc_fill_value(topo_idx)) < &
+                                    1.0d-6 * max(abs(nc_fill_value(topo_idx)), 1.0d0)) then
+                                if (trim(nc_fill_action(topo_idx)) == 'abort') then
+                                    print *, "ERROR: Fill value found in topo file ", &
+                                        trim(fname), " at index ", i
+                                    print *, "  fill_value = ", nc_fill_value(topo_idx)
+                                    print *, "  Set fill_action = warn to replace with topo_missing."
+                                    stop
+                                else
+                                    topo(i) = topo_missing
+                                end if
+                            end if
+                        end do
+                    end if
 
-                    ! Check if the topography was defined positive down and flip the
-                    ! sign if need be.  Just in case this is true but topo_type < 0
-                    ! we do not do anything here on this to avoid doing it twice.
+                    ! Honour 'positive = down' attribute (flip sign for depth-positive files).
+                    ! Only flip when topo_type > 0 to avoid double-flip for negative types.
                     ios = nf90_get_att(nc_file, z_var_id, 'positive', direction)
-                    call check_netcdf_error(nf90_close(nc_file))
                     if (ios == NF90_NOERR) then
-                        if (to_lower(direction) == "down") then
-                            if (topo_type < 0) then
-                                topo = -topo
-                            endif
+                        if (to_lower(direction) == "down" .and. topo_type > 0) then
+                            topo(1:mtot) = -topo(1:mtot)
                         end if
                     end if
                 end if
+
+                call check_netcdf_error(nf90_close(nc_file))
 #else
                 print *, "ERROR:  NetCDF library was not included in this build"
                 print *, "  of GeoClaw."
@@ -783,7 +852,7 @@ contains
     !   - xll,yll,xhi,yhi - (float) Lower and upper coordinates for grid
     !   - dx,dy - (float) Spatial resolution of grid
     ! ========================================================================
-    subroutine read_topo_header(fname,topo_type,mx,my,xll,yll,xhi,yhi,dx,dy)
+    subroutine read_topo_header(fname,topo_type,mx,my,xll,yll,xhi,yhi,dx,dy,topo_idx)
 #ifdef NETCDF
         use netcdf
 #endif
@@ -798,6 +867,7 @@ contains
         integer, intent(in) :: topo_type
         integer, intent(out) :: mx, my
         real(kind=8), intent(out) :: xll, yll, xhi, yhi, dx, dy
+        integer, intent(in), optional :: topo_idx
 
         ! Local
         integer, parameter :: iunit = 19
@@ -810,9 +880,6 @@ contains
         logical :: xll_registered, yll_registered
 
         ! NetCDF Support
-        ! character(len=1) :: axis_string
-        ! character(len=6) :: convention_string
-        ! integer(kind=4) :: convention_version
         integer(kind=4) :: nc_file
         real(kind=8), allocatable :: xlocs(:),ylocs(:)
         logical, allocatable :: x_in_dom(:),y_in_dom(:)
@@ -928,116 +995,113 @@ contains
             case(4)
 #ifdef NETCDF
 
-                ! Open file    
+                ! Open file
                 call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
 
-                ! NetCDF4 GEBCO topography, should conform to CF metadata
-                ! standard
-                ! ios = nf90_get_att(nc_file, NF90_GLOBAL, 'Conventions', convention_string)
-                ! if (verbose) then
-                    ! print *, convention_string
-                ! end if
-                ! if (ios /= NF90_NOERR .or. convention_string(1:3) /= "CF-") then
-                !     print *, "Topography file does not conform to the CF"
-                !     print *, "conventions and meta-data.  Please see the"
-                !     print *, "information at "
-                !     print *, ""
-                !     print *, "    cfconventions.org"
-                !     print *, ""
-                !     print *, "to find out more info."
-                !     stop
-                ! end if
+                ! ----------------------------------------------------------------
+                ! Discover spatial dimensions.
+                ! When a descriptor was provided (topo_idx present, lon_name set)
+                ! look up dimension IDs by name directly.  Otherwise fall back to
+                ! the name-heuristic in get_dim_info.
+                ! ----------------------------------------------------------------
+                call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, num_vars))
 
-                ! call parse_values(convention_string(4:6), num_values, convention_version)
-                ! if (convention_version(1) < CONVENTION_REQUIREMENT) then
-                !     print *, "Topography file conforms to a CF version that"
-                !     print *, "is too old (", convention_version, ").  "
-                !     print *, "Please refer to"
-                !     print *, ""
-                !     print *, "    cfconventions.org"
-                !     print *, ""
-                !     print *, "to find out more info."
-                !     stop
-                ! end if
-
-                ! get x and y dimension info
-                call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, &
-                    num_vars))
-                call get_dim_info(nc_file, num_dims_tot, x_dim_id, x_dim_name, &
-                    mx, y_dim_id, y_dim_name, my)
-                
-                ! allocate vector to hold lon and lat vals and vector for var ids
-                allocate(xlocs(mx),ylocs(my),x_in_dom(mx),y_in_dom(my),var_ids(num_vars))
-
-                if (verbose) then
-                    print *, "Names = (", x_dim_name, ", ", y_dim_name, ")"
-                    print *, "Size = (", mx, ", ", my, ")"
+                if (present(topo_idx) .and. &
+                        len_trim(nc_lon_name(topo_idx)) > 0) then
+                    ! Descriptor path: exact name look-up
+                    call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                        trim(nc_lon_name(topo_idx)), x_dim_id))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                        x_dim_id, x_dim_name, mx))
+                    call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                        trim(nc_lat_name(topo_idx)), y_dim_id))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                        y_dim_id, y_dim_name, my))
+                else
+                    ! Fallback: auto-discover by name matching
+                    call get_dim_info(nc_file, num_dims_tot, x_dim_id, &
+                        x_dim_name, mx, y_dim_id, y_dim_name, my)
                 end if
 
-                ! Read in variables
-                call check_netcdf_error(nf90_inq_varids(nc_file, num_vars, var_ids))
-                if (verbose) then
-                    print *, "n, var_name, var_type, num_dims, dim_ids"
-                end if
+                allocate(xlocs(mx), ylocs(my), x_in_dom(mx), y_in_dom(my))
 
-                do n=1, num_vars
-                    call check_netcdf_error(nf90_inquire_variable(nc_file, n, var_name, var_type, num_dims, dim_ids))
-                    if (verbose) then
-                        print *, n, ": ", var_name, "|", var_type, "|", num_dims, "|", dim_ids
-                    end if
+                ! ----------------------------------------------------------------
+                ! Look up coordinate variable IDs (CF convention: var name == dim name).
+                ! ----------------------------------------------------------------
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(x_dim_name), x_var_id))
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(y_dim_name), y_var_id))
 
-                    ! Assume dim names are same as var ids
-                    if (var_name == x_dim_name) then
-                        x_var_name = var_name
-                        call check_netcdf_error(nf90_inq_varid(nc_file, x_var_name, x_var_id))
-                        ! x_var_id = n
-                        ! x_var_name = var_name
-                    else if (var_name == y_dim_name) then
-                        y_var_name = var_name
-                        call check_netcdf_error(nf90_inq_varid(nc_file, y_var_name, y_var_id))
-                        ! y_var_id = n
-                        ! y_var_name = var_name
-                    ! Assume that this is the topography data
-                    else if (num_dims == 2) then
-                        z_var_name = var_name
-                        call check_netcdf_error(nf90_inq_varid(nc_file, z_var_name, z_var_id))
-                        ! z_var_id = n
-                        ! z_var_name = var_name
-                    else
-                        if (verbose) then
-                            print *, "Not using var_id ", n
+                ! ----------------------------------------------------------------
+                ! Find the topo data variable.
+                ! Descriptor path: look up by name.  Fallback: first 2-D variable
+                ! that is not a coordinate variable.
+                ! ----------------------------------------------------------------
+                if (present(topo_idx) .and. &
+                        len_trim(nc_var_name(topo_idx)) > 0) then
+                    call check_netcdf_error(nf90_inq_varid(nc_file, &
+                        trim(nc_var_name(topo_idx)), z_var_id))
+                else
+                    z_var_id = -1
+                    do n = 1, num_vars
+                        call check_netcdf_error(nf90_inquire_variable(nc_file, &
+                            n, var_name, var_type, num_dims, dim_ids))
+                        if (var_name /= x_dim_name .and. &
+                            var_name /= y_dim_name .and. num_dims == 2) then
+                            z_var_id = n
+                            exit
                         end if
+                    end do
+                    if (z_var_id == -1) then
+                        print *, "ERROR: Cannot find a 2-D topo variable in ", trim(fname)
+                        print *, "  Specify var_name in the topo descriptor block."
+                        stop
                     end if
-
-                end do
-
-                if (verbose) then
-                    print *, "x_var_name, x_var_id = ", x_var_name, x_var_id
-                    print *, "y_var_name, y_var_id = ", y_var_name, y_var_id
-                    print *, "z_var_name, z_var_id = ", z_var_name, z_var_id
                 end if
 
-                call check_netcdf_error(nf90_get_var(nc_file, x_var_id, xlocs, start=(/ 1 /), count=(/ mx /)))
-                call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, start=(/ 1 /), count=(/ my /)))
-                
+                ! ----------------------------------------------------------------
+                ! Read coordinate arrays.
+                ! ----------------------------------------------------------------
+                call check_netcdf_error(nf90_get_var(nc_file, x_var_id, xlocs, &
+                    start=(/ 1 /), count=(/ mx /)))
+                call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
+                    start=(/ 1 /), count=(/ my /)))
+
+                ! Shift 0-360 longitudes to -180/180 if descriptor says so.
+                if (present(topo_idx)) then
+                    if (nc_lon_convention(topo_idx) == 360) then
+                        where (xlocs > 180.0d0) xlocs = xlocs - 360.0d0
+                    end if
+                end if
+
                 dx = xlocs(2) - xlocs(1)
                 dy = ylocs(2) - ylocs(1)
-                
-                ! find which locs are within domain (with a dx/dy buffer around domain + ghost cells)
-                x_in_dom = (xlocs.gt.(xlower-dx-hxposs(1)*nghost)) .and. (xlocs.lt.(xupper+dx+hxposs(1)*nghost))
-                y_in_dom = (ylocs.gt.(ylower-dy-hyposs(1)*nghost)) .and. (ylocs.lt.(yupper+dy+hyposs(1)*nghost))
-                
+
+                ! ----------------------------------------------------------------
+                ! Select the subset of the file to load.
+                ! Descriptor path: use explicit crop_bounds.
+                ! Fallback: clip to the AMR domain (with ghost-cell buffer).
+                ! ----------------------------------------------------------------
+                if (present(topo_idx) .and. nc_has_crop(topo_idx)) then
+                    x_in_dom = (xlocs >= nc_crop_bounds(1, topo_idx)) .and. &
+                               (xlocs <= nc_crop_bounds(2, topo_idx))
+                    y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
+                               (ylocs <= nc_crop_bounds(4, topo_idx))
+                else
+                    x_in_dom = (xlocs > (xlower - dx - hxposs(1)*nghost)) .and. &
+                               (xlocs < (xupper + dx + hxposs(1)*nghost))
+                    y_in_dom = (ylocs > (ylower - dy - hyposs(1)*nghost)) .and. &
+                               (ylocs < (yupper + dy + hyposs(1)*nghost))
+                end if
+
                 xll = minval(xlocs, mask=x_in_dom)
                 yll = minval(ylocs, mask=y_in_dom)
                 xhi = maxval(xlocs, mask=x_in_dom)
                 yhi = maxval(ylocs, mask=y_in_dom)
-                
-                ! adjust mx, my
-                mx = count(x_in_dom)
-                my = count(y_in_dom)
+                mx  = count(x_in_dom)
+                my  = count(y_in_dom)
 
                 call check_netcdf_error(nf90_close(nc_file))
-                deallocate(xlocs,ylocs,x_in_dom,y_in_dom)
+                deallocate(xlocs, ylocs, x_in_dom, y_in_dom)
 #else
                 print *, "ERROR:  NetCDF library was not included in this build"
                 print *, "  of GeoClaw."
@@ -1383,207 +1447,204 @@ contains
     end subroutine read_dtopo_header
 
 
-    
+    recursive subroutine topoarea(x1,x2,y1,y2,m,area)
 
-recursive subroutine topoarea(x1,x2,y1,y2,m,area)
+        ! Compute the area of overlap of topo with the rectangle (x1,x2) x (y1,y2)
+        ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
+        ! (coarse to fine).
 
-    ! Compute the area of overlap of topo with the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
-    ! (coarse to fine).
+        ! The main call to this subroutine has corners of a physical domain for
+        ! the rectangle and m = 1 in order to compute the area of overlap of
+        ! domain by all topo arrays.  Used to check inputs and insure topo
+        ! covers domain.
 
-    ! The main call to this subroutine has corners of a physical domain for
-    ! the rectangle and m = 1 in order to compute the area of overlap of
-    ! domain by all topo arrays.  Used to check inputs and insure topo
-    ! covers domain.
-
-    ! The recursive strategy is to first compute the area using only topo 
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
-    ! and then apply corrections due to adding topo array mtopoorder(m).
-     
-    ! Corrections are needed if the new topo array intersects the grid cell.
-    ! Let the intersection be (x1m,x2m) x (y1m,y2m).
-    ! Two corrections are needed, first to subtract out the area over
-    ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
-    ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the area over this same region using 
-    ! topo array mtopoorder(m).
-
-    ! Based on the recursive routine rectintegral that integrates
-    ! topo over grid cells using a similar strategy.
-
-    implicit none
-
-    ! arguments
-    real (kind=8), intent(in) :: x1,x2,y1,y2
-    integer, intent(in) :: m
-    real (kind=8), intent(out) :: area
-
-    ! local
-    real(kind=8) :: xmlo,xmhi,ymlo,ymhi,x1m,x2m, &
-        y1m,y2m, area1,area2,area_m
-    integer :: mfid, indicator
-    integer(kind=8) :: i0
-    real(kind=8), external :: topointegral  
-
-
-    mfid = mtopoorder(m)
-    i0=i0topo(mfid)
-
-    if (m == mtopofiles) then
-         ! innermost step of recursion reaches this point.
-         ! only using coarsest topo grid -- compute directly...
-         call intersection(indicator,area,xmlo,xmhi, &
-             ymlo,ymhi, x1,x2,y1,y2, &
-             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
-
-    else
-        ! recursive call to compute area using one fewer topo grids:
-        call topoarea(x1,x2,y1,y2,m+1,area1)
-
-        ! region of intersection of cell with new topo grid:
-        call intersection(indicator,area_m,x1m,x2m, &
-             y1m,y2m, x1,x2,y1,y2, &
-             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
-
+        ! The recursive strategy is to first compute the area using only topo 
+        ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
+        ! and then apply corrections due to adding topo array mtopoorder(m).
         
-        if (area_m > 0) then
-        
-            ! correction to subtract out from previous set of topo grids:
-            call topoarea(x1m,x2m,y1m,y2m,m+1,area2)
-    
-            ! adjust integral due to corrections for new topo grid:
-            area = area1 - area2 + area_m
+        ! Corrections are needed if the new topo array intersects the grid cell.
+        ! Let the intersection be (x1m,x2m) x (y1m,y2m).
+        ! Two corrections are needed, first to subtract out the area over
+        ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
+        ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
+        ! and then adding in the area over this same region using 
+        ! topo array mtopoorder(m).
+
+        ! Based on the recursive routine rectintegral that integrates
+        ! topo over grid cells using a similar strategy.
+
+        implicit none
+
+        ! arguments
+        real (kind=8), intent(in) :: x1,x2,y1,y2
+        integer, intent(in) :: m
+        real (kind=8), intent(out) :: area
+
+        ! local
+        real(kind=8) :: xmlo,xmhi,ymlo,ymhi,x1m,x2m, &
+            y1m,y2m, area1,area2,area_m
+        integer :: mfid, indicator
+        integer(kind=8) :: i0
+        real(kind=8), external :: topointegral  
+
+
+        mfid = mtopoorder(m)
+        i0=i0topo(mfid)
+
+        if (m == mtopofiles) then
+            ! innermost step of recursion reaches this point.
+            ! only using coarsest topo grid -- compute directly...
+            call intersection(indicator,area,xmlo,xmhi, &
+                ymlo,ymhi, x1,x2,y1,y2, &
+                xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
+
         else
-            area = area1
+            ! recursive call to compute area using one fewer topo grids:
+            call topoarea(x1,x2,y1,y2,m+1,area1)
+
+            ! region of intersection of cell with new topo grid:
+            call intersection(indicator,area_m,x1m,x2m, &
+                y1m,y2m, x1,x2,y1,y2, &
+                xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
+
+            
+            if (area_m > 0) then
+            
+                ! correction to subtract out from previous set of topo grids:
+                call topoarea(x1m,x2m,y1m,y2m,m+1,area2)
+        
+                ! adjust integral due to corrections for new topo grid:
+                area = area1 - area2 + area_m
+            else
+                area = area1
+            endif
         endif
-    endif
 
-end subroutine topoarea
-
-    
-
-recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
-
-    ! Compute the integral of topo over the rectangle (x1,x2) x (y1,y2)
-    ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
-    ! (coarse to fine).
-
-    ! The main call to this subroutine has corners of a grid cell for the 
-    ! rectangle and m = 1 in order to compute the integral over the cell 
-    ! using all topo arrays.
-
-    ! The recursive strategy is to first compute the integral using only topo 
-    ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
-    ! and then apply corrections due to adding topo array mtopoorder(m).
-     
-    ! Corrections are needed if the new topo array intersects the grid cell.
-    ! Let the intersection be (x1m,x2m) x (y1m,y2m).
-    ! Two corrections are needed, first to subtract out the integral over
-    ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
-    ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
-    ! and then adding in the integral over this same region using 
-    ! topo array mtopoorder(m).
-
-    ! Note that the function topointegral returns the integral over the 
-    ! rectangle based on a single topo array, and that routine calls
-    ! bilinearintegral.
+    end subroutine topoarea
 
 
-    implicit none
+    recursive subroutine rectintegral(x1,x2,y1,y2,m,integral)
 
-    ! arguments
-    real (kind=8), intent(in) :: x1,x2,y1,y2
-    integer, intent(in) :: m
-    real (kind=8), intent(out) :: integral
+        ! Compute the integral of topo over the rectangle (x1,x2) x (y1,y2)
+        ! using topo arrays indexed mtopoorder(mtopofiles) through mtopoorder(m) 
+        ! (coarse to fine).
 
-    ! local
-    real(kind=8) :: xmlo,xmhi,ymlo,ymhi,area,x1m,x2m, &
-        y1m,y2m, int1,int2,int3
-    integer :: mfid, indicator
-    integer(kind=8) :: i0
-    real(kind=8), external :: topointegral  
+        ! The main call to this subroutine has corners of a grid cell for the 
+        ! rectangle and m = 1 in order to compute the integral over the cell 
+        ! using all topo arrays.
 
-
-    mfid = mtopoorder(m)
-    i0=i0topo(mfid)
-
-    if (m == mtopofiles) then
-         ! innermost step of recursion reaches this point.
-         ! only using coarsest topo grid -- compute directly...
-         call intersection(indicator,area,xmlo,xmhi, &
-             ymlo,ymhi, x1,x2,y1,y2, &
-             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
-
-         if (indicator.eq.1) then
-            ! cell overlaps the file
-            ! integrate surface over intersection of grid and cell
-            integral = topointegral( xmlo,xmhi,ymlo, &
-                    ymhi,xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
-                    dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
-         else
-            integral = 0.d0
-         endif
-
-    else
-        ! recursive call to compute area using one fewer topo grids:
-        call rectintegral(x1,x2,y1,y2,m+1,int1)
-
-        ! region of intersection of cell with new topo grid:
-        call intersection(indicator,area,x1m,x2m, &
-             y1m,y2m, x1,x2,y1,y2, &
-             xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
-
+        ! The recursive strategy is to first compute the integral using only topo 
+        ! arrays mtopoorder(mtopofiles) to mtopoorder(m+1), 
+        ! and then apply corrections due to adding topo array mtopoorder(m).
         
-        if (area > 0) then
-        
-            ! correction to subtract out from previous set of topo grids:
-            call rectintegral(x1m,x2m,y1m,y2m,m+1,int2)
-    
-            ! correction to add in for new topo grid:
-            int3 = topointegral(x1m,x2m, y1m,y2m, &
-                        xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
+        ! Corrections are needed if the new topo array intersects the grid cell.
+        ! Let the intersection be (x1m,x2m) x (y1m,y2m).
+        ! Two corrections are needed, first to subtract out the integral over
+        ! the rectangle (x1m,x2m) x (y1m,y2m) computed using
+        ! topo arrays mtopoorder(mtopofiles) to mtopoorder(m+1),
+        ! and then adding in the integral over this same region using 
+        ! topo array mtopoorder(m).
+
+        ! Note that the function topointegral returns the integral over the 
+        ! rectangle based on a single topo array, and that routine calls
+        ! bilinearintegral.
+
+
+        implicit none
+
+        ! arguments
+        real (kind=8), intent(in) :: x1,x2,y1,y2
+        integer, intent(in) :: m
+        real (kind=8), intent(out) :: integral
+
+        ! local
+        real(kind=8) :: xmlo,xmhi,ymlo,ymhi,area,x1m,x2m, &
+            y1m,y2m, int1,int2,int3
+        integer :: mfid, indicator
+        integer(kind=8) :: i0
+        real(kind=8), external :: topointegral  
+
+
+        mfid = mtopoorder(m)
+        i0=i0topo(mfid)
+
+        if (m == mtopofiles) then
+            ! innermost step of recursion reaches this point.
+            ! only using coarsest topo grid -- compute directly...
+            call intersection(indicator,area,xmlo,xmhi, &
+                ymlo,ymhi, x1,x2,y1,y2, &
+                xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
+
+            if (indicator.eq.1) then
+                ! cell overlaps the file
+                ! integrate surface over intersection of grid and cell
+                integral = topointegral( xmlo,xmhi,ymlo, &
+                        ymhi,xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
                         dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
-    
-            ! adjust integral due to corrections for new topo grid:
-            integral = int1 - int2 + int3
+            else
+                integral = 0.d0
+            endif
+
         else
-            integral = int1
-        endif
-    endif
+            ! recursive call to compute area using one fewer topo grids:
+            call rectintegral(x1,x2,y1,y2,m+1,int1)
 
-end subroutine rectintegral
+            ! region of intersection of cell with new topo grid:
+            call intersection(indicator,area,x1m,x2m, &
+                y1m,y2m, x1,x2,y1,y2, &
+                xlowtopo(mfid),xhitopo(mfid),ylowtopo(mfid),yhitopo(mfid))
+
+            
+            if (area > 0) then
+            
+                ! correction to subtract out from previous set of topo grids:
+                call rectintegral(x1m,x2m,y1m,y2m,m+1,int2)
+        
+                ! correction to add in for new topo grid:
+                int3 = topointegral(x1m,x2m, y1m,y2m, &
+                            xlowtopo(mfid),ylowtopo(mfid),dxtopo(mfid), &
+                            dytopo(mfid),mxtopo(mfid),mytopo(mfid),topowork(i0),1)
+        
+                ! adjust integral due to corrections for new topo grid:
+                integral = int1 - int2 + int3
+            else
+                integral = int1
+            endif
+        endif
+
+    end subroutine rectintegral
 
     
 
-subroutine intersection(indicator,area,xintlo,xinthi, &
-           yintlo,yinthi,x1lo,x1hi,y1lo,y1hi,x2lo,x2hi,y2lo,y2hi)
+    subroutine intersection(indicator,area,xintlo,xinthi, &
+            yintlo,yinthi,x1lo,x1hi,y1lo,y1hi,x2lo,x2hi,y2lo,y2hi)
 
-    ! find the intersection of two rectangles, return the intersection
-    ! and it's area, and indicator =1
-    ! if there is no intersection, indicator =0
+        ! find the intersection of two rectangles, return the intersection
+        ! and it's area, and indicator =1
+        ! if there is no intersection, indicator =0
 
-      implicit none
+        implicit none
 
-      integer, intent(out) :: indicator
+        integer, intent(out) :: indicator
 
-      real(kind=8), intent(in) ::  x1lo,x1hi,y1lo,y1hi,x2lo,x2hi,y2lo,y2hi
-      real(kind=8), intent(out) :: area,xintlo,xinthi,yintlo,yinthi
+        real(kind=8), intent(in) ::  x1lo,x1hi,y1lo,y1hi,x2lo,x2hi,y2lo,y2hi
+        real(kind=8), intent(out) :: area,xintlo,xinthi,yintlo,yinthi
 
-      xintlo=dmax1(x1lo,x2lo)
-      xinthi=dmin1(x1hi,x2hi)
-      yintlo=dmax1(y1lo,y2lo)
-      yinthi=dmin1(y1hi,y2hi)
+        xintlo=dmax1(x1lo,x2lo)
+        xinthi=dmin1(x1hi,x2hi)
+        yintlo=dmax1(y1lo,y2lo)
+        yinthi=dmin1(y1hi,y2hi)
 
 
-      if (xinthi.gt.xintlo.and.yinthi.gt.yintlo) then
-         area = (xinthi-xintlo)*(yinthi-yintlo)
-         indicator = 1
-      else
-         area = 0.d0
-         indicator = 0
-      endif
+        if (xinthi.gt.xintlo.and.yinthi.gt.yintlo) then
+            area = (xinthi-xintlo)*(yinthi-yintlo)
+            indicator = 1
+        else
+            area = 0.d0
+            indicator = 0
+        endif
 
-end subroutine intersection
+    end subroutine intersection
 
 ! :TODO: Use the utility module's version of these
 #ifdef NETCDF
@@ -1602,7 +1663,103 @@ end subroutine intersection
         end if
 
     end subroutine check_netcdf_error
+#endif
 
+    ! ========================================================================
+    ! subroutine read_netcdf_descriptor(iunit, idx)
+    !
+    ! Read the optional key=value block that follows the topo_type line in
+    ! topo.data for a type-4 (NetCDF) entry.  Lines are consumed until either
+    ! a blank line or EOF is reached.  Parsed values are stored in the module-
+    ! level nc_* arrays at position idx.
+    !
+    ! Format (Python DescriptorWriter output):
+    !   var_name       = z
+    !   lon_name       = longitude
+    !   lat_name       = latitude
+    !   lon_convention = 180
+    !   lat_order      = N_to_S
+    !   dim_order      = lat,lon
+    !   fill_value     = -9999.0
+    !   fill_action    = abort
+    !   crop_bounds    = -180.0 180.0 -90.0 90.0
+    !
+    ! Unknown keys produce a warning and are skipped.
+    ! ========================================================================
+    subroutine read_netcdf_descriptor(iunit, idx)
+
+        use geoclaw_module, only: GEO_PARM_UNIT
+
+        implicit none
+
+        integer, intent(in) :: iunit, idx
+
+        character(len=512) :: line, key, val
+        integer :: eq_pos, comment_pos, ios
+
+        do
+            read(iunit, '(a)', iostat=ios) line
+            if (ios /= 0) exit          ! EOF
+
+            ! Strip inline comment (! character)
+            comment_pos = index(line, '!')
+            if (comment_pos > 0) line = line(1:comment_pos-1)
+            line = adjustl(trim(line))
+
+            ! Blank line terminates the descriptor block
+            if (len_trim(line) == 0) exit
+
+            ! Skip lines without an '=' sign
+            eq_pos = index(line, '=')
+            if (eq_pos == 0) cycle
+
+            key = adjustl(trim(line(1:eq_pos-1)))
+            val = adjustl(trim(line(eq_pos+1:)))
+
+            select case (trim(key))
+                case ('var_name')
+                    nc_var_name(idx) = trim(val)
+                case ('lon_name')
+                    nc_lon_name(idx) = trim(val)
+                case ('lat_name')
+                    nc_lat_name(idx) = trim(val)
+                case ('lon_convention')
+                    read(val, *) nc_lon_convention(idx)
+                case ('lat_order')
+                    nc_lat_order(idx) = trim(val)
+                case ('dim_order')
+                    nc_dim_order(idx) = trim(val)
+                case ('fill_value')
+                    read(val, *) nc_fill_value(idx)
+                    nc_has_fill(idx) = .true.
+                case ('fill_action')
+                    nc_fill_action(idx) = trim(val)
+                case ('crop_bounds')
+                    read(val, *) nc_crop_bounds(1, idx), nc_crop_bounds(2, idx), &
+                                 nc_crop_bounds(3, idx), nc_crop_bounds(4, idx)
+                    nc_has_crop(idx) = .true.
+                case default
+                    write(GEO_PARM_UNIT, *) 'WARNING: Unknown NetCDF descriptor key: ', &
+                        trim(key)
+            end select
+        end do
+
+        ! Log what was parsed
+        write(GEO_PARM_UNIT, *) '  NetCDF descriptor for topo file ', idx, ':'
+        write(GEO_PARM_UNIT, *) '    var_name       = ', trim(nc_var_name(idx))
+        write(GEO_PARM_UNIT, *) '    lon_name       = ', trim(nc_lon_name(idx))
+        write(GEO_PARM_UNIT, *) '    lat_name       = ', trim(nc_lat_name(idx))
+        write(GEO_PARM_UNIT, *) '    lon_convention = ', nc_lon_convention(idx)
+        write(GEO_PARM_UNIT, *) '    lat_order      = ', trim(nc_lat_order(idx))
+        write(GEO_PARM_UNIT, *) '    fill_action    = ', trim(nc_fill_action(idx))
+        if (nc_has_fill(idx)) &
+            write(GEO_PARM_UNIT, *) '    fill_value     = ', nc_fill_value(idx)
+        if (nc_has_crop(idx)) &
+            write(GEO_PARM_UNIT, *) '    crop_bounds    = ', nc_crop_bounds(:, idx)
+
+    end subroutine read_netcdf_descriptor
+
+#ifdef NETCDF
     subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &
         y_dim_id, y_dim_name, my)
         use netcdf
@@ -1630,18 +1787,18 @@ end subroutine intersection
     end subroutine get_dim_info
 #endif
 
-function Upper(s1)  RESULT (s2)
-    CHARACTER(*)       :: s1
-    CHARACTER(LEN(s1)) :: s2
-    CHARACTER          :: ch
-    INTEGER,PARAMETER  :: DUC = ICHAR('A') - ICHAR('a')
-    INTEGER            :: i
+    function Upper(s1)  RESULT (s2)
+        CHARACTER(*)       :: s1
+        CHARACTER(LEN(s1)) :: s2
+        CHARACTER          :: ch
+        INTEGER,PARAMETER  :: DUC = ICHAR('A') - ICHAR('a')
+        INTEGER            :: i
 
-    DO i = 1,LEN(s1)
-       ch = s1(i:i)
-       IF (ch >= 'a'.AND.ch <= 'z') ch = CHAR(ICHAR(ch)+DUC)
-       s2(i:i) = ch
-    END DO
-END function Upper
+        DO i = 1,LEN(s1)
+        ch = s1(i:i)
+        IF (ch >= 'a'.AND.ch <= 'z') ch = CHAR(ICHAR(ch)+DUC)
+        s2(i:i) = ch
+        END DO
+    END function Upper
 
 end module topo_module
