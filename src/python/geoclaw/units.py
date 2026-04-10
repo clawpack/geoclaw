@@ -92,6 +92,31 @@ conversion_func['K'] = [lambda temp: temp + 273.15,
                         lambda temp: temp - 273.15]
 units['temperature'] = {'C': "Celsius", 'F': "Fahrenheit", 'K': "Kelvin"}
 
+# Time
+conversion_func['s'] = [lambda t: t, lambda t: t]
+conversion_func['min'] = [lambda t: t * 60.0, lambda t: t / 60.0]
+conversion_func['minutes'] = conversion_func['min']
+conversion_func['h'] = [lambda t: t * 3600.0, lambda t: t / 3600.0]
+conversion_func['hours'] = conversion_func['h']
+conversion_func['days'] = [lambda t: t * 86400.0, lambda t: t / 86400.0]
+units['time'] = collections.OrderedDict({'s': 'seconds', 'min': 'minutes',
+                                         'h': 'hours', 'days': 'days'})
+
+# Unit contract for GeoClaw NetCDF input.
+# These are the units that Fortran assumes when reading NetCDF data.
+# Python interrogators must verify and, if necessary, record a conversion
+# factor before writing the descriptor so that Fortran receives data in
+# these units.
+GEOCLAW_NETCDF_UNITS = {
+    'topo':     'm',      # bathymetry / topography elevation
+    'wind_u':   'm/s',    # eastward wind component
+    'wind_v':   'm/s',    # northward wind component
+    'pressure': 'Pa',     # surface pressure (absolute)
+    'time':     's',      # time coordinate (seconds from descriptor offset)
+    # TODO: 'precipitation': ???  (unit TBD)
+    # TODO: 'friction':      ???  (unit TBD)
+}
+
 
 def units_available():
     r"""
