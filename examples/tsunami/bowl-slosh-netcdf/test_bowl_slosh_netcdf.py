@@ -1,9 +1,6 @@
 """Pytest regression test for the GeoClaw bowl-slosh NetCDF example."""
 
 from pathlib import Path
-import os
-import shutil
-import subprocess
 
 import numpy as np
 import pytest
@@ -11,14 +8,22 @@ import pytest
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 
-
-def _make_bowl_netcdf_topography(output_dir: Path) -> None:
+def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") -> None:
     """
     Create the NetCDF topography input used by the example.
-    
+
     We are directly creating the NetCDF file here rather than relying on the
     example's maketopo.py to test out a slightly generic NetCDF writing approach
     that doesn't rely on the topotools write method.™
+
+    Parameters
+    ----------
+    output_dir : Path
+        Directory where the NetCDF file is written.
+    variant : str
+        Coordinate layout to produce.  ``"standard"`` (default) preserves the
+        original behavior and writes ``bowl.nc``.  All other variants write a
+        file named after the variant (see ``_VARIANT_FILENAMES``).
     """
     netCDF4 = pytest.importorskip("netCDF4")
 
@@ -30,32 +35,107 @@ def _make_bowl_netcdf_topography(output_dir: Path) -> None:
     topo.x = np.linspace(-3.1, 3.1, 310)
     topo.y = np.linspace(-3.5, 2.5, 300)
 
-    # Intentionally create latitude first to exercise dimension discovery.
-    with netCDF4.Dataset(output_dir / "bowl.nc", "w") as out:
-        out.createDimension("lat", len(topo.y))
-        out.createDimension("lon", len(topo.x))
+    filename = "bowl.nc"
 
-        latitudes = out.createVariable("lat", "f8", ("lat",))
-        longitudes = out.createVariable("lon", "f8", ("lon",))
-        elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+    if variant == "standard":
+        # Intentionally create latitude first to exercise dimension discovery.
+        with netCDF4.Dataset(output_dir / filename, "w") as out:
+            out.createDimension("lat", len(topo.y))
+            out.createDimension("lon", len(topo.x))
 
-        latitudes[:] = topo.y
-        longitudes[:] = topo.x
-        elevations[:] = topo.Z
+            latitudes = out.createVariable("lat", "f8", ("lat",))
+            longitudes = out.createVariable("lon", "f8", ("lon",))
+            elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+
+            latitudes[:] = topo.y
+            longitudes[:] = topo.x
+            elevations[:] = topo.Z
+
+    elif variant == "dim_order":
+        # Data variable stored as (lon, lat) instead of (lat, lon); exercises
+        # dimension-order discovery.
+        with netCDF4.Dataset(output_dir / filename, "w") as out:
+            out.createDimension("lat", len(topo.y))
+            out.createDimension("lon", len(topo.x))
+
+            latitudes = out.createVariable("lat", "f8", ("lat",))
+            longitudes = out.createVariable("lon", "f8", ("lon",))
+            elevations = out.createVariable("elevation", "f8", ("lon", "lat"))
+
+            latitudes[:] = topo.y
+            longitudes[:] = topo.x
+            elevations[:] = topo.Z.T          # transpose to match (lon, lat)
+
+    elif variant == "cf_compliant":
+        # Standard (lat, lon) layout with full CF attributes added via
+        # CFNormalizer; exercises CF-attribute-based coordinate discovery.
+        from clawpack.geoclaw.netcdf_utils import CFNormalizer
+        import xarray as xr
+
+        ds = xr.Dataset(
+            {"elevation": (["lat", "lon"], topo.Z)},
+            coords={"lat": topo.y, "lon": topo.x},
+        )
+        ds_norm = CFNormalizer(ds).normalize()
+        ds_norm.to_netcdf(
+            output_dir / filename,
+            encoding={"elevation": {"_FillValue": 9.96921e+36}},
+        )
+
+    elif variant == "cropped":
+        # Topography domain is exactly 0.5 degrees larger than the simulation
+        # extent on each side: x in [-2.5, 2.5], y in [-3.5, 2.5].
+        # (Simulation domain after test setup: x in [-2, 2], y in [-3, 2].)
+        topo_crop = topotools.Topography(topo_func=topo_func)
+        topo_crop.x = np.linspace(-2.5, 2.5, 250)
+        topo_crop.y = np.linspace(-3.5, 2.5, 300)
+
+        with netCDF4.Dataset(output_dir / filename, "w") as out:
+            out.createDimension("lat", len(topo_crop.y))
+            out.createDimension("lon", len(topo_crop.x))
+
+            latitudes = out.createVariable("lat", "f8", ("lat",))
+            longitudes = out.createVariable("lon", "f8", ("lon",))
+            elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+
+            latitudes[:] = topo_crop.y
+            longitudes[:] = topo_crop.x
+            elevations[:] = topo_crop.Z
+
+    else:
+        raise ValueError(f"Unknown variant '{variant}'.")
 
 
 @pytest.mark.regression
 @pytest.mark.netcdf
-def test_bowl_slosh_netcdf(tmp_path: Path, save: bool) -> None:
-    """Regression test for bowl-slosh using NetCDF topography input."""
+@pytest.mark.parametrize("variant", ["standard", "dim_order", "cf_compliant", "cropped"])
+def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str) -> None:
+    """
+    Parametrized regression test exercising non-standard NetCDF coordinate layouts.
+
+    Each variant writes a topography file with a different coordinate convention
+    while encoding the same parabolic-bowl bathymetry as test_bowl_slosh_netcdf.
+    Because the physical bathymetry is identical, all variants must produce gauge
+    output that matches the existing reference data.
+
+    Variants
+    --------
+    standard     Intentionally create latitude first to exercise dimension
+                 discovery; otherwise, a pretty standard layout.
+    dim_order    Data variable stored as (lon, lat) instead of (lat, lon);
+                 exercises dimension-order discovery.
+    cf_compliant Standard (lat, lon) layout with full CF attributes added via
+                 CFNormalizer (standard_name, axis, units, _FillValue); exercises
+                 CF-attribute-based coordinate discovery.
+    cropped      Topography domain is exactly 0.5 degrees larger than the
+                 simulation extent on each side (x in [-2.5, 2.5],
+                 y in [-3.5, 2.5]); exercises minimal-margin domain coverage.
+    """
     pytest.importorskip("netCDF4")
 
-    example_dir = Path(__file__).parent
-    runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
+    _make_bowl_netcdf_topography(tmp_path, variant=variant)
 
-    # Generate topography
-    _make_bowl_netcdf_topography(tmp_path)
-
+    runner = test.GeoClawTestRunner(tmp_path, test_path=Path(__file__).parent)
     runner.set_data()
     runner.rundata.clawdata.lower[1] = -3.0
     runner.rundata.clawdata.num_output_times = 1

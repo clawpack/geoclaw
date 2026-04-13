@@ -689,10 +689,16 @@ contains
                         x_dim_name, mx_tot, y_dim_id, y_dim_name, my_tot)
                 end if
 
+                ! Dimension IDs and variable IDs are separate ID spaces in NetCDF.
+                ! Look up the coordinate variable IDs by name so nf90_get_var
+                ! receives the correct IDs regardless of creation order in the file.
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(x_dim_name), x_var_id))
+                call check_netcdf_error(nf90_inq_varid(nc_file, trim(y_dim_name), y_var_id))
+
                 allocate(xlocs(mx_tot), ylocs(my_tot))
-                call check_netcdf_error(nf90_get_var(nc_file, x_dim_id, xlocs, &
+                call check_netcdf_error(nf90_get_var(nc_file, x_var_id, xlocs, &
                     start=(/ 1 /), count=(/ mx_tot /)))
-                call check_netcdf_error(nf90_get_var(nc_file, y_dim_id, ylocs, &
+                call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
                     start=(/ 1 /), count=(/ my_tot /)))
 
                 ! Apply lon convention shift so xstart matches the shifted xll
@@ -704,7 +710,17 @@ contains
                 end if
 
                 xstart = minloc(xlocs, mask=(xlocs == xll))
-                ystart = minloc(ylocs, mask=(ylocs == yll))
+                if (ylocs(1) < ylocs(my_tot)) then
+                    ! S-to-N: southern boundary (yll) is at a low index.
+                    ystart = minloc(ylocs, mask=(ylocs == yll))
+                else
+                    ! N-to-S: the read must start at the northern boundary (yhi),
+                    ! which sits at a low index in the descending array.
+                    ! Reconstruct yhi from yll, my, and the absolute grid spacing.
+                    y = yll + (my - 1) * abs(ylocs(2) - ylocs(1))
+                    ystart = minloc(ylocs, &
+                        mask=(abs(ylocs - y) < 0.5d0 * abs(ylocs(2) - ylocs(1))))
+                end if
                 deallocate(xlocs, ylocs)
 
                 ! ----------------------------------------------------------------
@@ -747,9 +763,18 @@ contains
                         stop
                     end if
 
-                    call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
-                        nc_buffer, start=(/ xstart(1), ystart(1) /), &
-                        count=(/ mx, my /)))
+                    if (z_dim_ids(1) == x_dim_id) then
+                        ! Variable stored (lon, lat): start/count already lon-first.
+                        call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
+                            nc_buffer, start=(/ xstart(1), ystart(1) /), &
+                            count=(/ mx, my /)))
+                    else
+                        ! Variable stored (lat, lon): swap start and count to match
+                        ! the actual dimension order of the variable.
+                        call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
+                            nc_buffer, start=(/ ystart(1), xstart(1) /), &
+                            count=(/ my, mx /)))
+                    end if
 
                     ! Transpose into GeoClaw topo array (N-to-S row order).
                     if (z_dim_ids(1) == x_dim_id) then
