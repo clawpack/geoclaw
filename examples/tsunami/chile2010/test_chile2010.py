@@ -11,8 +11,6 @@ from pathlib import Path
 
 import pytest
 
-import numpy as np
-
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 import clawpack.clawutil.util as clawutil
@@ -21,7 +19,8 @@ def _get_topography(runner, variant=0):
     """Get topography and read"""
 
     # Ensure that the topography file is available
-    maketopo = clawutil.fullpath_import("maketopo.py", module_name="maketopo")
+    maketopo = clawutil.fullpath_import(runner.test_path / "maketopo.py", 
+                                        module_name="maketopo")
     topo_path = maketopo.get_topo()
 
     # Read in original topography data and write out in format expected by test
@@ -153,12 +152,16 @@ def _write_netcdf_variant(topo, variant, output_path):
     from clawpack.geoclaw.netcdf_utils import TopoInterrogator
     return TopoInterrogator(output_path, 'elevation').interrogate_topo()
 
+CASES = [pytest.param("standard", id="standard"),
+         pytest.param("netcdf_topotools", id="netcdf_topotools", marks=pytest.mark.netcdf),
+         pytest.param("lat_flip", id="lat_flip", marks=pytest.mark.netcdf),
+         pytest.param("lon_360", id="lon_360", marks=pytest.mark.netcdf)]
 
 @pytest.mark.regression
 @pytest.mark.remote
 @pytest.mark.tsunami
-@pytest.mark.parametrize("variant", ["standard", "netcdf_topotools", "lat_flip", "lon_360"])
-def test_chile2010(tmp_path: Path, save: bool, variant: str):
+@pytest.mark.parametrize("variant", CASES)
+def test_chile2010(tmp_path: Path, save: bool, variant: dict):
     """Chile 2010 tsunami regression test for GeoClaw.
 
     Parametrized over topography file format.  Because every variant encodes
