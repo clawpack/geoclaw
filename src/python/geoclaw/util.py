@@ -305,7 +305,7 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
     import xarray as xr
 
     # Open file and construct set of names
-    data = xr.open_dataset(path)
+    data = xr.open_dataset(path, decode_timedelta=False)
     if 'dim' in lookup_type.lower():
         _var_mapping = {"x": (False, ["x", "longitude", "lon"]), 
                         "y": (False, ["y", "latitude", "lat"]),
