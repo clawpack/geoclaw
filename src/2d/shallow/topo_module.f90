@@ -562,6 +562,7 @@ contains
         integer(kind=4) :: xstart(1), ystart(1), mx_tot, my_tot
         integer(kind=4) :: ios, nc_file, dim_ids(2), num_dims, &
             var_type, num_vars, num_dims_tot, z_dim_ids(2)
+        logical :: lat_south_to_north
 
         mtot = int(mx, 8) * int(my, 8)
 
@@ -710,7 +711,8 @@ contains
                 end if
 
                 xstart = minloc(xlocs, mask=(xlocs == xll))
-                if (ylocs(1) < ylocs(my_tot)) then
+                lat_south_to_north = (ylocs(1) < ylocs(my_tot))
+                if (lat_south_to_north) then
                     ! S-to-N: southern boundary (yll) is at a low index.
                     ystart = minloc(ylocs, mask=(ylocs == yll))
                 else
@@ -777,14 +779,31 @@ contains
                     end if
 
                     ! Transpose into GeoClaw topo array (N-to-S row order).
+                    ! For S-to-N files ystart points to the southern end of the
+                    ! domain, so nc_buffer row 1 = south, row my = north; reverse
+                    ! with (my - j) to store north first.
+                    ! For N-to-S files ystart points to the northern end, so
+                    ! nc_buffer row 1 = north already; copy in order with (j + 1).
                     if (z_dim_ids(1) == x_dim_id) then
-                        do j = 0, int(my, 8) - 1
-                            topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(:, my - j)
-                        end do
+                        if (lat_south_to_north) then
+                            do j = 0, int(my, 8) - 1
+                                topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(:, my - j)
+                            end do
+                        else
+                            do j = 0, int(my, 8) - 1
+                                topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(:, j + 1)
+                            end do
+                        end if
                     else
-                        do j = 0, int(my, 8) - 1
-                            topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(my - j, :)
-                        end do
+                        if (lat_south_to_north) then
+                            do j = 0, int(my, 8) - 1
+                                topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(my - j, :)
+                            end do
+                        else
+                            do j = 0, int(my, 8) - 1
+                                topo(j*int(mx,8)+1:(j+1)*int(mx,8)) = nc_buffer(j + 1, :)
+                            end do
+                        end if
                     end if
                     deallocate(nc_buffer)
 
@@ -1098,8 +1117,8 @@ contains
                     end if
                 end if
 
-                dx = xlocs(2) - xlocs(1)
-                dy = ylocs(2) - ylocs(1)
+                dx = abs(xlocs(2) - xlocs(1))
+                dy = abs(ylocs(2) - ylocs(1))
 
                 ! ----------------------------------------------------------------
                 ! Select the subset of the file to load.

@@ -22,14 +22,14 @@ except:
 # Scratch directory for storing topo and dtopo files:
 scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
 
-def get_topo(makeplots=False):
+def get_topo(path=scratch_dir, makeplots=False):
     """
     Retrieve the topo file from the GeoClaw repository.
     """
     from clawpack.geoclaw import topotools
     topo_fname = 'etopo10min120W60W60S0S.asc'
     url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
-    clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
+    clawpack.clawutil.data.get_remote_file(url, output_dir=path, 
             file_name=topo_fname, verbose=True)
 
     if makeplots:
@@ -39,6 +39,8 @@ def get_topo(makeplots=False):
         fname = os.path.splitext(topo_fname)[0] + '.png'
         plt.savefig(fname)
         print("Created ",fname)
+
+    return os.path.join(scratch_dir, topo_fname)
 
 
     
