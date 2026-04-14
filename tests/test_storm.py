@@ -51,6 +51,219 @@ def create_netcdf_storm_file(path):
     ds.to_netcdf(path)
 
 
+def create_era5_storm_file(path, pressure_fields=None, u_fields=None,
+                           v_fields=None, times=None, lon=None, lat=None):
+    """Create an ERA5-style CF-compliant NetCDF met-forcing file.
+
+    ERA5 is a common source of met forcing for GeoClaw storm surge simulations.
+    This function produces the variable/dimension schema used by ECMWF ERA5
+    reanalysis: dims ``(valid_time, latitude, longitude)``, variables
+    ``msl`` (Pa), ``u10`` (m/s), ``v10`` (m/s), lon in [0, 360], lat S-to-N,
+    and a ``Conventions = "CF-1.7"`` global attribute.
+
+    The dimension order ``(valid_time, latitude, longitude)`` = ``(nt, nlat,
+    nlon)`` matches the C-row-major layout expected by the Fortran NetCDF reader
+    ``nf90_get_var`` when it fills its column-major ``pressure(nlon, nlat, nt)``
+    array: the library reverses the dimension order automatically.
+
+    Parameters
+    ----------
+    path : Path or str
+        Output NetCDF file path.
+    pressure_fields : ndarray, shape (nt, nlat, nlon), optional
+        Pressure in Pa.  Defaults to 101300 Pa everywhere.
+    u_fields : ndarray, shape (nt, nlat, nlon), optional
+        Eastward 10-m wind in m/s.  Defaults to zero.
+    v_fields : ndarray, shape (nt, nlat, nlon), optional
+        Northward 10-m wind in m/s.  Defaults to zero.
+    times : array-like of int, optional
+        Time values in **seconds since the time_offset epoch** used in the
+        accompanying .storm descriptor.  Defaults to ``[0, 3600, 7200]``.
+    lon : array-like of float, optional
+        Longitude values in [0, 360].  Defaults to a 5-point sample grid.
+    lat : array-like of float, optional
+        Latitude values, S-to-N.  Defaults to a 4-point sample grid.
+    """
+    # netCDF4 is required as xarray's NetCDF backend.
+    pytest.importorskip("netCDF4")
+    xr = pytest.importorskip("xarray")
+
+    # --- defaults (synthetic values for unit tests) ---
+    if lon is None:
+        lon = np.linspace(260.0, 300.0, 5)   # [0, 360] convention
+    else:
+        lon = np.asarray(lon, dtype=float)
+    if lat is None:
+        lat = np.linspace(10.0, 35.0, 4)     # S-to-N
+    else:
+        lat = np.asarray(lat, dtype=float)
+    if times is None:
+        times = np.array([0, 3600, 7200], dtype=np.int64)
+    else:
+        times = np.asarray(times, dtype=np.int64)
+
+    nt, nlat, nlon = len(times), len(lat), len(lon)
+    shape = (nt, nlat, nlon)
+
+    if pressure_fields is None:
+        pressure_fields = np.full(shape, 101300.0)
+    if u_fields is None:
+        u_fields = np.zeros(shape)
+    if v_fields is None:
+        v_fields = np.zeros(shape)
+
+    # Use a fixed epoch string; callers that need a specific offset should
+    # convert their datetime values to integer seconds before the call.
+    time_epoch_str = "2012-08-29T00:00:00"
+
+    ds = xr.Dataset(
+        {
+            "msl": (
+                ["valid_time", "latitude", "longitude"],
+                pressure_fields,
+                {
+                    "units": "Pa",
+                    "standard_name": "air_pressure_at_mean_sea_level",
+                    "long_name": "Mean sea level pressure",
+                },
+            ),
+            "u10": (
+                ["valid_time", "latitude", "longitude"],
+                u_fields,
+                {
+                    "units": "m s-1",
+                    "standard_name": "eastward_wind",
+                    "long_name": "10 metre U wind component",
+                },
+            ),
+            "v10": (
+                ["valid_time", "latitude", "longitude"],
+                v_fields,
+                {
+                    "units": "m s-1",
+                    "standard_name": "northward_wind",
+                    "long_name": "10 metre V wind component",
+                },
+            ),
+        },
+        coords={
+            "longitude": (
+                ["longitude"],
+                lon,
+                {"units": "degrees_east", "axis": "X",
+                 "standard_name": "longitude"},
+            ),
+            "latitude": (
+                ["latitude"],
+                lat,
+                {"units": "degrees_north", "axis": "Y",
+                 "standard_name": "latitude"},
+            ),
+            "valid_time": (
+                ["valid_time"],
+                times,
+                {
+                    "units": f"seconds since {time_epoch_str}",
+                    "axis": "T",
+                    "standard_name": "time",
+                    "long_name": "time",
+                },
+            ),
+        },
+        attrs={"Conventions": "CF-1.7"},
+    )
+    ds.to_netcdf(path)
+
+
+def create_nws13_storm_file(path, pressure_fields=None, u_fields=None,
+                            v_fields=None, times=None, lon=None, lat=None):
+    """Create a NWS13/OWI-NetCDF style met-forcing file.
+
+    NWS13 (NOAA Weather Service format 13) is the OWI NetCDF met-forcing
+    schema used by ADCIRC and GeoClaw.  This function produces the canonical
+    NWS13 variable and dimension names: dims ``(time, lat, lon)``, variables
+    ``uwnd`` (m/s), ``vwnd`` (m/s), ``press`` (mb).
+
+    Pressure is stored in millibar (mb) to exercise the unit-awareness path
+    in tests.  Note that the Fortran NetCDF reader does **not** perform unit
+    conversion; callers responsible for running Fortran should convert to Pa
+    before calling this function.
+
+    The dimension order ``(time, lat, lon)`` = ``(nt, nlat, nlon)`` is
+    correct for the Fortran column-major allocation ``pressure(nlon, nlat,
+    nt)`` via the library-managed Fortran–C transpose.
+
+    Parameters
+    ----------
+    path : Path or str
+        Output NetCDF file path.
+    pressure_fields : ndarray, shape (nt, nlat, nlon), optional
+        Pressure in **mb**.  Defaults to 1013.0 mb everywhere.
+    u_fields : ndarray, shape (nt, nlat, nlon), optional
+        Eastward wind in m/s.  Defaults to zero.
+    v_fields : ndarray, shape (nt, nlat, nlon), optional
+        Northward wind in m/s.  Defaults to zero.
+    times : array-like of int, optional
+        Time in seconds (absolute UNIX seconds or relative to an epoch).
+        Defaults to ``[0, 3600, 7200]``.
+    lon : array-like of float, optional
+        Longitude values.  Defaults to a 5-point sample.
+    lat : array-like of float, optional
+        Latitude values.  Defaults to a 4-point sample.
+    """
+    pytest.importorskip("netCDF4")
+    xr = pytest.importorskip("xarray")
+
+    if lon is None:
+        lon = np.linspace(-99.0, -70.0, 5)
+    else:
+        lon = np.asarray(lon, dtype=float)
+    if lat is None:
+        lat = np.linspace(8.0, 32.0, 4)
+    else:
+        lat = np.asarray(lat, dtype=float)
+    if times is None:
+        times = np.array([0, 3600, 7200], dtype=np.int64)
+    else:
+        times = np.asarray(times, dtype=np.int64)
+
+    nt, nlat, nlon = len(times), len(lat), len(lon)
+    shape = (nt, nlat, nlon)
+
+    if pressure_fields is None:
+        pressure_fields = np.full(shape, 1013.0)  # mb
+    if u_fields is None:
+        u_fields = np.zeros(shape)
+    if v_fields is None:
+        v_fields = np.zeros(shape)
+
+    ds = xr.Dataset(
+        {
+            "press": (
+                ["time", "lat", "lon"],
+                pressure_fields,
+                {"units": "mb", "long_name": "Sea-level pressure"},
+            ),
+            "uwnd": (
+                ["time", "lat", "lon"],
+                u_fields,
+                {"units": "m/s", "long_name": "U-component of wind"},
+            ),
+            "vwnd": (
+                ["time", "lat", "lon"],
+                v_fields,
+                {"units": "m/s", "long_name": "V-component of wind"},
+            ),
+        },
+        coords={
+            "lon": (["lon"], lon, {"units": "degrees_east"}),
+            "lat": (["lat"], lat, {"units": "degrees_north"}),
+            "time": (["time"], times, {"units": "seconds since 1970-01-01T00:00:00"}),
+        },
+    )
+    ds.to_netcdf(path)
+
+
 def check_geoclaw(paths, check_header=False):
     """
     Check that two GeoClaw-formatted storm files are numerically equivalent.
@@ -167,17 +380,29 @@ def save_storm_test_data(output_dir):
 
 
 @pytest.mark.python
-@pytest.mark.parametrize("file_format", ["ascii", "netcdf"])
+@pytest.mark.parametrize("file_format",
+                         ["ascii", "netcdf", "netcdf_era5", "netcdf_nws13"])
 def test_data_storm_roundtrip(file_format, tmp_path):
-    """Test round-trip read/write of data-driven storm metadata."""
+    """Test round-trip read/write of data-driven storm metadata.
+
+    Exercises:
+    - ``ascii``      : OWI/NWS12 ASCII pair (two PRE + WIN files)
+    - ``netcdf``     : generic NetCDF format with existing helper
+    - ``netcdf_era5``: ERA5-style CF NetCDF (valid_time/latitude/longitude,
+                       u10/v10/msl) — verifies that write_data discovers and
+                       records ERA5 variable and dimension names correctly
+    - ``netcdf_nws13``: NWS13-style OWI NetCDF (time/lat/lon, uwnd/vwnd/press,
+                        pressure in mb) — verifies user-mapping path for
+                        non-default variable names
+    """
     storm_path = tmp_path / "test.storm"
     data_storm = storm.Storm()
     data_storm.time_offset = np.datetime64("2012-08-29")
-    data_storm.file_format = file_format
     data_storm.window_type = 1
     data_storm.ramp_width = 3
 
     if file_format == "ascii":
+        data_storm.file_format = "ascii"
         data_storm.file_paths = [
             Path("storm_1.PRE"),
             Path("storm_1.WIN"),
@@ -186,7 +411,9 @@ def test_data_storm_roundtrip(file_format, tmp_path):
         ]
         data_storm.write(storm_path, file_format="data")
         read_storm = storm.Storm(storm_path, file_format="data")
-    else:
+
+    elif file_format == "netcdf":
+        data_storm.file_format = "netcdf"
         data_storm.file_paths = [tmp_path / "storm.nc"]
         create_netcdf_storm_file(data_storm.file_paths[0])
         data_storm.write(
@@ -195,6 +422,58 @@ def test_data_storm_roundtrip(file_format, tmp_path):
             dim_mapping={"t": "valid_time"},
         )
         read_storm = storm.Storm(storm_path, file_format="data")
+
+    elif file_format == "netcdf_era5":
+        # ERA5-style: dims (valid_time, latitude, longitude),
+        # vars (u10, v10, msl).  Dimension "t" requires a user_mapping because
+        # "valid_time" is not in the default "t" fallback list ["t", "time"].
+        #
+        # TODO: util.get_netcdf_names and netcdf_utils.NetCDFInterrogator both
+        # implement dimension/variable discovery.  These parallel paths should
+        # eventually be unified; for now write_data uses util.get_netcdf_names.
+        pytest.importorskip("netCDF4")
+        data_storm.file_format = "netcdf"
+        data_storm.file_paths = [tmp_path / "era5.nc"]
+        create_era5_storm_file(data_storm.file_paths[0])
+        data_storm.write(
+            storm_path,
+            file_format="data",
+            dim_mapping={"t": "valid_time"},
+        )
+        read_storm = storm.Storm(storm_path, file_format="data")
+
+        # Also verify the descriptor body contains the correct names.
+        desc_text = storm_path.read_text()
+        assert "longitude latitude valid_time" in desc_text
+        assert "u10 v10 msl" in desc_text
+
+    elif file_format == "netcdf_nws13":
+        # NWS13-style: dims (time, lat, lon), vars (uwnd, vwnd, press, mb).
+        # Dimension names resolve automatically; variable names require an
+        # explicit user_mapping because "uwnd"/"vwnd"/"press" are not in the
+        # default fallback lists.
+        #
+        # TODO: util.get_netcdf_names and netcdf_utils.MetInterrogator both
+        # implement variable discovery.  These parallel paths should eventually
+        # be unified; for now write_data uses util.get_netcdf_names.
+        pytest.importorskip("netCDF4")
+        data_storm.file_format = "nws13"
+        data_storm.file_paths = [tmp_path / "nws13.nc"]
+        create_nws13_storm_file(data_storm.file_paths[0])
+        data_storm.write(
+            storm_path,
+            file_format="data",
+            var_mapping={
+                "wind_u": "uwnd",
+                "wind_v": "vwnd",
+                "pressure": "press",
+            },
+        )
+        read_storm = storm.Storm(storm_path, file_format="data")
+
+        desc_text = storm_path.read_text()
+        assert "lon lat time" in desc_text
+        assert "uwnd vwnd press" in desc_text
 
     assert data_storm.time_offset == read_storm.time_offset
     assert data_storm.file_format in DATA_FILE_FORMAT_MAP[read_storm.file_format]
@@ -225,6 +504,133 @@ def test_netcdf_var_mapping(tmp_path):
 
     assert dim_mapping == {"x": "longitude", "y": "latitude", "t": "valid_time"}
     assert var_mapping == {"wind_u": "u", "wind_v": "v", "pressure": "pressure"}
+
+
+@pytest.mark.python
+def test_netcdf_var_mapping_era5(tmp_path):
+    """Test ERA5-style CF NetCDF dimension and variable name discovery.
+
+    ERA5 is a common source of met forcing for GeoClaw storm surge simulations.
+    This test verifies that ``util.get_netcdf_names`` correctly maps ERA5
+    dimension names (``valid_time``, ``latitude``, ``longitude``) and variable
+    names (``u10``, ``v10``, ``msl``) to the GeoClaw roles ``t``/``x``/``y``
+    and ``wind_u``/``wind_v``/``pressure``.
+
+    ``valid_time`` requires an explicit ``user_mapping`` because it is not in
+    the default "t" fallback list ``["t", "time"]`` used by
+    ``util.get_netcdf_names``.  ``u10``, ``v10``, and ``msl`` are resolved
+    automatically from the default variable fallback lists.
+
+    TODO: ``util.get_netcdf_names`` and
+    ``netcdf_utils.NetCDFInterrogator._find_coord_name`` both implement
+    dimension/variable discovery (the latter is CF-first via axis/standard_name
+    attributes).  These parallel implementations should eventually be unified;
+    they are kept separate for now and flagged here for future consolidation.
+    """
+    pytest.importorskip("netCDF4")
+
+    nc_path = tmp_path / "era5.nc"
+    create_era5_storm_file(nc_path)
+
+    # "valid_time" is not in the default "t" fallback list; must be specified.
+    dim_mapping = util.get_netcdf_names(
+        nc_path,
+        lookup_type="dim",
+        user_mapping={"t": "valid_time"},
+    )
+    # u10, v10, msl are in the default variable fallback lists.
+    var_mapping = util.get_netcdf_names(
+        nc_path,
+        lookup_type="var",
+    )
+
+    assert dim_mapping["x"] == "longitude"
+    assert dim_mapping["y"] == "latitude"
+    assert dim_mapping["t"] == "valid_time"
+    assert var_mapping["wind_u"] == "u10"
+    assert var_mapping["wind_v"] == "v10"
+    assert var_mapping["pressure"] == "msl"
+
+
+@pytest.mark.python
+def test_netcdf_var_mapping_nws13(tmp_path):
+    """Test NWS13/OWI-NetCDF dimension and variable name discovery.
+
+    NWS13 is the OWI NetCDF met-forcing format used by ADCIRC and GeoClaw.
+    This test verifies that ``util.get_netcdf_names`` correctly maps NWS13
+    dimension names (``lon``, ``lat``, ``time``) and variable names
+    (``uwnd``, ``vwnd``, ``press``) when an explicit ``user_mapping`` is
+    provided for the variable names.
+
+    ``lon``, ``lat``, and ``time`` are resolved automatically from the default
+    dimension fallback lists.  ``uwnd``, ``vwnd``, and ``press`` are NOT in
+    the default variable fallback lists and require an explicit mapping.
+
+    TODO: ``util.get_netcdf_names`` and
+    ``netcdf_utils.MetInterrogator`` (variable unit / role discovery) both
+    implement variable-name lookup.  These parallel implementations should
+    eventually be unified; they are kept separate for now and flagged here for
+    future consolidation.
+    """
+    pytest.importorskip("netCDF4")
+
+    nc_path = tmp_path / "nws13.nc"
+    create_nws13_storm_file(nc_path)
+
+    # lon, lat, time are auto-discovered from the default fallback lists.
+    dim_mapping = util.get_netcdf_names(
+        nc_path,
+        lookup_type="dim",
+    )
+    # uwnd, vwnd, press require an explicit user_mapping.
+    var_mapping = util.get_netcdf_names(
+        nc_path,
+        lookup_type="var",
+        user_mapping={
+            "wind_u": "uwnd",
+            "wind_v": "vwnd",
+            "pressure": "press",
+        },
+    )
+
+    assert dim_mapping["x"] == "lon"
+    assert dim_mapping["y"] == "lat"
+    assert dim_mapping["t"] == "time"
+    assert var_mapping["wind_u"] == "uwnd"
+    assert var_mapping["wind_v"] == "vwnd"
+    assert var_mapping["pressure"] == "press"
+
+
+@pytest.mark.python
+@pytest.mark.skip(
+    reason=(
+        "WRF string-time axis and curvilinear grid require MetPreprocessor, "
+        "not yet implemented"
+    )
+)
+def test_netcdf_wrf_stub(tmp_path):
+    """Stub for future WRF NetCDF met-forcing test (currently skipped).
+
+    WRF output files differ from ERA5 and NWS13 in two ways that require
+    pre-processing before the GeoClaw Fortran reader can consume them:
+
+    1. **String time axis**: WRF stores time as ``char Times(Time, DateStrLen)``
+       (ISO 8601 strings) rather than a numeric variable.  GeoClaw's Fortran
+       reader expects integer seconds; a ``MetPreprocessor`` step is needed to
+       decode and convert the time axis.
+
+    2. **Curvilinear grid**: WRF uses a map-projected (Lambert conformal,
+       polar stereographic, or Mercator) curvilinear grid described by 2-D
+       ``XLAT``/``XLONG`` arrays rather than 1-D coordinate variables.
+       GeoClaw's reader expects regular (lon, lat) grids; regridding to a
+       regular lat/lon grid is required before use.
+
+    Once a ``MetPreprocessor`` class (or equivalent) is implemented to handle
+    these two cases, this test slot should be filled in with a synthetic WRF
+    file (minimal curvilinear grid, string time) and an end-to-end round-trip
+    assertion.
+    """
+    pass  # placeholder — see docstring for implementation notes
 
 
 @pytest.mark.python
