@@ -13,15 +13,17 @@ import pytest
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
+import clawpack.geoclaw.dtopotools as dtopotools
 import clawpack.clawutil.util as clawutil
 
 def _get_topography(runner, variant=0):
     """Get topography and read"""
-
+    
     # Ensure that the topography file is available
     maketopo = clawutil.fullpath_import(runner.test_path / "maketopo.py", 
                                         module_name="maketopo")
     topo_path = maketopo.get_topo()
+    dtopo_path = maketopo.make_dtopo()
 
     # Read in original topography data and write out in format expected by test
     topo = topotools.Topography()
@@ -29,7 +31,13 @@ def _get_topography(runner, variant=0):
     topo.path = topo_path
     topo.read()
 
-    return topo
+    # Read in dtopography data
+    dtopo = dtopotools.DTopography()
+    dtopo.dtopo_type = 3
+    dtopo.path = dtopo_path
+    dtopo.read()
+
+    return topo, dtopo
 
 
 def _write_netcdf_variant(topo, variant, output_path):
@@ -190,7 +198,7 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
     runner = test.GeoClawTestRunner(tmp_path, test_path=Path(__file__).parent)
 
     # Topography
-    topo = _get_topography(runner)
+    topo, dtopo = _get_topography(runner)
 
     # Setup data for test
     runner.set_data()

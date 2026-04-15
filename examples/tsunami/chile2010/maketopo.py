@@ -44,7 +44,7 @@ def get_topo(path=scratch_dir, makeplots=False):
 
 
     
-def make_dtopo(makeplots=False):
+def make_dtopo(path=scratch_dir, makeplots=False):
     """
     Create dtopo data file for deformation of sea floor due to earthquake.
     Uses the Okada model with fault parameters and mesh specified below.
@@ -52,7 +52,7 @@ def make_dtopo(makeplots=False):
     from clawpack.geoclaw import dtopotools
     import numpy
 
-    dtopo_fname = os.path.join(scratch_dir, "dtopo_usgs100227.tt3")
+    dtopo_fname = os.path.join(path, "dtopo_usgs100227.tt3")
 
     # Specify subfault parameters for this simple fault model consisting
     # of a single subfault:
@@ -108,6 +108,8 @@ def make_dtopo(makeplots=False):
         fname = os.path.splitext(os.path.split(dtopo_fname)[-1])[0] + '.png'
         plt.savefig(fname)
         print("Created ",fname)
+
+    return dtopo_fname
 
 
 if __name__=='__main__':
