@@ -166,10 +166,16 @@ class NetCDFInterrogator:
     ) -> None:
         self.path = Path(path)
         self.crop_bounds = crop_bounds
-        # Open with chunks={} to activate Dask-lazy mode.
+        # Activate Dask-lazy chunking if dask is available; fall back to
+        # netCDF4 native lazy loading so dask is an optional dependency.
+        try:
+            import dask  # noqa: F401
+            chunks: dict | str = {}
+        except ImportError:
+            chunks = None
         # mask_and_scale=True (default) so fill values appear as NaN.
         self.ds: xr.Dataset = xr.open_dataset(
-            self.path, chunks={}, mask_and_scale=True
+            self.path, chunks=chunks, mask_and_scale=True
         )
 
     # ------------------------------------------------------------------
