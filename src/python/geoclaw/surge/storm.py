@@ -226,6 +226,17 @@ class Storm(object):
         self.window = None                  # If not provided for data files it
                                             # will be set to the file extents
 
+        # NetCDF met-forcing metadata (populated by read_data for file_format==2)
+        self.met_lon_name = None
+        self.met_lat_name = None
+        self.met_time_name = None
+        self.met_lon_convention = None
+        self.met_lat_order = None
+        self.met_fill_value = None
+        self.met_fill_action = None
+        self.met_time_offset = None
+        self.met_variable_map = {}
+
         if path is not None:
             self.read(path, file_format=file_format, **kwargs)
 
@@ -948,15 +959,64 @@ class Storm(object):
             data_file.readline()
             data_file.readline()
 
-            # We do not keep track of any of the format specific information
             if self.file_format == 1:
+                # Skip blank line then "# File paths" comment
                 data_file.readline()
                 data_file.readline()
             elif self.file_format == 2:
-                data_file.readline()
-                data_file.readline()
-                data_file.readline()
-                data_file.readline()
+                # Parse the &file_info / &variable_info descriptor produced
+                # by DescriptorWriter.write_met_descriptor.
+                file_info = {}
+                variable_infos = []
+
+                # Read &file_info block (lines until standalone "/")
+                line = data_file.readline()
+                if line.strip().startswith('&file_info'):
+                    while True:
+                        inner = data_file.readline()
+                        if not inner:
+                            break
+                        s = inner.strip()
+                        if s == '/':
+                            break
+                        if '=' in s and not s.startswith('&'):
+                            key, _, val = s.partition('=')
+                            file_info[key.strip()] = val.strip()
+
+                # Read &variable_info lines until "# File paths" terminator
+                while True:
+                    line = data_file.readline()
+                    if not line:
+                        break
+                    s = line.strip()
+                    if s.startswith('# File paths'):
+                        break
+                    if s.startswith('&variable_info'):
+                        var_info = {}
+                        content = s[len('&variable_info'):].rstrip('/').strip()
+                        for pair in content.split():
+                            k, _, v = pair.partition('=')
+                            if k and v:
+                                var_info[k] = v
+                        variable_infos.append(var_info)
+
+                # Store fields on Storm object for Fortran to consume
+                self.met_lon_name = file_info.get('lon_name')
+                self.met_lat_name = file_info.get('lat_name')
+                self.met_time_name = file_info.get('time_name')
+                _conv = file_info.get('lon_convention')
+                self.met_lon_convention = int(_conv) if _conv is not None else None
+                self.met_lat_order = file_info.get('lat_order')
+                _fv = file_info.get('fill_value')
+                self.met_fill_value = float(_fv) if _fv is not None else None
+                self.met_fill_action = file_info.get('fill_action', 'warn')
+                _to = file_info.get('time_offset')
+                self.met_time_offset = float(_to) if _to is not None else None
+                self.met_variable_map = {
+                    vi['geoclaw_role']: vi['var_name']
+                    for vi in variable_infos
+                    if 'geoclaw_role' in vi and 'var_name' in vi
+                }
             else:
                 raise TypeError(f"Unknown storm data file format type" +
                                 f" '{self.file_format}' provided.")
@@ -1269,7 +1329,8 @@ class Storm(object):
                                    "implemented yet but is planned for a ",
                                    "future release."))
 
-    def write_data(self, path, dim_mapping=None, var_mapping=None, verbose=False):
+    def write_data(self, path, dim_mapping=None, var_mapping=None,
+                   met_interrogator=None, verbose=False):
         r"""
          """
 
@@ -1337,28 +1398,72 @@ class Storm(object):
                                          "resolution provided.")
                 data_file.write("\n")
             elif file_format == 2:
-                # Get dimension mapping
-                _dim_mapping = util.get_netcdf_names(self.file_paths[0],
-                                                     lookup_type='dim',
-                                                     user_mapping=dim_mapping,
-                                                     verbose=verbose)
-
-                # Get variable mapping
-                _var_mapping = util.get_netcdf_names(self.file_paths[0],
-                                                     lookup_type='var',
-                                                     user_mapping=var_mapping,
-                                                     verbose=verbose)
-                data_file.write(f"{str(_dim_mapping['x'])} ")
-                data_file.write(f"{str(_dim_mapping['y'])} ")
-                data_file.write(f"{str(_dim_mapping['t'])}\n")
-                data_file.write(f"{str(_var_mapping['wind_u'])} ")
-                data_file.write(f"{str(_var_mapping['wind_v'])} ")
-                data_file.write(f"{str(_var_mapping['pressure'])}\n")
-                data_file.write("\n")
+                # Variable discovery: get_netcdf_names auto-discovers met
+                # roles from standard name lists, then any explicit var_mapping
+                # entries override specific roles.  MetInterrogator then applies
+                # CF-aware coordinate discovery, unit validation, lon-convention
+                # detection, and fill-value resolution.
+                # TODO: consolidate get_netcdf_names with MetInterrogator
 
                 if len(self.file_paths) != 1:
                     raise ValueError(f"Expected 1 path for NetCDF format, " +
                                      f"got {len(self.file_paths)}")
+
+                from clawpack.geoclaw.netcdf_utils import (
+                    MetInterrogator, DescriptorWriter)
+
+                if met_interrogator is None:
+                    # Auto-discover met variable names, then apply explicit
+                    # overrides from var_mapping.  This lets callers supply
+                    # only the non-standard names (e.g. a non-standard pressure
+                    # field) while standard wind names are still found
+                    # automatically.  dim_mapping is handled automatically by
+                    # MetInterrogator via CF axis/standard_name conventions; it
+                    # is accepted for backwards compatibility but not forwarded.
+                    _MET_ROLES = frozenset({'wind_u', 'wind_v', 'pressure'})
+                    variable_map = {
+                        role: name
+                        for role, name in util.get_netcdf_names(
+                            self.file_paths[0],
+                            lookup_type='var',
+                            verbose=verbose,
+                        ).items()
+                        if role in _MET_ROLES
+                    }
+
+                    if var_mapping is not None:
+                        # Validate each user-specified name exists before
+                        # merging to catch typos early with a clear message.
+                        import xarray as xr
+                        with xr.open_dataset(str(self.file_paths[0])) as _ds:
+                            _available = set(_ds.data_vars) | set(_ds.coords)
+                        _bad = {role: name
+                                for role, name in var_mapping.items()
+                                if name not in _available}
+                        if _bad:
+                            raise ValueError(
+                                "The following names in var_mapping were not "
+                                f"found in {self.file_paths[0]}:\n"
+                                + "\n".join(
+                                    f"  '{role}': '{name}'"
+                                    for role, name in _bad.items())
+                                + f"\nAvailable variables: "
+                                + str(sorted(_available))
+                            )
+                        variable_map.update(var_mapping)
+
+                    with MetInterrogator(self.file_paths[0],
+                                         variable_map=variable_map,
+                                         time_reference=self.time_offset) as mi:
+                        meta = mi.interrogate_met()
+                else:
+                    meta = met_interrogator.interrogate_met()
+
+                # Note: storm.window governs the Fortran forcing application
+                # domain (with ramp width); MetInterrogator.crop_bounds is a
+                # read-time spatial subset of the NetCDF file.  These are
+                # conceptually distinct and should remain independent.
+                DescriptorWriter.write_met_descriptor(data_file, meta)
 
             # Write paths
             data_file.write("# File paths\n")
