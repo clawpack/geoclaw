@@ -1012,7 +1012,6 @@ class DescriptorWriter:
             Output of ``MetInterrogator.interrogate_met()``.
         """
         f.write("&file_info\n")
-        f.write(f"  source_file    = {meta.source_file}\n")
         f.write(f"  lon_name       = {meta.lon_name}\n")
         f.write(f"  lat_name       = {meta.lat_name}\n")
         f.write(f"  time_name      = {meta.time_name}\n")

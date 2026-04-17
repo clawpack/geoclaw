@@ -94,6 +94,13 @@ contains
         integer :: nc_fid, num_dims, num_vars, var_id
         character(len=16) :: name, dim_names(3), var_names(3)
 
+        ! NetCDF descriptor parsing (format 2)
+        real(kind=8) :: nc_time_offset
+        integer :: lon_convention
+        character(len=512) :: nc_line, nc_key, nc_val
+        integer :: nc_eq_pos, nc_in_file_info
+        integer :: nc_vn_start, nc_vn_end, nc_role_start, nc_role_end
+
         if (.not.module_setup) then
             ! Open data file
             print *,'Reading storm data file ', storm_data_path
@@ -138,17 +145,99 @@ contains
                 case(1) ! ASCII/OWI
                     read(data_unit, *)
                     read(data_unit, *)
-                case(2) ! NetCDF
-                    read(data_unit, *)
-                    read(data_unit, *) dim_names
-                    read(data_unit, *) var_names
-                    read(data_unit, *)
-                    write(log_unit, "('dims = ',a)") dim_names
-                    write(log_unit, "('vars = ',a)") var_names
+                case(2) ! NetCDF - &file_info / &variable_info namelist format
+                    read(data_unit, *)  ! "# Format Data Information"
+                    nc_time_offset = 0.0d0
+                    lon_convention = 180
+                    nc_in_file_info = 0
+                    dim_names = ''
+                    var_names = ''
+
+                    do
+                        read(data_unit, '(a)', iostat=io_status) nc_line
+                        if (io_status /= 0) exit
+                        nc_line = adjustl(nc_line)
+
+                        ! Stop at "# File paths" — put it back for post-case read
+                        if (nc_line(1:12) == '# File paths') then
+                            backspace(data_unit)
+                            exit
+                        end if
+
+                        ! Start of &file_info block
+                        if (nc_line(1:10) == '&file_info') then
+                            nc_in_file_info = 1
+                            cycle
+                        end if
+
+                        ! End of block (standalone /)
+                        if (trim(nc_line) == '/') then
+                            nc_in_file_info = 0
+                            cycle
+                        end if
+
+                        ! &variable_info inline block
+                        ! Format: &variable_info  var_name=u10  geoclaw_role=wind_u  /
+                        if (nc_line(1:14) == '&variable_info') then
+                            nc_vn_start = index(nc_line, 'var_name=') + 9
+                            nc_vn_end = nc_vn_start
+                            do while (nc_vn_end <= len_trim(nc_line) .and. &
+                                      nc_line(nc_vn_end:nc_vn_end) /= ' ' .and. &
+                                      nc_line(nc_vn_end:nc_vn_end) /= '/')
+                                nc_vn_end = nc_vn_end + 1
+                            end do
+                            nc_val = nc_line(nc_vn_start:nc_vn_end-1)
+
+                            nc_role_start = index(nc_line, 'geoclaw_role=') + 13
+                            nc_role_end = nc_role_start
+                            do while (nc_role_end <= len_trim(nc_line) .and. &
+                                      nc_line(nc_role_end:nc_role_end) /= ' ' .and. &
+                                      nc_line(nc_role_end:nc_role_end) /= '/')
+                                nc_role_end = nc_role_end + 1
+                            end do
+                            nc_key = nc_line(nc_role_start:nc_role_end-1)
+
+                            select case(trim(nc_key))
+                                case('wind_u')
+                                    var_names(1) = trim(nc_val)
+                                case('wind_v')
+                                    var_names(2) = trim(nc_val)
+                                case('pressure')
+                                    var_names(3) = trim(nc_val)
+                            end select
+                            cycle
+                        end if
+
+                        ! key = value lines inside &file_info
+                        if (nc_in_file_info == 1) then
+                            nc_eq_pos = index(nc_line, '=')
+                            if (nc_eq_pos > 0) then
+                                nc_key = adjustl(trim(nc_line(1:nc_eq_pos-1)))
+                                nc_val = adjustl(trim(nc_line(nc_eq_pos+1:)))
+                                select case(trim(nc_key))
+                                    case('lon_name')
+                                        dim_names(1) = trim(nc_val)
+                                    case('lat_name')
+                                        dim_names(2) = trim(nc_val)
+                                    case('time_name')
+                                        dim_names(3) = trim(nc_val)
+                                    case('lon_convention')
+                                        read(nc_val, *) lon_convention
+                                    case('time_offset')
+                                        read(nc_val, *) nc_time_offset
+                                end select
+                            end if
+                        end if
+                    end do
+
+                    write(log_unit, "('dims = ',3(1x,a))") dim_names
+                    write(log_unit, "('vars = ',3(1x,a))") var_names
+                    write(log_unit, "('lon_convention = ',i4)") lon_convention
+                    write(log_unit, "('nc_time_offset = ',d16.8)") nc_time_offset
 
                     if (DEBUG) then
-                        print "('dims = ',a)", dim_names
-                        print "('vars = ',a)", var_names
+                        print *, "dims = ", dim_names
+                        print *, "vars = ", var_names
                     end if
                 case default
                     print *, "Storm data format", file_format," not available."
@@ -252,17 +341,42 @@ contains
                     call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(3), var_ID))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%time))
 
-                    ! Convert time to seconds from offset
-                    storm%time(:) = storm%time(:) - seconds_from_epoch(time(:, 1))
+                    ! Normalize [0,360] longitude to [-180,180]
+                    if (lon_convention == 360) then
+                        where (storm%longitude > 180.0d0)
+                            storm%longitude = storm%longitude - 360.0d0
+                        end where
+                    end if
 
-                    ! Wind
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(1), var_ID))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_u))
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(2), var_ID))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_v))
-                    ! ! Pressure
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, var_names(3), var_ID))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%pressure))
+                    ! nc_time_offset = (first_file_time - storm_offset) in s.
+                    ! Subtracting raw[0] handles files where time is stored as
+                    ! absolute seconds (e.g. Unix epoch) rather than relative.
+                    storm%time(:) = storm%time(:) - storm%time(1) &
+                                    + nint(nc_time_offset)
+
+                    ! Wind (optional — zero-fill if not in descriptor)
+                    if (len_trim(var_names(1)) > 0) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(1)), var_ID))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_u))
+                    else
+                        write(log_unit, *) "Warning: wind_u not in descriptor, setting to zero."
+                        storm%wind_u = 0.0d0
+                    end if
+                    if (len_trim(var_names(2)) > 0) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(2)), var_ID))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_v))
+                    else
+                        write(log_unit, *) "Warning: wind_v not in descriptor, setting to zero."
+                        storm%wind_v = 0.0d0
+                    end if
+                    ! Pressure
+                    if (len_trim(var_names(3)) > 0) then
+                        call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(3)), var_ID))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%pressure))
+                    else
+                        write(log_unit, *) "Warning: pressure not in descriptor, setting to zero."
+                        storm%pressure = 0.0d0
+                    end if
 
                     ! Close file to stop corrupting the netcdf files
                     call check_netcdf_error(nf90_close(nc_fid))
