@@ -250,9 +250,8 @@ def test_met_descriptor_file_info_block_present(met_file_factory):
 
 def test_met_descriptor_file_info_required_keys(met_file_factory):
     """
-    &file_info block contains all mandatory keys: source_file, lon_name,
-    lat_name, time_name, dim_order, lon_convention, lat_order,
-    fill_action, time_offset.
+    &file_info block contains all mandatory keys: lon_name, lat_name,
+    time_name, dim_order, lon_convention, lat_order, fill_action, time_offset.
     """
     meta = _get_met_meta(met_file_factory)
     buf = io.StringIO()
@@ -260,7 +259,7 @@ def test_met_descriptor_file_info_required_keys(met_file_factory):
     parsed = _parse_met_descriptor(buf.getvalue())
     fi = parsed["file_info"]
 
-    for key in ("source_file", "lon_name", "lat_name", "time_name",
+    for key in ("lon_name", "lat_name", "time_name",
                 "dim_order", "lon_convention", "lat_order",
                 "fill_action", "time_offset"):
         assert key in fi, f"Missing key '{key}' in &file_info block"

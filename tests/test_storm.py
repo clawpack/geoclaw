@@ -425,12 +425,9 @@ def test_data_storm_roundtrip(file_format, tmp_path):
 
     elif file_format == "netcdf_era5":
         # ERA5-style: dims (valid_time, latitude, longitude),
-        # vars (u10, v10, msl).  Dimension "t" requires a user_mapping because
-        # "valid_time" is not in the default "t" fallback list ["t", "time"].
-        #
-        # TODO: util.get_netcdf_names and netcdf_utils.NetCDFInterrogator both
-        # implement dimension/variable discovery.  These parallel paths should
-        # eventually be unified; for now write_data uses util.get_netcdf_names.
+        # vars (u10, v10, msl).  write_data uses MetInterrogator, which
+        # discovers "valid_time" via CF axis='T' automatically; dim_mapping
+        # is accepted for backwards compatibility but not required.
         pytest.importorskip("netCDF4")
         data_storm.file_format = "netcdf"
         data_storm.file_paths = [tmp_path / "era5.nc"]
@@ -442,20 +439,21 @@ def test_data_storm_roundtrip(file_format, tmp_path):
         )
         read_storm = storm.Storm(storm_path, file_format="data")
 
-        # Also verify the descriptor body contains the correct names.
+        # Verify the descriptor body contains the correct coordinate and
+        # variable names in the new &file_info / &variable_info format.
         desc_text = storm_path.read_text()
-        assert "longitude latitude valid_time" in desc_text
-        assert "u10 v10 msl" in desc_text
+        assert "lon_name       = longitude" in desc_text
+        assert "lat_name       = latitude" in desc_text
+        assert "time_name      = valid_time" in desc_text
+        assert "var_name=u10" in desc_text
+        assert "var_name=v10" in desc_text
+        assert "var_name=msl" in desc_text
 
     elif file_format == "netcdf_nws13":
         # NWS13-style: dims (time, lat, lon), vars (uwnd, vwnd, press, mb).
-        # Dimension names resolve automatically; variable names require an
-        # explicit user_mapping because "uwnd"/"vwnd"/"press" are not in the
-        # default fallback lists.
-        #
-        # TODO: util.get_netcdf_names and netcdf_utils.MetInterrogator both
-        # implement variable discovery.  These parallel paths should eventually
-        # be unified; for now write_data uses util.get_netcdf_names.
+        # write_data uses MetInterrogator; variable names require an explicit
+        # var_mapping because "uwnd"/"vwnd"/"press" are not in the default
+        # fallback lists used by get_netcdf_names.
         pytest.importorskip("netCDF4")
         data_storm.file_format = "nws13"
         data_storm.file_paths = [tmp_path / "nws13.nc"]
@@ -471,9 +469,15 @@ def test_data_storm_roundtrip(file_format, tmp_path):
         )
         read_storm = storm.Storm(storm_path, file_format="data")
 
+        # Verify the descriptor body contains the correct coordinate and
+        # variable names in the new &file_info / &variable_info format.
         desc_text = storm_path.read_text()
-        assert "lon lat time" in desc_text
-        assert "uwnd vwnd press" in desc_text
+        assert "lon_name       = lon" in desc_text
+        assert "lat_name       = lat" in desc_text
+        assert "time_name      = time" in desc_text
+        assert "var_name=uwnd" in desc_text
+        assert "var_name=vwnd" in desc_text
+        assert "var_name=press" in desc_text
 
     assert data_storm.time_offset == read_storm.time_offset
     assert data_storm.file_format in DATA_FILE_FORMAT_MAP[read_storm.file_format]
