@@ -282,21 +282,24 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path) -> Path:
 
     time_offset = np.datetime64("2012-08-29T00:00:00")
 
-    # The storm time axis in the descriptor is relative to time_offset;
-    # the NetCDF stores absolute UNIX seconds.  The Fortran will subtract
-    # seconds_from_epoch(time_offset) from the raw values.
-
     isaac = Storm()
     isaac.time_offset = time_offset
 
     if fmt == "netcdf_era5":
         nc_path = tmp_path / "isaac_era5.nc"
+        # create_era5_storm_file uses "seconds since 2012-08-29" as the time
+        # epoch (see time_epoch_str in test_storm.py).  Convert Unix seconds
+        # to seconds relative to that epoch so xarray decodes them correctly
+        # and MetInterrogator computes the right nc_time_offset.
+        time_offset_s = int(
+            (time_offset - unix_epoch) / np.timedelta64(1, "s")
+        )
         create_era5_storm_file(
             nc_path,
             pressure_fields=pressure_pa,
             u_fields=u_wind,
             v_fields=v_wind,
-            times=times_unix,
+            times=times_unix - time_offset_s,
             lon=lon,
             lat=lat,
         )
@@ -347,8 +350,9 @@ def _check_netcdf_storm_descriptor(generated_path: Path, fmt: str) -> None:
     """Validate structure of a NetCDF data-storm descriptor file.
 
     Checks that ``generated_path`` contains the correct format number (2),
-    the expected dimension names, the expected variable names, and exactly
-    one file path entry.
+    the expected coordinate names in the ``&file_info`` block, the expected
+    variable/role pairs in ``&variable_info`` blocks, and exactly one file
+    path entry.
 
     This is a structural validation against known-good expected values for
     each format, not a comparison against a committed regression file (which
@@ -384,23 +388,67 @@ def _check_netcdf_storm_descriptor(generated_path: Path, fmt: str) -> None:
             f"'# Format Data Information' section not found in {generated_path}"
         )
 
-    # The dim-names line is immediately after the comment.
-    dim_line = lines[fmt_info_idx + 1]
-    var_line = lines[fmt_info_idx + 2]
+    # Parse &file_info block for coordinate names.
+    file_info: dict = {}
+    in_file_info = False
+    for ln in lines[fmt_info_idx:]:
+        stripped = ln.strip()
+        if stripped == "&file_info":
+            in_file_info = True
+            continue
+        if in_file_info:
+            if stripped == "/":
+                break
+            if "=" in stripped:
+                key, _, val = stripped.partition("=")
+                file_info[key.strip()] = val.strip()
+
+    # Parse &variable_info blocks for role→var_name mapping.
+    var_info: dict = {}
+    for ln in lines[fmt_info_idx:]:
+        stripped = ln.strip()
+        if stripped.startswith("&variable_info"):
+            kv = dict(re.findall(r'(\w+)=(\S+)', stripped))
+            if "geoclaw_role" in kv and "var_name" in kv:
+                var_info[kv["geoclaw_role"]] = kv["var_name"].rstrip("/").strip()
 
     if fmt == "netcdf_era5":
-        assert dim_line == "longitude latitude valid_time", (
-            f"ERA5 dim line wrong: {dim_line!r}"
+        assert file_info.get("lon_name") == "longitude", (
+            f"ERA5 lon_name wrong: {file_info.get('lon_name')!r}"
         )
-        assert var_line == "u10 v10 msl", (
-            f"ERA5 var line wrong: {var_line!r}"
+        assert file_info.get("lat_name") == "latitude", (
+            f"ERA5 lat_name wrong: {file_info.get('lat_name')!r}"
+        )
+        assert file_info.get("time_name") == "valid_time", (
+            f"ERA5 time_name wrong: {file_info.get('time_name')!r}"
+        )
+        assert var_info.get("wind_u") == "u10", (
+            f"ERA5 wind_u var wrong: {var_info.get('wind_u')!r}"
+        )
+        assert var_info.get("wind_v") == "v10", (
+            f"ERA5 wind_v var wrong: {var_info.get('wind_v')!r}"
+        )
+        assert var_info.get("pressure") == "msl", (
+            f"ERA5 pressure var wrong: {var_info.get('pressure')!r}"
         )
     elif fmt == "netcdf_nws13":
-        assert dim_line == "lon lat time", (
-            f"NWS13 dim line wrong: {dim_line!r}"
+        assert file_info.get("lon_name") == "lon", (
+            f"NWS13 lon_name wrong: {file_info.get('lon_name')!r}"
         )
-        assert var_line == "uwnd vwnd press", (
-            f"NWS13 var line wrong: {var_line!r}"
+        assert file_info.get("lat_name") == "lat", (
+            f"NWS13 lat_name wrong: {file_info.get('lat_name')!r}"
+        )
+        assert file_info.get("time_name") == "time", (
+            f"NWS13 time_name wrong: {file_info.get('time_name')!r}"
+        )
+        assert var_info.get("wind_u") == "uwnd", (
+            f"NWS13 wind_u var wrong: {var_info.get('wind_u')!r}"
+        )
+        assert var_info.get("wind_v") == "vwnd", (
+            f"NWS13 wind_v var wrong: {var_info.get('wind_v')!r}"
+        )
+        assert var_info.get("pressure") == "press", (
+            f"NWS13 pressure var wrong: {var_info.get('pressure')!r}"
         )
     else:
         raise ValueError(f"Unknown fmt={fmt!r}")
