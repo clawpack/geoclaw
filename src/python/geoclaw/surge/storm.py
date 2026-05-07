@@ -1333,7 +1333,6 @@ class Storm(object):
                    met_interrogator=None, verbose=False):
         r"""
          """
-
         # Only one format right now
         _data_file_format_mapping = {'ascii': 1, 'nws12': 1, "owi": 1,
                                      'netcdf': 2, 'nws13': 2}
