@@ -567,7 +567,7 @@ contains
         mtot = int(mx, 8) * int(my, 8)
 
         print *, ' '
-        print *, 'Reading topography file  ', fname
+        print *, 'Reading topography file  ', trim(fname)
 
         select case(abs(topo_type))
             ! ASCII file with x,y,z values on each line.
