@@ -302,7 +302,9 @@ contains
                     call check_netcdf_error(nf90_open(storm%paths(1), nf90_nowrite, nc_fid))
                     ! Check dim/var number
                     call check_netcdf_error(nf90_inquire(nc_fid, num_dims, num_vars))
-                    if (num_dims /= 3 .and. num_vars /= 3) then
+                    ! Check to make sure the mimimal number of dimansions and
+                    ! variables are there to read in the data
+                    if (num_dims < 3 .or. num_vars < 3) then
                         print *, "Invalid number of dimensions/variables."
                         print *, "  num_dims = ", num_dims
                         print *, "  num_vars = ", num_vars
