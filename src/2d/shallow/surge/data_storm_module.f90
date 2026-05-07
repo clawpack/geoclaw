@@ -103,7 +103,7 @@ contains
 
         if (.not.module_setup) then
             ! Open data file
-            print *,'Reading storm data file ', storm_data_path
+            print *,'Reading storm data file ', trim(storm_data_path)
             open(unit=data_unit, file=storm_data_path, status='old',        &
                  action='read', iostat=io_status)
             if (io_status /= 0) then
@@ -298,7 +298,7 @@ contains
 #ifdef NETCDF
                     ! Open file and get file ID
                     ! :TODO: Only read in times that are between t0 and tfinal
-                    print *, "Reading storm NetCDF file ", storm%paths(1)
+                    print *, "Reading storm NetCDF file ", trim(storm%paths(1))
                     call check_netcdf_error(nf90_open(storm%paths(1), nf90_nowrite, nc_fid))
                     ! Check dim/var number
                     call check_netcdf_error(nf90_inquire(nc_fid, num_dims, num_vars))
