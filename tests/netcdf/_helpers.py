@@ -35,6 +35,7 @@ def make_topo_dataset(
     has_fill_in_data: bool = False,
     lon_axis_attr: bool = False,
     lat_axis_attr: bool = False,
+    var_standard_name: Optional[str] = None,
 ) -> xr.Dataset:
     """
     Build a minimal topo xarray Dataset.
@@ -69,6 +70,8 @@ def make_topo_dataset(
     var_attrs: dict = {}
     if units:
         var_attrs["units"] = units
+    if var_standard_name is not None:
+        var_attrs["standard_name"] = var_standard_name
 
     coords = {
         lon_name: xr.DataArray(lons, dims=[lon_name], attrs=lon_attrs),
@@ -246,4 +249,41 @@ PRESSURE_UNIT_VARIANTS: list = [
 WIND_UNIT_VARIANTS: list = [
     pytest.param({"wind_units": "m/s",   "expected_source": "m/s"},   id="m_s"),
     pytest.param({"wind_units": "knots", "expected_source": "knots"}, id="knots"),
+]
+
+#: CF standard_name values recognised by TopoInterrogator._find_topo_var_name,
+#: in priority order.
+TOPO_CF_STANDARD_NAME_VARIANTS: list = [
+    pytest.param("surface_altitude",                  id="surface_altitude"),
+    pytest.param("height_above_mean_sea_level",       id="height_above_mean_sea_level"),
+    pytest.param("height_above_reference_ellipsoid",  id="height_above_reference_ellipsoid"),
+    pytest.param("bedrock_altitude",                  id="bedrock_altitude"),
+    pytest.param("altitude",                          id="altitude"),
+    pytest.param("height",                            id="height"),
+    pytest.param("sea_floor_depth_below_geoid",       id="sea_floor_depth_below_geoid"),
+]
+
+#: Variable names in the fallback list recognised by
+#: TopoInterrogator._find_topo_var_name.
+TOPO_FALLBACK_NAME_VARIANTS: list = [
+    pytest.param("z",           id="z"),
+    pytest.param("Z",           id="Z"),
+    pytest.param("elevation",   id="elevation"),
+    pytest.param("Elevation",   id="Elevation"),
+    pytest.param("ELEVATION",   id="ELEVATION"),
+    pytest.param("topo",        id="topo"),
+    pytest.param("TOPO",        id="TOPO"),
+    pytest.param("height",      id="height"),
+    pytest.param("HEIGHT",      id="HEIGHT"),
+    pytest.param("altitude",    id="altitude"),
+    pytest.param("ALTITUDE",    id="ALTITUDE"),
+    pytest.param("depth",       id="depth"),
+    pytest.param("DEPTH",       id="DEPTH"),
+    pytest.param("Band1",       id="Band1"),
+    pytest.param("dem",         id="dem"),
+    pytest.param("DEM",         id="DEM"),
+    pytest.param("topography",  id="topography"),
+    pytest.param("bathymetry",  id="bathymetry"),
+    pytest.param("bathy",       id="bathy"),
+    pytest.param("bedrock",     id="bedrock"),
 ]
