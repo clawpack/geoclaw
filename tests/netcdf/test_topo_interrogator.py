@@ -14,7 +14,9 @@ from clawpack.geoclaw.netcdf_utils import TopoInterrogator, TopoMetadata
 from ._helpers import (
     make_topo_dataset,
     COORD_VARIANTS,
+    TOPO_CF_STANDARD_NAME_VARIANTS,
     TOPO_DIM_ORDER_VARIANTS,
+    TOPO_FALLBACK_NAME_VARIANTS,
 )
 
 pytestmark = [pytest.mark.python, pytest.mark.netcdf]
@@ -203,3 +205,83 @@ def test_dim_order_variants(topo_file_factory, dim_kwargs):
     with TopoInterrogator(path, var_name="z") as intr:
         meta = intr.interrogate_topo()
     assert meta.dim_order == list(dim_kwargs["dim_order"])
+
+
+# ============================================================
+# Variable auto-detection (no var_name supplied)
+# ============================================================
+
+@pytest.mark.parametrize("std_name", TOPO_CF_STANDARD_NAME_VARIANTS)
+def test_autodetect_by_cf_standard_name(topo_file_factory, std_name):
+    """
+    When var_name is omitted, TopoInterrogator finds the elevation variable
+    by matching the CF standard_name attribute.  The matched name is written
+    back into the returned metadata.
+    """
+    ds = make_topo_dataset(var_name="topo_data", var_standard_name=std_name)
+    path = topo_file_factory(ds=ds)
+    with TopoInterrogator(path) as intr:
+        meta = intr.interrogate_topo()
+    assert isinstance(meta, TopoMetadata)
+    assert meta.var_name == "topo_data"
+
+
+@pytest.mark.parametrize("var_name", TOPO_FALLBACK_NAME_VARIANTS)
+def test_autodetect_by_fallback_name(topo_file_factory, var_name):
+    """
+    When var_name is omitted, TopoInterrogator falls back to matching the
+    variable name against the built-in list of common elevation names.
+    """
+    path = topo_file_factory(var_name=var_name)
+    with TopoInterrogator(path) as intr:
+        meta = intr.interrogate_topo()
+    assert isinstance(meta, TopoMetadata)
+    assert meta.var_name == var_name
+
+
+def test_autodetect_no_match_raises(topo_file_factory):
+    """
+    When var_name is omitted and no variable name or CF standard_name matches
+    any known elevation identifier, interrogate_topo() raises ValueError with
+    a message that mentions auto-detect and lists available variables.
+    """
+    path = topo_file_factory(var_name="completely_unknown_field")
+    with TopoInterrogator(path) as intr:
+        with pytest.raises(ValueError, match="auto-detect"):
+            intr.interrogate_topo()
+
+
+def test_autodetect_cf_standard_name_takes_priority(topo_file_factory):
+    """
+    CF standard_name detection takes priority over the fallback name list.
+    A dataset with both a CF-tagged variable and an 'elevation' variable must
+    return the CF-tagged one.
+    """
+    import numpy as np
+    import xarray as xr
+
+    lons = np.linspace(-10.0, 10.0, 5)
+    lats = np.linspace(-10.0, 10.0, 5)
+    coords = {
+        "lon": xr.DataArray(lons, dims=["lon"]),
+        "lat": xr.DataArray(lats, dims=["lat"]),
+    }
+    data = np.full((5, 5), -100.0, dtype=np.float32)
+    ds = xr.Dataset(
+        {
+            # CF-tagged variable: should be selected first
+            "cf_topo": xr.DataArray(
+                data, dims=["lat", "lon"], coords=coords,
+                attrs={"units": "m", "standard_name": "surface_altitude"},
+            ),
+            # Fallback-name variable: present but must not be selected
+            "elevation": xr.DataArray(
+                data, dims=["lat", "lon"], coords=coords,
+                attrs={"units": "m"},
+            ),
+        }
+    )
+    path = topo_file_factory(ds=ds)
+    with TopoInterrogator(path) as intr:
+        meta = intr.interrogate_topo()
+    assert meta.var_name == "cf_topo"

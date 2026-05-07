@@ -410,8 +410,13 @@ class TopoInterrogator(NetCDFInterrogator):
     ----------
     path : str or Path
         Path to the NetCDF topography file.
-    var_name : str
-        Name of the elevation/bathymetry variable (e.g. 'z', 'elevation').
+    var_name : str, optional
+        Name of the elevation/bathymetry variable (e.g. ``'z'``,
+        ``'elevation'``).  If omitted, the variable is auto-detected by
+        searching for known CF ``standard_name`` values
+        (``surface_altitude``, ``height_above_mean_sea_level``, …) and
+        then falling back to common names (``z``, ``elevation``, ``topo``,
+        …).  A ``ValueError`` is raised if no match is found.
     crop_bounds : tuple of four floats, optional
         (lon_min, lon_max, lat_min, lat_max).
     """
@@ -419,11 +424,72 @@ class TopoInterrogator(NetCDFInterrogator):
     def __init__(
         self,
         path: str | Path,
-        var_name: str,
+        var_name: Optional[str] = None,
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
     ) -> None:
         super().__init__(path, crop_bounds)
         self.var_name = var_name
+
+    # ------------------------------------------------------------------
+    # Variable auto-detection
+    # ------------------------------------------------------------------
+
+    #: CF standard_names that indicate an elevation / bathymetry variable,
+    #: ordered from most specific to most generic.
+    _TOPO_CF_STANDARD_NAMES: tuple[str, ...] = (
+        'surface_altitude',
+        'height_above_mean_sea_level',
+        'height_above_reference_ellipsoid',
+        'bedrock_altitude',
+        'altitude',
+        'height',
+        'sea_floor_depth_below_geoid',
+    )
+
+    #: Common variable names for elevation / bathymetry data.
+    _TOPO_FALLBACK_NAMES: tuple[str, ...] = (
+        'z', 'Z',
+        'elevation', 'Elevation', 'ELEVATION',
+        'topo', 'TOPO',
+        'height', 'HEIGHT',
+        'altitude', 'ALTITUDE',
+        'depth', 'DEPTH',
+        'Band1',
+        'dem', 'DEM',
+        'topography', 'bathymetry', 'bathy',
+        'bedrock',
+    )
+
+    def _find_topo_var_name(self) -> str:
+        """
+        Auto-detect the elevation/bathymetry variable.
+
+        Search order:
+        1. CF ``standard_name`` attribute against known elevation standard names.
+        2. Variable name against ``_TOPO_FALLBACK_NAMES`` (case-sensitive).
+
+        Returns the matched variable name.  Raises ValueError if nothing is found.
+        """
+        # 1. CF standard_name lookup across all data variables
+        for std_name in self._TOPO_CF_STANDARD_NAMES:
+            for var_name, var in self.ds.data_vars.items():
+                if var.attrs.get('standard_name', '') == std_name:
+                    return str(var_name)
+
+        # 2. Name-based fallback
+        available = {str(k) for k in self.ds.data_vars}
+        for name in self._TOPO_FALLBACK_NAMES:
+            if name in available:
+                return name
+
+        raise ValueError(
+            f"Cannot auto-detect elevation variable in '{self.path}'.  "
+            f"No data variable matched known CF standard_names "
+            f"{self._TOPO_CF_STANDARD_NAMES} or fallback names "
+            f"{self._TOPO_FALLBACK_NAMES}.  "
+            f"Pass var_name explicitly.  "
+            f"Available data variables: {sorted(available)}"
+        )
 
     # ------------------------------------------------------------------
     # Unit verification
@@ -531,13 +597,15 @@ class TopoInterrogator(NetCDFInterrogator):
         """
         Fully interrogate the topo file and return a TopoMetadata instance.
         """
+        if self.var_name is None:
+            self.var_name = self._find_topo_var_name()
         base = self.interrogate(self.var_name)
         source_units = self._check_topo_units()
         self._check_fill_in_crop(base.lon_name, base.lat_name, base.lat_order)
 
         return TopoMetadata(
             **dataclasses.asdict(base),
-            var_name=self.var_name,
+            var_name = self.var_name,
             source_units=source_units,
             fill_action='abort',  # fill in topo crop region is always fatal
         )
