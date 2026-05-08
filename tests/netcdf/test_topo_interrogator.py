@@ -3,7 +3,7 @@ Tests for TopoInterrogator.
 
 Covers: fill-in-crop detection, fill-outside-crop pass, unit verification,
 unit-conversion warn path, missing units warn path, descriptor key presence,
-and all coordinate variant combinations.
+all coordinate variant combinations, and topo_entries() lon wrapping.
 """
 import warnings
 
@@ -249,6 +249,190 @@ def test_autodetect_no_match_raises(topo_file_factory):
     with TopoInterrogator(path) as intr:
         with pytest.raises(ValueError, match="auto-detect"):
             intr.interrogate_topo()
+
+
+# ============================================================
+# topo_entries() — longitude offset and wrap logic
+# ============================================================
+
+def test_topo_entries_no_wrap(topo_file_factory):
+    """
+    File [-180, 180], crop (-90, 0, -45, 45): single entry, offset 0,
+    crop_bounds in metadata equal the requested file-coord crop.
+    """
+    path = topo_file_factory(lon_min=-180.0, lon_max=180.0,
+                              lat_min=-45.0, lat_max=45.0)
+    intr = TopoInterrogator(path, var_name="z",
+                             crop_bounds=(-90.0, 0.0, -45.0, 45.0))
+    entries = intr.topo_entries()
+    intr.close()
+
+    assert len(entries) == 1
+    ttype, fpath, meta = entries[0]
+    assert ttype == 4
+    assert meta.lon_offset == pytest.approx(0.0)
+    assert meta.crop_bounds is not None
+    lon0, lon1, lat0, lat1 = meta.crop_bounds
+    assert lon0 == pytest.approx(-90.0)
+    assert lon1 == pytest.approx(0.0)
+    assert lat0 == pytest.approx(-45.0)
+    assert lat1 == pytest.approx(45.0)
+
+
+def test_topo_entries_simple_shift(topo_file_factory):
+    """
+    File [0, 360], crop (0, 180, -45, 45): single entry with lon_offset 0.0.
+    """
+    path = topo_file_factory(lon_min=0.0, lon_max=360.0,
+                              lat_min=-45.0, lat_max=45.0)
+    intr = TopoInterrogator(path, var_name="z",
+                             crop_bounds=(0.0, 180.0, -45.0, 45.0))
+    entries = intr.topo_entries()
+    intr.close()
+
+    assert len(entries) == 1
+    assert entries[0][2].lon_offset == pytest.approx(0.0)
+
+
+def test_topo_entries_simple_shift_negative(topo_file_factory):
+    """
+    File [0, 360], crop (-180, 0, -45, 45): 1 or 2 entries are both valid;
+    combined domain coverage must equal 180 degrees.
+    """
+    path = topo_file_factory(lon_min=0.0, lon_max=360.0,
+                              lat_min=-45.0, lat_max=45.0)
+    intr = TopoInterrogator(path, var_name="z",
+                             crop_bounds=(-180.0, 0.0, -45.0, 45.0))
+    entries = intr.topo_entries()
+    intr.close()
+
+    assert 1 <= len(entries) <= 2
+    # Total lon coverage across all entries must equal the requested domain width.
+    total = sum(
+        meta.crop_bounds[1] - meta.crop_bounds[0]
+        for _, _, meta in entries
+        if meta.crop_bounds is not None
+    )
+    assert total == pytest.approx(180.0)
+
+
+def test_topo_entries_wrap_required(topo_file_factory):
+    """
+    File [-180, 180], domain (-360, 0): requires two entries.
+    Entry 1: file_crop [-180, 0], lon_offset 0.0.
+    Entry 2: file_crop [0, 180], lon_offset -360.0.
+    Combined domain coverage == 360 degrees.
+    """
+    path = topo_file_factory(lon_min=-180.0, lon_max=180.0,
+                              lat_min=-90.0, lat_max=90.0)
+    intr = TopoInterrogator(path, var_name="z",
+                             crop_bounds=(-360.0, 0.0, -90.0, 90.0))
+    entries = intr.topo_entries()
+    intr.close()
+
+    assert len(entries) == 2
+
+    # Collect (file_crop_min, file_crop_max, lon_offset) pairs (order not mandated).
+    pairs = {
+        (meta.crop_bounds[0], meta.crop_bounds[1], meta.lon_offset)
+        for _, _, meta in entries
+        if meta.crop_bounds is not None
+    }
+    assert (-180.0, 0.0, 0.0) in pairs
+    assert (0.0, 180.0, -360.0) in pairs
+
+
+def test_topo_entries_no_coverage(topo_file_factory):
+    """
+    File [0, 90], domain [-180, -90]: no candidate offset can cover the
+    domain; _compute_lon_entries raises ValueError.
+    """
+    path = topo_file_factory(lon_min=0.0, lon_max=90.0,
+                              lat_min=-45.0, lat_max=45.0)
+    intr = TopoInterrogator(path, var_name="z",
+                             crop_bounds=(-180.0, -90.0, -45.0, 45.0))
+    with pytest.raises(ValueError):
+        intr.topo_entries()
+    intr.close()
+
+
+def test_topo_entries_near_global_gap(topo_file_factory):
+    """
+    Near-global file (e.g. GEBCO style) with lons [-179.99, 179.99] has a
+    gap of ~0.0042 degrees at the dateline — one grid cell.  A domain that
+    straddles the dateline (crop [-211, -99, 40, 75]) must still produce two
+    entries without raising ValueError, since the gap is within one grid
+    spacing.
+    """
+    import numpy as np
+    import xarray as xr
+
+    # 121 points from -179.99 to 179.99 gives spacing ~3.0 degrees; the
+    # "missing" wrap column sits between 179.99 and -179.99 + 360 = 180.01.
+    lons = np.linspace(-179.99, 179.99, 121)
+    lats = np.linspace(40.0, 75.0, 10)
+    data = np.full((len(lats), len(lons)), -500.0, dtype=np.float32)
+    coords = {
+        "lon": xr.DataArray(lons, dims=["lon"]),
+        "lat": xr.DataArray(lats, dims=["lat"]),
+    }
+    ds = xr.Dataset(
+        {"z": xr.DataArray(data, dims=["lat", "lon"], coords=coords,
+                            attrs={"units": "m"})}
+    )
+    path = topo_file_factory(ds=ds)
+
+    intr = TopoInterrogator(path, var_name="z",
+                             crop_bounds=(-211.0, -99.0, 40.0, 75.0))
+    entries = intr.topo_entries()
+    intr.close()
+
+    assert len(entries) == 2, (
+        f"Expected 2 entries for dateline-straddling crop, got {len(entries)}"
+    )
+    # The seam gap (domain width minus combined file-coord coverage) must be
+    # within one grid spacing.  crop_bounds widths equal domain-coord widths
+    # because lon_offset is a constant shift.
+    lon_spacing = float(lons[1] - lons[0])
+    total_covered = sum(
+        meta.crop_bounds[1] - meta.crop_bounds[0]
+        for _, _, meta in entries
+        if meta.crop_bounds is not None
+    )
+    domain_width = -99.0 - (-211.0)
+    gap = domain_width - total_covered
+    assert gap <= lon_spacing, (
+        f"Seam gap {gap:.6f} exceeds grid spacing {lon_spacing:.6f}"
+    )
+
+
+def test_topo_entries_genuine_gap_still_errors(topo_file_factory):
+    """
+    File [-90, 90] genuinely cannot cover domain [-200, -50]: the uncovered
+    gap (~60 degrees) is far larger than the grid spacing, so ValueError
+    must still be raised even with the near-global-gap tolerance.
+    """
+    import numpy as np
+    import xarray as xr
+
+    lons = np.linspace(-90.0, 90.0, 91)
+    lats = np.linspace(40.0, 75.0, 10)
+    data = np.full((len(lats), len(lons)), -500.0, dtype=np.float32)
+    coords = {
+        "lon": xr.DataArray(lons, dims=["lon"]),
+        "lat": xr.DataArray(lats, dims=["lat"]),
+    }
+    ds = xr.Dataset(
+        {"z": xr.DataArray(data, dims=["lat", "lon"], coords=coords,
+                            attrs={"units": "m"})}
+    )
+    path = topo_file_factory(ds=ds)
+
+    intr = TopoInterrogator(path, var_name="z",
+                             crop_bounds=(-200.0, -50.0, 40.0, 75.0))
+    with pytest.raises(ValueError, match="[Gg]ap"):
+        intr.topo_entries()
+    intr.close()
 
 
 def test_autodetect_cf_standard_name_takes_priority(topo_file_factory):

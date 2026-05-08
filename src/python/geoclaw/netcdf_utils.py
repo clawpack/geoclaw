@@ -120,6 +120,7 @@ class TopoMetadata(FileMetadata):
     var_name: str
     source_units: str    # units as found in file
     fill_action: str     # 'abort' (only value for topo; fill = fatal)
+    lon_offset: float = 0.0  # scalar Fortran adds to file coords: x_domain = x_file + lon_offset
 
 
 @dataclasses.dataclass
@@ -605,10 +606,64 @@ class TopoInterrogator(NetCDFInterrogator):
 
         return TopoMetadata(
             **dataclasses.asdict(base),
-            var_name = self.var_name,
+            var_name=self.var_name,
             source_units=source_units,
             fill_action='abort',  # fill in topo crop region is always fatal
+            lon_offset=0.0,
         )
+
+    def topo_entries(self) -> list[list]:
+        """
+        Return a list of ready-to-use topo entries for topofiles.
+
+        Each entry is [4, filepath, TopoMetadata]. When no wrapping is needed
+        this returns a list of one entry. When crop_bounds straddle the file's
+        lon cut point, returns two entries pointing to the same file with
+        different lon_offset and crop_bounds values.
+
+        crop_bounds on the interrogator are in domain coordinates; this method
+        converts them to file coordinates before storing in the returned
+        metadata. Fortran can then use crop_bounds directly against file
+        coordinate arrays before applying lon_offset.
+        """
+
+        # Interrogate without crop validation: self.crop_bounds is in domain
+        # coordinates, which may lie outside the file extent.
+        saved_crop = self.crop_bounds
+        self.crop_bounds = None
+        try:
+            meta = self.interrogate_topo()
+        finally:
+            self.crop_bounds = saved_crop
+
+        if saved_crop is None:
+            return [[4, self.path, dataclasses.replace(meta, lon_offset=0.0)]]
+
+        assert saved_crop is not None  # narrowing hint: already returned above
+        lon_coords = self.ds[meta.lon_name].values
+        file_lon_min = float(lon_coords.min())
+        file_lon_max = float(lon_coords.max())
+        if len(lon_coords) > 1:
+            lon_resolution = float(abs(lon_coords[1] - lon_coords[0]))
+        else:
+            lon_resolution = 1e-10  # single-point file, no gap tolerance needed
+        crop_lon_min, crop_lon_max, crop_lat_min, crop_lat_max = saved_crop
+
+        entries_spec = _compute_lon_entries(
+            file_lon_min, file_lon_max, crop_lon_min, crop_lon_max,
+            max_gap=lon_resolution,
+        )
+
+        result = []
+        for file_crop_min, file_crop_max, lon_offset in entries_spec:
+            new_meta = dataclasses.replace(
+                meta,
+                crop_bounds=(file_crop_min, file_crop_max, crop_lat_min, crop_lat_max),
+                lon_offset=lon_offset,
+            )
+            result.append([4, self.path, new_meta])
+
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -1007,6 +1062,76 @@ class CFNormalizer:
 
 
 # ---------------------------------------------------------------------------
+# Longitude entry computation
+# ---------------------------------------------------------------------------
+
+def _compute_lon_entries(
+    file_lon_min: float,
+    file_lon_max: float,
+    domain_lon_min: float,
+    domain_lon_max: float,
+    max_gap: float = 1e-10,
+) -> list[tuple[float, float, float]]:
+    """
+    Compute (file_crop_min, file_crop_max, lon_offset) tuples needed to cover
+    [domain_lon_min, domain_lon_max] from a file with lons in
+    [file_lon_min, file_lon_max].
+
+    lon_offset is the scalar Fortran adds to file coordinates to produce
+    domain coordinates: x_domain = x_file + lon_offset.
+
+    Returns 1 tuple if a single offset suffices, 2 tuples if the domain
+    straddles the file's cut point.
+
+    max_gap controls how much under-coverage is tolerated.  The default
+    (1e-10) is tight enough to catch genuine gaps.  Pass the file's grid
+    spacing to allow for the half-cell gap at the dateline that near-global
+    files (e.g. GEBCO) have between their last and first longitude columns.
+
+    Raises ValueError if the file cannot cover the requested domain even
+    with all candidate offsets, or if the remaining uncovered gap exceeds
+    max_gap.
+    """
+    candidate_offsets = [0.0, 360.0, -360.0]
+    entries: list[tuple[float, float, float]] = []
+    total_coverage = 0.0
+
+    for offset in candidate_offsets:
+        shifted_min = file_lon_min + offset
+        shifted_max = file_lon_max + offset
+        intersect_min = max(domain_lon_min, shifted_min)
+        intersect_max = min(domain_lon_max, shifted_max)
+        width = intersect_max - intersect_min
+        if width > 1e-10:
+            file_crop_min = intersect_min - offset
+            file_crop_max = intersect_max - offset
+            # Clamp to file extent (guards against floating-point overshoot)
+            file_crop_min = max(file_crop_min, file_lon_min)
+            file_crop_max = min(file_crop_max, file_lon_max)
+            entries.append((file_crop_min, file_crop_max, offset))
+            total_coverage += width
+
+    if not entries:
+        raise ValueError(
+            f"File longitude range [{file_lon_min}, {file_lon_max}] cannot cover "
+            f"domain [{domain_lon_min}, {domain_lon_max}] with candidate offsets "
+            f"{candidate_offsets}."
+        )
+
+    # One-sided check: overcoverage is harmless; under-coverage beyond max_gap
+    # indicates that the file genuinely cannot cover the requested domain.
+    gap = (domain_lon_max - domain_lon_min) - total_coverage
+    if gap > max_gap:
+        raise ValueError(
+            f"File longitudes [{file_lon_min}, {file_lon_max}] cannot "
+            f"cover requested domain [{domain_lon_min}, {domain_lon_max}]. "
+            f"Gap of {gap:.6f} degrees exceeds tolerance {max_gap:.6f}."
+        )
+
+    return entries
+
+
+# ---------------------------------------------------------------------------
 # Descriptor writer
 # ---------------------------------------------------------------------------
 
@@ -1049,10 +1174,14 @@ class DescriptorWriter:
         meta : TopoMetadata
             Output of ``TopoInterrogator.interrogate_topo()``.
         """
+        # Fortran adds lon_offset to all file coordinate values after reading:
+        #   x_domain = x_file + lon_offset
+        # crop_bounds written here are in FILE coordinates (converted from
+        # domain coordinates by topo_entries()).
         f.write(f"var_name       = {meta.var_name}\n")
         f.write(f"lon_name       = {meta.lon_name}\n")
         f.write(f"lat_name       = {meta.lat_name}\n")
-        f.write(f"lon_convention = {meta.lon_convention}\n")
+        f.write(f"lon_offset     = {meta.lon_offset!r}\n")
         f.write(f"lat_order      = {meta.lat_order}\n")
         f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
         if meta.fill_value is not None:

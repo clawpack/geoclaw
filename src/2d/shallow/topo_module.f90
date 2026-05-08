@@ -47,7 +47,7 @@ module topo_module
     character(len=32), allocatable :: nc_lat_order(:)    ! 'N_to_S' or 'S_to_N'
     character(len=32), allocatable :: nc_dim_order(:)    ! e.g. 'lat,lon'
     character(len=8),  allocatable :: nc_fill_action(:)  ! 'abort' or 'warn'
-    integer,           allocatable :: nc_lon_convention(:) ! 180 or 360
+    real(kind=8),      allocatable :: nc_lon_offset(:)     ! scalar added to file coords: x_domain = x_file + offset
     real(kind=8),      allocatable :: nc_fill_value(:)   ! fill/nodata sentinel
     real(kind=8),      allocatable :: nc_crop_bounds(:,:) ! (4, n): lon0,lon1,lat0,lat1
     logical,           allocatable :: nc_has_fill(:)     ! fill_value was specified
@@ -173,7 +173,7 @@ contains
                 allocate(nc_var_name(mtopofiles), nc_lon_name(mtopofiles))
                 allocate(nc_lat_name(mtopofiles), nc_lat_order(mtopofiles))
                 allocate(nc_dim_order(mtopofiles), nc_fill_action(mtopofiles))
-                allocate(nc_lon_convention(mtopofiles), nc_fill_value(mtopofiles))
+                allocate(nc_lon_offset(mtopofiles), nc_fill_value(mtopofiles))
                 allocate(nc_crop_bounds(4, mtopofiles))
                 allocate(nc_has_fill(mtopofiles), nc_has_crop(mtopofiles))
                 nc_var_name      = ''
@@ -182,7 +182,7 @@ contains
                 nc_lat_order     = 'S_to_N'
                 nc_dim_order     = 'lat,lon'
                 nc_fill_action   = 'abort'
-                nc_lon_convention = 180
+                nc_lon_offset    = 0.0d0
                 nc_fill_value    = 0.0d0
                 nc_crop_bounds   = 0.0d0
                 nc_has_fill      = .false.
@@ -702,11 +702,12 @@ contains
                 call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
                     start=(/ 1 /), count=(/ my_tot /)))
 
-                ! Apply lon convention shift so xstart matches the shifted xll
-                ! computed in read_topo_header.
+                ! Apply lon_offset to convert file coordinates to domain
+                ! coordinates, so xstart matches the domain-coord xll that
+                ! was computed by read_topo_header.
                 if (present(topo_idx)) then
-                    if (nc_lon_convention(topo_idx) == 360) then
-                        where (xlocs > 180.0d0) xlocs = xlocs - 360.0d0
+                    if (nc_lon_offset(topo_idx) /= 0.0d0) then
+                        xlocs = xlocs + nc_lon_offset(topo_idx)
                     end if
                 end if
 
@@ -1110,22 +1111,17 @@ contains
                 call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
                     start=(/ 1 /), count=(/ my /)))
 
-                ! Shift 0-360 longitudes to -180/180 if descriptor says so.
-                if (present(topo_idx)) then
-                    if (nc_lon_convention(topo_idx) == 360) then
-                        where (xlocs > 180.0d0) xlocs = xlocs - 360.0d0
-                    end if
-                end if
-
                 dx = abs(xlocs(2) - xlocs(1))
                 dy = abs(ylocs(2) - ylocs(1))
 
                 ! ----------------------------------------------------------------
                 ! Select the subset of the file to load.
-                ! Descriptor path: use explicit crop_bounds.
+                ! Descriptor path: use explicit crop_bounds (in FILE coordinates).
                 ! Fallback: clip to the AMR domain (with ghost-cell buffer).
                 ! ----------------------------------------------------------------
                 if (present(topo_idx) .and. nc_has_crop(topo_idx)) then
+                    ! crop_bounds are in FILE coordinates; compare against
+                    ! file-coord xlocs before applying lon_offset.
                     x_in_dom = (xlocs >= nc_crop_bounds(1, topo_idx)) .and. &
                                (xlocs <= nc_crop_bounds(2, topo_idx))
                     y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
@@ -1135,6 +1131,16 @@ contains
                                (xlocs < (xupper + dx + hxposs(1)*nghost))
                     y_in_dom = (ylocs > (ylower - dy - hyposs(1)*nghost)) .and. &
                                (ylocs < (yupper + dy + hyposs(1)*nghost))
+                end if
+
+                ! Apply lon_offset AFTER crop_bounds selection: converts file
+                ! coordinates to domain coordinates.  crop_bounds above were
+                ! compared against file-coord xlocs; xll/xhi below will be in
+                ! domain coordinates as GeoClaw expects.
+                if (present(topo_idx)) then
+                    if (nc_lon_offset(topo_idx) /= 0.0d0) then
+                        xlocs = xlocs + nc_lon_offset(topo_idx)
+                    end if
                 end if
 
                 xll = minval(xlocs, mask=x_in_dom)
@@ -1721,7 +1727,7 @@ contains
     !   var_name       = z
     !   lon_name       = longitude
     !   lat_name       = latitude
-    !   lon_convention = 180
+    !   lon_offset     = 0.0
     !   lat_order      = N_to_S
     !   dim_order      = lat,lon
     !   fill_value     = -9999.0
@@ -1767,8 +1773,8 @@ contains
                     nc_lon_name(idx) = trim(val)
                 case ('lat_name')
                     nc_lat_name(idx) = trim(val)
-                case ('lon_convention')
-                    read(val, *) nc_lon_convention(idx)
+                case ('lon_offset')
+                    read(val, *) nc_lon_offset(idx)
                 case ('lat_order')
                     nc_lat_order(idx) = trim(val)
                 case ('dim_order')
@@ -1793,7 +1799,7 @@ contains
         write(GEO_PARM_UNIT, *) '    var_name       = ', trim(nc_var_name(idx))
         write(GEO_PARM_UNIT, *) '    lon_name       = ', trim(nc_lon_name(idx))
         write(GEO_PARM_UNIT, *) '    lat_name       = ', trim(nc_lat_name(idx))
-        write(GEO_PARM_UNIT, *) '    lon_convention = ', nc_lon_convention(idx)
+        write(GEO_PARM_UNIT, *) '    lon_offset     = ', nc_lon_offset(idx)
         write(GEO_PARM_UNIT, *) '    lat_order      = ', trim(nc_lat_order(idx))
         write(GEO_PARM_UNIT, *) '    fill_action    = ', trim(nc_fill_action(idx))
         if (nc_has_fill(idx)) &

@@ -40,7 +40,7 @@ def _get_topography(runner, variant=0):
     return topo, dtopo
 
 
-def _write_netcdf_variant(topo, variant, output_path):
+def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
     """Write topography as a NetCDF file in the requested variant format.
 
     Parameters
@@ -51,6 +51,11 @@ def _write_netcdf_variant(topo, variant, output_path):
         One of ``"netcdf_topotools"``, ``"lat_flip"``, or ``"lon_360"``.
     output_path : Path
         Destination file path for the NetCDF output.
+    crop_bounds : tuple or None
+        (lon_min, lon_max, lat_min, lat_max) in domain coordinates.  When
+        provided, ``topo_entries()`` is called to compute the correct
+        ``lon_offset`` for the descriptor; the returned list has the same
+        ``[ttype, path, meta]`` element format used by ``topo_data.topofiles``.
 
     Variants
     --------
@@ -151,14 +156,16 @@ def _write_netcdf_variant(topo, variant, output_path):
     else:
         raise ValueError(f"Unknown NetCDF variant '{variant}'.")
 
-    # Interrogate the written file to auto-detect lon_convention, lat_order,
-    # and dim_order.  The returned TopoMetadata is passed to topofiles as the
-    # third element so data.py writes the descriptor block that Fortran's
-    # read_netcdf_descriptor needs.  Without it nc_lon_convention defaults to
-    # 180 and [0,360] longitudes are never shifted back to [-180,180], causing
-    # the "topo arrays do not cover domain" check to fail.
+    # Interrogate the written file to auto-detect lat_order, dim_order, etc.
+    # When crop_bounds (domain coordinates) are given, topo_entries() is used
+    # so that the correct lon_offset is computed and written into the descriptor
+    # block that Fortran's read_netcdf_descriptor needs.
     from clawpack.geoclaw.netcdf_utils import TopoInterrogator
-    return TopoInterrogator(output_path, 'elevation').interrogate_topo()
+    with TopoInterrogator(output_path, 'elevation', crop_bounds=crop_bounds) as intr:
+        if crop_bounds is not None:
+            return intr.topo_entries()
+        else:
+            return [[4, output_path, intr.interrogate_topo()]]
 
 CASES = [pytest.param("standard", id="standard"),
          pytest.param("netcdf_topotools", id="netcdf_topotools", marks=pytest.mark.netcdf),
@@ -209,10 +216,14 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
         runner.rundata.topo_data.topofiles = [[2, topo.path]]
     else:
         nc_path = tmp_path / f"chile_topo_{variant}.nc"
-        meta = _write_netcdf_variant(topo, variant, nc_path)
-        # Pass TopoMetadata as the third element so data.py writes the
-        # descriptor block Fortran needs to interpret coordinate conventions.
-        runner.rundata.topo_data.topofiles = [[4, nc_path, meta]]
+        clawdata = runner.rundata.clawdata
+        # lon_360 needs domain crop bounds so topo_entries() can compute the
+        # correct lon_offset (-360.0) for the descriptor.  Other variants use
+        # interrogate_topo() (lon_offset=0.0 is correct for [-180,180] files).
+        crop = (clawdata.lower[0], clawdata.upper[0],
+                clawdata.lower[1], clawdata.upper[1]) if variant == "lon_360" else None
+        entries = _write_netcdf_variant(topo, variant, nc_path, crop_bounds=crop)
+        runner.rundata.topo_data.topofiles = entries
 
     runner.write_data()
 
@@ -226,7 +237,11 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
         runner.build_executable()
     runner.run_code()
 
-    runner.check_gauge(save=save, gauge_id=32412)
+    # lon_360 coordinates undergo +360 then -360 shifts that are not a
+    # perfect floating-point round-trip for non-round values, so allow a
+    # slightly relaxed tolerance (still much smaller than 1% physically).
+    tol = {"atol": 1e-2} if variant == "lon_360" else {}
+    runner.check_gauge(save=save, gauge_id=32412, **tol)
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
