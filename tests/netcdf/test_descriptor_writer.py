@@ -124,14 +124,14 @@ def _get_met_meta(met_file_factory, **kwargs) -> MetMetadata:
 def test_topo_descriptor_required_keys_present(topo_file_factory):
     """
     write_topo_descriptor emits all mandatory keys: var_name, lon_name,
-    lat_name, lon_convention, lat_order, dim_order, fill_action.
+    lat_name, lon_offset, lat_order, dim_order, fill_action.
     """
     meta = _get_topo_meta(topo_file_factory)
     buf = io.StringIO()
     DescriptorWriter.write_topo_descriptor(buf, meta)
     parsed = _parse_topo_descriptor(buf.getvalue())
 
-    for key in ("var_name", "lon_name", "lat_name", "lon_convention",
+    for key in ("var_name", "lon_name", "lat_name", "lon_offset",
                 "lat_order", "dim_order", "fill_action"):
         assert key in parsed, f"Missing required key '{key}' in topo descriptor"
 
@@ -151,7 +151,7 @@ def test_topo_descriptor_values_match_metadata(topo_file_factory):
     assert parsed["var_name"] == meta.var_name
     assert parsed["lon_name"] == meta.lon_name
     assert parsed["lat_name"] == meta.lat_name
-    assert int(parsed["lon_convention"]) == meta.lon_convention
+    assert float(parsed["lon_offset"]) == pytest.approx(meta.lon_offset)
     assert parsed["lat_order"] == meta.lat_order
     assert parsed["dim_order"] == ",".join(meta.dim_order)
     assert parsed["fill_action"] == meta.fill_action
@@ -217,6 +217,28 @@ def test_topo_descriptor_crop_bounds_present_when_set(topo_file_factory):
     assert lon1 == pytest.approx(5.0)
     assert lat0 == pytest.approx(-5.0)
     assert lat1 == pytest.approx(5.0)
+
+
+def test_descriptor_writes_lon_offset_not_convention(topo_file_factory):
+    """
+    Topo descriptor must contain 'lon_offset' as a parseable float and must
+    NOT contain 'lon_convention'.  This verifies the format-version-2 change.
+    """
+    import dataclasses
+    meta = _get_topo_meta(topo_file_factory)
+    # Exercise a non-zero offset to confirm the value round-trips.
+    meta = dataclasses.replace(meta, lon_offset=-360.0)
+
+    buf = io.StringIO()
+    DescriptorWriter.write_topo_descriptor(buf, meta)
+    text = buf.getvalue()
+    parsed = _parse_topo_descriptor(text)
+
+    assert "lon_offset" in parsed, "Descriptor must contain 'lon_offset'"
+    assert "lon_convention" not in parsed, (
+        "Descriptor must NOT contain 'lon_convention' (superseded by lon_offset)"
+    )
+    assert float(parsed["lon_offset"]) == pytest.approx(-360.0)
 
 
 def test_topo_descriptor_ends_with_blank_line(topo_file_factory):
