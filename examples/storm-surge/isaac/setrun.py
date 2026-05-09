@@ -409,34 +409,6 @@ def setgeo(rundata):
     data.storm_specification_type = 'holland80'
     # data.storm_specification_type = 'data'
     data.storm_file = (Path() / 'isaac.storm').resolve()
-    
-    isaac = Storm()
-    atcf_path = (Path(__file__).parent / "bal092012.dat").resolve()
-    isaac.read(path=atcf_path, file_format="ATCF")
-    # Calculate landfall time - Need to specify as the file above does not
-    # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
-    isaac.time_offset = np.datetime64("2012-08-29T00:00")
-
-    if data.storm_specification_type == 'holland80':
-        isaac.write(data.storm_file, file_format='geoclaw')
-
-    elif data.storm_specification_type == "data":
-        # ASCII
-        isaac.file_format = 'NWS12'
-        isaac.file_paths = []
-        isaac.file_paths.append((Path() / "isaac.PRE").resolve())
-        isaac.file_paths.append((Path() / "isaac.WIN").resolve())
-
-        # NetCDF
-        # isaac.file_format = "NWS13"
-        # isaac.file_paths.append((Path() / "isaac.nc").resolve())
-        # # For NetCDF we need to set this to the epoch or things do not work yet
-        # isaac.time_offset = np.datetime64("1970-01-01")
-
-        isaac.write(data.storm_file, file_format='data')
-
-    else:
-        raise ValueError("Invalid storm specification type.")
 
     # =======================
     #  Set Variable Friction
@@ -463,6 +435,45 @@ def setgeo(rundata):
     # ----------------------
 
 
+def write_storm_file(rundata):
+    """Write the storm file configured in rundata.surge_data.
+
+    Separated from setgeo so that importing/calling setrun() does not write
+    files as a side effect (important for test runners that call setrun() and
+    then substitute their own storm file).
+    """
+    data = rundata.surge_data
+
+    isaac = Storm()
+    atcf_path = (Path(__file__).parent / "bal092012.dat").resolve()
+    isaac.read(path=atcf_path, file_format="ATCF")
+    # Calculate landfall time - Need to specify as the file above does not
+    # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
+    isaac.time_offset = np.datetime64("2012-08-29T00:00")
+
+    if data.storm_specification_type == 'holland80':
+        isaac.write(data.storm_file, file_format='geoclaw')
+
+    elif data.storm_specification_type == "data":
+        # ASCII
+        isaac.file_format = 'NWS12'
+        isaac.file_paths = [
+            (Path(__file__).parent / "isaac.PRE").resolve(),
+            (Path(__file__).parent / "isaac.WIN").resolve(),
+        ]
+
+        # NetCDF
+        # isaac.file_format = "NWS13"
+        # isaac.file_paths.append((Path() / "isaac.nc").resolve())
+        # # For NetCDF we need to set this to the epoch or things do not work yet
+        # isaac.time_offset = np.datetime64("1970-01-01")
+
+        isaac.write(data.storm_file, file_format='data')
+
+    else:
+        raise ValueError("Invalid storm specification type.")
+
+
 if __name__ == '__main__':
     # Set up run-time parameters and write all data files.
     import sys
@@ -471,4 +482,5 @@ if __name__ == '__main__':
     else:
         rundata = setrun()
 
+    write_storm_file(rundata)
     rundata.write()
