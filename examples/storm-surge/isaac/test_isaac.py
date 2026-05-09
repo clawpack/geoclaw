@@ -501,8 +501,6 @@ def _check_data_storm_descriptor(generated_path: Path, regression_path: Path) ->
     ]
 
 
-# @pytest.mark.slow
-
 @pytest.mark.regression
 @pytest.mark.storm
 @pytest.mark.remote
