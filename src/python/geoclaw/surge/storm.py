@@ -219,6 +219,7 @@ class Storm(object):
 
         # Run-time modifications for storm
         self.scaling = [1.0, 1.0]          # Scaling of wind and pressure
+        self.storm_time_scale = 1.0        # >1 slower storm, <1 faster storm
 
         # Ramping information - only applies to data storms currently
         self.window_type = 0
@@ -955,9 +956,14 @@ class Storm(object):
                                 data_file.readline().partition("#")[0].rstrip())
             self.ramp_width = float(
                                 data_file.readline().partition("#")[0].rstrip())
-            data_file.readline()
-            data_file.readline()
-            data_file.readline()
+            data_file.readline()  # window
+            _ts_str = data_file.readline().partition("#")[0].rstrip()
+            try:
+                self.storm_time_scale = float(_ts_str)
+            except ValueError:
+                # Legacy file: blank line consumed; storm_time_scale absent
+                self.storm_time_scale = 1.0
+            data_file.readline()  # "# Format Data Information"
 
             if self.file_format == 1:
                 # Skip blank line then "# File paths" comment
@@ -1387,7 +1393,7 @@ class Storm(object):
                 data_file.write(f"{str(self.window)[1:-1].ljust(20)} # Window\n")
             else:
                 data_file.write(f"{str(None).ljust(20)} # Window\n")
-            data_file.write("\n")
+            data_file.write(f"{str(self.storm_time_scale).ljust(20)} # Storm time scale (>1 slower, <1 faster)\n")
             data_file.write("# Format Data Information\n")
             if file_format == 1:
                 # Check number of file paths

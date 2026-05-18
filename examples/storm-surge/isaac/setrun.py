@@ -468,6 +468,10 @@ def write_storm_file(rundata):
         # # For NetCDF we need to set this to the epoch or things do not work yet
         # isaac.time_offset = np.datetime64("1970-01-01")
 
+        # Stretch (>1) or compress (<1) the storm time axis relative to the
+        # first time step.  1.0 = no change; 2.0 = storm moves twice as slow.
+        isaac.storm_time_scale = 1.0
+
         isaac.write(data.storm_file, file_format='data')
 
     else:

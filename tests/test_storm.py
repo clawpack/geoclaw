@@ -483,6 +483,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
     assert data_storm.file_format in DATA_FILE_FORMAT_MAP[read_storm.file_format]
     assert data_storm.window_type == read_storm.window_type
     assert data_storm.ramp_width == read_storm.ramp_width
+    assert data_storm.storm_time_scale == read_storm.storm_time_scale
     assert len(data_storm.file_paths) == len(read_storm.file_paths)
     for i, path in enumerate(data_storm.file_paths):
         assert read_storm.file_paths[i] == path
