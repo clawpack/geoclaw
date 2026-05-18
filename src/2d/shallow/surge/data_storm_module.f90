@@ -47,6 +47,7 @@ module data_storm_module
 
     ! Run-time storm modification settings
     real(kind=8) :: wind_scaling, pressure_scaling
+    real(kind=8) :: storm_time_scale
 
     ! Ramping settings
     integer :: window_type
@@ -132,7 +133,16 @@ contains
             else
                 read(data_unit, *)
             end if
-            read(data_unit, *)
+
+            ! storm_time_scale stretches (>1) or compresses (<1) the time axis
+            ! to simulate slower or faster storm translation speeds.
+            ! A blank line here means a legacy file without the parameter; default to 1.0.
+            read(data_unit, *, iostat=io_status) storm_time_scale
+            if (io_status /= 0) then
+                storm_time_scale = 1.0d0
+                write(log_unit, *) "Warning: storm_time_scale not in data file, defaulting to 1.0"
+            end if
+            write(log_unit, "('storm_time_scale = ',d16.8)") storm_time_scale
 
             if (DEBUG) then
                 print "('time_offset = ',a)", storm%time_offset
@@ -355,6 +365,14 @@ contains
                     ! absolute seconds (e.g. Unix epoch) rather than relative.
                     storm%time(:) = storm%time(:) - storm%time(1) &
                                     + nint(nc_time_offset)
+
+                    ! Stretch (>1) or compress (<1) the time axis relative to
+                    ! the first time step (anchor).  No-op when scale is 1.0.
+                    if (storm_time_scale /= 1.0d0) then
+                        storm%time(:) = storm%time(1) &
+                            + nint(storm_time_scale &
+                                   * dble(storm%time(:) - storm%time(1)))
+                    end if
 
                     ! Wind (optional — zero-fill if not in descriptor)
                     if (len_trim(var_names(1)) > 0) then
