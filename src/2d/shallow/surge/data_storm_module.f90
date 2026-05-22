@@ -105,6 +105,7 @@ contains
         if (.not.module_setup) then
             ! Open data file
             print *,'Reading storm data file ', trim(storm_data_path)
+            print *
             open(unit=data_unit, file=storm_data_path, status='old',        &
                  action='read', iostat=io_status)
             if (io_status /= 0) then
@@ -138,8 +139,8 @@ contains
             ! to simulate slower or faster storm translation speeds.
             ! A blank line here means a legacy file without the parameter; default to 1.0.
             read(data_unit, *, iostat=io_status) storm_time_scale
-            if (io_status /= 0) then
-                storm_time_scale = 1.0d0
+                if (io_status /= 0) then
+                    storm_time_scale = 1.0d0
                 write(log_unit, *) "Warning: storm_time_scale not in data file, defaulting to 1.0"
             end if
             write(log_unit, "('storm_time_scale = ',d16.8)") storm_time_scale
@@ -298,8 +299,9 @@ contains
                     allocate(storm%time(mt))
 
                     ! Fill out variable data/info
-                    print *, "Reading pressure file ", storm%paths(1)
-                    print *, "Reading wind file ", storm%paths(2)
+                    print *, "Reading pressure file ", trim(storm%paths(1))
+                    print *, "Reading wind file ", trim(storm%paths(2))
+                    print *
                     call read_OWI_ASCII(storm%paths(2), storm%paths(1),        &
                                         mx, my, mt, sw_lat, sw_lon, dy, dx,    &
                                         storm, seconds_from_epoch(time(:, 1)))
@@ -309,6 +311,7 @@ contains
                     ! Open file and get file ID
                     ! :TODO: Only read in times that are between t0 and tfinal
                     print *, "Reading storm NetCDF file ", trim(storm%paths(1))
+                    print *
                     call check_netcdf_error(nf90_open(storm%paths(1), nf90_nowrite, nc_fid))
                     ! Check dim/var number
                     call check_netcdf_error(nf90_inquire(nc_fid, num_dims, num_vars))
