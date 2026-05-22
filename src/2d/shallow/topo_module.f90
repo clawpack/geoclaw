@@ -568,6 +568,7 @@ contains
 
         print *, ' '
         print *, 'Reading topography file  ', trim(fname)
+        print *
 
         select case(abs(topo_type))
             ! ASCII file with x,y,z values on each line.
