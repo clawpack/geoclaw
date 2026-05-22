@@ -24,7 +24,7 @@ PLOTDIR = _plots               # Directory for plots
 # FFLAGS += -DNETCDF -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib
 # LFLAGS += -I$(NETCDF4_DIR)/include -L$(NETCDF4_DIR)/lib -lnetcdff
 FFLAGS += -DNETCDF $(NETCDF_FFLAGS)
-LFLAGS += $(NETCDF_LFLAGS)
+LFLAGS += $(FFLAGS) $(NETCDF_LFLAGS)
 
 # ---------------------------------
 # package sources for this program:
