@@ -322,6 +322,9 @@ def setrun(claw_pkg='geoclaw'):
     rundata.gaugedata.gauges.append([2, -89.95826667, 29.26460167,
                                      rundata.clawdata.t0,
                                      rundata.clawdata.tfinal])
+    
+    # Record the wind and pressure fields at the gauges
+    rundata.gaugedata.aux_out_fields = [4, 5, 6]
 
     # ------------------------------------------------------------------
     # GeoClaw specific parameters:

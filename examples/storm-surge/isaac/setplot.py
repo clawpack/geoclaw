@@ -13,6 +13,7 @@ import clawpack.clawutil.data as clawutil
 import clawpack.amrclaw.data as amrclaw
 import clawpack.geoclaw.data as geodata
 import clawpack.geoclaw.util as geoutil
+import clawpack.geoclaw.surge.storm as stormtools
 import clawpack.geoclaw.surge.plot as surgeplot
 
 try:
@@ -42,7 +43,8 @@ def setplot(plotdata=None):
     friction_data = geodata.FrictionData()
     friction_data.read(os.path.join(plotdata.outdir, 'friction.data'))
 
-    # Load storm track
+    # Load storm data
+    storm = stormtools.Storm(surge_data.storm_file, file_format="data")
     track = surgeplot.track_data(os.path.join(plotdata.outdir, 'fort.track'))
 
     # Set afteraxes function
@@ -173,17 +175,19 @@ def setplot(plotdata=None):
     # ========================================================================
     #  Figures for gauges
     # ========================================================================
+    # Map GeoClaw gauge number to NOAA gauge number and location/name
+    gauge_mapping = {1: [8761724, "Grand Isle, LA"],
+                        2: [8760922, 'Pilots Station East, SW Pass, LA']}
+    
+    # Storm Timepoints
+    landfall_time = np.datetime64(datetime.datetime(2012, 8, 29, 0))
+    begin_date = datetime.datetime(2012, 8, 27)
+    end_date = datetime.datetime(2012, 8, 31)
+    
     def plot_observed(current_data):
         """Fetch and plot gauge data for gauges used."""
 
-        # Map GeoClaw gauge number to NOAA gauge number and location/name
-        gauge_mapping = {1: [8761724, "Grand Isle, LA"],
-                         2: [8760922, 'Pilots Station East, SW Pass, LA']}
-
         station_id, station_name = gauge_mapping[current_data.gaugesoln.id]
-        landfall_time = np.datetime64(datetime.datetime(2012, 8, 29, 0))
-        begin_date = datetime.datetime(2012, 8, 27)
-        end_date = datetime.datetime(2012, 8, 31)
 
         # Fetch data if needed
         date_time, water_level, tide = geoutil.fetch_noaa_tide_data(station_id,
@@ -227,6 +231,49 @@ def setplot(plotdata=None):
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
     plotitem.plot_var = surgeplot.gauge_dry_regions
     plotitem.kwargs = {"color":'lightcoral', "linewidth":5}
+
+
+    # Plot wind and pressure at each gauge
+    def storm_gauge_afteraxes(cd, storm):
+        # Map GeoClaw gauge number to NOAA gauge number and location/name
+        station_id, station_name = gauge_mapping[cd.gaugesoln.id]
+        
+        # Convert to seconds relative to landfall
+        # t = (cd.gaugesoln.t - landfall_time) / np.timedelta64(1, 's')
+        t = cd.gaugesoln.t
+        t /= (24 * 60**2)
+
+        w_ax = plt.gca()
+        color ="tab:blue"
+        w_ax.plot(t, surgeplot.gauge_wind(cd), label="wind", color=color)
+        w_ax.set_ylabel("Wind (m/s)", color=color)
+        w_ax.set_ylim(wind_limits)
+        w_ax.tick_params(axis='y', labelcolor=color)
+        
+        P_ax = w_ax.twinx()
+        color = "tab:red"
+        P_ax.set_ylabel("Pressure (mbar)", color=color)
+        P_ax.plot(t, surgeplot.gauge_pressure(cd) * 1e-2, label="pressure", color=color)
+        P_ax.set_ylim(pressure_limits)
+        P_ax.tick_params(axis='y', labelcolor=color)
+
+        w_ax.set_title(f"Storm Fileds at {station_name}")
+
+        plt.gcf().tight_layout()
+
+    plotfigure = plotdata.new_plotfigure(name='Gauge Wind', figno=301,
+                                         type='each_gauge')
+    plotfigure.show = True
+    plotfigure.clf_each_gauge = True
+    plotfigure.kwargs = {"figsize": [6.4 * 1.2,
+                                     4.8 * 1.0]}
+
+    plotaxes = plotfigure.new_plotaxes()
+    plotaxes.time_scale = 1 / (24 * 60**2)
+    plotaxes.grid = True
+    plotaxes.xlimits = [-2, 1.5]
+    plotaxes.time_label = "Days relative to 2012-12-26 00:00 UTC"
+    plotaxes.afteraxes = lambda cd: storm_gauge_afteraxes(cd, storm)
     
     #  Gauge Location Plot
     def gauge_location_afteraxes(cd):
