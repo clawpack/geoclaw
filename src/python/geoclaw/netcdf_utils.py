@@ -3,22 +3,22 @@
 r"""
 NetCDF utilities for GeoClaw NetCDF input.
 
-Provides interrogator classes that inspect NetCDF files for coordinate
+Provides inspector classes that inspect NetCDF files for coordinate
 metadata, unit consistency, and fill values without loading data arrays.
-The interrogators produce metadata dataclasses consumed by DescriptorWriter
+The inspectors produce metadata dataclasses consumed by DescriptorWriter
 (not yet implemented — pending confirmation of Fortran topo.data parser).
 
 Classes
 -------
-NetCDFInterrogator
+NetCDFInspector
     Base class: opens a file, discovers coordinate variables, detects lon/lat
     conventions, resolves fill value, validates crop bounds.
 
-TopoInterrogator(NetCDFInterrogator)
+TopoInspector(NetCDFInspector)
     Adds bathymetry-specific checks: fill values within crop region (fatal),
     unit verification against GEOCLAW_NETCDF_UNITS['topo'].
 
-MetInterrogator(NetCDFInterrogator)
+MetInspector(NetCDFInspector)
     Adds met-forcing checks: multi-variable grid/time consistency, unit
     verification and conversion to contract units, CF time -> seconds offset,
     ensemble dimension detection.
@@ -140,12 +140,12 @@ class MetMetadata(FileMetadata):
 
 
 # ---------------------------------------------------------------------------
-# Base interrogator
+# Base inspector
 # ---------------------------------------------------------------------------
 
-class NetCDFInterrogator:
+class NetCDFInspector:
     """
-    Open a NetCDF file and interrogate its coordinate metadata.
+    Open a NetCDF file and inspect its coordinate metadata.
 
     No data arrays are loaded; only coordinate values and variable attributes
     are accessed.  Dask-lazy chunking is enabled so that any accidental
@@ -328,10 +328,10 @@ class NetCDFInterrogator:
             )
 
     # ------------------------------------------------------------------
-    # Core interrogation
+    # Core inspection
     # ------------------------------------------------------------------
 
-    def interrogate(
+    def inspect(
         self,
         var_name: str,
         time_name_override: Optional[str] = None,
@@ -383,7 +383,7 @@ class NetCDFInterrogator:
     def close(self) -> None:
         self.ds.close()
 
-    def __enter__(self) -> 'NetCDFInterrogator':
+    def __enter__(self) -> 'NetCDFInspector':
         return self
 
     def __exit__(self, *args: object) -> None:
@@ -391,10 +391,10 @@ class NetCDFInterrogator:
 
 
 # ---------------------------------------------------------------------------
-# Topo interrogator
+# Topo inspector
 # ---------------------------------------------------------------------------
 
-class TopoInterrogator(NetCDFInterrogator):
+class TopoInspector(NetCDFInspector):
     """
     Interrogate a NetCDF bathymetry/topography file.
 
@@ -594,13 +594,13 @@ class TopoInterrogator(NetCDFInterrogator):
     # Public interface
     # ------------------------------------------------------------------
 
-    def interrogate_topo(self) -> TopoMetadata:
+    def inspect_topo(self) -> TopoMetadata:
         """
-        Fully interrogate the topo file and return a TopoMetadata instance.
+        Fully inspect the topo file and return a TopoMetadata instance.
         """
         if self.var_name is None:
             self.var_name = self._find_topo_var_name()
-        base = self.interrogate(self.var_name)
+        base = self.inspect(self.var_name)
         source_units = self._check_topo_units()
         self._check_fill_in_crop(base.lon_name, base.lat_name, base.lat_order)
 
@@ -621,7 +621,7 @@ class TopoInterrogator(NetCDFInterrogator):
         lon cut point, returns two entries pointing to the same file with
         different lon_offset and crop_bounds values.
 
-        crop_bounds on the interrogator are in domain coordinates; this method
+        crop_bounds on the inspector are in domain coordinates; this method
         converts them to file coordinates before storing in the returned
         metadata. Fortran can then use crop_bounds directly against file
         coordinate arrays before applying lon_offset.
@@ -632,7 +632,7 @@ class TopoInterrogator(NetCDFInterrogator):
         saved_crop = self.crop_bounds
         self.crop_bounds = None
         try:
-            meta = self.interrogate_topo()
+            meta = self.inspect_topo()
         finally:
             self.crop_bounds = saved_crop
 
@@ -667,10 +667,10 @@ class TopoInterrogator(NetCDFInterrogator):
 
 
 # ---------------------------------------------------------------------------
-# Met interrogator
+# Met inspector
 # ---------------------------------------------------------------------------
 
-class MetInterrogator(NetCDFInterrogator):
+class MetInspector(NetCDFInspector):
     """
     Interrogate a NetCDF meteorological forcing file.
 
@@ -786,7 +786,7 @@ class MetInterrogator(NetCDFInterrogator):
                         f"Variable '{var_name}' (role '{role}') has non-singleton "
                         f"dimension '{dim}' (size {size}).  Ensemble / member "
                         f"dimensions are not supported by GeoClaw.  "
-                        f"Select a single member before interrogating."
+                        f"Select a single member before inspecting."
                     )
 
     # ------------------------------------------------------------------
@@ -913,16 +913,16 @@ class MetInterrogator(NetCDFInterrogator):
     # Public interface
     # ------------------------------------------------------------------
 
-    def interrogate_met(self) -> MetMetadata:
+    def inspect_met(self) -> MetMetadata:
         """
-        Fully interrogate the met file and return a MetMetadata instance.
+        Fully inspect the met file and return a MetMetadata instance.
         """
         if not self.variable_map:
             raise ValueError("variable_map must not be empty.")
 
         # Use the first variable for base coordinate detection
         primary_var = next(iter(self.variable_map.values()))
-        base = self.interrogate(primary_var)
+        base = self.inspect(primary_var)
 
         if base.time_name is None:
             raise ValueError(
@@ -1146,13 +1146,13 @@ class DescriptorWriter:
 
     Usage — topo::
 
-        meta = TopoInterrogator(path, var_name='z').interrogate_topo()
+        meta = TopoInspector(path, var_name='z').inspect_topo()
         with open('topo.data', 'a') as f:
             DescriptorWriter.write_topo_descriptor(f, meta)
 
     Usage — met (storm file)::
 
-        meta = MetInterrogator(path, var_map).interrogate_met()
+        meta = MetInspector(path, var_map).inspect_met()
         with open('storm.nc', 'w') as f:
             f.write('netcdf\\n')   # format header written by caller
             DescriptorWriter.write_met_descriptor(f, meta)
@@ -1172,7 +1172,7 @@ class DescriptorWriter:
         f : file-like object
             Open for writing (text mode).
         meta : TopoMetadata
-            Output of ``TopoInterrogator.interrogate_topo()``.
+            Output of ``TopoInspector.inspect_topo()``.
         """
         # Fortran adds lon_offset to all file coordinate values after reading:
         #   x_domain = x_file + lon_offset
@@ -1206,7 +1206,7 @@ class DescriptorWriter:
         f : file-like object
             Open for writing (text mode).
         meta : MetMetadata
-            Output of ``MetInterrogator.interrogate_met()``.
+            Output of ``MetInspector.inspect_met()``.
         """
         f.write("&file_info\n")
         f.write(f"  lon_name       = {meta.lon_name}\n")

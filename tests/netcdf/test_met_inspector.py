@@ -1,5 +1,5 @@
 """
-Tests for MetInterrogator.
+Tests for MetInspector.
 
 Covers: variable presence/absence, grid consistency, unit passthrough and
 conversion, time offset calculation, ensemble dimension handling, and
@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from clawpack.geoclaw.netcdf_utils import MetInterrogator, MetMetadata
+from clawpack.geoclaw.netcdf_utils import MetInspector, MetMetadata
 
 from ._helpers import (
     make_met_dataset,
@@ -32,32 +32,32 @@ _VAR_MAP = {"wind_u": "u10", "wind_v": "v10", "pressure": "msl"}
 # ============================================================
 
 def test_all_variables_present_passes(met_file_factory):
-    """All required variables present: interrogate_met() returns MetMetadata."""
+    """All required variables present: inspect_met() returns MetMetadata."""
     path = met_file_factory()
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
     assert isinstance(meta, MetMetadata)
 
 
 @pytest.mark.parametrize("missing_role", ["wind_u", "wind_v", "pressure"])
 def test_missing_variable_raises(met_file_factory, missing_role):
     """
-    interrogate_met() raises KeyError with a message identifying the missing
+    inspect_met() raises KeyError with a message identifying the missing
     variable when one required variable is absent from the file.
     """
     path = met_file_factory(omit_roles=[missing_role])
     expected_var = _VAR_MAP[missing_role]
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
         with pytest.raises(KeyError, match=expected_var):
-            intr.interrogate_met()
+            insp.inspect_met()
 
 
 def test_empty_variable_map_raises(met_file_factory):
     """An empty variable_map raises ValueError before any file inspection."""
     path = met_file_factory()
-    with MetInterrogator(path, variable_map={}) as intr:
+    with MetInspector(path, variable_map={}) as insp:
         with pytest.raises(ValueError, match="variable_map"):
-            intr.interrogate_met()
+            insp.inspect_met()
 
 
 # ============================================================
@@ -66,13 +66,13 @@ def test_empty_variable_map_raises(met_file_factory):
 
 def test_mismatched_variable_dims_raises(met_file_factory):
     """
-    interrogate_met() raises ValueError when variables do not share
+    inspect_met() raises ValueError when variables do not share
     the same set of dimensions.
     """
     path = met_file_factory(mismatch_dims=True)
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
         with pytest.raises(ValueError, match="[Gg]rid|[Dd]im"):
-            intr.interrogate_met()
+            insp.inspect_met()
 
 
 def test_missing_time_coord_raises(met_file_factory):
@@ -85,9 +85,9 @@ def test_missing_time_coord_raises(met_file_factory):
     # Remove the time dimension by selecting a single time step
     ds_no_time = ds.isel(time=0).drop_vars("time")
     path = met_file_factory(ds=ds_no_time)
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
         with pytest.raises(ValueError, match="[Tt]ime"):
-            intr.interrogate_met()
+            insp.inspect_met()
 
 
 # ============================================================
@@ -97,11 +97,11 @@ def test_missing_time_coord_raises(met_file_factory):
 def test_singleton_ensemble_dim_passes(met_file_factory):
     """
     A singleton extra dimension (e.g. a single ensemble member) does not
-    cause interrogate_met() to raise.
+    cause inspect_met() to raise.
     """
     path = met_file_factory(extra_dim=("member", 1))
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
     assert isinstance(meta, MetMetadata)
 
 
@@ -111,9 +111,9 @@ def test_non_singleton_ensemble_dim_raises(met_file_factory):
     support ensemble/member dimensions.
     """
     path = met_file_factory(extra_dim=("member", 3))
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
         with pytest.raises(ValueError, match="[Ee]nsemble|[Mm]ember|singleton"):
-            intr.interrogate_met()
+            insp.inspect_met()
 
 
 # ============================================================
@@ -131,8 +131,8 @@ def test_pressure_unit_variants(met_file_factory, unit_cfg):
     expected_source = unit_cfg["expected_source"]
 
     path = met_file_factory(pressure_units=pressure_units)
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
 
     pressure_info = next(v for v in meta.variables if v.geoclaw_role == "pressure")
     assert pressure_info.source_units == expected_source, (
@@ -151,8 +151,8 @@ def test_wind_unit_variants(met_file_factory, unit_cfg):
     expected_source = unit_cfg["expected_source"]
 
     path = met_file_factory(wind_units=wind_units)
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
 
     wind_u_info = next(v for v in meta.variables if v.geoclaw_role == "wind_u")
     assert wind_u_info.source_units == expected_source
@@ -165,16 +165,16 @@ def test_contract_units_no_warning(met_file_factory):
     path = met_file_factory(pressure_units="Pa", wind_units="m/s")
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-            intr.interrogate_met()
+        with MetInspector(path, variable_map=_VAR_MAP) as insp:
+            insp.inspect_met()
 
 
 def test_unrecognised_pressure_unit_raises(met_file_factory):
     """An unrecognised pressure unit string raises ValueError."""
     path = met_file_factory(pressure_units="atm_weird_unknown")
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
         with pytest.raises(ValueError, match="[Uu]nrecogni"):
-            intr.interrogate_met()
+            insp.inspect_met()
 
 
 # ============================================================
@@ -188,8 +188,8 @@ def test_time_offset_unix_epoch_default(met_file_factory):
     """
     time_start = "2020-01-01"
     path = met_file_factory(time_start=time_start)
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
 
     expected_offset = pd.Timestamp(time_start).timestamp()
     assert meta.time_offset == pytest.approx(expected_offset, rel=1e-6), (
@@ -203,9 +203,9 @@ def test_time_offset_custom_reference(met_file_factory):
     """
     time_start = "2020-06-15T12:00:00"
     path = met_file_factory(time_start=time_start)
-    with MetInterrogator(path, variable_map=_VAR_MAP,
-                          time_reference=time_start) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP,
+                          time_reference=time_start) as insp:
+        meta = insp.inspect_met()
     assert meta.time_offset == pytest.approx(0.0, abs=1.0), (
         f"Expected time_offset≈0, got {meta.time_offset}"
     )
@@ -220,8 +220,8 @@ def test_metadata_variables_all_roles_present(met_file_factory):
     MetMetadata.variables contains one entry per variable_map role.
     """
     path = met_file_factory()
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
 
     roles = {v.geoclaw_role for v in meta.variables}
     assert roles == set(_VAR_MAP.keys()), (
@@ -232,8 +232,8 @@ def test_metadata_variables_all_roles_present(met_file_factory):
 def test_metadata_variable_names_match_map(met_file_factory):
     """MetVariableInfo.var_name matches the value in variable_map."""
     path = met_file_factory()
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
 
     for v in meta.variables:
         assert v.var_name == _VAR_MAP[v.geoclaw_role], (
@@ -243,19 +243,19 @@ def test_metadata_variable_names_match_map(met_file_factory):
 
 
 def test_fill_action_default_is_warn(met_file_factory):
-    """Default fill_action for MetInterrogator is 'warn'."""
+    """Default fill_action for MetInspector is 'warn'."""
     path = met_file_factory()
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
     assert meta.fill_action == "warn"
 
 
 def test_fill_action_abort_propagated(met_file_factory):
     """fill_action='abort' is forwarded into MetMetadata."""
     path = met_file_factory()
-    with MetInterrogator(path, variable_map=_VAR_MAP,
-                          fill_action="abort") as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP,
+                          fill_action="abort") as insp:
+        meta = insp.inspect_met()
     assert meta.fill_action == "abort"
 
 
@@ -263,12 +263,12 @@ def test_invalid_fill_action_raises(met_file_factory):
     """
     Passing an invalid fill_action raises ValueError at construction.
 
-    A real file path is required because MetInterrogator opens the file in
+    A real file path is required because MetInspector opens the file in
     super().__init__() before the fill_action validation check fires.
     """
     path = met_file_factory()
     with pytest.raises(ValueError, match="fill_action"):
-        MetInterrogator(path, variable_map=_VAR_MAP, fill_action="ignore")
+        MetInspector(path, variable_map=_VAR_MAP, fill_action="ignore")
 
 
 # ============================================================
@@ -277,20 +277,20 @@ def test_invalid_fill_action_raises(met_file_factory):
 
 @pytest.mark.parametrize("coord_kwargs", COORD_VARIANTS)
 def test_coord_variants(met_file_factory, coord_kwargs):
-    """interrogate_met() completes for every coordinate variant."""
+    """inspect_met() completes for every coordinate variant."""
     path = met_file_factory(**coord_kwargs)
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
     expected_conv = 360 if coord_kwargs["lon_max"] > 180 else 180
     assert meta.lon_convention == expected_conv
 
 
 @pytest.mark.parametrize("dim_kwargs", MET_DIM_ORDER_VARIANTS)
 def test_dim_order_variants(met_file_factory, dim_kwargs):
-    """interrogate_met() reports correct dim_order for all axis arrangements."""
+    """inspect_met() reports correct dim_order for all axis arrangements."""
     path = met_file_factory(**dim_kwargs)
-    with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-        meta = intr.interrogate_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
     expected = [{"lat": "lat", "lon": "lon", "time": "time"}.get(d, d)
                 for d in dim_kwargs["dim_order"]]
     assert meta.dim_order == expected

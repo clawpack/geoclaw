@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for GeoClaw NetCDF interrogator tests.
+Shared pytest fixtures for GeoClaw NetCDF inspector tests.
 
 Factory functions, parametrize lists, and helper constants live in
 _helpers.py so they can be imported directly by test files without
