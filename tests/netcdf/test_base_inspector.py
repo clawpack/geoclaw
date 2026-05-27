@@ -1,5 +1,5 @@
 """
-Tests for NetCDFInterrogator base class.
+Tests for NetCDFInspector base class.
 
 Covers: coordinate discovery, lon convention, lat order, dim order,
 fill value resolution, crop bound validation, and laziness guarantee.
@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 import pytest
 
-from clawpack.geoclaw.netcdf_utils import NetCDFInterrogator, FileMetadata
+from clawpack.geoclaw.netcdf_utils import NetCDFInspector, FileMetadata
 
 from ._helpers import (
     make_topo_dataset,
@@ -26,8 +26,8 @@ pytestmark = [pytest.mark.python, pytest.mark.netcdf]
 # ============================================================
 
 def _open(path):
-    """Return an interrogator; caller is responsible for .close()."""
-    return NetCDFInterrogator(path)
+    """Return an inspector; caller is responsible for .close()."""
+    return NetCDFInspector(path)
 
 
 # ============================================================
@@ -40,10 +40,10 @@ def _open(path):
 ])
 def test_lon_convention_detected(topo_file_factory, lon_min, lon_max,
                                  expected_convention):
-    """Interrogator reports the correct longitude convention."""
+    """Inspector reports the correct longitude convention."""
     path = topo_file_factory(lon_min=lon_min, lon_max=lon_max)
-    with NetCDFInterrogator(path) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        meta = insp.inspect("z")
     assert meta.lon_convention == expected_convention, (
         f"Expected lon_convention={expected_convention} for lon range "
         f"[{lon_min}, {lon_max}], got {meta.lon_convention}"
@@ -59,10 +59,10 @@ def test_lon_convention_detected(topo_file_factory, lon_min, lon_max,
     ("N_to_S", "N_to_S"),
 ])
 def test_lat_order_detected(topo_file_factory, lat_direction, expected_order):
-    """Interrogator reports the correct latitude order."""
+    """Inspector reports the correct latitude order."""
     path = topo_file_factory(lat_direction=lat_direction)
-    with NetCDFInterrogator(path) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        meta = insp.inspect("z")
     assert meta.lat_order == expected_order, (
         f"Expected lat_order={expected_order!r} for lat_direction="
         f"{lat_direction!r}, got {meta.lat_order!r}"
@@ -76,12 +76,12 @@ def test_lat_order_detected(topo_file_factory, lat_direction, expected_order):
 @pytest.mark.parametrize("dim_kwargs", TOPO_DIM_ORDER_VARIANTS)
 def test_dim_order_detected_topo(topo_file_factory, dim_kwargs):
     """
-    Interrogator reports canonical dim order using role names
+    Inspector reports canonical dim order using role names
     ('lat', 'lon') regardless of how the variable is stored.
     """
     path = topo_file_factory(**dim_kwargs)
-    with NetCDFInterrogator(path) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        meta = insp.inspect("z")
     expected = list(dim_kwargs["dim_order"])
     assert meta.dim_order == expected, (
         f"Expected dim_order={expected}, got {meta.dim_order}"
@@ -101,8 +101,8 @@ def test_coord_discovery_via_axis_attr(topo_file_factory):
         lon_name="x_coord", lat_name="y_coord",
         lon_axis_attr=True, lat_axis_attr=True,
     )
-    with NetCDFInterrogator(path) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        meta = insp.inspect("z")
     assert meta.lon_name == "x_coord"
     assert meta.lat_name == "y_coord"
 
@@ -113,15 +113,15 @@ def test_coord_discovery_via_fallback_name(topo_file_factory):
     is present ('lon', 'lat' are in the fallback list).
     """
     path = topo_file_factory(lon_name="lon", lat_name="lat")
-    with NetCDFInterrogator(path) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        meta = insp.inspect("z")
     assert meta.lon_name == "lon"
     assert meta.lat_name == "lat"
 
 
 def test_missing_lon_coord_raises(topo_file_factory):
     """
-    interrogate() raises ValueError when no longitude coordinate can be found.
+    inspect() raises ValueError when no longitude coordinate can be found.
     """
     import xarray as xr
     # Build a dataset whose coordinate names cannot be recognised
@@ -129,9 +129,9 @@ def test_missing_lon_coord_raises(topo_file_factory):
     # Drop the axis/standard_name hints so it can't be found
     ds["xpos"].attrs.clear()
     path = topo_file_factory(ds=ds)
-    with NetCDFInterrogator(path) as intr:
+    with NetCDFInspector(path) as insp:
         with pytest.raises(ValueError, match="longitude"):
-            intr.interrogate("z")
+            insp.inspect("z")
 
 
 # ============================================================
@@ -143,23 +143,23 @@ def test_fill_value_resolution(nc4_topo_file_factory, fill_cfg):
     """
     _resolve_fill_value returns the correct value across all attribute
     placement combinations.  Conflicting _FillValue / missing_value must not
-    raise or warn from the interrogator (that is the normalizer's job).
+    raise or warn from the inspector (that is the normalizer's job).
 
     Note: xarray itself emits SerializationWarning when it opens a file that
     has conflicting fill values; that warning is suppressed here because it
-    comes from xarray internals, not from any interrogator code.
+    comes from xarray internals, not from any inspector code.
     """
     path = nc4_topo_file_factory(
         fill_value=fill_cfg["fill_value"],
         missing_value=fill_cfg["missing_value"],
     )
     with warnings.catch_warnings():
-        warnings.simplefilter("error")   # any interrogator warning is a failure
+        warnings.simplefilter("error")   # any inspector warning is a failure
         # xarray emits SerializationWarning for conflicting fill values during
         # open_dataset; suppress it so it does not mask real test failures.
         warnings.filterwarnings("ignore", message=".*multiple fill values.*")
-        with NetCDFInterrogator(path) as intr:
-            meta = intr.interrogate("z")
+        with NetCDFInspector(path) as insp:
+            meta = insp.inspect("z")
 
     expected = fill_cfg["expected"]
     if expected is None:
@@ -172,29 +172,29 @@ def test_fill_value_resolution(nc4_topo_file_factory, fill_cfg):
         )
 
 
-def test_conflicting_fill_values_no_interrogator_warning(nc4_topo_file_factory):
+def test_conflicting_fill_values_no_inspector_warning(nc4_topo_file_factory):
     """
     Conflicting _FillValue and missing_value must not produce a warning from
-    NetCDFInterrogator.  (Warnings are the CFNormalizer's responsibility.)
+    NetCDFInspector.  (Warnings are the CFNormalizer's responsibility.)
 
     xarray itself emits SerializationWarning when opening such a file; that
     warning is excluded from the assertion because it originates in xarray
-    internals, not in any interrogator code.
+    internals, not in any inspector code.
     """
     path = nc4_topo_file_factory(fill_value=-9999.0, missing_value=-8888.0)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with NetCDFInterrogator(path) as intr:
-            intr.interrogate("z")
+        with NetCDFInspector(path) as insp:
+            insp.inspect("z")
 
     # Filter out xarray's own SerializationWarning about multiple fill values.
-    interrogator_warnings = [
+    inspector_warnings = [
         w for w in caught
         if "multiple fill values" not in str(w.message)
     ]
-    assert not interrogator_warnings, (
-        f"Interrogator emitted unexpected warning(s): "
-        f"{[str(w.message) for w in interrogator_warnings]}"
+    assert not inspector_warnings, (
+        f"Inspector emitted unexpected warning(s): "
+        f"{[str(w.message) for w in inspector_warnings]}"
     )
 
 
@@ -208,8 +208,8 @@ def test_crop_bounds_inside_extent_passes(topo_file_factory):
     """
     path = topo_file_factory(lon_min=-10.0, lon_max=10.0,
                              lat_min=-10.0, lat_max=10.0)
-    with NetCDFInterrogator(path, crop_bounds=(-5.0, 5.0, -5.0, 5.0)) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path, crop_bounds=(-5.0, 5.0, -5.0, 5.0)) as insp:
+        meta = insp.inspect("z")
     assert meta.crop_bounds == (-5.0, 5.0, -5.0, 5.0)
 
 
@@ -227,29 +227,29 @@ def test_crop_bounds_outside_extent_raises(topo_file_factory, crop_bounds,
     """
     path = topo_file_factory(lon_min=-10.0, lon_max=10.0,
                              lat_min=-10.0, lat_max=10.0)
-    with NetCDFInterrogator(path, crop_bounds=crop_bounds) as intr:
+    with NetCDFInspector(path, crop_bounds=crop_bounds) as insp:
         with pytest.raises(ValueError):
-            intr.interrogate("z")
+            insp.inspect("z")
 
 
 # ============================================================
-# Laziness: no data arrays loaded during interrogation
+# Laziness: no data arrays loaded during inspection
 # ============================================================
 
-def test_variables_remain_lazy_after_interrogation(topo_file_factory):
+def test_variables_remain_lazy_after_inspection(topo_file_factory):
     """
-    Opening the interrogator with chunks={} keeps variables as Dask arrays.
-    interrogate() must not trigger a full data load.
+    Opening the inspector with chunks={} keeps variables as Dask arrays.
+    inspect() must not trigger a full data load.
     """
     pytest.importorskip("dask")
     import dask.array as da
 
     path = topo_file_factory()
-    with NetCDFInterrogator(path) as intr:
-        intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        insp.inspect("z")
         # The raw data backing the variable should still be a dask array
-        assert isinstance(intr.ds["z"].data, da.Array), (
-            "Variable 'z' should remain a Dask array after interrogation "
+        assert isinstance(insp.ds["z"].data, da.Array), (
+            "Variable 'z' should remain a Dask array after inspection "
             "(no full .compute() should have been triggered)"
         )
 
@@ -258,20 +258,20 @@ def test_variables_remain_lazy_after_interrogation(topo_file_factory):
 # Return type
 # ============================================================
 
-def test_interrogate_returns_file_metadata(topo_file_factory):
-    """interrogate() returns a FileMetadata instance."""
+def test_inspect_returns_file_metadata(topo_file_factory):
+    """inspect() returns a FileMetadata instance."""
     path = topo_file_factory()
-    with NetCDFInterrogator(path) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        meta = insp.inspect("z")
     assert isinstance(meta, FileMetadata)
 
 
-def test_interrogate_missing_variable_raises(topo_file_factory):
-    """interrogate() raises KeyError when the requested variable is absent."""
+def test_inspect_missing_variable_raises(topo_file_factory):
+    """inspect() raises KeyError when the requested variable is absent."""
     path = topo_file_factory()
-    with NetCDFInterrogator(path) as intr:
+    with NetCDFInspector(path) as insp:
         with pytest.raises(KeyError, match="not_a_var"):
-            intr.interrogate("not_a_var")
+            insp.inspect("not_a_var")
 
 
 # ============================================================
@@ -281,12 +281,12 @@ def test_interrogate_missing_variable_raises(topo_file_factory):
 @pytest.mark.parametrize("coord_kwargs", COORD_VARIANTS)
 def test_coord_variants_smoke(topo_file_factory, coord_kwargs):
     """
-    interrogate() completes without error for every coord variant and
+    inspect() completes without error for every coord variant and
     reports the expected convention and order.
     """
     path = topo_file_factory(**coord_kwargs)
-    with NetCDFInterrogator(path) as intr:
-        meta = intr.interrogate("z")
+    with NetCDFInspector(path) as insp:
+        meta = insp.inspect("z")
 
     lon_max = coord_kwargs["lon_max"]
     lat_dir = coord_kwargs["lat_direction"]

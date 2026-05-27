@@ -43,7 +43,7 @@ def make_topo_dataset(
     lon_max > 180 gives a [0, 360] convention file.
     lat_direction='N_to_S' gives decreasing latitude values.
     has_fill_in_data=True puts a NaN in the data array so
-    fill-in-crop tests can verify the interrogator rejects the file.
+    fill-in-crop tests can verify the inspector rejects the file.
     """
     lons = np.linspace(lon_min, lon_max, nlon)
     lats = (
@@ -228,7 +228,7 @@ FILL_VALUE_VARIANTS: list = [
         id="both-agree",
     ),
     pytest.param(
-        # Conflicting: _FillValue wins (CF precedence); no warning from interrogator.
+        # Conflicting: _FillValue wins (CF precedence); no warning from inspector.
         {"fill_value": -9999.0, "missing_value": -8888.0, "expected": -9999.0},
         id="both-conflict-no-warn",
     ),
@@ -251,7 +251,7 @@ WIND_UNIT_VARIANTS: list = [
     pytest.param({"wind_units": "knots", "expected_source": "knots"}, id="knots"),
 ]
 
-#: CF standard_name values recognised by TopoInterrogator._find_topo_var_name,
+#: CF standard_name values recognised by TopoInspector._find_topo_var_name,
 #: in priority order.
 TOPO_CF_STANDARD_NAME_VARIANTS: list = [
     pytest.param("surface_altitude",                  id="surface_altitude"),
@@ -264,7 +264,7 @@ TOPO_CF_STANDARD_NAME_VARIANTS: list = [
 ]
 
 #: Variable names in the fallback list recognised by
-#: TopoInterrogator._find_topo_var_name.
+#: TopoInspector._find_topo_var_name.
 TOPO_FALLBACK_NAME_VARIANTS: list = [
     pytest.param("z",           id="z"),
     pytest.param("Z",           id="Z"),

@@ -1,5 +1,5 @@
 """
-Tests for TopoInterrogator.
+Tests for TopoInspector.
 
 Covers: fill-in-crop detection, fill-outside-crop pass, unit verification,
 unit-conversion warn path, missing units warn path, descriptor key presence,
@@ -9,7 +9,7 @@ import warnings
 
 import pytest
 
-from clawpack.geoclaw.netcdf_utils import TopoInterrogator, TopoMetadata
+from clawpack.geoclaw.netcdf_utils import TopoInspector, TopoMetadata
 
 from ._helpers import (
     make_topo_dataset,
@@ -28,7 +28,7 @@ pytestmark = [pytest.mark.python, pytest.mark.netcdf]
 
 def test_fill_in_crop_region_raises(topo_file_factory):
     """
-    TopoInterrogator raises ValueError when NaN is present within the
+    TopoInspector raises ValueError when NaN is present within the
     crop region.  Silent NaN in bathymetry would corrupt simulations.
     """
     path = topo_file_factory(
@@ -36,16 +36,16 @@ def test_fill_in_crop_region_raises(topo_file_factory):
         lat_min=-10.0, lat_max=10.0,
         has_fill_in_data=True,  # NaN placed at data.flat[0]
     )
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-10.0, 10.0, -10.0, 10.0))
     with pytest.raises(ValueError, match="[Ff]ill"):
-        intr.interrogate_topo()
-    intr.close()
+        insp.inspect_topo()
+    insp.close()
 
 
 def test_fill_outside_crop_region_passes(topo_file_factory):
     """
-    TopoInterrogator passes when NaN exists only outside the crop region.
+    TopoInspector passes when NaN exists only outside the crop region.
     """
     # The dataset has NaN at data.flat[0] which corresponds to the corner
     # of the full grid.  We crop to the interior so the NaN is outside.
@@ -58,18 +58,18 @@ def test_fill_outside_crop_region_passes(topo_file_factory):
     )
     # The NaN is at the south-west corner; crop to the north-east interior.
     path = topo_file_factory(ds=ds)
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(5.0, 10.0, 5.0, 10.0))
-    meta = intr.interrogate_topo()   # must not raise
-    intr.close()
+    meta = insp.inspect_topo()   # must not raise
+    insp.close()
     assert isinstance(meta, TopoMetadata)
 
 
 def test_no_fill_no_crop_passes(topo_file_factory):
-    """TopoInterrogator passes when there are no NaN values at all."""
+    """TopoInspector passes when there are no NaN values at all."""
     path = topo_file_factory(has_fill_in_data=False)
-    with TopoInterrogator(path, var_name="z") as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path, var_name="z") as insp:
+        meta = insp.inspect_topo()
     assert isinstance(meta, TopoMetadata)
 
 
@@ -85,8 +85,8 @@ def test_units_meters_passes_without_warning(topo_file_factory):
     path = topo_file_factory(units="m")
     with warnings.catch_warnings():
         warnings.simplefilter("error")   # any warning is a test failure
-        with TopoInterrogator(path, var_name="z") as intr:
-            meta = intr.interrogate_topo()
+        with TopoInspector(path, var_name="z") as insp:
+            meta = insp.inspect_topo()
     assert meta.source_units in {"m", "meter", "meters", "metre", "metres"}
 
 
@@ -98,8 +98,8 @@ def test_units_convertible_warns_and_records_source(topo_file_factory):
     """
     path = topo_file_factory(units="cm")
     with pytest.warns(UserWarning, match="cm"):
-        with TopoInterrogator(path, var_name="z") as intr:
-            meta = intr.interrogate_topo()
+        with TopoInspector(path, var_name="z") as insp:
+            meta = insp.inspect_topo()
     assert meta.source_units == "cm", (
         f"Expected source_units='cm', got {meta.source_units!r}"
     )
@@ -110,20 +110,20 @@ def test_units_unrecognised_raises(topo_file_factory):
     A variable with units not in the known conversion table raises ValueError.
     """
     path = topo_file_factory(units="furlongs")
-    with TopoInterrogator(path, var_name="z") as intr:
+    with TopoInspector(path, var_name="z") as insp:
         with pytest.raises(ValueError, match="[Uu]nrecogni"):
-            intr.interrogate_topo()
+            insp.inspect_topo()
 
 
 def test_units_missing_warns_and_assumes_meters(topo_file_factory):
     """
     A variable with no units attribute emits a UserWarning and assumes 'm'.
-    The interrogation itself must not raise.
+    The inspection itself must not raise.
     """
     path = topo_file_factory(units="")   # empty string → no 'units' attr written
     with pytest.warns(UserWarning):
-        with TopoInterrogator(path, var_name="z") as intr:
-            meta = intr.interrogate_topo()
+        with TopoInspector(path, var_name="z") as insp:
+            meta = insp.inspect_topo()
     assert meta.source_units == "m", (
         f"Expected assumed source_units='m', got {meta.source_units!r}"
     )
@@ -133,29 +133,29 @@ def test_units_missing_warns_and_assumes_meters(topo_file_factory):
 # Descriptor output keys
 # ============================================================
 
-def test_interrogate_topo_returns_topo_metadata(topo_file_factory):
-    """interrogate_topo() returns a TopoMetadata instance."""
+def test_inspect_topo_returns_topo_metadata(topo_file_factory):
+    """inspect_topo() returns a TopoMetadata instance."""
     path = topo_file_factory()
-    with TopoInterrogator(path, var_name="z") as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path, var_name="z") as insp:
+        meta = insp.inspect_topo()
     assert isinstance(meta, TopoMetadata)
 
 
 def test_topo_metadata_required_fields_present(topo_file_factory):
     """
     TopoMetadata contains all required fields with valid values after
-    interrogation of a well-formed file.
+    inspection of a well-formed file.
     """
     path = topo_file_factory(
         lon_min=-10.0, lon_max=10.0,
         lat_min=-10.0, lat_max=10.0,
         units="m",
     )
-    # crop_bounds is passed to TopoInterrogator, not to the dataset factory.
-    intr = TopoInterrogator(path, var_name="z",
+    # crop_bounds is passed to TopoInspector, not to the dataset factory.
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-5.0, 5.0, -5.0, 5.0))
-    meta = intr.interrogate_topo()
-    intr.close()
+    meta = insp.inspect_topo()
+    insp.close()
 
     assert meta.var_name == "z"
     assert meta.lon_name is not None and len(meta.lon_name) > 0
@@ -171,8 +171,8 @@ def test_topo_metadata_required_fields_present(topo_file_factory):
 def test_topo_metadata_crop_bounds_none_when_not_specified(topo_file_factory):
     """When no crop_bounds are given, TopoMetadata.crop_bounds is None."""
     path = topo_file_factory()
-    with TopoInterrogator(path, var_name="z") as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path, var_name="z") as insp:
+        meta = insp.inspect_topo()
     assert meta.crop_bounds is None
 
 
@@ -183,12 +183,12 @@ def test_topo_metadata_crop_bounds_none_when_not_specified(topo_file_factory):
 @pytest.mark.parametrize("coord_kwargs", COORD_VARIANTS)
 def test_coord_variants(topo_file_factory, coord_kwargs):
     """
-    interrogate_topo() completes without error for every coordinate variant
+    inspect_topo() completes without error for every coordinate variant
     and reports consistent lon_convention / lat_order values.
     """
     path = topo_file_factory(**coord_kwargs)
-    with TopoInterrogator(path, var_name="z") as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path, var_name="z") as insp:
+        meta = insp.inspect_topo()
 
     expected_conv = 360 if coord_kwargs["lon_max"] > 180 else 180
     assert meta.lon_convention == expected_conv
@@ -198,12 +198,12 @@ def test_coord_variants(topo_file_factory, coord_kwargs):
 @pytest.mark.parametrize("dim_kwargs", TOPO_DIM_ORDER_VARIANTS)
 def test_dim_order_variants(topo_file_factory, dim_kwargs):
     """
-    interrogate_topo() reports the correct dim_order regardless of how
+    inspect_topo() reports the correct dim_order regardless of how
     the variable axes are arranged in the file.
     """
     path = topo_file_factory(**dim_kwargs)
-    with TopoInterrogator(path, var_name="z") as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path, var_name="z") as insp:
+        meta = insp.inspect_topo()
     assert meta.dim_order == list(dim_kwargs["dim_order"])
 
 
@@ -214,14 +214,14 @@ def test_dim_order_variants(topo_file_factory, dim_kwargs):
 @pytest.mark.parametrize("std_name", TOPO_CF_STANDARD_NAME_VARIANTS)
 def test_autodetect_by_cf_standard_name(topo_file_factory, std_name):
     """
-    When var_name is omitted, TopoInterrogator finds the elevation variable
+    When var_name is omitted, TopoInspector finds the elevation variable
     by matching the CF standard_name attribute.  The matched name is written
     back into the returned metadata.
     """
     ds = make_topo_dataset(var_name="topo_data", var_standard_name=std_name)
     path = topo_file_factory(ds=ds)
-    with TopoInterrogator(path) as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path) as insp:
+        meta = insp.inspect_topo()
     assert isinstance(meta, TopoMetadata)
     assert meta.var_name == "topo_data"
 
@@ -229,12 +229,12 @@ def test_autodetect_by_cf_standard_name(topo_file_factory, std_name):
 @pytest.mark.parametrize("var_name", TOPO_FALLBACK_NAME_VARIANTS)
 def test_autodetect_by_fallback_name(topo_file_factory, var_name):
     """
-    When var_name is omitted, TopoInterrogator falls back to matching the
+    When var_name is omitted, TopoInspector falls back to matching the
     variable name against the built-in list of common elevation names.
     """
     path = topo_file_factory(var_name=var_name)
-    with TopoInterrogator(path) as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path) as insp:
+        meta = insp.inspect_topo()
     assert isinstance(meta, TopoMetadata)
     assert meta.var_name == var_name
 
@@ -242,13 +242,13 @@ def test_autodetect_by_fallback_name(topo_file_factory, var_name):
 def test_autodetect_no_match_raises(topo_file_factory):
     """
     When var_name is omitted and no variable name or CF standard_name matches
-    any known elevation identifier, interrogate_topo() raises ValueError with
+    any known elevation identifier, inspect_topo() raises ValueError with
     a message that mentions auto-detect and lists available variables.
     """
     path = topo_file_factory(var_name="completely_unknown_field")
-    with TopoInterrogator(path) as intr:
+    with TopoInspector(path) as insp:
         with pytest.raises(ValueError, match="auto-detect"):
-            intr.interrogate_topo()
+            insp.inspect_topo()
 
 
 # ============================================================
@@ -262,10 +262,10 @@ def test_topo_entries_no_wrap(topo_file_factory):
     """
     path = topo_file_factory(lon_min=-180.0, lon_max=180.0,
                               lat_min=-45.0, lat_max=45.0)
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-90.0, 0.0, -45.0, 45.0))
-    entries = intr.topo_entries()
-    intr.close()
+    entries = insp.topo_entries()
+    insp.close()
 
     assert len(entries) == 1
     ttype, fpath, meta = entries[0]
@@ -285,10 +285,10 @@ def test_topo_entries_simple_shift(topo_file_factory):
     """
     path = topo_file_factory(lon_min=0.0, lon_max=360.0,
                               lat_min=-45.0, lat_max=45.0)
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(0.0, 180.0, -45.0, 45.0))
-    entries = intr.topo_entries()
-    intr.close()
+    entries = insp.topo_entries()
+    insp.close()
 
     assert len(entries) == 1
     assert entries[0][2].lon_offset == pytest.approx(0.0)
@@ -301,10 +301,10 @@ def test_topo_entries_simple_shift_negative(topo_file_factory):
     """
     path = topo_file_factory(lon_min=0.0, lon_max=360.0,
                               lat_min=-45.0, lat_max=45.0)
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-180.0, 0.0, -45.0, 45.0))
-    entries = intr.topo_entries()
-    intr.close()
+    entries = insp.topo_entries()
+    insp.close()
 
     assert 1 <= len(entries) <= 2
     # Total lon coverage across all entries must equal the requested domain width.
@@ -325,10 +325,10 @@ def test_topo_entries_wrap_required(topo_file_factory):
     """
     path = topo_file_factory(lon_min=-180.0, lon_max=180.0,
                               lat_min=-90.0, lat_max=90.0)
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-360.0, 0.0, -90.0, 90.0))
-    entries = intr.topo_entries()
-    intr.close()
+    entries = insp.topo_entries()
+    insp.close()
 
     assert len(entries) == 2
 
@@ -349,11 +349,11 @@ def test_topo_entries_no_coverage(topo_file_factory):
     """
     path = topo_file_factory(lon_min=0.0, lon_max=90.0,
                               lat_min=-45.0, lat_max=45.0)
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-180.0, -90.0, -45.0, 45.0))
     with pytest.raises(ValueError):
-        intr.topo_entries()
-    intr.close()
+        insp.topo_entries()
+    insp.close()
 
 
 def test_topo_entries_near_global_gap(topo_file_factory):
@@ -382,10 +382,10 @@ def test_topo_entries_near_global_gap(topo_file_factory):
     )
     path = topo_file_factory(ds=ds)
 
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-211.0, -99.0, 40.0, 75.0))
-    entries = intr.topo_entries()
-    intr.close()
+    entries = insp.topo_entries()
+    insp.close()
 
     assert len(entries) == 2, (
         f"Expected 2 entries for dateline-straddling crop, got {len(entries)}"
@@ -428,11 +428,11 @@ def test_topo_entries_genuine_gap_still_errors(topo_file_factory):
     )
     path = topo_file_factory(ds=ds)
 
-    intr = TopoInterrogator(path, var_name="z",
+    insp = TopoInspector(path, var_name="z",
                              crop_bounds=(-200.0, -50.0, 40.0, 75.0))
     with pytest.raises(ValueError, match="[Gg]ap"):
-        intr.topo_entries()
-    intr.close()
+        insp.topo_entries()
+    insp.close()
 
 
 def test_autodetect_cf_standard_name_takes_priority(topo_file_factory):
@@ -466,6 +466,6 @@ def test_autodetect_cf_standard_name_takes_priority(topo_file_factory):
         }
     )
     path = topo_file_factory(ds=ds)
-    with TopoInterrogator(path) as intr:
-        meta = intr.interrogate_topo()
+    with TopoInspector(path) as insp:
+        meta = insp.inspect_topo()
     assert meta.var_name == "cf_topo"

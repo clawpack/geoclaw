@@ -160,12 +160,12 @@ def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
     # When crop_bounds (domain coordinates) are given, topo_entries() is used
     # so that the correct lon_offset is computed and written into the descriptor
     # block that Fortran's read_netcdf_descriptor needs.
-    from clawpack.geoclaw.netcdf_utils import TopoInterrogator
-    with TopoInterrogator(output_path, 'elevation', crop_bounds=crop_bounds) as intr:
+    from clawpack.geoclaw.netcdf_utils import TopoInspector
+    with TopoInspector(output_path, 'elevation', crop_bounds=crop_bounds) as insp:
         if crop_bounds is not None:
-            return intr.topo_entries()
+            return insp.topo_entries()
         else:
-            return [[4, output_path, intr.interrogate_topo()]]
+            return [[4, output_path, insp.inspect_topo()]]
 
 CASES = [pytest.param("standard", id="standard"),
          pytest.param("netcdf_topotools", id="netcdf_topotools", marks=pytest.mark.netcdf),
@@ -219,7 +219,7 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
         clawdata = runner.rundata.clawdata
         # lon_360 needs domain crop bounds so topo_entries() can compute the
         # correct lon_offset (-360.0) for the descriptor.  Other variants use
-        # interrogate_topo() (lon_offset=0.0 is correct for [-180,180] files).
+        # inspect_topo() (lon_offset=0.0 is correct for [-180,180] files).
         crop = (clawdata.lower[0], clawdata.upper[0],
                 clawdata.lower[1], clawdata.upper[1]) if variant == "lon_360" else None
         entries = _write_netcdf_variant(topo, variant, nc_path, crop_bounds=crop)

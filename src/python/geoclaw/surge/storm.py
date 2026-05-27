@@ -1336,7 +1336,7 @@ class Storm(object):
                                    "future release."))
 
     def write_data(self, path, dim_mapping=None, var_mapping=None,
-                   met_interrogator=None, verbose=False):
+                   met_inspector=None, verbose=False):
         r"""
          """
         # Only one format right now
@@ -1405,25 +1405,25 @@ class Storm(object):
             elif file_format == 2:
                 # Variable discovery: get_netcdf_names auto-discovers met
                 # roles from standard name lists, then any explicit var_mapping
-                # entries override specific roles.  MetInterrogator then applies
+                # entries override specific roles.  MetInspector then applies
                 # CF-aware coordinate discovery, unit validation, lon-convention
                 # detection, and fill-value resolution.
-                # TODO: consolidate get_netcdf_names with MetInterrogator
+                # TODO: consolidate get_netcdf_names with MetInspector
 
                 if len(self.file_paths) != 1:
                     raise ValueError(f"Expected 1 path for NetCDF format, " +
                                      f"got {len(self.file_paths)}")
 
                 from clawpack.geoclaw.netcdf_utils import (
-                    MetInterrogator, DescriptorWriter)
+                    MetInspector, DescriptorWriter)
 
-                if met_interrogator is None:
+                if met_inspector is None:
                     # Auto-discover met variable names, then apply explicit
                     # overrides from var_mapping.  This lets callers supply
                     # only the non-standard names (e.g. a non-standard pressure
                     # field) while standard wind names are still found
                     # automatically.  dim_mapping is handled automatically by
-                    # MetInterrogator via CF axis/standard_name conventions; it
+                    # MetInspector via CF axis/standard_name conventions; it
                     # is accepted for backwards compatibility but not forwarded.
                     _MET_ROLES = frozenset({'wind_u', 'wind_v', 'pressure'})
                     variable_map = {
@@ -1457,15 +1457,15 @@ class Storm(object):
                             )
                         variable_map.update(var_mapping)
 
-                    with MetInterrogator(self.file_paths[0],
+                    with MetInspector(self.file_paths[0],
                                          variable_map=variable_map,
                                          time_reference=self.time_offset) as mi:
-                        meta = mi.interrogate_met()
+                        meta = mi.inspect_met()
                 else:
-                    meta = met_interrogator.interrogate_met()
+                    meta = met_inspector.inspect_met()
 
                 # Note: storm.window governs the Fortran forcing application
-                # domain (with ramp width); MetInterrogator.crop_bounds is a
+                # domain (with ramp width); MetInspector.crop_bounds is a
                 # read-time spatial subset of the NetCDF file.  These are
                 # conceptually distinct and should remain independent.
                 DescriptorWriter.write_met_descriptor(data_file, meta)

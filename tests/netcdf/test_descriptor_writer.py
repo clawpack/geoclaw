@@ -11,8 +11,8 @@ import pytest
 
 from clawpack.geoclaw.netcdf_utils import (
     DescriptorWriter,
-    TopoInterrogator,
-    MetInterrogator,
+    TopoInspector,
+    MetInspector,
     TopoMetadata,
     MetMetadata,
     MetVariableInfo,
@@ -98,23 +98,23 @@ def _parse_met_descriptor(text: str) -> dict:
 
 
 def _get_topo_meta(topo_file_factory, **kwargs) -> TopoMetadata:
-    """Build a TopoMetadata via interrogation for use in writer tests."""
+    """Build a TopoMetadata via inspection for use in writer tests."""
     import warnings
     path = topo_file_factory(**kwargs)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with TopoInterrogator(path, var_name="z") as intr:
-            return intr.interrogate_topo()
+        with TopoInspector(path, var_name="z") as insp:
+            return insp.inspect_topo()
 
 
 def _get_met_meta(met_file_factory, **kwargs) -> MetMetadata:
-    """Build a MetMetadata via interrogation for use in writer tests."""
+    """Build a MetMetadata via inspection for use in writer tests."""
     import warnings
     path = met_file_factory(**kwargs)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with MetInterrogator(path, variable_map=_VAR_MAP) as intr:
-            return intr.interrogate_met()
+        with MetInspector(path, variable_map=_VAR_MAP) as insp:
+            return insp.inspect_met()
 
 
 # ============================================================
