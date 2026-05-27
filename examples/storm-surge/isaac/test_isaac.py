@@ -290,7 +290,7 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path) -> Path:
         # create_era5_storm_file uses "seconds since 2012-08-29" as the time
         # epoch (see time_epoch_str in test_storm.py).  Convert Unix seconds
         # to seconds relative to that epoch so xarray decodes them correctly
-        # and MetInterrogator computes the right nc_time_offset.
+        # and MetInspector computes the right nc_time_offset.
         time_offset_s = int(
             (time_offset - unix_epoch) / np.timedelta64(1, "s")
         )
@@ -531,8 +531,9 @@ def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save
     ``netcdf_era5``
         CF-1.7 ERA5-style file: dims ``valid_time / latitude / longitude``,
         vars ``u10 / v10 / msl``, lon in [0, 360], lat S-to-N.
-        ERA5 is a common source of met forcing for GeoClaw storm surge
-        simulations.
+        ERA5 (ECMWF Reanalysis v5) is used here as one example of a
+        CF-compliant netCDF met-forcing source; GeoClaw supports any
+        CF-compliant netCDF data with compatible structure.
 
     ``netcdf_nws13``
         OWI NWS13-style file: dims ``time / lat / lon``, vars
