@@ -55,7 +55,8 @@ def create_era5_storm_file(path, pressure_fields=None, u_fields=None,
                            v_fields=None, times=None, lon=None, lat=None):
     """Create an ERA5-style CF-compliant NetCDF met-forcing file.
 
-    ERA5 is a common source of met forcing for GeoClaw storm surge simulations.
+    ERA5 (ECMWF Reanalysis v5) is one example of a CF-compliant netCDF
+    met-forcing source; GeoClaw supports any CF-compliant netCDF data.
     This function produces the variable/dimension schema used by ECMWF ERA5
     reanalysis: dims ``(valid_time, latitude, longitude)``, variables
     ``msl`` (Pa), ``u10`` (m/s), ``v10`` (m/s), lon in [0, 360], lat S-to-N,
@@ -425,7 +426,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
 
     elif file_format == "netcdf_era5":
         # ERA5-style: dims (valid_time, latitude, longitude),
-        # vars (u10, v10, msl).  write_data uses MetInterrogator, which
+        # vars (u10, v10, msl).  write_data uses MetInspector, which
         # discovers "valid_time" via CF axis='T' automatically; dim_mapping
         # is accepted for backwards compatibility but not required.
         pytest.importorskip("netCDF4")
@@ -451,7 +452,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
 
     elif file_format == "netcdf_nws13":
         # NWS13-style: dims (time, lat, lon), vars (uwnd, vwnd, press, mb).
-        # write_data uses MetInterrogator; variable names require an explicit
+        # write_data uses MetInspector; variable names require an explicit
         # var_mapping because "uwnd"/"vwnd"/"press" are not in the default
         # fallback lists used by get_netcdf_names.
         pytest.importorskip("netCDF4")
@@ -515,8 +516,10 @@ def test_netcdf_var_mapping(tmp_path):
 def test_netcdf_var_mapping_era5(tmp_path):
     """Test ERA5-style CF NetCDF dimension and variable name discovery.
 
-    ERA5 is a common source of met forcing for GeoClaw storm surge simulations.
-    This test verifies that ``util.get_netcdf_names`` correctly maps ERA5
+    ERA5 (ECMWF Reanalysis v5) is one example of a CF-compliant netCDF
+    met-forcing source supported by GeoClaw; the same discovery logic applies
+    to any CF-compliant dataset.  This test verifies that
+    ``util.get_netcdf_names`` correctly maps ERA5
     dimension names (``valid_time``, ``latitude``, ``longitude``) and variable
     names (``u10``, ``v10``, ``msl``) to the GeoClaw roles ``t``/``x``/``y``
     and ``wind_u``/``wind_v``/``pressure``.
@@ -527,7 +530,7 @@ def test_netcdf_var_mapping_era5(tmp_path):
     automatically from the default variable fallback lists.
 
     TODO: ``util.get_netcdf_names`` and
-    ``netcdf_utils.NetCDFInterrogator._find_coord_name`` both implement
+    ``netcdf_utils.NetCDFInspector._find_coord_name`` both implement
     dimension/variable discovery (the latter is CF-first via axis/standard_name
     attributes).  These parallel implementations should eventually be unified;
     they are kept separate for now and flagged here for future consolidation.
@@ -572,7 +575,7 @@ def test_netcdf_var_mapping_nws13(tmp_path):
     the default variable fallback lists and require an explicit mapping.
 
     TODO: ``util.get_netcdf_names`` and
-    ``netcdf_utils.MetInterrogator`` (variable unit / role discovery) both
+    ``netcdf_utils.MetInspector`` (variable unit / role discovery) both
     implement variable-name lookup.  These parallel implementations should
     eventually be unified; they are kept separate for now and flagged here for
     future consolidation.
