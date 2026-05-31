@@ -21,8 +21,6 @@ module topo_module
     real(kind=8), allocatable :: dxtopo(:), dytopo(:)
     real(kind=8), allocatable :: topotime(:)
     integer(kind=8), allocatable :: mtopo(:), i0topo(:)
-    logical :: override_topo_order
-
     integer, allocatable :: mxtopo(:), mytopo(:), mtopoorder(:)
     integer, allocatable :: itopotype(:)
     integer, allocatable :: topoID(:),topo0save(:)
@@ -52,6 +50,16 @@ module topo_module
     real(kind=8),      allocatable :: nc_crop_bounds(:,:) ! (4, n): lon0,lon1,lat0,lat1
     logical,           allocatable :: nc_has_fill(:)     ! fill_value was specified
     logical,           allocatable :: nc_has_crop(:)     ! crop_bounds was specified
+
+    ! Per-file preprocessing parameters — read from the 7 new lines in topo.data
+    ! for all topo file types (2, 3, 4, 5). Type-1 files are skipped.
+    real(kind=8), allocatable :: tp_crop_extent(:,:)  ! (4,n): x1,x2,y1,y2; all-zero=no crop
+    integer,      allocatable :: tp_coarsen(:)         ! subsampling factor (1=none)
+    integer,      allocatable :: tp_buffer(:)          ! buffer cells around crop region
+    real(kind=8), allocatable :: tp_align(:,:)         ! (2,n): align offset; all-zero=none
+    real(kind=8), allocatable :: tp_x_shift(:)         ! coordinate registration offset (not applied)
+    real(kind=8), allocatable :: tp_z_shift(:)         ! bulk datum offset
+    logical,      allocatable :: tp_negate_z(:)        ! explicit Z sign flip
 
     ! dtopo variables
     ! Work array
@@ -113,8 +121,7 @@ contains
 
         ! Locals
         integer, parameter :: iunit = 7
-        integer :: i,j,finer_than,rank,irank,jrank,krank,idtopo
-        real(kind=8) :: area_i,area_j
+        integer :: i,j,rank,irank,jrank,krank,idtopo
         real(kind=8) :: area, area_domain, area_maxj, area_tol
         real(kind=8), allocatable :: areatopo(:)
         if (.not.module_setup) then
@@ -140,7 +147,6 @@ contains
             ! Primary topography type, read in topography files specified
             if (test_topography == 0) then
                 read(iunit,*) mtopofiles
-                read(iunit,*) override_topo_order
 
                 if (mtopofiles == 0) then
                     write(GEO_PARM_UNIT,*) '   mtopofiles = 0'
@@ -188,14 +194,55 @@ contains
                 nc_has_fill      = .false.
                 nc_has_crop      = .false.
 
+                allocate(tp_crop_extent(4, mtopofiles), tp_coarsen(mtopofiles))
+                allocate(tp_buffer(mtopofiles), tp_align(2, mtopofiles))
+                allocate(tp_x_shift(mtopofiles), tp_z_shift(mtopofiles))
+                allocate(tp_negate_z(mtopofiles))
+                tp_crop_extent = 0.0d0
+                tp_coarsen     = 1
+                tp_buffer      = 0
+                tp_align       = 0.0d0
+                tp_x_shift     = 0.0d0
+                tp_z_shift     = 0.0d0
+                tp_negate_z    = .false.
+
                 mtopofiles = mtopofiles - num_dtopo  ! decrement after allocates
 
                 do i=1,mtopofiles
                     read(iunit,*) topofname(i)
                     read(iunit,*) itopotype(i)
 
+                    ! Deprecation warning for topo_type=1 (unstructured).
+                    if (abs(itopotype(i)) == 1) then
+                        print *, "WARNING: topo_type=1 is deprecated. Convert to topo_type=2, 3,"
+                        print *, "  or 4 using topotools.Topography. Unstructured type-1 data is"
+                        print *, "  not supported and will produce incorrect results."
+                    end if
+
+                    ! Read the 7 new preprocessing parameter lines present in
+                    ! topo.data for ALL file types (written by TopographyData.write()).
+                    read(iunit,*) tp_crop_extent(1,i), tp_crop_extent(2,i), &
+                                  tp_crop_extent(3,i), tp_crop_extent(4,i)
+                    read(iunit,*) tp_coarsen(i)
+                    read(iunit,*) tp_buffer(i)
+                    read(iunit,*) tp_align(1,i), tp_align(2,i)
+                    read(iunit,*) tp_x_shift(i)
+                    read(iunit,*) tp_z_shift(i)
+                    read(iunit,*) tp_negate_z(i)
+
+                    ! Preprocessing is not supported for topo_type=1.
+                    if (abs(itopotype(i)) == 1 .and. ( &
+                            any(tp_crop_extent(:,i) /= 0.0d0) .or. &
+                            tp_coarsen(i) > 1 .or. &
+                            tp_negate_z(i) .or. &
+                            tp_z_shift(i) /= 0.0d0)) then
+                        print *, "ERROR: preprocessing attributes (crop, coarsen, shift) are not"
+                        print *, "  supported for topo_type=1. Convert to type 2/3/4 first."
+                        stop
+                    end if
+
                     ! For NetCDF files, read the optional key=value descriptor
-                    ! block that follows the topo_type line.
+                    ! block that follows the preprocessing lines.
                     if (abs(itopotype(i)) == 4) then
                         call read_netcdf_descriptor(iunit, i)
                     end if
@@ -203,10 +250,6 @@ contains
                     write(GEO_PARM_UNIT,*) '   '
                     write(GEO_PARM_UNIT,*) '   ',topofname(i)
                     write(GEO_PARM_UNIT,*) '  itopotype = ', itopotype(i)
-                    if (abs(itopotype(i)) == 1) then
-                        print *, 'converting to topotype > 1 might reduce file size'
-                        print *, 'python tools for converting files are provided'
-                    endif
                     call read_topo_header(topofname(i),itopotype(i),mxtopo(i), &
                         mytopo(i),xlowtopo(i),ylowtopo(i),xhitopo(i),yhitopo(i), &
                         dxtopo(i),dytopo(i), i)
@@ -271,50 +314,22 @@ contains
                     enddo
                 enddo
 
-                ! topography order...
-                ! This determines which order to process topography when
-                ! computing the cell-averaged value for each grid cell.
+                ! Topography priority order.
+                ! mtopoorder(rank) = i means the i'th topo file has the given rank.
+                ! rank=1 is the finest (highest priority); rank=mtopofiles is coarsest.
+                ! rectintegral/topoarea use mtopoorder coarse-to-fine and finer files
+                ! always overwrite coarser contributions in overlapping regions.
                 !
-                ! The finest topography will be given priority in any region
-                ! mtopoorder(rank) = i means that i'th topography file has rank,
-                ! where the file with rank=1 is the finest and considered first.
-                !
-                ! First order only the original topo, not the topo_for_dtopo
+                ! Convention: first file listed in topo.data = rank 1 = highest priority.
+                ! Python's _compute_priority_order writes the finest file first, so the
+                ! identity assignment mtopoorder(i)=i preserves that ordering without
+                ! any Fortran-side re-sort. dtopo_for_topo files are inserted below.
 
-                area_tol = 1.d-3  ! relative tol for deciding if areas agree
+                area_tol = 1.d-3  ! relative tol used in dtopo insertion below
 
-                if (override_topo_order) then
-                    ! use order that the files were specified directly:
-                    do i=1,mtopofiles
-                        ! first file listed should have lowest priority
-                        mtopoorder(i) = mtopofiles + 1 - i
-                    end do
-                else
-                    ! order by resolution, as determined by areatopo = dx*dy:
-                    do i=1,mtopofiles
-                        finer_than = 0  ! how many others is file i finer than?
-                        do j=1,mtopofiles
-                            if (j /= i) then
-                                area_i = areatopo(i)
-                                area_j = areatopo(j)
-                                if (abs(area_i - area_j) &
-                                        < area_tol*min(area_i,area_j)) then
-                                    ! areas nearly equal, check order in setrun:
-                                    if (j<i) then
-                                        ! file i appears after j in setrun:
-                                        finer_than = finer_than + 1
-                                    endif
-                                else if (area_i < area_j) then
-                                    ! area_i clearly less than area_j:
-                                    finer_than = finer_than + 1
-                                endif
-                            endif
-                        enddo
-                        ! finer_than tells how many other files i is finer than
-                        rank = mtopofiles - finer_than
-                        mtopoorder(rank) = i
-                    enddo
-                end if
+                do i=1,mtopofiles
+                    mtopoorder(i) = i
+                end do
 
                 ! now insert topo_for_dtopo arrays into ordering:
 
@@ -855,6 +870,43 @@ contains
                 topo(i) = -topo(i)
             end forall
         endif
+
+        ! ====================================================================
+        ! Per-file preprocessing: negate_z and z_shift (types 2, 3, 4, 5 only).
+        ! crop/coarsen/buffer/align are applied by Python (Topography.crop())
+        ! before Fortran reads the file; tp_crop_extent etc. are stored for
+        ! informational purposes and are not re-applied here.
+        ! ====================================================================
+        if (present(topo_idx) .and. abs(topo_type) /= 1) then
+
+            ! 1. negate_z: explicit Z sign flip, independent of topo_type sign.
+            if (tp_negate_z(topo_idx)) then
+                topo(1:mtot) = -topo(1:mtot)
+            end if
+
+            ! 2. z_shift: bulk datum adjustment.
+            !    Applied directly to stored topo array.
+            !    Do not apply to fill/missing cells (check against topo_missing).
+            if (tp_z_shift(topo_idx) /= 0.0d0) then
+                do i = 1, mtot
+                    if (abs(topo(i) - topo_missing) > &
+                            1.0d-6 * max(abs(topo_missing), 1.0d0)) then
+                        topo(i) = topo(i) + tp_z_shift(topo_idx)
+                    end if
+                end do
+            end if
+
+            ! 3. x_shift: grid registration offset (cell-center vs. node registration).
+            !    Distinct from lon_offset (domain wrapping). Not yet implemented —
+            !    requires resolving registration convention. See issue [TBD].
+            !    The value is read (tp_x_shift) but no action is taken.
+
+            ! 4. crop/coarsen/buffer/align: handled by Python (Topography.crop()) before
+            !    writing the topo file. Fortran receives the already-preprocessed data.
+            !    tp_crop_extent, tp_coarsen, tp_buffer, tp_align are stored for
+            !    informational purposes only.
+
+        end if
 
         ! ====================================================================
         ! when topo_type=1 and data has x,y,z columns,
