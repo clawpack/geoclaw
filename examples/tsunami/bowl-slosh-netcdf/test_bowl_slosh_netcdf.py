@@ -102,13 +102,41 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
             longitudes[:] = topo_crop.x
             elevations[:] = topo_crop.Z
 
+    elif variant == "coarsened":
+        # Twice the standard resolution, corrupted at every point a coarsen=2
+        # subsample should skip (odd row/column indices); the kept even-even
+        # lattice reproduces the standard grid exactly.  Exercises the strided
+        # NetCDF read path (tp_coarsen for topo_type=4).  The test pins the
+        # kept window to index 0 with a full-extent crop_extent, since the AMR
+        # domain fallback would start the window at an arbitrary parity.
+        x = np.linspace(-3.1, 3.1, 619)
+        y = np.linspace(-3.5, 2.5, 599)
+        X, Y = np.meshgrid(x, y)
+        Z = topo_func(X, Y)
+        corrupt = np.ones(Z.shape, dtype=bool)
+        corrupt[::2, ::2] = False
+        Z[corrupt] -= 0.05
+
+        with netCDF4.Dataset(output_dir / filename, "w") as out:
+            out.createDimension("lat", len(y))
+            out.createDimension("lon", len(x))
+
+            latitudes = out.createVariable("lat", "f8", ("lat",))
+            longitudes = out.createVariable("lon", "f8", ("lon",))
+            elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+
+            latitudes[:] = y
+            longitudes[:] = x
+            elevations[:] = Z
+
     else:
         raise ValueError(f"Unknown variant '{variant}'.")
 
 
 @pytest.mark.regression
 @pytest.mark.netcdf
-@pytest.mark.parametrize("variant", ["standard", "dim_order", "cf_compliant", "cropped"])
+@pytest.mark.parametrize("variant", ["standard", "dim_order", "cf_compliant",
+                                     "cropped", "coarsened"])
 def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str) -> None:
     """
     Parametrized regression test exercising non-standard NetCDF coordinate layouts.
@@ -130,6 +158,10 @@ def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str) -> None:
     cropped      Topography domain is exactly 0.5 degrees larger than the
                  simulation extent on each side (x in [-2.5, 2.5],
                  y in [-3.5, 2.5]); exercises minimal-margin domain coverage.
+    coarsened    Twice the standard resolution with corrupted values at the
+                 points a coarsen=2 subsample must skip; exercises the strided
+                 NetCDF read (tp_coarsen for topo_type=4) with detection power
+                 against a missed or mis-indexed stride.
     """
     pytest.importorskip("netCDF4")
 
@@ -142,6 +174,17 @@ def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str) -> None:
     runner.rundata.clawdata.tfinal = 0.5
     runner.rundata.gaugedata.gauges = []
     runner.rundata.gaugedata.gauges.append([1, 0.5, 0.5, 0.0, 1e10])
+
+    if variant == "coarsened":
+        topo_entry = topotools.Topography()
+        topo_entry.path = "bowl.nc"
+        topo_entry.topo_type = 4
+        topo_entry.coarsen = 2
+        # Full-extent crop pins the kept lattice to file index 0 (see the
+        # variant writer); the subsample then lands on the standard grid.
+        topo_entry.crop_extent = [-3.1, 3.1, -3.5, 2.5]
+        runner.rundata.topo_data.topofiles = [topo_entry]
+
     runner.write_data()
 
     runner.build_executable()
