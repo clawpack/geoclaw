@@ -53,13 +53,18 @@ module topo_module
 
     ! Per-file preprocessing parameters — read from the 7 new lines in topo.data
     ! for all topo file types (2, 3, 4, 5). Type-1 files are skipped.
-    real(kind=8), allocatable :: tp_crop_extent(:,:)  ! (4,n): x1,x2,y1,y2; all-zero=no crop
+    real(kind=8), allocatable :: tp_crop_extent(:,:)  ! (4,n): x1,x2,y1,y2 domain coords; all-zero=no crop
     integer,      allocatable :: tp_coarsen(:)         ! subsampling factor (1=none)
-    integer,      allocatable :: tp_buffer(:)          ! buffer cells around crop region
+    integer,      allocatable :: tp_buffer(:)          ! buffer cells (grid points) around crop region
     real(kind=8), allocatable :: tp_align(:,:)         ! (2,n): align offset; all-zero=none
-    real(kind=8), allocatable :: tp_x_shift(:)         ! coordinate registration offset (not applied)
+    real(kind=8), allocatable :: tp_x_shift(:)         ! coordinate registration offset
     real(kind=8), allocatable :: tp_z_shift(:)         ! bulk datum offset
     logical,      allocatable :: tp_negate_z(:)        ! explicit Z sign flip
+
+    ! Full (un-cropped) file extents for types 2/3 — saved before crop is applied
+    ! so that read_topo_file can compute the row/column offset into the file.
+    integer,      allocatable :: mxtopo_full(:), mytopo_full(:)
+    real(kind=8), allocatable :: xlowtopo_full(:), ylowtopo_full(:)
 
     ! dtopo variables
     ! Work array
@@ -124,6 +129,9 @@ contains
         integer :: i,j,rank,irank,jrank,krank,idtopo
         real(kind=8) :: area, area_domain, area_maxj, area_tol
         real(kind=8), allocatable :: areatopo(:)
+        ! Crop index locals (types 2/3 only)
+        integer :: i_start, i_end, j_start, j_end
+        real(kind=8) :: x1_c, x2_c, y1_c, y2_c
         if (.not.module_setup) then
 
             ! Open and begin parameter file output
@@ -206,6 +214,13 @@ contains
                 tp_z_shift     = 0.0d0
                 tp_negate_z    = .false.
 
+                allocate(mxtopo_full(mtopofiles), mytopo_full(mtopofiles))
+                allocate(xlowtopo_full(mtopofiles), ylowtopo_full(mtopofiles))
+                mxtopo_full  = 0
+                mytopo_full  = 0
+                xlowtopo_full = 0.0d0
+                ylowtopo_full = 0.0d0
+
                 mtopofiles = mtopofiles - num_dtopo  ! decrement after allocates
 
                 do i=1,mtopofiles
@@ -235,10 +250,11 @@ contains
                             any(tp_crop_extent(:,i) /= 0.0d0) .or. &
                             tp_coarsen(i) > 1 .or. &
                             tp_negate_z(i) .or. &
+                            tp_x_shift(i) /= 0.0d0 .or. &
                             tp_z_shift(i) /= 0.0d0)) then
                         print *, "ERROR: preprocessing attributes (crop, coarsen, shift) are not"
                         print *, "  supported for topo_type=1. Convert to type 2/3/4 first."
-                        stop
+                        stop 1
                     end if
 
                     ! For NetCDF files, read the optional key=value descriptor
@@ -253,6 +269,63 @@ contains
                     call read_topo_header(topofname(i),itopotype(i),mxtopo(i), &
                         mytopo(i),xlowtopo(i),ylowtopo(i),xhitopo(i),yhitopo(i), &
                         dxtopo(i),dytopo(i), i)
+
+                    ! For types 2/3: save the full (un-cropped) file extents so
+                    ! read_topo_file can compute the row/column offset.  For type 4
+                    ! the crop is handled inside read_topo_header via xstart/ystart,
+                    ! so no full-extent save is needed.
+                    if (abs(itopotype(i)) == 2 .or. abs(itopotype(i)) == 3) then
+                        mxtopo_full(i)   = mxtopo(i)
+                        mytopo_full(i)   = mytopo(i)
+                        xlowtopo_full(i) = xlowtopo(i)
+                        ylowtopo_full(i) = ylowtopo(i)
+
+                        ! Apply tp_crop_extent + tp_buffer to reduce the reported
+                        ! extents.  tp_crop_extent is in domain coordinates; subtract
+                        ! tp_x_shift to get file coordinates for the comparison (the
+                        ! header values returned by read_topo_header are in file coords
+                        ! at this point, before tp_x_shift is applied below).
+                        if (any(tp_crop_extent(:,i) /= 0.0d0)) then
+                            x1_c = tp_crop_extent(1,i) - tp_x_shift(i) &
+                                   - real(tp_buffer(i),8)*dxtopo(i)
+                            x2_c = tp_crop_extent(2,i) - tp_x_shift(i) &
+                                   + real(tp_buffer(i),8)*dxtopo(i)
+                            y1_c = tp_crop_extent(3,i) &
+                                   - real(tp_buffer(i),8)*dytopo(i)
+                            y2_c = tp_crop_extent(4,i) &
+                                   + real(tp_buffer(i),8)*dytopo(i)
+                            ! Snap to grid (0-based indices from file lower-left)
+                            i_start = max(0, nint((x1_c - xlowtopo(i)) / dxtopo(i)))
+                            i_end   = min(mxtopo(i)-1, nint((x2_c - xlowtopo(i)) / dxtopo(i)))
+                            j_start = max(0, nint((y1_c - ylowtopo(i)) / dytopo(i)))
+                            j_end   = min(mytopo(i)-1, nint((y2_c - ylowtopo(i)) / dytopo(i)))
+                            if (i_start > i_end .or. j_start > j_end) then
+                                print *, "ERROR: tp_crop_extent does not overlap topo file:"
+                                print *, "  file = ", trim(topofname(i))
+                                print *, "  crop = ", tp_crop_extent(:,i)
+                                stop 1
+                            end if
+                            ! Update extents to cropped region (still file coords)
+                            xlowtopo(i) = xlowtopo(i) + real(i_start,8)*dxtopo(i)
+                            xhitopo(i)  = xlowtopo(i) + real(i_end-i_start,8)*dxtopo(i)
+                            ylowtopo(i) = ylowtopo(i) + real(j_start,8)*dytopo(i)
+                            yhitopo(i)  = ylowtopo(i) + real(j_end-j_start,8)*dytopo(i)
+                            mxtopo(i) = i_end - i_start + 1
+                            mytopo(i) = j_end - j_start + 1
+                        end if
+                    end if
+
+                    ! Apply tp_x_shift to the stored domain extents so that all
+                    ! coordinate comparisons (topoarea, rectintegral,
+                    ! set_topo_for_dtopo) use the shifted bounds.  For types 2/3
+                    ! this is the only place x_shift is applied; for type 4 we
+                    ! also shift xlocs inside read_topo_file so the xstart
+                    ! lookup against xlowtopo (= xll) still finds the right index.
+                    if (tp_x_shift(i) /= 0.0d0) then
+                        xlowtopo(i) = xlowtopo(i) + tp_x_shift(i)
+                        xhitopo(i)  = xhitopo(i)  + tp_x_shift(i)
+                    end if
+
                     topoID(i) = i
                     mtopo(i) = int(mxtopo(i), 8) * int(mytopo(i), 8)
                     areatopo(i) = dxtopo(i)*dytopo(i)
@@ -568,6 +641,10 @@ contains
         real(kind=8) :: values(16)
         character(len=80) :: str
         integer(kind=8) :: i, j, mtot
+        ! For types 2/3 crop extraction
+        real(kind=8), allocatable :: topo_full(:)
+        integer :: i_start, j_start_top, mx_full, my_full
+        integer(kind=8) :: mtot_full, icrop, jcrop, i_in_full, j_in_full
 
         ! NetCDF Support
         character(len=64) :: direction, x_dim_name, x_var_name, y_dim_name, &
@@ -621,47 +698,111 @@ contains
             ! ================================================================
             case(2:3)
                 open(unit=iunit, file=fname, status='unknown',form='formatted')
-                ! Read header
+                ! Skip 5-line header; read no_data_value from line 6.
                 do i=1,5
                     read(iunit,*)
                 enddo
-                
                 read(iunit,'(a)') str
                 call parse_values(str, n, values)
                 no_data_value = values(1)
 
-                ! Read in data
                 missing = 0
-                select case(abs(topo_type))
-                    case(2)
-                        do i=1,mtot
-                            read(iunit,*) topo(i)
-                            if (topo(i) == no_data_value) then
-                                missing = missing + 1
-                                topo(i) = topo_missing
-                                ! uncomment next line to print row i
-                                ! write(6,600) i
- 600                            format('*** missing data, i = ',i6)
-                            endif
-                        enddo
-                    case(3)
-                        do j=1,int(my, 8)
-                            read(iunit,*) (topo((j-1)*int(mx, 8) + i),i=1,mx)
-                            do i=1,int(mx, 8)
-                                if (topo((j-1)*int(mx, 8) + i) == no_data_value) then
+
+                if (present(topo_idx) .and. &
+                        any(tp_crop_extent(:,topo_idx) /= 0.0d0)) then
+                    ! ----------------------------------------------------------
+                    ! Crop active: read the full file into a temporary array,
+                    ! then extract the crop sub-region into the output topo.
+                    ! ----------------------------------------------------------
+                    mx_full  = mxtopo_full(topo_idx)
+                    my_full  = mytopo_full(topo_idx)
+                    mtot_full = int(mx_full,8) * int(my_full,8)
+                    allocate(topo_full(mtot_full))
+
+                    select case(abs(topo_type))
+                        case(2)
+                            do i = 1, mtot_full
+                                read(iunit,*) topo_full(i)
+                                if (topo_full(i) == no_data_value) then
                                     missing = missing + 1
-                                    topo((j-1)*int(mx, 8) + i) = topo_missing
-                                    ! uncomment next line to print row j
-                                    ! and element i that are missing.
-                                    ! write(6,601) i,j
- 601                                format('*** missing data, i = ',i6, &
-                                           '  j = ',i6)
+                                    topo_full(i) = topo_missing
+                                end if
+                            end do
+                        case(3)
+                            do j = 1, int(my_full,8)
+                                read(iunit,*) (topo_full((j-1)*int(mx_full,8)+i), &
+                                               i=1,mx_full)
+                                do i = 1, int(mx_full,8)
+                                    if (topo_full((j-1)*int(mx_full,8)+i) &
+                                            == no_data_value) then
+                                        missing = missing + 1
+                                        topo_full((j-1)*int(mx_full,8)+i) = topo_missing
+                                    end if
+                                end do
+                            end do
+                    end select
+
+                    ! Column offset: xlowtopo(topo_idx) includes tp_x_shift;
+                    ! subtract it to get file-coordinate crop lower-left, then
+                    ! find its 1-based column index in the full file.
+                    i_start = nint((xlowtopo(topo_idx) - tp_x_shift(topo_idx) &
+                                    - xlowtopo_full(topo_idx)) / dxtopo(topo_idx)) + 1
+
+                    ! Row offset: file stores N-to-S (row 1 = northernmost).
+                    ! j_start_sn = 0-based row index from south of crop lower-left.
+                    ! j_start_top = 1-based row from top for the northernmost crop row.
+                    j_start_top = my_full &
+                                  - nint((ylowtopo(topo_idx) - ylowtopo_full(topo_idx)) &
+                                         / dytopo(topo_idx)) &
+                                  - my + 1
+
+                    ! Extract the mx×my crop region from topo_full.
+                    do jcrop = 1, int(my, 8)
+                        j_in_full = int(j_start_top,8) + jcrop - 1
+                        do icrop = 1, int(mx, 8)
+                            i_in_full = int(i_start,8) + icrop - 1
+                            topo((jcrop-1)*int(mx,8) + icrop) = &
+                                topo_full((j_in_full-1)*int(mx_full,8) + i_in_full)
+                        end do
+                    end do
+
+                    deallocate(topo_full)
+
+                else
+                    ! ----------------------------------------------------------
+                    ! No crop: read directly into the output topo array.
+                    ! ----------------------------------------------------------
+                    select case(abs(topo_type))
+                        case(2)
+                            do i=1,mtot
+                                read(iunit,*) topo(i)
+                                if (topo(i) == no_data_value) then
+                                    missing = missing + 1
+                                    topo(i) = topo_missing
+                                    ! uncomment next line to print row i
+                                    ! write(6,600) i
+ 600                                format('*** missing data, i = ',i6)
                                 endif
                             enddo
-                        enddo
-                end select
+                        case(3)
+                            do j=1,int(my, 8)
+                                read(iunit,*) (topo((j-1)*int(mx, 8) + i),i=1,mx)
+                                do i=1,int(mx, 8)
+                                    if (topo((j-1)*int(mx, 8) + i) == no_data_value) then
+                                        missing = missing + 1
+                                        topo((j-1)*int(mx, 8) + i) = topo_missing
+                                        ! uncomment next line to print row j
+                                        ! and element i that are missing.
+                                        ! write(6,601) i,j
+ 601                                    format('*** missing data, i = ',i6, &
+                                               '  j = ',i6)
+                                    endif
+                                enddo
+                            enddo
+                    end select
+                end if
 
-                ! Write a warning if we found and missing values
+                ! Write a warning if we found any missing values
                 if (missing > 0)  then
                     write(6,602) missing
  602                format('WARNING... ',i6, &
@@ -718,12 +859,16 @@ contains
                 call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
                     start=(/ 1 /), count=(/ my_tot /)))
 
-                ! Apply lon_offset to convert file coordinates to domain
-                ! coordinates, so xstart matches the domain-coord xll that
-                ! was computed by read_topo_header.
+                ! Apply lon_offset then tp_x_shift to convert file coordinates
+                ! to domain coordinates, so xstart matches the domain-coord xll
+                ! that was computed by read_topo_header (which also has both
+                ! offsets applied via read_topo_settings).
                 if (present(topo_idx)) then
                     if (nc_lon_offset(topo_idx) /= 0.0d0) then
                         xlocs = xlocs + nc_lon_offset(topo_idx)
+                    end if
+                    if (tp_x_shift(topo_idx) /= 0.0d0) then
+                        xlocs = xlocs + tp_x_shift(topo_idx)
                     end if
                 end if
 
@@ -872,10 +1017,9 @@ contains
         endif
 
         ! ====================================================================
-        ! Per-file preprocessing: negate_z and z_shift (types 2, 3, 4, 5 only).
-        ! crop/coarsen/buffer/align are applied by Python (Topography.crop())
-        ! before Fortran reads the file; tp_crop_extent etc. are stored for
-        ! informational purposes and are not re-applied here.
+        ! Per-file preprocessing applied in-memory after reading (types 2,3,4,5).
+        ! Both Python (Topography.read()) and Fortran apply these independently
+        ! so the original file on disk is never modified.
         ! ====================================================================
         if (present(topo_idx) .and. abs(topo_type) /= 1) then
 
@@ -884,9 +1028,7 @@ contains
                 topo(1:mtot) = -topo(1:mtot)
             end if
 
-            ! 2. z_shift: bulk datum adjustment.
-            !    Applied directly to stored topo array.
-            !    Do not apply to fill/missing cells (check against topo_missing).
+            ! 2. z_shift: bulk datum adjustment.  Skip fill/missing cells.
             if (tp_z_shift(topo_idx) /= 0.0d0) then
                 do i = 1, mtot
                     if (abs(topo(i) - topo_missing) > &
@@ -896,15 +1038,13 @@ contains
                 end do
             end if
 
-            ! 3. x_shift: grid registration offset (cell-center vs. node registration).
-            !    Distinct from lon_offset (domain wrapping). Not yet implemented —
-            !    requires resolving registration convention. See issue [TBD].
-            !    The value is read (tp_x_shift) but no action is taken.
+            ! 3. x_shift: applied to xlowtopo/xhitopo in read_topo_settings
+            !    (after read_topo_header) and to xlocs in the type-4 case above.
+            !    No action needed here on the z array.
 
-            ! 4. crop/coarsen/buffer/align: handled by Python (Topography.crop()) before
-            !    writing the topo file. Fortran receives the already-preprocessed data.
-            !    tp_crop_extent, tp_coarsen, tp_buffer, tp_align are stored for
-            !    informational purposes only.
+            ! 4. crop_extent + buffer: applied in read_topo_settings (types 2/3)
+            !    and in read_topo_header (type 4 via x_in_dom/y_in_dom mask).
+            !    coarsen + align: not yet implemented in Fortran.
 
         end if
 
@@ -976,6 +1116,8 @@ contains
         character(len=80) :: str
         logical :: verbose
         logical :: xll_registered, yll_registered
+        ! Crop bounds locals (type 4 tp_crop_extent path)
+        real(kind=8) :: x1_c, x2_c, y1_c, y2_c
 
         ! NetCDF Support
         integer(kind=4) :: nc_file
@@ -1169,16 +1311,31 @@ contains
 
                 ! ----------------------------------------------------------------
                 ! Select the subset of the file to load.
-                ! Descriptor path: use explicit crop_bounds (in FILE coordinates).
-                ! Fallback: clip to the AMR domain (with ghost-cell buffer).
+                ! Priority: nc_crop_bounds (file coords) > tp_crop_extent (domain
+                ! coords, converted to file coords) > AMR domain fallback.
                 ! ----------------------------------------------------------------
                 if (present(topo_idx) .and. nc_has_crop(topo_idx)) then
-                    ! crop_bounds are in FILE coordinates; compare against
+                    ! nc_crop_bounds are in FILE coordinates; compare against
                     ! file-coord xlocs before applying lon_offset.
                     x_in_dom = (xlocs >= nc_crop_bounds(1, topo_idx)) .and. &
                                (xlocs <= nc_crop_bounds(2, topo_idx))
                     y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
                                (ylocs <= nc_crop_bounds(4, topo_idx))
+                else if (present(topo_idx) .and. &
+                         any(tp_crop_extent(:,topo_idx) /= 0.0d0)) then
+                    ! tp_crop_extent is in domain coordinates (after nc_lon_offset
+                    ! and tp_x_shift).  Convert to file coordinates for comparison
+                    ! against raw xlocs (which have neither offset applied yet).
+                    x1_c = tp_crop_extent(1,topo_idx) - nc_lon_offset(topo_idx) &
+                           - tp_x_shift(topo_idx) &
+                           - real(tp_buffer(topo_idx),8)*dx
+                    x2_c = tp_crop_extent(2,topo_idx) - nc_lon_offset(topo_idx) &
+                           - tp_x_shift(topo_idx) &
+                           + real(tp_buffer(topo_idx),8)*dx
+                    y1_c = tp_crop_extent(3,topo_idx) - real(tp_buffer(topo_idx),8)*dy
+                    y2_c = tp_crop_extent(4,topo_idx) + real(tp_buffer(topo_idx),8)*dy
+                    x_in_dom = (xlocs >= x1_c) .and. (xlocs <= x2_c)
+                    y_in_dom = (ylocs >= y1_c) .and. (ylocs <= y2_c)
                 else
                     x_in_dom = (xlocs > (xlower - dx - hxposs(1)*nghost)) .and. &
                                (xlocs < (xupper + dx + hxposs(1)*nghost))
