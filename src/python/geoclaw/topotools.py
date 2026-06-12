@@ -910,13 +910,15 @@ class Topography(object):
                                   region_index[0]:region_index[1]]
 
             # ---------------------------------------------------------------
-            # Apply preprocessing attributes.
-            # Order confirmed from topo_module.f90 read_topo_file:
-            #   1. negate_z  (mirrors Fortran negative-topo_type convention)
-            #   2. z_shift   (global elevation offset; no Fortran equivalent)
-            #   3. x_shift   (longitude offset; no Fortran equivalent)
-            #   4+5. crop + coarsen via self.crop() (no Fortran equivalent;
-            #        Fortran clips at setaux time using AMR domain bounds)
+            # Apply preprocessing attributes in-memory (original file unchanged).
+            # Fortran applies the same attributes independently in read_topo_file
+            # and read_topo_settings so neither side needs to write a modified copy.
+            # Order:
+            #   1. negate_z
+            #   2. z_shift   (guard fill cells)
+            #   3. x_shift   (shift x array; Fortran shifts xlowtopo/xhitopo)
+            #   4+5. crop + coarsen via self.crop() (Fortran: crop+buffer done,
+            #        coarsen not yet implemented)
             # Steps are skipped when the attribute equals its default value.
             # ---------------------------------------------------------------
             if self.negate_z:
