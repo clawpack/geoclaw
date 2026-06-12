@@ -1,7 +1,8 @@
 """Pytest regression tests for Fortran-side topography preprocessing.
 
 These exercise the per-file preprocessing attributes (``z_shift``,
-``negate_z``, ``x_shift``, ``crop_extent``, ``buffer``) end-to-end through
+``negate_z``, ``x_shift``, ``crop_extent``, ``buffer``, ``coarsen``,
+``align``) end-to-end through
 the real GeoClaw executable: each variant writes topo file(s) whose stored
 data has the *inverse* transformation baked in, so the preprocessing applied
 by Fortran at read time must reconstruct the same physical bowl bathymetry
@@ -21,6 +22,9 @@ produces *physically different* bathymetry near the gauge, not just a no-op:
   crop boundary and a second file supplies the correct data there.  If the
   crop (or its buffer arithmetic) is not applied, the corrupted or uncovered
   region reaches the gauge.
+- ``coarsen`` / ``coarsen_align``: the fine file is corrupted at every point
+  the subsampling should skip, so a missed or mis-indexed stride keeps
+  corrupted points.
 
 The initial condition (``qinit.f90``) sets ``h = max(0, eta - b)`` directly
 from the topo aux array, so bathymetry errors are immediately visible in the
@@ -80,6 +84,25 @@ def _write_topo_file(path, zfunc=_bowl, x=None, y=None, topo_type=2):
     topo.x = np.linspace(-2.0, 2.0, 201) if x is None else x
     topo.y = np.linspace(-2.0, 2.0, 201) if y is None else y
     topo.write(path, topo_type=topo_type, Z_format="%22.15e")
+
+
+def _write_fine_corrupt_file(path, x, y):
+    """Write a fine-resolution bowl corrupted off the even-even lattice.
+
+    Points whose row or column index is odd are 0.05 too deep; subsampling
+    with coarsen=2 from an even start index keeps only correct points, while
+    any indexing error lands on corrupted ones.
+    """
+    X, Y = np.meshgrid(x, y)
+    Z = _bowl(X, Y)
+    corrupt = np.ones(Z.shape, dtype=bool)
+    corrupt[::2, ::2] = False
+    Z[corrupt] -= 0.05
+    topo = topotools.Topography()
+    topo.x = x
+    topo.y = y
+    topo.Z = Z
+    topo.write(path, topo_type=3, Z_format="%22.15e")
 
 
 def _topo_entry(path, topo_type=2, **attrs):
@@ -176,6 +199,33 @@ def _setup_crop_buffer(temp_path):
             None)
 
 
+def _setup_coarsen(temp_path):
+    # File at twice the baseline resolution, corrupted off the even-even
+    # lattice; coarsen=2 keeps exactly the baseline grid points.  If the
+    # subsampling is skipped or mis-indexed, corrupted points reach the
+    # gauge.  (Written as topo_type=3 to exercise the row-format path.)
+    _write_fine_corrupt_file(temp_path / "fine.topotype3",
+                             x=np.linspace(-2.0, 2.0, 401),
+                             y=np.linspace(-2.0, 2.0, 401))
+    return [_topo_entry("fine.topotype3", topo_type=3, coarsen=2)], None
+
+
+def _setup_coarsen_align(temp_path):
+    # Fine grid registered so that the naive subsample start lands on a
+    # corrupted (odd-index) point: the crop lower edge (-2.015) selects
+    # x = -2.01 (index 1) as the first in-window point, and align=(0.5, 0.5)
+    # must shift the start to x = -2.00 (index 2, even lattice), recovering
+    # exactly the baseline grid.  If align is ignored, the kept lattice is
+    # entirely corrupted.
+    _write_fine_corrupt_file(temp_path / "fine.topotype3",
+                             x=np.linspace(-2.02, 2.0, 403),
+                             y=np.linspace(-2.02, 2.0, 403))
+    return ([_topo_entry("fine.topotype3", topo_type=3, coarsen=2,
+                         crop_extent=[-2.015, 2.0, -2.015, 2.0],
+                         align=(0.5, 0.5))],
+            None)
+
+
 def _setup_priority(temp_path):
     # Two same-resolution files covering the same extent.  The first-listed
     # file must win in the overlap (identity mtopoorder; the Python priority
@@ -195,6 +245,8 @@ _VARIANTS = {
     "x_shift": _setup_x_shift,
     "crop": _setup_crop,
     "crop_buffer": _setup_crop_buffer,
+    "coarsen": _setup_coarsen,
+    "coarsen_align": _setup_coarsen_align,
     "priority": _setup_priority,
 }
 

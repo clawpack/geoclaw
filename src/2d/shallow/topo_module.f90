@@ -61,10 +61,12 @@ module topo_module
     real(kind=8), allocatable :: tp_z_shift(:)         ! bulk datum offset
     logical,      allocatable :: tp_negate_z(:)        ! explicit Z sign flip
 
-    ! Full (un-cropped) file extents for types 2/3 — saved before crop is applied
-    ! so that read_topo_file can compute the row/column offset into the file.
+    ! Full (un-cropped) file sizes and kept-window start indices for types 2/3,
+    ! saved by read_topo_settings so read_topo_file can extract the kept
+    ! (cropped/coarsened) lattice: 0-based indices from the file's south-west
+    ! corner; kept points are tp_i_start + k*tp_coarsen, k = 0..mxtopo-1.
     integer,      allocatable :: mxtopo_full(:), mytopo_full(:)
-    real(kind=8), allocatable :: xlowtopo_full(:), ylowtopo_full(:)
+    integer,      allocatable :: tp_i_start(:), tp_j_start(:)
 
     ! dtopo variables
     ! Work array
@@ -215,11 +217,11 @@ contains
                 tp_negate_z    = .false.
 
                 allocate(mxtopo_full(mtopofiles), mytopo_full(mtopofiles))
-                allocate(xlowtopo_full(mtopofiles), ylowtopo_full(mtopofiles))
-                mxtopo_full  = 0
-                mytopo_full  = 0
-                xlowtopo_full = 0.0d0
-                ylowtopo_full = 0.0d0
+                allocate(tp_i_start(mtopofiles), tp_j_start(mtopofiles))
+                mxtopo_full = 0
+                mytopo_full = 0
+                tp_i_start  = 0
+                tp_j_start  = 0
 
                 mtopofiles = mtopofiles - num_dtopo  ! decrement after allocates
 
@@ -249,6 +251,8 @@ contains
                     if (abs(itopotype(i)) == 1 .and. ( &
                             any(tp_crop_extent(:,i) /= 0.0d0) .or. &
                             tp_coarsen(i) > 1 .or. &
+                            tp_buffer(i) /= 0 .or. &
+                            any(tp_align(:,i) /= 0.0d0) .or. &
                             tp_negate_z(i) .or. &
                             tp_x_shift(i) /= 0.0d0 .or. &
                             tp_z_shift(i) /= 0.0d0)) then
@@ -270,48 +274,82 @@ contains
                         mytopo(i),xlowtopo(i),ylowtopo(i),xhitopo(i),yhitopo(i), &
                         dxtopo(i),dytopo(i), i)
 
-                    ! For types 2/3: save the full (un-cropped) file extents so
-                    ! read_topo_file can compute the row/column offset.  For type 4
-                    ! the crop is handled inside read_topo_header via xstart/ystart,
-                    ! so no full-extent save is needed.
+                    ! For types 2/3: apply crop_extent/align/buffer/coarsen by
+                    ! computing the kept index window, mirroring Python
+                    ! Topography.crop().  The full file sizes and the window
+                    ! start are saved so read_topo_file can extract the kept
+                    ! lattice.  For type 4 the window is computed inside
+                    ! read_topo_header and applied via strided NetCDF reads.
                     if (abs(itopotype(i)) == 2 .or. abs(itopotype(i)) == 3) then
-                        mxtopo_full(i)   = mxtopo(i)
-                        mytopo_full(i)   = mytopo(i)
-                        xlowtopo_full(i) = xlowtopo(i)
-                        ylowtopo_full(i) = ylowtopo(i)
+                        mxtopo_full(i) = mxtopo(i)
+                        mytopo_full(i) = mytopo(i)
 
-                        ! Apply tp_crop_extent + tp_buffer to reduce the reported
-                        ! extents.  tp_crop_extent is in domain coordinates; subtract
-                        ! tp_x_shift to get file coordinates for the comparison (the
-                        ! header values returned by read_topo_header are in file coords
-                        ! at this point, before tp_x_shift is applied below).
-                        if (any(tp_crop_extent(:,i) /= 0.0d0)) then
-                            x1_c = tp_crop_extent(1,i) - tp_x_shift(i) &
-                                   - real(tp_buffer(i),8)*dxtopo(i)
-                            x2_c = tp_crop_extent(2,i) - tp_x_shift(i) &
-                                   + real(tp_buffer(i),8)*dxtopo(i)
-                            y1_c = tp_crop_extent(3,i) &
-                                   - real(tp_buffer(i),8)*dytopo(i)
-                            y2_c = tp_crop_extent(4,i) &
-                                   + real(tp_buffer(i),8)*dytopo(i)
-                            ! Snap to grid (0-based indices from file lower-left)
-                            i_start = max(0, nint((x1_c - xlowtopo(i)) / dxtopo(i)))
-                            i_end   = min(mxtopo(i)-1, nint((x2_c - xlowtopo(i)) / dxtopo(i)))
-                            j_start = max(0, nint((y1_c - ylowtopo(i)) / dytopo(i)))
-                            j_end   = min(mytopo(i)-1, nint((y2_c - ylowtopo(i)) / dytopo(i)))
-                            if (i_start > i_end .or. j_start > j_end) then
-                                print *, "ERROR: tp_crop_extent does not overlap topo file:"
-                                print *, "  file = ", trim(topofname(i))
-                                print *, "  crop = ", tp_crop_extent(:,i)
-                                stop 1
+                        if (any(tp_crop_extent(:,i) /= 0.0d0) .or. &
+                                tp_coarsen(i) > 1) then
+
+                            ! Base window: indices of file points inside the
+                            ! crop extent (first >= lower edge, last <= upper
+                            ! edge, with a tolerance so grid-aligned extents
+                            ! stay exact), or the full file if only coarsening.
+                            ! tp_crop_extent is in domain coordinates; subtract
+                            ! tp_x_shift to get file coordinates (the header
+                            ! values are in file coords at this point, before
+                            ! tp_x_shift is applied below).
+                            if (any(tp_crop_extent(:,i) /= 0.0d0)) then
+                                x1_c = tp_crop_extent(1,i) - tp_x_shift(i)
+                                x2_c = tp_crop_extent(2,i) - tp_x_shift(i)
+                                y1_c = tp_crop_extent(3,i)
+                                y2_c = tp_crop_extent(4,i)
+                                i_start = max(0, ceiling((x1_c - xlowtopo(i)) &
+                                                / dxtopo(i) - 1.0d-6))
+                                i_end   = min(mxtopo(i)-1, &
+                                              floor((x2_c - xlowtopo(i)) &
+                                                / dxtopo(i) + 1.0d-6))
+                                j_start = max(0, ceiling((y1_c - ylowtopo(i)) &
+                                                / dytopo(i) - 1.0d-6))
+                                j_end   = min(mytopo(i)-1, &
+                                              floor((y2_c - ylowtopo(i)) &
+                                                / dytopo(i) + 1.0d-6))
+                                if (i_start > i_end .or. j_start > j_end) then
+                                    print *, "ERROR: tp_crop_extent does not overlap topo file:"
+                                    print *, "  file = ", trim(topofname(i))
+                                    print *, "  crop = ", tp_crop_extent(:,i)
+                                    stop 1
+                                end if
+                            else
+                                i_start = 0
+                                i_end   = mxtopo(i) - 1
+                                j_start = 0
+                                j_end   = mytopo(i) - 1
                             end if
-                            ! Update extents to cropped region (still file coords)
+
+                            ! Align targets are in domain coordinates; convert
+                            ! to file coordinates for x.  All-zero align is the
+                            ! "no alignment" sentinel (matches the topo.data
+                            ! format written by TopographyData.write()).
+                            call apply_align_buffer_coarsen(i_start, i_end, &
+                                mxtopo(i), xlowtopo(i), dxtopo(i), &
+                                tp_align(1,i) - tp_x_shift(i), &
+                                any(tp_align(:,i) /= 0.0d0), &
+                                max(1, tp_coarsen(i)), tp_buffer(i))
+                            call apply_align_buffer_coarsen(j_start, j_end, &
+                                mytopo(i), ylowtopo(i), dytopo(i), &
+                                tp_align(2,i), &
+                                any(tp_align(:,i) /= 0.0d0), &
+                                max(1, tp_coarsen(i)), tp_buffer(i))
+
+                            ! Update stored extents/sizes to the kept lattice
+                            ! (still file coords; tp_x_shift is applied below).
                             xlowtopo(i) = xlowtopo(i) + real(i_start,8)*dxtopo(i)
                             xhitopo(i)  = xlowtopo(i) + real(i_end-i_start,8)*dxtopo(i)
                             ylowtopo(i) = ylowtopo(i) + real(j_start,8)*dytopo(i)
                             yhitopo(i)  = ylowtopo(i) + real(j_end-j_start,8)*dytopo(i)
-                            mxtopo(i) = i_end - i_start + 1
-                            mytopo(i) = j_end - j_start + 1
+                            mxtopo(i) = (i_end - i_start)/max(1, tp_coarsen(i)) + 1
+                            mytopo(i) = (j_end - j_start)/max(1, tp_coarsen(i)) + 1
+                            dxtopo(i) = dxtopo(i)*max(1, tp_coarsen(i))
+                            dytopo(i) = dytopo(i)*max(1, tp_coarsen(i))
+                            tp_i_start(i) = i_start
+                            tp_j_start(i) = j_start
                         end if
                     end if
 
@@ -529,6 +567,64 @@ contains
     end subroutine read_topo_settings
 
     ! ========================================================================
+    !  apply_align_buffer_coarsen
+    !
+    !  Adjust a kept index window [i_lo, i_hi] (0-based file indices along one
+    !  axis) for the align, buffer, and coarsen preprocessing attributes,
+    !  mirroring Python Topography.crop() exactly (topotools.py):
+    !
+    !    1. align (only when coarsening): among the first c candidate start
+    !       offsets, pick the one minimizing the fractional misalignment of
+    !       (x - align_val) / (dxf*c); then trim i_hi onto the kept lattice.
+    !    2. buffer: expand the window by nbuf*c points each side, clamped to
+    !       the available range (clamping re-anchors the lattice, as Python's
+    !       slicing does).
+    !    3. coarsen: snap i_hi to the last kept lattice point
+    !       (i_hi - i_lo becomes a multiple of c).
+    !
+    !  The kept points are then i_lo + k*c for k = 0..(i_hi-i_lo)/c.
+    !
+    !  x0 is the coordinate of file index 0 and dxf the signed spacing in
+    !  file index order (negative for descending axes, e.g. N-to-S latitude).
+    ! ========================================================================
+    subroutine apply_align_buffer_coarsen(i_lo, i_hi, n_avail, x0, dxf, &
+                                          align_val, has_align, c, nbuf)
+
+        implicit none
+
+        integer, intent(inout) :: i_lo, i_hi
+        integer, intent(in) :: n_avail, c, nbuf
+        real(kind=8), intent(in) :: x0, dxf, align_val
+        logical, intent(in) :: has_align
+
+        integer :: k, ioff
+        real(kind=8) :: dx_new, r, frac, best
+
+        if (c > 1 .and. has_align) then
+            dx_new = dxf * c
+            best = huge(1.0d0)
+            ioff = 0
+            do k = 0, c - 1
+                r = (x0 + real(i_lo + k, 8)*dxf - align_val) / dx_new
+                frac = abs(r - nint(r))
+                if (frac < best) then
+                    best = frac
+                    ioff = k
+                end if
+            end do
+            i_lo = i_lo + ioff
+            i_hi = i_hi - mod(i_hi - i_lo, c)
+        end if
+
+        i_lo = max(0, i_lo - nbuf*c)
+        i_hi = min(n_avail - 1, i_hi + nbuf*c)
+
+        ! Snap the upper index onto the kept lattice.
+        i_hi = i_lo + ((i_hi - i_lo)/c)*c
+
+    end subroutine apply_align_buffer_coarsen
+
+    ! ========================================================================
     !  set_topo_for_dtopo()
     !
     !  Set topography values in new topo arrays that correspond to dtopo spatialy
@@ -641,9 +737,10 @@ contains
         real(kind=8) :: values(16)
         character(len=80) :: str
         integer(kind=8) :: i, j, mtot
-        ! For types 2/3 crop extraction
+        ! For types 2/3 crop/coarsen extraction
         real(kind=8), allocatable :: topo_full(:)
-        integer :: i_start, j_start_top, mx_full, my_full
+        logical :: crop_active
+        integer :: mx_full, my_full, cf
         integer(kind=8) :: mtot_full, icrop, jcrop, i_in_full, j_in_full
 
         ! NetCDF Support
@@ -708,11 +805,19 @@ contains
 
                 missing = 0
 
-                if (present(topo_idx) .and. &
-                        any(tp_crop_extent(:,topo_idx) /= 0.0d0)) then
+                if (present(topo_idx)) then
+                    crop_active = any(tp_crop_extent(:,topo_idx) /= 0.0d0) &
+                                  .or. tp_coarsen(topo_idx) > 1
+                else
+                    crop_active = .false.
+                end if
+
+                if (crop_active) then
                     ! ----------------------------------------------------------
-                    ! Crop active: read the full file into a temporary array,
-                    ! then extract the crop sub-region into the output topo.
+                    ! Crop and/or coarsen active: read the full file into a
+                    ! temporary array, then extract the kept lattice computed
+                    ! by read_topo_settings (tp_i_start/tp_j_start, stride
+                    ! tp_coarsen) into the output topo.
                     ! ----------------------------------------------------------
                     mx_full  = mxtopo_full(topo_idx)
                     my_full  = mytopo_full(topo_idx)
@@ -742,25 +847,19 @@ contains
                             end do
                     end select
 
-                    ! Column offset: xlowtopo(topo_idx) includes tp_x_shift;
-                    ! subtract it to get file-coordinate crop lower-left, then
-                    ! find its 1-based column index in the full file.
-                    i_start = nint((xlowtopo(topo_idx) - tp_x_shift(topo_idx) &
-                                    - xlowtopo_full(topo_idx)) / dxtopo(topo_idx)) + 1
-
-                    ! Row offset: file stores N-to-S (row 1 = northernmost).
-                    ! j_start_sn = 0-based row index from south of crop lower-left.
-                    ! j_start_top = 1-based row from top for the northernmost crop row.
-                    j_start_top = my_full &
-                                  - nint((ylowtopo(topo_idx) - ylowtopo_full(topo_idx)) &
-                                         / dytopo(topo_idx)) &
-                                  - my + 1
-
-                    ! Extract the mx×my crop region from topo_full.
+                    ! Extract the kept mx-by-my lattice from topo_full.  The
+                    ! output topo rows run N-to-S while tp_j_start counts from
+                    ! the south, so output row jcrop corresponds to the kept
+                    ! south-based row tp_j_start + (my - jcrop)*c, which is
+                    ! file row my_full - that (file rows are 1-based from the
+                    ! north).
+                    cf = max(1, tp_coarsen(topo_idx))
                     do jcrop = 1, int(my, 8)
-                        j_in_full = int(j_start_top,8) + jcrop - 1
+                        j_in_full = int(my_full,8) - (int(tp_j_start(topo_idx),8) &
+                                    + (int(my,8) - jcrop)*int(cf,8))
                         do icrop = 1, int(mx, 8)
-                            i_in_full = int(i_start,8) + icrop - 1
+                            i_in_full = int(tp_i_start(topo_idx),8) &
+                                        + (icrop - 1)*int(cf,8) + 1
                             topo((jcrop-1)*int(mx,8) + icrop) = &
                                 topo_full((j_in_full-1)*int(mx_full,8) + i_in_full)
                         end do
@@ -872,6 +971,15 @@ contains
                     end if
                 end if
 
+                ! Coarsening factor: the kept points are read with a strided
+                ! nf90_get_var, so mx/my count kept points and the spacing
+                ! between them is cf times the file spacing.
+                if (present(topo_idx)) then
+                    cf = max(1, tp_coarsen(topo_idx))
+                else
+                    cf = 1
+                end if
+
                 xstart = minloc(xlocs, mask=(xlocs == xll))
                 lat_south_to_north = (ylocs(1) < ylocs(my_tot))
                 if (lat_south_to_north) then
@@ -880,8 +988,8 @@ contains
                 else
                     ! N-to-S: the read must start at the northern boundary (yhi),
                     ! which sits at a low index in the descending array.
-                    ! Reconstruct yhi from yll, my, and the absolute grid spacing.
-                    y = yll + (my - 1) * abs(ylocs(2) - ylocs(1))
+                    ! Reconstruct yhi from yll, my, and the kept-point spacing.
+                    y = yll + (my - 1) * cf * abs(ylocs(2) - ylocs(1))
                     ystart = minloc(ylocs, &
                         mask=(abs(ylocs - y) < 0.5d0 * abs(ylocs(2) - ylocs(1))))
                 end if
@@ -931,13 +1039,13 @@ contains
                         ! Variable stored (lon, lat): start/count already lon-first.
                         call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
                             nc_buffer, start=(/ xstart(1), ystart(1) /), &
-                            count=(/ mx, my /)))
+                            count=(/ mx, my /), stride=(/ cf, cf /)))
                     else
                         ! Variable stored (lat, lon): swap start and count to match
                         ! the actual dimension order of the variable.
                         call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
                             nc_buffer, start=(/ ystart(1), xstart(1) /), &
-                            count=(/ my, mx /)))
+                            count=(/ my, mx /), stride=(/ cf, cf /)))
                     end if
 
                     ! Transpose into GeoClaw topo array (N-to-S row order).
@@ -1042,9 +1150,10 @@ contains
             !    (after read_topo_header) and to xlocs in the type-4 case above.
             !    No action needed here on the z array.
 
-            ! 4. crop_extent + buffer: applied in read_topo_settings (types 2/3)
-            !    and in read_topo_header (type 4 via x_in_dom/y_in_dom mask).
-            !    coarsen + align: not yet implemented in Fortran.
+            ! 4. crop_extent/align/buffer/coarsen: index window computed in
+            !    read_topo_settings (types 2/3, extracted from the full read
+            !    above) and in read_topo_header (type 4, applied via strided
+            !    NetCDF reads).  No action needed here on the z array.
 
         end if
 
@@ -1116,8 +1225,10 @@ contains
         character(len=80) :: str
         logical :: verbose
         logical :: xll_registered, yll_registered
-        ! Crop bounds locals (type 4 tp_crop_extent path)
-        real(kind=8) :: x1_c, x2_c, y1_c, y2_c
+        ! Crop/align/buffer/coarsen locals (type 4 preprocessing pipeline)
+        real(kind=8) :: x1_c, x2_c, y1_c, y2_c, al_x4, al_y4
+        integer :: cf4, nbuf4, i_lo4, i_hi4, j_lo4, j_hi4
+        logical :: has_al4
 
         ! NetCDF Support
         integer(kind=4) :: nc_file
@@ -1314,6 +1425,7 @@ contains
                 ! Priority: nc_crop_bounds (file coords) > tp_crop_extent (domain
                 ! coords, converted to file coords) > AMR domain fallback.
                 ! ----------------------------------------------------------------
+                nbuf4 = 0
                 if (present(topo_idx) .and. nc_has_crop(topo_idx)) then
                     ! nc_crop_bounds are in FILE coordinates; compare against
                     ! file-coord xlocs before applying lon_offset.
@@ -1326,16 +1438,17 @@ contains
                     ! tp_crop_extent is in domain coordinates (after nc_lon_offset
                     ! and tp_x_shift).  Convert to file coordinates for comparison
                     ! against raw xlocs (which have neither offset applied yet).
+                    ! tp_buffer is applied in index space below, mirroring
+                    ! Python Topography.crop().
                     x1_c = tp_crop_extent(1,topo_idx) - nc_lon_offset(topo_idx) &
-                           - tp_x_shift(topo_idx) &
-                           - real(tp_buffer(topo_idx),8)*dx
+                           - tp_x_shift(topo_idx)
                     x2_c = tp_crop_extent(2,topo_idx) - nc_lon_offset(topo_idx) &
-                           - tp_x_shift(topo_idx) &
-                           + real(tp_buffer(topo_idx),8)*dx
-                    y1_c = tp_crop_extent(3,topo_idx) - real(tp_buffer(topo_idx),8)*dy
-                    y2_c = tp_crop_extent(4,topo_idx) + real(tp_buffer(topo_idx),8)*dy
+                           - tp_x_shift(topo_idx)
+                    y1_c = tp_crop_extent(3,topo_idx)
+                    y2_c = tp_crop_extent(4,topo_idx)
                     x_in_dom = (xlocs >= x1_c) .and. (xlocs <= x2_c)
                     y_in_dom = (ylocs >= y1_c) .and. (ylocs <= y2_c)
+                    nbuf4 = tp_buffer(topo_idx)
                 else
                     x_in_dom = (xlocs > (xlower - dx - hxposs(1)*nghost)) .and. &
                                (xlocs < (xupper + dx + hxposs(1)*nghost))
@@ -1353,12 +1466,71 @@ contains
                     end if
                 end if
 
-                xll = minval(xlocs, mask=x_in_dom)
-                yll = minval(ylocs, mask=y_in_dom)
-                xhi = maxval(xlocs, mask=x_in_dom)
-                yhi = maxval(ylocs, mask=y_in_dom)
-                mx  = count(x_in_dom)
-                my  = count(y_in_dom)
+                if (count(x_in_dom) == 0 .or. count(y_in_dom) == 0) then
+                    ! No overlap with the requested region: report an empty
+                    ! topo; read_topo_file skips loading when mx/my = 0.
+                    mx = 0
+                    my = 0
+                    xll = 0.0d0
+                    yll = 0.0d0
+                    xhi = 0.0d0
+                    yhi = 0.0d0
+                else
+                    ! Convert the selection masks to index windows (0-based)
+                    ! and apply the align/buffer/coarsen pipeline, mirroring
+                    ! Python Topography.crop().  The masks select contiguous
+                    ! runs, so first/last true bound the window.
+                    if (present(topo_idx)) then
+                        cf4 = max(1, tp_coarsen(topo_idx))
+                        has_al4 = any(tp_align(:,topo_idx) /= 0.0d0)
+                        ! Align targets are in domain coordinates; xlocs now
+                        ! include lon_offset but not tp_x_shift, so shift the
+                        ! x target into the same frame.
+                        al_x4 = tp_align(1,topo_idx) - tp_x_shift(topo_idx)
+                        al_y4 = tp_align(2,topo_idx)
+                    else
+                        cf4 = 1
+                        has_al4 = .false.
+                        al_x4 = 0.0d0
+                        al_y4 = 0.0d0
+                    end if
+
+                    i_lo4 = 0
+                    do while (.not. x_in_dom(i_lo4 + 1))
+                        i_lo4 = i_lo4 + 1
+                    end do
+                    i_hi4 = mx - 1
+                    do while (.not. x_in_dom(i_hi4 + 1))
+                        i_hi4 = i_hi4 - 1
+                    end do
+                    j_lo4 = 0
+                    do while (.not. y_in_dom(j_lo4 + 1))
+                        j_lo4 = j_lo4 + 1
+                    end do
+                    j_hi4 = my - 1
+                    do while (.not. y_in_dom(j_hi4 + 1))
+                        j_hi4 = j_hi4 - 1
+                    end do
+
+                    call apply_align_buffer_coarsen(i_lo4, i_hi4, mx, &
+                        xlocs(1), xlocs(2) - xlocs(1), al_x4, has_al4, &
+                        cf4, nbuf4)
+                    call apply_align_buffer_coarsen(j_lo4, j_hi4, my, &
+                        ylocs(1), ylocs(2) - ylocs(1), al_y4, has_al4, &
+                        cf4, nbuf4)
+
+                    ! Kept-lattice extents from the actual coordinate values
+                    ! (min/max handles descending axes).  Spacings become the
+                    ! kept-point spacings.
+                    xll = min(xlocs(i_lo4 + 1), xlocs(i_hi4 + 1))
+                    xhi = max(xlocs(i_lo4 + 1), xlocs(i_hi4 + 1))
+                    yll = min(ylocs(j_lo4 + 1), ylocs(j_hi4 + 1))
+                    yhi = max(ylocs(j_lo4 + 1), ylocs(j_hi4 + 1))
+                    mx  = (i_hi4 - i_lo4)/cf4 + 1
+                    my  = (j_hi4 - j_lo4)/cf4 + 1
+                    dx  = dx*cf4
+                    dy  = dy*cf4
+                end if
 
                 call check_netcdf_error(nf90_close(nc_file))
                 deallocate(xlocs, ylocs, x_in_dom, y_in_dom)

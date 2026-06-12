@@ -317,26 +317,31 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 f.write(f"\n'{fname}'   # topo_path\n")
                 f.write(f"{t.topo_type:3d}   # topo_type\n")
 
+                # Float values use repr (shortest round-trip representation)
+                # so coordinates reach Fortran at full precision; %g would
+                # truncate to 6 significant digits.
+
                 # crop_extent: write all-zero sentinel or 4 space-separated floats
                 # All-zero is safe: a valid extent requires x1<x2 and y1<y2.
                 if t.crop_extent is None:
                     f.write("0. 0. 0. 0.   # crop_extent [x1 x2 y1 y2]\n")
                 else:
-                    vals = ' '.join(f"{v:g}" for v in t.crop_extent)
+                    vals = ' '.join(repr(float(v)) for v in t.crop_extent)
                     f.write(f"{vals}   # crop_extent [x1 x2 y1 y2]\n")
 
                 f.write(f"{int(t.coarsen):d}   # coarsen\n")
-                f.write(f"{t.buffer:g}   # buffer\n")
+                # buffer is a count of grid points; Fortran reads an integer.
+                f.write(f"{int(t.buffer):d}   # buffer\n")
 
                 # align: write all-zero sentinel or 2 space-separated floats
                 if t.align is None:
                     f.write("0. 0.   # align [x y]\n")
                 else:
-                    vals = ' '.join(f"{v:g}" for v in t.align)
+                    vals = ' '.join(repr(float(v)) for v in t.align)
                     f.write(f"{vals}   # align [x y]\n")
 
-                f.write(f"{t.x_shift:g}   # x_shift\n")
-                f.write(f"{t.z_shift:g}   # z_shift\n")
+                f.write(f"{float(t.x_shift)!r}   # x_shift\n")
+                f.write(f"{float(t.z_shift)!r}   # z_shift\n")
                 f.write(f"{'T' if t.negate_z else 'F'}   # negate_z\n")
 
                 # For NetCDF (type 4): write the CF descriptor block that
