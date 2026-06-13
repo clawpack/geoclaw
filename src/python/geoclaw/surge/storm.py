@@ -221,11 +221,15 @@ class Storm(object):
         self.scaling = [1.0, 1.0]          # Scaling of wind and pressure
         self.storm_time_scale = 1.0        # >1 slower storm, <1 faster storm
 
-        # Ramping information - only applies to data storms currently
-        self.window_type = 0
+        # Spatial cropping + edge ramping - only applies to data storms.
+        # met_crop_extent = [lon0, lon1, lat0, lat1] restricts the forcing to
+        # a sub-region read directly from the file (NetCDF: strided read;
+        # OWI/ASCII: read full then subset).  ramp_width tapers the wind and
+        # pressure forcing to ambient over this many degrees inside the crop
+        # (equivalently the file) edges.  met_crop_extent=None reads the full
+        # file extent.
+        self.met_crop_extent = None
         self.ramp_width = 1e0               # 1 degree
-        self.window = None                  # If not provided for data files it
-                                            # will be set to the file extents
 
         # NetCDF met-forcing metadata (populated by read_data for file_format==2)
         self.met_lon_name = None
@@ -952,17 +956,18 @@ class Storm(object):
             self.scaling = np.array([float(value)
                 for value in data_file.readline().partition("#")[0].rstrip().split()],
                 dtype=float)
-            self.window_type = int(
-                                data_file.readline().partition("#")[0].rstrip())
             self.ramp_width = float(
                                 data_file.readline().partition("#")[0].rstrip())
-            data_file.readline()  # window
-            _ts_str = data_file.readline().partition("#")[0].rstrip()
-            try:
-                self.storm_time_scale = float(_ts_str)
-            except ValueError:
-                # Legacy file: blank line consumed; storm_time_scale absent
-                self.storm_time_scale = 1.0
+            _crop_vals = [float(v) for v in
+                          data_file.readline().partition("#")[0].split()]
+            # All-zero is the "no crop" sentinel (a valid extent requires
+            # lon0<lon1 and lat0<lat1).
+            if len(_crop_vals) == 4 and any(v != 0.0 for v in _crop_vals):
+                self.met_crop_extent = _crop_vals
+            else:
+                self.met_crop_extent = None
+            self.storm_time_scale = float(
+                                data_file.readline().partition("#")[0].rstrip())
             data_file.readline()  # "# Format Data Information"
 
             if self.file_format == 1:
@@ -1343,8 +1348,6 @@ class Storm(object):
         _data_file_format_mapping = {'ascii': 1, 'nws12': 1, "owi": 1,
                                      'netcdf': 2, 'nws13': 2}
 
-        _window_type_mapping = {None: 0, 'none': 0, 'custom': 1}
-
         if isinstance(self.file_format, int):
             file_format = self.file_format
         elif isinstance(self.file_format, str):
@@ -1359,19 +1362,16 @@ class Storm(object):
             raise TypeError(f"Unknown storm data file format type" +
                             f" '{self.file_format}' provided.")
 
-        if isinstance(self.window_type, int):
-            window_type = self.window_type
-        elif isinstance(self.window_type, str):
-            if (self.window_type.lower() in
-                                    _window_type_mapping.keys()):
-                window_type = _window_type_mapping[
-                                          self.window_type.lower()]
-            else:
-                raise TypeError(f"Unknown window type" +
-                                f" '{self.window_type}' provided.")
+        # met_crop_extent: write a 4-value crop region or the all-zero "no
+        # crop" sentinel (a valid extent requires lon0<lon1 and lat0<lat1).
+        if self.met_crop_extent is None:
+            crop_str = "0. 0. 0. 0."
         else:
-            raise TypeError(f"Unknown window type" +
-                            f" '{self.window_type}' provided.")
+            if len(self.met_crop_extent) != 4:
+                raise ValueError(
+                    "met_crop_extent must be [lon0, lon1, lat0, lat1], got "
+                    f"{self.met_crop_extent!r}")
+            crop_str = ' '.join(repr(float(v)) for v in self.met_crop_extent)
 
         with path.open("w") as data_file:
             # Write header
@@ -1387,12 +1387,8 @@ class Storm(object):
             data_file.write(f"{str(file_format).ljust(20)} # File format\n")
             data_file.write(f"{str(len(self.file_paths)).ljust(20)} # Number of files\n")
             data_file.write(f"{str(self.scaling)[1:-1].replace(',', '').ljust(20)} # Scaling\n")
-            data_file.write(f"{str(window_type).ljust(20)} # Window type\n")
             data_file.write(f"{str(self.ramp_width).ljust(20)} # Ramp width\n")
-            if window_type > 0:
-                data_file.write(f"{str(self.window)[1:-1].ljust(20)} # Window\n")
-            else:
-                data_file.write(f"{str(None).ljust(20)} # Window\n")
+            data_file.write(f"{crop_str.ljust(20)} # Met crop extent [lon0 lon1 lat0 lat1]; all-zero = full file\n")
             data_file.write(f"{str(self.storm_time_scale).ljust(20)} # Storm time scale (>1 slower, <1 faster)\n")
             data_file.write("# Format Data Information\n")
             if file_format == 1:
@@ -1403,13 +1399,6 @@ class Storm(object):
                                          "resolution provided.")
                 data_file.write("\n")
             elif file_format == 2:
-                # Variable discovery: get_netcdf_names auto-discovers met
-                # roles from standard name lists, then any explicit var_mapping
-                # entries override specific roles.  MetInspector then applies
-                # CF-aware coordinate discovery, unit validation, lon-convention
-                # detection, and fill-value resolution.
-                # TODO: consolidate get_netcdf_names with MetInspector
-
                 if len(self.file_paths) != 1:
                     raise ValueError(f"Expected 1 path for NetCDF format, " +
                                      f"got {len(self.file_paths)}")
@@ -1418,56 +1407,24 @@ class Storm(object):
                     MetInspector, DescriptorWriter)
 
                 if met_inspector is None:
-                    # Auto-discover met variable names, then apply explicit
-                    # overrides from var_mapping.  This lets callers supply
-                    # only the non-standard names (e.g. a non-standard pressure
-                    # field) while standard wind names are still found
-                    # automatically.  dim_mapping is handled automatically by
-                    # MetInspector via CF axis/standard_name conventions; it
-                    # is accepted for backwards compatibility but not forwarded.
-                    _MET_ROLES = frozenset({'wind_u', 'wind_v', 'pressure'})
-                    variable_map = {
-                        role: name
-                        for role, name in util.get_netcdf_names(
-                            self.file_paths[0],
-                            lookup_type='var',
-                            verbose=verbose,
-                        ).items()
-                        if role in _MET_ROLES
-                    }
-
-                    if var_mapping is not None:
-                        # Validate each user-specified name exists before
-                        # merging to catch typos early with a clear message.
-                        import xarray as xr
-                        with xr.open_dataset(str(self.file_paths[0])) as _ds:
-                            _available = set(_ds.data_vars) | set(_ds.coords)
-                        _bad = {role: name
-                                for role, name in var_mapping.items()
-                                if name not in _available}
-                        if _bad:
-                            raise ValueError(
-                                "The following names in var_mapping were not "
-                                f"found in {self.file_paths[0]}:\n"
-                                + "\n".join(
-                                    f"  '{role}': '{name}'"
-                                    for role, name in _bad.items())
-                                + f"\nAvailable variables: "
-                                + str(sorted(_available))
-                            )
-                        variable_map.update(var_mapping)
-
+                    # MetInspector auto-discovers met roles (CF standard_name
+                    # first, then common variable names); explicit var_mapping
+                    # entries override individual roles, so callers only need
+                    # to supply the non-standard names.  Coordinates are
+                    # discovered via CF axis/standard_name conventions;
+                    # dim_mapping is accepted for backwards compatibility but
+                    # not needed.
                     with MetInspector(self.file_paths[0],
-                                         variable_map=variable_map,
+                                         variable_map=var_mapping,
                                          time_reference=self.time_offset) as mi:
                         meta = mi.inspect_met()
                 else:
                     meta = met_inspector.inspect_met()
 
-                # Note: storm.window governs the Fortran forcing application
-                # domain (with ramp width); MetInspector.crop_bounds is a
-                # read-time spatial subset of the NetCDF file.  These are
-                # conceptually distinct and should remain independent.
+                # The spatial crop is carried by the top-level
+                # met_crop_extent line (read by set_storm and applied at file
+                # read for both formats), so it is intentionally not also
+                # emitted in the NetCDF descriptor's crop_bounds.
                 DescriptorWriter.write_met_descriptor(data_file, meta)
 
             # Write paths

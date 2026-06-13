@@ -222,7 +222,8 @@ def _read_owi_all_timesteps(pre_path: Path, win_path: Path):
     return pressure_mb, u_wind, v_wind, lon, lat, times
 
 
-def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path) -> Path:
+def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
+                       met_crop_extent=None) -> Path:
     """Generate a NetCDF met-forcing file from the committed OWI Isaac files.
 
     Reads all time steps from ``isaac.PRE`` and ``isaac.WIN`` using minimal
@@ -284,6 +285,7 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path) -> Path:
 
     isaac = Storm()
     isaac.time_offset = time_offset
+    isaac.met_crop_extent = met_crop_extent
 
     if fmt == "netcdf_era5":
         nc_path = tmp_path / "isaac_era5.nc"
@@ -494,7 +496,7 @@ def _check_data_storm_descriptor(generated_path: Path, regression_path: Path) ->
     assert generated.file_format == regression.file_format
     assert len(generated.file_paths) == len(regression.file_paths)
     np.testing.assert_allclose(generated.scaling, regression.scaling)
-    assert generated.window_type == regression.window_type
+    assert generated.met_crop_extent == regression.met_crop_extent
     np.testing.assert_allclose(generated.ramp_width, regression.ramp_width)
     assert [path.name for path in generated.file_paths] == [
         path.name for path in regression.file_paths
@@ -619,6 +621,57 @@ def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
         gauge_regression_path = check_path
     runner.check_gauge(gauge_id=1, regression_path=gauge_regression_path, save=save)
     runner.check_gauge(gauge_id=2, regression_path=gauge_regression_path, save=save)
+
+
+@pytest.mark.storm
+@pytest.mark.netcdf
+def test_isaac_netcdf_crop(tmp_path: Path) -> None:
+    """met_crop_extent restricts the forcing to the cropped sub-region.
+
+    The met file is cropped to the southern Gulf (lat 8-15), well south of
+    both Isaac gauges (lat ~29).  With the forcing cropped out at the gauges,
+    no wind or pressure perturbation ever reaches them, so the sea stays at
+    rest: gauge momentum and surface elevation remain ~0 for the whole run.
+    The uncropped netcdf variants (test_isaac[netcdf_*]) show the same gauges
+    develop a real surge, so this isolates the crop's spatial restriction.
+    """
+    pytest.importorskip("netCDF4")
+    import clawpack.pyclaw.gauges as gauges
+
+    example_dir = Path(__file__).parent
+    runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
+    runner.set_data()
+    runner.rundata.amrdata.amr_levels_max = 2
+    # Short run: the crop's effect at the gauges is time-independent (forcing
+    # there is always ambient), so a brief integration suffices.
+    runner.rundata.clawdata.num_output_times = 1
+
+    surge_data = runner.rundata.surge_data
+    # Crop to the southern Gulf, excluding both gauges (lat ~29).
+    surge_data.storm_file = _make_isaac_netcdf(
+        "netcdf_era5", tmp_path, example_dir,
+        met_crop_extent=[-99.0, -70.0, 8.0, 15.0],
+    )
+    surge_data.storm_specification_type = "data"
+
+    # Confirm the crop line reached the descriptor.
+    assert "8.0 15.0" in surge_data.storm_file.read_text() or \
+           "8.0" in surge_data.storm_file.read_text()
+
+    runner.write_data()
+    runner.build_executable()
+    runner.run_code()
+
+    for gauge_id in (1, 2):
+        g = gauges.GaugeSolution(gauge_id, path=runner.temp_path)
+        # q = (h, hu, hv, eta).  With forcing cropped out here, the sea is at
+        # rest: momentum and surface perturbation stay negligible.
+        assert np.max(np.abs(g.q[1, :])) < 1e-3, \
+            f"gauge {gauge_id} hu not at rest: {np.max(np.abs(g.q[1, :]))}"
+        assert np.max(np.abs(g.q[2, :])) < 1e-3, \
+            f"gauge {gauge_id} hv not at rest: {np.max(np.abs(g.q[2, :]))}"
+        assert np.max(np.abs(g.q[3, :])) < 1e-3, \
+            f"gauge {gauge_id} eta not at rest: {np.max(np.abs(g.q[3, :]))}"
 
 
 if __name__ == "__main__":
