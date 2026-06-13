@@ -42,22 +42,27 @@ def test_all_variables_present_passes(met_file_factory):
 @pytest.mark.parametrize("missing_role", ["wind_u", "wind_v", "pressure"])
 def test_missing_variable_raises(met_file_factory, missing_role):
     """
-    inspect_met() raises KeyError with a message identifying the missing
-    variable when one required variable is absent from the file.
+    inspect_met() raises ValueError identifying the missing variable when an
+    explicit variable_map points to a name absent from the file.
     """
     path = met_file_factory(omit_roles=[missing_role])
     expected_var = _VAR_MAP[missing_role]
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
-        with pytest.raises(KeyError, match=expected_var):
+        with pytest.raises(ValueError, match=expected_var):
             insp.inspect_met()
 
 
-def test_empty_variable_map_raises(met_file_factory):
-    """An empty variable_map raises ValueError before any file inspection."""
+def test_empty_variable_map_autodiscovers(met_file_factory):
+    """An empty (or omitted) variable_map auto-discovers all met roles.
+
+    The default met file uses common variable names (u10/v10/msl) that are
+    resolved from the fallback lists, so no explicit map is needed.
+    """
     path = met_file_factory()
     with MetInspector(path, variable_map={}) as insp:
-        with pytest.raises(ValueError, match="variable_map"):
-            insp.inspect_met()
+        meta = insp.inspect_met()
+    roles = {v.geoclaw_role: v.var_name for v in meta.variables}
+    assert roles == {"wind_u": "u10", "wind_v": "v10", "pressure": "msl"}
 
 
 # ============================================================

@@ -830,11 +830,14 @@ class MetInspector(NetCDFInspector):
     ----------
     path : str or Path
         Path to the NetCDF file.
-    variable_map : dict
+    variable_map : dict, optional
         Maps GeoClaw role strings to variable names in the file, e.g.::
 
             {'wind_u': 'u10', 'wind_v': 'v10', 'pressure': 'msl'}
 
+        Roles not given (or the whole map, when omitted) are auto-discovered
+        by CF ``standard_name`` first, then by common variable names.  An
+        explicit entry overrides discovery for that role.
     crop_bounds : tuple of four floats, optional
         (lon_min, lon_max, lat_min, lat_max).
     time_reference : str or datetime-like, optional
@@ -847,20 +850,96 @@ class MetInspector(NetCDFInspector):
         the domain edges (Fortran handles edge fill).  Default is 'warn'.
     """
 
+    # Role discovery, in priority order: CF standard_name, then common
+    # variable names (case-insensitive; superset of the historical
+    # util.get_netcdf_names fallback lists).
+    _MET_STANDARD_NAMES = {
+        'wind_u': ['eastward_wind', 'x_wind'],
+        'wind_v': ['northward_wind', 'y_wind'],
+        'pressure': ['air_pressure_at_mean_sea_level',
+                     'air_pressure_at_sea_level',
+                     'surface_air_pressure'],
+    }
+    _MET_FALLBACK_NAMES = {
+        'wind_u': ['wind_x', 'wind_u', 'u10', 'u'],
+        'wind_v': ['wind_y', 'wind_v', 'v10', 'v'],
+        'pressure': ['pressure', 'msl', 'sp'],
+    }
+
     def __init__(
         self,
         path: str | Path,
-        variable_map: dict[str, str],
+        variable_map: Optional[dict[str, str]] = None,
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
         time_reference: Optional[str] = None,
         fill_action: str = 'warn',
     ) -> None:
         super().__init__(path, crop_bounds)
-        self.variable_map = variable_map  # {geoclaw_role: var_name_in_file}
+        # {geoclaw_role: var_name_in_file}; missing roles auto-discovered
+        # in inspect_met() via _resolve_variable_map()
+        self.variable_map = variable_map
         self.time_reference = time_reference
         if fill_action not in ('abort', 'warn'):
             raise ValueError(f"fill_action must be 'abort' or 'warn', got '{fill_action}'")
         self.fill_action = fill_action
+
+    # ------------------------------------------------------------------
+    # Variable role discovery
+    # ------------------------------------------------------------------
+
+    def _resolve_variable_map(
+        self,
+        overrides: Optional[dict[str, str]],
+    ) -> dict[str, str]:
+        """Return a complete {role: var_name} map.
+
+        Explicit *overrides* entries are validated against the file and used
+        as-is; the remaining roles are discovered by CF ``standard_name``
+        first, then by common variable names.
+        """
+        overrides = dict(overrides or {})
+        available = {str(n) for n in self.ds.data_vars} | \
+                    {str(n) for n in self.ds.coords}
+
+        bad = {role: name for role, name in overrides.items()
+               if name not in available}
+        if bad:
+            raise ValueError(
+                f"The following names in variable_map were not found in "
+                f"'{self.path}':\n"
+                + "\n".join(f"  '{role}': '{name}'"
+                            for role, name in bad.items())
+                + f"\nAvailable variables: {sorted(available)}"
+            )
+
+        result = dict(overrides)
+        names_lower = {str(n).lower(): str(n) for n in self.ds.data_vars}
+        for role in ('wind_u', 'wind_v', 'pressure'):
+            if role in result:
+                continue
+            # 1. CF standard_name
+            for name, var in self.ds.data_vars.items():
+                if var.attrs.get('standard_name', '') in \
+                        self._MET_STANDARD_NAMES[role]:
+                    result[role] = str(name)
+                    break
+            if role in result:
+                continue
+            # 2. Common names (case-insensitive)
+            for cand in self._MET_FALLBACK_NAMES[role]:
+                if cand in names_lower:
+                    result[role] = names_lower[cand]
+                    break
+            if role not in result:
+                raise ValueError(
+                    f"Cannot find a variable for met role '{role}' in "
+                    f"'{self.path}'.  Expected standard_name in "
+                    f"{self._MET_STANDARD_NAMES[role]} or a name in "
+                    f"{self._MET_FALLBACK_NAMES[role]}; available: "
+                    f"{list(self.ds.data_vars)}.  Pass variable_map to "
+                    f"specify it explicitly."
+                )
+        return result
 
     # ------------------------------------------------------------------
     # Variable grid/time consistency
@@ -1060,9 +1139,11 @@ class MetInspector(NetCDFInspector):
     def inspect_met(self) -> MetMetadata:
         """
         Fully inspect the met file and return a MetMetadata instance.
+
+        Roles missing from variable_map are auto-discovered (CF
+        standard_name first, then common variable names).
         """
-        if not self.variable_map:
-            raise ValueError("variable_map must not be empty.")
+        self.variable_map = self._resolve_variable_map(self.variable_map)
 
         # Use the first variable for base coordinate detection
         primary_var = next(iter(self.variable_map.values()))

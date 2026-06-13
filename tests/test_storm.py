@@ -399,7 +399,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
     storm_path = tmp_path / "test.storm"
     data_storm = storm.Storm()
     data_storm.time_offset = np.datetime64("2012-08-29")
-    data_storm.window_type = 1
+    data_storm.met_crop_extent = [-100.0, -60.0, 10.0, 40.0]
     data_storm.ramp_width = 3
 
     if file_format == "ascii":
@@ -482,7 +482,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
 
     assert data_storm.time_offset == read_storm.time_offset
     assert data_storm.file_format in DATA_FILE_FORMAT_MAP[read_storm.file_format]
-    assert data_storm.window_type == read_storm.window_type
+    assert data_storm.met_crop_extent == read_storm.met_crop_extent
     assert data_storm.ramp_width == read_storm.ramp_width
     assert data_storm.storm_time_scale == read_storm.storm_time_scale
     assert len(data_storm.file_paths) == len(read_storm.file_paths)
@@ -490,123 +490,101 @@ def test_data_storm_roundtrip(file_format, tmp_path):
         assert read_storm.file_paths[i] == path
 
 
+def _met_roles(meta):
+    """Return {geoclaw_role: var_name} from a MetMetadata instance."""
+    return {v.geoclaw_role: v.var_name for v in meta.variables}
+
+
 @pytest.mark.python
+@pytest.mark.netcdf
 def test_netcdf_var_mapping(tmp_path):
-    """Test NetCDF dimension and variable name discovery for data storms."""
+    """MetInspector discovers coords/vars by common names (no attrs)."""
+    pytest.importorskip("netCDF4")
+    from clawpack.geoclaw.netcdf_utils import MetInspector
+
     storm_data_file = tmp_path / "storm.nc"
     create_netcdf_storm_file(storm_data_file)
 
-    dim_mapping = util.get_netcdf_names(
-        storm_data_file,
-        lookup_type="dim",
-        verbose=True,
-        user_mapping={"t": "valid_time"},
-    )
-    var_mapping = util.get_netcdf_names(
-        storm_data_file,
-        lookup_type="var",
-        verbose=True,
-    )
+    with MetInspector(storm_data_file) as mi:
+        meta = mi.inspect_met()
 
-    assert dim_mapping == {"x": "longitude", "y": "latitude", "t": "valid_time"}
-    assert var_mapping == {"wind_u": "u", "wind_v": "v", "pressure": "pressure"}
+    assert meta.lon_name == "longitude"
+    assert meta.lat_name == "latitude"
+    assert meta.time_name == "valid_time"
+    assert _met_roles(meta) == {"wind_u": "u", "wind_v": "v",
+                                "pressure": "pressure"}
 
 
 @pytest.mark.python
+@pytest.mark.netcdf
 def test_netcdf_var_mapping_era5(tmp_path):
-    """Test ERA5-style CF NetCDF dimension and variable name discovery.
+    """MetInspector discovers ERA5 coords/vars via CF attributes.
 
     ERA5 (ECMWF Reanalysis v5) is one example of a CF-compliant netCDF
     met-forcing source supported by GeoClaw; the same discovery logic applies
-    to any CF-compliant dataset.  This test verifies that
-    ``util.get_netcdf_names`` correctly maps ERA5
-    dimension names (``valid_time``, ``latitude``, ``longitude``) and variable
-    names (``u10``, ``v10``, ``msl``) to the GeoClaw roles ``t``/``x``/``y``
-    and ``wind_u``/``wind_v``/``pressure``.
-
-    ``valid_time`` requires an explicit ``user_mapping`` because it is not in
-    the default "t" fallback list ``["t", "time"]`` used by
-    ``util.get_netcdf_names``.  ``u10``, ``v10``, and ``msl`` are resolved
-    automatically from the default variable fallback lists.
-
-    TODO: ``util.get_netcdf_names`` and
-    ``netcdf_utils.NetCDFInspector._find_coord_name`` both implement
-    dimension/variable discovery (the latter is CF-first via axis/standard_name
-    attributes).  These parallel implementations should eventually be unified;
-    they are kept separate for now and flagged here for future consolidation.
+    to any CF-compliant dataset.  Coordinates are found via ``axis`` attrs
+    (``valid_time``/``latitude``/``longitude``) and the wind/pressure
+    variables via ``standard_name`` (``eastward_wind``, ``northward_wind``,
+    ``air_pressure_at_mean_sea_level``) — no explicit mapping required.
     """
     pytest.importorskip("netCDF4")
+    from clawpack.geoclaw.netcdf_utils import MetInspector
 
     nc_path = tmp_path / "era5.nc"
     create_era5_storm_file(nc_path)
 
-    # "valid_time" is not in the default "t" fallback list; must be specified.
-    dim_mapping = util.get_netcdf_names(
-        nc_path,
-        lookup_type="dim",
-        user_mapping={"t": "valid_time"},
-    )
-    # u10, v10, msl are in the default variable fallback lists.
-    var_mapping = util.get_netcdf_names(
-        nc_path,
-        lookup_type="var",
-    )
+    with MetInspector(nc_path) as mi:
+        meta = mi.inspect_met()
 
-    assert dim_mapping["x"] == "longitude"
-    assert dim_mapping["y"] == "latitude"
-    assert dim_mapping["t"] == "valid_time"
-    assert var_mapping["wind_u"] == "u10"
-    assert var_mapping["wind_v"] == "v10"
-    assert var_mapping["pressure"] == "msl"
+    assert meta.lon_name == "longitude"
+    assert meta.lat_name == "latitude"
+    assert meta.time_name == "valid_time"
+    assert _met_roles(meta) == {"wind_u": "u10", "wind_v": "v10",
+                                "pressure": "msl"}
 
 
 @pytest.mark.python
+@pytest.mark.netcdf
 def test_netcdf_var_mapping_nws13(tmp_path):
-    """Test NWS13/OWI-NetCDF dimension and variable name discovery.
+    """MetInspector on NWS13/OWI-NetCDF: coords auto, vars need a map.
 
     NWS13 is the OWI NetCDF met-forcing format used by ADCIRC and GeoClaw.
-    This test verifies that ``util.get_netcdf_names`` correctly maps NWS13
-    dimension names (``lon``, ``lat``, ``time``) and variable names
-    (``uwnd``, ``vwnd``, ``press``) when an explicit ``user_mapping`` is
-    provided for the variable names.
-
-    ``lon``, ``lat``, and ``time`` are resolved automatically from the default
-    dimension fallback lists.  ``uwnd``, ``vwnd``, and ``press`` are NOT in
-    the default variable fallback lists and require an explicit mapping.
-
-    TODO: ``util.get_netcdf_names`` and
-    ``netcdf_utils.MetInspector`` (variable unit / role discovery) both
-    implement variable-name lookup.  These parallel implementations should
-    eventually be unified; they are kept separate for now and flagged here for
-    future consolidation.
+    Its coordinate names (``lon``/``lat``/``time``) are found by common-name
+    fallback, but the variable names (``uwnd``/``vwnd``/``press``) are neither
+    standard_name-tagged nor in the fallback lists, so they require an
+    explicit ``variable_map``; omitting it raises.
     """
     pytest.importorskip("netCDF4")
+    from clawpack.geoclaw.netcdf_utils import MetInspector
 
     nc_path = tmp_path / "nws13.nc"
     create_nws13_storm_file(nc_path)
 
-    # lon, lat, time are auto-discovered from the default fallback lists.
-    dim_mapping = util.get_netcdf_names(
-        nc_path,
-        lookup_type="dim",
-    )
-    # uwnd, vwnd, press require an explicit user_mapping.
-    var_mapping = util.get_netcdf_names(
-        nc_path,
-        lookup_type="var",
-        user_mapping={
-            "wind_u": "uwnd",
-            "wind_v": "vwnd",
-            "pressure": "press",
-        },
-    )
+    # Without a mapping, the non-standard variable names cannot be resolved.
+    with MetInspector(nc_path) as mi:
+        with pytest.raises(ValueError, match="met role"):
+            mi.inspect_met()
 
-    assert dim_mapping["x"] == "lon"
-    assert dim_mapping["y"] == "lat"
-    assert dim_mapping["t"] == "time"
-    assert var_mapping["wind_u"] == "uwnd"
-    assert var_mapping["wind_v"] == "vwnd"
-    assert var_mapping["pressure"] == "press"
+    with MetInspector(nc_path, variable_map={
+            "wind_u": "uwnd", "wind_v": "vwnd", "pressure": "press"}) as mi:
+        meta = mi.inspect_met()
+
+    assert meta.lon_name == "lon"
+    assert meta.lat_name == "lat"
+    assert meta.time_name == "time"
+    assert _met_roles(meta) == {"wind_u": "uwnd", "wind_v": "vwnd",
+                                "pressure": "press"}
+
+
+@pytest.mark.python
+def test_get_netcdf_names_deprecated(tmp_path):
+    """util.get_netcdf_names still works but emits a DeprecationWarning."""
+    pytest.importorskip("netCDF4")
+    storm_data_file = tmp_path / "storm.nc"
+    create_netcdf_storm_file(storm_data_file)
+
+    with pytest.warns(DeprecationWarning, match="get_netcdf_names"):
+        util.get_netcdf_names(storm_data_file, lookup_type="var")
 
 
 @pytest.mark.python

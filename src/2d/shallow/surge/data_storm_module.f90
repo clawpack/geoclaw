@@ -49,9 +49,14 @@ module data_storm_module
     real(kind=8) :: wind_scaling, pressure_scaling
     real(kind=8) :: storm_time_scale
 
-    ! Ramping settings
-    integer :: window_type
-    real(kind=8) :: window(4), ramp_width
+    ! Spatial crop + edge ramping.  met_crop_extent = [lon0, lon1, lat0, lat1]
+    ! restricts the forcing to a sub-region read directly from the file
+    ! (NetCDF: strided read; OWI/ASCII: read full then subset).  ramp_width
+    ! tapers wind and pressure to ambient over this many degrees just inside
+    ! the crop edges, avoiding a discontinuity where the data ends.  When no
+    ! crop is set the full file is used and no taper is applied.
+    logical :: has_met_crop
+    real(kind=8) :: met_crop_extent(4), ramp_width
 
     ! Time tracking tolerance allowance - allows for the beginning of the storm
     ! track to be close to but not equal the start time of the simulation
@@ -88,6 +93,10 @@ contains
         integer :: i, io_status, file_format, num_data_files
         integer :: mt, mx, my, time(6, 2)
 
+        ! Crop window (full file dims and 1-based inclusive kept index range)
+        integer :: mx_full, my_full, i0, i1, j0, j1
+        real(kind=8), allocatable :: lon_full(:), lat_full(:)
+
         ! ASCII
         real(kind=8) :: sw_lon, sw_lat, dx, dy
 
@@ -118,31 +127,25 @@ contains
             read(data_unit, "(i2)") file_format
             read(data_unit, "(i2)") num_data_files
             read(data_unit, *) wind_scaling, pressure_scaling
-            read(data_unit, "(i2)") window_type
             read(data_unit, *) ramp_width
+            ! met_crop_extent = lon0 lon1 lat0 lat1; all-zero = full file.
+            read(data_unit, *) met_crop_extent
+            has_met_crop = any(met_crop_extent /= 0.0d0)
 
             write(log_unit, "('time_offset = ',a)") storm%time_offset
             write(log_unit, "('format = ',i2)") file_format
             write(log_unit, "('num files = ',i2)") num_data_files
             write(log_unit, "('scaling = ',2d16.8)") wind_scaling, pressure_scaling
-            write(log_unit, "('window_type = ',i2)") window_type
             write(log_unit, "('ramp_width = ',d16.8)") ramp_width
-
-            ! If not provided, then we use the file extents after being read
-            if (window_type > 0) then
-                read(data_unit, *) window
+            if (has_met_crop) then
+                write(log_unit, "('met_crop_extent = ',4d16.8)") met_crop_extent
             else
-                read(data_unit, *)
+                write(log_unit, *) "met_crop_extent = (full file)"
             end if
 
             ! storm_time_scale stretches (>1) or compresses (<1) the time axis
             ! to simulate slower or faster storm translation speeds.
-            ! A blank line here means a legacy file without the parameter; default to 1.0.
-            read(data_unit, *, iostat=io_status) storm_time_scale
-                if (io_status /= 0) then
-                    storm_time_scale = 1.0d0
-                write(log_unit, *) "Warning: storm_time_scale not in data file, defaulting to 1.0"
-            end if
+            read(data_unit, *) storm_time_scale
             write(log_unit, "('storm_time_scale = ',d16.8)") storm_time_scale
 
             if (DEBUG) then
@@ -275,35 +278,54 @@ contains
             select case(file_format)
                 case(1)
                     ! Load headers for setting up the rest of the data
-                    call read_OWI_ASCII_header(storm%paths(1), mx, my, mt,   &
-                                                               sw_lon, sw_lat, &
-                                                               dy, dx)
+                    call read_OWI_ASCII_header(storm%paths(1),               &
+                                               mx_full, my_full, mt,         &
+                                               sw_lon, sw_lat, dy, dx)
                     write(log_unit, *) "Storm header info:"
-                    write(log_unit, "('  mx,mx,mt = ', 3i4)") mx, my, mt
+                    write(log_unit, "('  mx,mx,mt = ', 3i4)") mx_full, my_full, mt
                     write(log_unit, "('  sw = ', 2D25.16)") sw_lon, sw_lat
                     write(log_unit, "('  delta = ', 2D25.16)") dx, dy
 
                     if (DEBUG) then
                         print *, "Storm header info:"
-                        print "('  mx,mx,mt = ', 3i4)", mx, my, mt
+                        print "('  mx,mx,mt = ', 3i4)", mx_full, my_full, mt
                         print "('  sw = ', 2D25.16)", sw_lon, sw_lat
                         print "('  delta = ', 2D25.16)", dx, dy
                     end if
 
-                    ! allocate arrays in storm object
+                    ! Full-file coordinates (OWI grids are S-to-N / W-to-E
+                    ! from the SW corner), then crop to met_crop_extent.
+                    allocate(lon_full(mx_full), lat_full(my_full))
+                    do i = 1, mx_full
+                        lon_full(i) = sw_lon + i * dx
+                    end do
+                    do i = 1, my_full
+                        lat_full(i) = sw_lat + i * dy
+                    end do
+                    call met_crop_indices(lon_full, mx_full, lat_full,       &
+                                          my_full, i0, i1, j0, j1)
+                    mx = i1 - i0 + 1
+                    my = j1 - j0 + 1
+
+                    ! allocate arrays in storm object (cropped extent)
                     allocate(storm%pressure(mx, my, mt))
                     allocate(storm%wind_u(mx, my, mt))
                     allocate(storm%wind_v(mx, my, mt))
                     allocate(storm%longitude(mx))
                     allocate(storm%latitude(my))
                     allocate(storm%time(mt))
+                    storm%longitude = lon_full(i0:i1)
+                    storm%latitude  = lat_full(j0:j1)
+                    deallocate(lon_full, lat_full)
 
                     ! Fill out variable data/info
                     print *, "Reading pressure file ", trim(storm%paths(1))
                     print *, "Reading wind file ", trim(storm%paths(2))
                     print *
+                    ! OWI cannot random-access a subregion: read the full
+                    ! grid and keep only the [i0:i1, j0:j1] crop window.
                     call read_OWI_ASCII(storm%paths(2), storm%paths(1),        &
-                                        mx, my, mt, sw_lat, sw_lon, dy, dx,    &
+                                        mx_full, my_full, mt, i0, j0, mx, my,  &
                                         storm, seconds_from_epoch(time(:, 1)))
 
                 case(2)
@@ -324,70 +346,80 @@ contains
                         stop
                     end if
 
-                    ! Get dimensions
+                    ! Full file dimension sizes
                     call check_netcdf_error(nf90_inq_dimid(nc_fid, dim_names(1), var_ID))
-                    call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, mx))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, mx_full))
                     call check_netcdf_error(nf90_inq_dimid(nc_fid, dim_names(2), var_ID))
-                    call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, my))
+                    call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, my_full))
                     call check_netcdf_error(nf90_inq_dimid(nc_fid, dim_names(3), var_ID))
                     call check_netcdf_error(nf90_inquire_dimension(nc_fid, var_ID, name, mt))
 
-                    ! allocate arrays in storm object
+                    ! Read full coordinate arrays (cheap) to locate the crop.
+                    allocate(lon_full(mx_full), lat_full(my_full))
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(1), var_ID))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_ID, lon_full))
+                    call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(2), var_ID))
+                    call check_netcdf_error(nf90_get_var(nc_fid, var_ID, lat_full))
+
+                    ! Normalize [0,360] longitude to [-180,180] before cropping
+                    ! so met_crop_extent (domain coords) compares correctly.
+                    if (lon_convention == 360) then
+                        where (lon_full > 180.0d0)
+                            lon_full = lon_full - 360.0d0
+                        end where
+                    end if
+
+                    call met_crop_indices(lon_full, mx_full, lat_full, my_full, &
+                                          i0, i1, j0, j1)
+                    mx = i1 - i0 + 1
+                    my = j1 - j0 + 1
+
+                    ! allocate arrays in storm object (cropped extent)
                     allocate(storm%pressure(mx, my, mt))
                     allocate(storm%wind_u(mx, my, mt))
                     allocate(storm%wind_v(mx, my, mt))
                     allocate(storm%longitude(mx))
                     allocate(storm%latitude(my))
                     allocate(storm%time(mt))
+                    storm%longitude = lon_full(i0:i1)
+                    storm%latitude  = lat_full(j0:j1)
+                    deallocate(lon_full, lat_full)
 
                     write(log_unit, *) "Storm header info:"
-                    write(log_unit, "('  mx,mx,mt = ', 3i4)") mx, my, mt
+                    write(log_unit, "('  mx,my,mt = ', 3i4)") mx, my, mt
 
                     if (DEBUG) then
                         print *, "Storm header info:"
-                        print "('  mx,mx,mt = ', 3i4)", mx, my, mt
+                        print "('  mx,my,mt = ', 3i4)", mx, my, mt
                     end if
 
-                    ! Dimensions
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(1), var_ID))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%longitude))
-                    call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(2), var_ID))
-                    call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%latitude))
+                    ! Time (read full, no spatial crop)
                     call check_netcdf_error(nf90_inq_varid(nc_fid, dim_names(3), var_ID))
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%time))
-
-                    ! Normalize [0,360] longitude to [-180,180]
-                    if (lon_convention == 360) then
-                        where (storm%longitude > 180.0d0)
-                            storm%longitude = storm%longitude - 360.0d0
-                        end where
-                    end if
 
                     ! nc_time_offset = (first_file_time - storm_offset) in s.
                     ! Subtracting raw[0] handles files where time is stored as
                     ! absolute seconds (e.g. Unix epoch) rather than relative.
+                    ! storm_time_scale is applied uniformly after the select.
                     storm%time(:) = storm%time(:) - storm%time(1) &
                                     + nint(nc_time_offset)
 
-                    ! Stretch (>1) or compress (<1) the time axis relative to
-                    ! the first time step (anchor).  No-op when scale is 1.0.
-                    if (storm_time_scale /= 1.0d0) then
-                        storm%time(:) = storm%time(1) &
-                            + nint(storm_time_scale &
-                                   * dble(storm%time(:) - storm%time(1)))
-                    end if
-
-                    ! Wind (optional — zero-fill if not in descriptor)
+                    ! Wind/pressure: strided read of the [i0:i1, j0:j1] crop
+                    ! window over all times.  Variable dims are (lon, lat, time)
+                    ! in Fortran order, so start/count are lon-first.
+                    ! (optional — zero-fill if not in descriptor)
                     if (len_trim(var_names(1)) > 0) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(1)), var_ID))
-                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_u))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, &
+                            storm%wind_u, start=[i0, j0, 1], count=[mx, my, mt]))
                     else
                         write(log_unit, *) "Warning: wind_u not in descriptor, setting to zero."
                         storm%wind_u = 0.0d0
                     end if
                     if (len_trim(var_names(2)) > 0) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(2)), var_ID))
-                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%wind_v))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, &
+                            storm%wind_v, start=[i0, j0, 1], count=[mx, my, mt]))
                     else
                         write(log_unit, *) "Warning: wind_v not in descriptor, setting to zero."
                         storm%wind_v = 0.0d0
@@ -395,7 +427,8 @@ contains
                     ! Pressure
                     if (len_trim(var_names(3)) > 0) then
                         call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(3)), var_ID))
-                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, storm%pressure))
+                        call check_netcdf_error(nf90_get_var(nc_fid, var_ID, &
+                            storm%pressure, start=[i0, j0, 1], count=[mx, my, mt]))
                     else
                         write(log_unit, *) "Warning: pressure not in descriptor, setting to zero."
                         storm%pressure = 0.0d0
@@ -408,6 +441,15 @@ contains
                     stop
 #endif
             end select
+
+            ! Stretch (>1) or compress (<1) the time axis relative to the
+            ! first time step (anchor), for both ASCII/OWI and NetCDF paths.
+            ! No-op when scale is 1.0.
+            if (storm_time_scale /= 1.0d0) then
+                storm%time(:) = storm%time(1) &
+                    + nint(storm_time_scale &
+                           * dble(storm%time(:) - storm%time(1)))
+            end if
 
             ! Make sure first time step in setrun is inside the times in the data
             if (t0 - storm%time(1) < -TRACKING_TOLERANCE) then
@@ -424,17 +466,66 @@ contains
                 stop
             end if
 
-            ! Set bounds on window to file bounds if not provided
-            if (window_type == 0) then
-                window = [storm%longitude(1), storm%latitude(1),            &
-                          storm%longitude(mx), storm%latitude(my)]
-            end if
-            write(log_unit, "('window = ',4d16.8)") window
+            ! The forcing extent is the (possibly cropped) data extent; the
+            ! edge taper in set_data_fields is derived from storm%longitude /
+            ! storm%latitude directly, so no separate window is stored.
+            write(log_unit, "('data extent = ',4d16.8)") &
+                storm%longitude(1), storm%latitude(1), &
+                storm%longitude(size(storm%longitude)), &
+                storm%latitude(size(storm%latitude))
 
             module_setup = .true.
         endif
 
     end subroutine set_storm
+
+
+    ! === met_crop_indices =====================================================
+    ! Given full-file longitude/latitude arrays, return the 1-based inclusive
+    ! index range [i0:i1] x [j0:j1] of points inside met_crop_extent.  When no
+    ! crop is set the full range is returned.  Assumes monotonic coordinates
+    ! (the points within the bounds form a contiguous block).  Aborts if the
+    ! crop does not overlap the file.
+    subroutine met_crop_indices(lon, nlon, lat, nlat, i0, i1, j0, j1)
+
+        implicit none
+
+        integer, intent(in) :: nlon, nlat
+        real(kind=8), intent(in) :: lon(nlon), lat(nlat)
+        integer, intent(out) :: i0, i1, j0, j1
+
+        integer :: k
+
+        if (.not. has_met_crop) then
+            i0 = 1; i1 = nlon; j0 = 1; j1 = nlat
+            return
+        end if
+
+        i0 = nlon + 1; i1 = 0
+        do k = 1, nlon
+            if (lon(k) >= met_crop_extent(1) .and. &
+                lon(k) <= met_crop_extent(2)) then
+                if (k < i0) i0 = k
+                if (k > i1) i1 = k
+            end if
+        end do
+
+        j0 = nlat + 1; j1 = 0
+        do k = 1, nlat
+            if (lat(k) >= met_crop_extent(3) .and. &
+                lat(k) <= met_crop_extent(4)) then
+                if (k < j0) j0 = k
+                if (k > j1) j1 = k
+            end if
+        end do
+
+        if (i0 > i1 .or. j0 > j1) then
+            print *, "ERROR: met_crop_extent does not overlap the met file."
+            print *, "  met_crop_extent = ", met_crop_extent
+            stop 1
+        end if
+
+    end subroutine met_crop_indices
 
 
     ! === read_OWI_ASCII_header ================================================
@@ -495,11 +586,13 @@ contains
 
 
     ! === read_OWI_ASCII =======================================================
-    ! reads the data files and fills out the storm object and it's dataarrays
-    subroutine read_OWI_ASCII(wind_file, pressure_file, mx, my, mt,         &
-                                                        swlat, swlon,       &
-                                                        dx, dy, storm,      &
-                                                        seconds_from_offset)
+    ! Reads the OWI wind/pressure files and fills the storm data arrays.
+    ! OWI cannot random-access a subregion, so each full mx_full x my_full
+    ! field is read into a temporary and only the crop window
+    ! [i0:i0+mx-1, j0:j0+my-1] is stored.  storm%longitude / storm%latitude
+    ! are set by the caller (set_storm) to the cropped coordinates.
+    subroutine read_OWI_ASCII(wind_file, pressure_file, mx_full, my_full, mt, &
+                              i0, j0, mx, my, storm, seconds_from_offset)
 
         use utility_module, only: seconds_from_epoch
 
@@ -508,12 +601,16 @@ contains
         ! Input arguments
         type(data_storm_type) :: storm
         character(len=*), intent(in) :: wind_file, pressure_file
-        integer, intent(in) :: my, mx, mt, seconds_from_offset
-        real(kind=8), intent(in) :: swlat, swlon, dx, dy
+        integer, intent(in) :: mx_full, my_full, mt, i0, j0, mx, my
+        integer, intent(in) :: seconds_from_offset
 
         ! Local storage
         integer, parameter :: wind_unit = 700, pressure_unit = 800
         integer :: i, j, n, time(5)
+        real(kind=8), allocatable :: u_full(:,:), v_full(:,:), p_full(:,:)
+
+        allocate(u_full(mx_full, my_full), v_full(mx_full, my_full), &
+                 p_full(mx_full, my_full))
 
         ! Open both storm forcing files
         open(wind_unit, file=wind_file, status='old', action='read')
@@ -528,25 +625,21 @@ contains
             read(wind_unit, '(t69, i4,i2,i2,i2, i2)') time
             storm%time(n) = seconds_from_epoch(time) - seconds_from_offset
 
-            read(wind_unit, '(8f10.0)') ((storm%wind_u(i,j, n),i=1,mx),j=1,my)
-            read(wind_unit, '(8f10.0)') ((storm%wind_v(i,j, n),i=1,mx),j=1,my)
+            read(wind_unit, '(8f10.0)') ((u_full(i,j),i=1,mx_full),j=1,my_full)
+            read(wind_unit, '(8f10.0)') ((v_full(i,j),i=1,mx_full),j=1,my_full)
 
             read(pressure_unit, *) ! Skip header line since we have it from above
-            read(pressure_unit, '(8f10.0)') ((storm%pressure(i,j, n),i=1,mx),j=1,my)
-            ! Convert from Pa to hPa
-            storm%pressure(:,:,n) = storm%pressure(:,:,n) * 100.0
+            read(pressure_unit, '(8f10.0)') ((p_full(i,j),i=1,mx_full),j=1,my_full)
+
+            ! Keep only the crop window; convert pressure from Pa to hPa.
+            storm%wind_u(:,:,n) = u_full(i0:i0+mx-1, j0:j0+my-1)
+            storm%wind_v(:,:,n) = v_full(i0:i0+mx-1, j0:j0+my-1)
+            storm%pressure(:,:,n) = p_full(i0:i0+mx-1, j0:j0+my-1) * 100.0
         end do
         close(wind_unit)
         close(pressure_unit)
 
-        ! Calculate lat/lon from SW corner and resolution
-        ! :TODO: do we need to store these?
-        do i = 1, my
-            storm%latitude(i) = swlat + i * dy
-        end do
-        do j = 1, mx
-            storm%longitude(j) = swlon + j * dx
-        end do
+        deallocate(u_full, v_full, p_full)
 
     end subroutine read_OWI_ASCII
 
@@ -676,16 +769,23 @@ contains
         real(kind=8) :: wind_v(size(storm%longitude), size(storm%latitude))
         real(kind=8) :: pressure(size(storm%longitude),size(storm%latitude))
 
-        ! Ramping window support
-        real(kind=8) :: d, ramp, xhi, yhi
+        ! Edge ramp support.  The forcing extent is the (possibly cropped)
+        ! data extent ext = [lon_min, lat_min, lon_max, lat_max]; forcing is
+        ! applied inside ext and tapered to ambient over the innermost
+        ! ramp_eff degrees of that boundary.  ramp_eff is ramp_width only
+        ! when a crop is active — without a crop there is no artificial edge
+        ! to ramp, so the full file is applied with a hard cutoff at its edge.
+        real(kind=8) :: d, ramp, ramp_eff, xhi, yhi, ext(4)
 
-        ! Check to see if this anything on this grid is inside of the window
-        ! Patch boundaries [xlower, xhi] x [ylower, yhi] \in window + ramp_width
+        ext = [storm%longitude(1), storm%latitude(1),                          &
+               storm%longitude(size(storm%longitude)),                         &
+               storm%latitude(size(storm%latitude))]
+        ramp_eff = merge(ramp_width, 0.0d0, has_met_crop)
+
+        ! Skip the patch entirely if it does not overlap the data extent.
         xhi = xlower + (mx + mbc - 0.5d0) * dx
         yhi = ylower + (my + mbc - 0.5d0) * dy
-        if (rects_intersect([xlower, ylower, xhi, yhi],                        &
-                        [window(1) - ramp_width, window(2) - ramp_width,       &
-                         window(3) + ramp_width, window(4) + ramp_width])) then
+        if (rects_intersect([xlower, ylower, xhi, yhi], ext)) then
 
             ! Get the wind and pressure arrays for the current timestep
             call interp_time(storm, t, wind_u, wind_v, pressure)
@@ -696,25 +796,21 @@ contains
                 do i=1-mbc, mx+mbc
                     x = xlower + (i-0.5d0) * dx
 
-                    ! Inside of window + ramp_width
-                    if (point_in_rectangle([x, y], [window(1) - ramp_width,   &
-                                                    window(2) - ramp_width,   &
-                                                    window(3) + ramp_width,   &
-                                                    window(4) + ramp_width])) then
+                    ! Inside the data extent: interpolate and taper near edges.
+                    if (point_in_rectangle([x, y], ext)) then
 
                         aux(wind_index, i, j) = spatial_interp(storm, x, y, wind_u)
                         aux(wind_index + 1, i, j) = spatial_interp(storm, x, y, wind_v)
                         aux(pressure_index, i, j) = spatial_interp(storm, x, y, pressure)
 
-                        ! Ramp function, hardcoded right now
-                        d = min(x - window(1), window(3) - x,         &
-                                y - window(2), window(4) - y)
-                        if (-ramp_width < d .and. d < 0.d0) then
-                            ramp = 0.5d0 * (1.d0 + sin(-pi / ramp_width * d + pi / 2.0))
-                        else if (d > 0.d0) then
+                        ! d = distance to the nearest edge of ext (>= 0 inside).
+                        ! Raised-cosine taper: 0 at the edge, 1 at ramp_eff in.
+                        d = min(x - ext(1), ext(3) - x,                        &
+                                y - ext(2), ext(4) - y)
+                        if (ramp_eff <= 0.0d0 .or. d >= ramp_eff) then
                             ramp = 1.d0
                         else
-                            ramp = 0.d0
+                            ramp = 0.5d0 * (1.d0 - cos(pi * d / ramp_eff))
                         end if
                         aux(pressure_index,i,j) =                              &
                                     Pa + (aux(pressure_index,i,j) - Pa)        &
