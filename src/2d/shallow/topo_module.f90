@@ -68,6 +68,21 @@ module topo_module
     integer,      allocatable :: mxtopo_full(:), mytopo_full(:)
     integer,      allocatable :: tp_i_start(:), tp_j_start(:)
 
+    ! Per-file dtopo preprocessing parameters — read from the 7 preprocessing
+    ! lines in dtopo.data.  Only z_shift and negate_z are implemented for
+    ! dtopography; the others trigger a stop in read_dtopo_settings.
+    real(kind=8), allocatable :: dtp_z_shift(:)
+    logical,      allocatable :: dtp_negate_z(:)
+
+    ! NetCDF descriptor values for type-4 dtopo files, parsed from the
+    ! key=value block in dtopo.data by read_dtopo_netcdf_descriptor.  The
+    ! time axis is carried as (t0, dt) in simulation seconds — computed by
+    ! Python's DTopoInspector — so Fortran never parses CF time metadata.
+    character(len=64), allocatable :: dnc_var_name(:), dnc_lon_name(:), &
+                                      dnc_lat_name(:), dnc_dim_order(:)
+    real(kind=8), allocatable :: dnc_lon_offset(:), dnc_t0(:), dnc_dt(:)
+    logical, allocatable :: dnc_has_descriptor(:)
+
     ! dtopo variables
     ! Work array
     real(kind=8), allocatable :: dtopowork(:)
@@ -1617,6 +1632,9 @@ contains
         integer :: finer_than,rank
         real(kind=8) :: area_i,area_j
         integer :: i,j
+        ! Unsupported preprocessing values: read, guarded, then discarded
+        real(kind=8) :: dtp_crop(4), dtp_align_v(2), dtp_x_shift_v
+        integer :: dtp_coarsen_v, dtp_buffer_v
 
         write(GEO_PARM_UNIT,*) ' '
         write(GEO_PARM_UNIT,*) '--------------------------------------------'
@@ -1647,10 +1665,55 @@ contains
         allocate(index0_dtopowork1(num_dtopo),index0_dtopowork2(num_dtopo))
         allocate(tdtopo1(num_dtopo),tdtopo2(num_dtopo),taudtopo(num_dtopo))
         allocate(mdtopoorder(num_dtopo),topoaltered(num_dtopo))
+        allocate(dtp_z_shift(num_dtopo),dtp_negate_z(num_dtopo))
+        dtp_z_shift  = 0.0d0
+        dtp_negate_z = .false.
+
+        allocate(dnc_var_name(num_dtopo),dnc_lon_name(num_dtopo))
+        allocate(dnc_lat_name(num_dtopo),dnc_dim_order(num_dtopo))
+        allocate(dnc_lon_offset(num_dtopo),dnc_t0(num_dtopo),dnc_dt(num_dtopo))
+        allocate(dnc_has_descriptor(num_dtopo))
+        dnc_var_name = ''
+        dnc_lon_name = ''
+        dnc_lat_name = ''
+        dnc_dim_order = ''
+        dnc_lon_offset = 0.0d0
+        dnc_t0 = 0.0d0
+        dnc_dt = 0.0d0
+        dnc_has_descriptor = .false.
 
         do i=1,num_dtopo
             read(iunit,*) dtopofname(i)
             read(iunit,*) dtopotype(i)
+
+            ! Read the 7 preprocessing lines (same per-file block as
+            ! topo.data, written by DTopoData.write()).  Only z_shift and
+            ! negate_z are implemented for dtopography; fail loudly on the
+            ! rest rather than silently ignoring them (an ignored x_shift,
+            ! for example, would mis-place the deformation).
+            read(iunit,*) dtp_crop(1), dtp_crop(2), dtp_crop(3), dtp_crop(4)
+            read(iunit,*) dtp_coarsen_v
+            read(iunit,*) dtp_buffer_v
+            read(iunit,*) dtp_align_v(1), dtp_align_v(2)
+            read(iunit,*) dtp_x_shift_v
+            read(iunit,*) dtp_z_shift(i)
+            read(iunit,*) dtp_negate_z(i)
+
+            if (any(dtp_crop /= 0.0d0) .or. dtp_coarsen_v > 1 .or. &
+                    dtp_buffer_v /= 0 .or. any(dtp_align_v /= 0.0d0) .or. &
+                    dtp_x_shift_v /= 0.0d0) then
+                print *, "ERROR: only z_shift and negate_z preprocessing are"
+                print *, "  implemented for dtopography files.  Unsupported"
+                print *, "  attribute set for file: ", trim(dtopofname(i))
+                stop 1
+            end if
+
+            ! For NetCDF files, read the key=value descriptor block that
+            ! follows the preprocessing lines (written by DTopoData.write()).
+            if (abs(dtopotype(i)) == 4) then
+                call read_dtopo_netcdf_descriptor(iunit, i)
+            end if
+
             write(GEO_PARM_UNIT,*) '   fname:',dtopofname(i)
             write(GEO_PARM_UNIT,*) '   topo type:',dtopotype(i)
 
@@ -1658,7 +1721,7 @@ contains
             call read_dtopo_header(dtopofname(i),dtopotype(i),mxdtopo(i), &
                 mydtopo(i),mtdtopo(i),xlowdtopo(i),ylowdtopo(i),t0dtopo(i), &
                 xhidtopo(i),yhidtopo(i),tfdtopo(i),dxdtopo(i),dydtopo(i), &
-                dtdtopo(i))
+                dtdtopo(i), i)
             mdtopo(i) = mxdtopo(i) * mydtopo(i) * mtdtopo(i)
         enddo
 
@@ -1702,7 +1765,20 @@ contains
 
         do i=1,num_dtopo
             call read_dtopo(mxdtopo(i),mydtopo(i),mtdtopo(i),dtopotype(i), &
-                dtopofname(i),dtopowork(i0dtopo(i):i0dtopo(i)+mdtopo(i)-1))
+                dtopofname(i),dtopowork(i0dtopo(i):i0dtopo(i)+mdtopo(i)-1), i)
+
+            ! Apply preprocessing in-memory (original file unchanged), same
+            ! convention as read_topo_file.  No fill-cell guard: deformation
+            ! grids have no no-data convention.
+            if (dtp_negate_z(i)) then
+                dtopowork(i0dtopo(i):i0dtopo(i)+mdtopo(i)-1) = &
+                    -dtopowork(i0dtopo(i):i0dtopo(i)+mdtopo(i)-1)
+            end if
+            if (dtp_z_shift(i) /= 0.0d0) then
+                dtopowork(i0dtopo(i):i0dtopo(i)+mdtopo(i)-1) = &
+                    dtopowork(i0dtopo(i):i0dtopo(i)+mdtopo(i)-1) &
+                    + dtp_z_shift(i)
+            end if
         enddo
 
     end subroutine read_dtopo_settings
@@ -1711,7 +1787,11 @@ contains
     ! ========================================================================
     !  read_dtopo(fname)
     ! ========================================================================
-    subroutine read_dtopo(mx,my,mt,dtopo_type,fname,dtopo)
+    subroutine read_dtopo(mx,my,mt,dtopo_type,fname,dtopo,dtopo_idx)
+
+#ifdef NETCDF
+      use netcdf
+#endif
 
       implicit none
 
@@ -1719,6 +1799,7 @@ contains
       integer, intent(in) :: mx,my,mt,dtopo_type
       character (len=150), intent(in) :: fname
       real(kind=8), intent(inout) :: dtopo(1:int(mx, 8)*int(my, 8)*int(mt, 8))
+      integer, intent(in), optional :: dtopo_idx
 
       ! Local
       integer, parameter :: iunit = 29
@@ -1726,9 +1807,20 @@ contains
       real(kind=8) :: t,x,y
       integer(kind=8) :: i, j, k, mtot
 
+      ! NetCDF locals (type 4)
+#ifdef NETCDF
+      integer(kind=4) :: nc_file, x_dim_id, y_dim_id, x_var_id, y_var_id
+      integer(kind=4) :: z_var_id, dim_ids(3), kk, jj, jf
+      character(len=64) :: dim_name
+      real(kind=8), allocatable :: nc_buffer(:,:), ylocs(:)
+      logical :: south_to_north
+#endif
+
       mtot = int(mx, 8) * int(my, 8)
 
-      open(unit=iunit, file=fname, status = 'unknown',form='formatted')
+      if (abs(dtopo_type) /= 4) then
+          open(unit=iunit, file=fname, status = 'unknown',form='formatted')
+      endif
 
       select case(abs(dtopo_type))
          case(1)
@@ -1756,6 +1848,88 @@ contains
                   read(iunit,*) (dtopo((k-1)*mtot + (j-1)*int(mx, 8) + i) , i=1,int(mx, 8))
                enddo
             enddo
+
+         ! NetCDF
+         case(4)
+#ifdef NETCDF
+            if (.not. present(dtopo_idx)) then
+                print *, 'ERROR: dtopo_type=4 requires a dtopo index'
+                stop 1
+            end if
+
+            call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
+            call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                trim(dnc_lon_name(dtopo_idx)), x_dim_id))
+            call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                trim(dnc_lat_name(dtopo_idx)), y_dim_id))
+            call check_netcdf_error(nf90_inq_varid(nc_file, &
+                trim(dnc_var_name(dtopo_idx)), z_var_id))
+            call check_netcdf_error(nf90_inquire_variable(nc_file, &
+                z_var_id, dimids=dim_ids))
+
+            ! The netCDF Fortran API reverses the file's C dimension order,
+            ! so time-slowest files appear here with time as dim_ids(3).
+            if (dim_ids(3) == x_dim_id .or. dim_ids(3) == y_dim_id) then
+                print *, 'ERROR: dtopo variable in ', trim(fname)
+                print *, '  must have time as its slowest dimension.'
+                stop 1
+            end if
+
+            ! Latitude direction: in-memory dtopo rows run N-to-S.
+            allocate(ylocs(my))
+            call check_netcdf_error(nf90_inq_varid(nc_file, &
+                trim(dnc_lat_name(dtopo_idx)), y_var_id))
+            call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
+                start=(/ 1 /), count=(/ my /)))
+            south_to_north = (ylocs(1) < ylocs(my))
+            deallocate(ylocs)
+
+            if (dim_ids(1) == x_dim_id) then
+                ! File C-order (time, lat, lon) -> API (lon, lat, time)
+                allocate(nc_buffer(mx, my))
+                do kk = 1, mt
+                    call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
+                        nc_buffer, start=(/ 1, 1, kk /), &
+                        count=(/ mx, my, 1 /)))
+                    do jj = 1, my
+                        if (south_to_north) then
+                            jf = my - jj + 1
+                        else
+                            jf = jj
+                        end if
+                        dtopo((kk-1)*mtot + (jj-1)*int(mx,8) + 1 : &
+                              (kk-1)*mtot + int(jj,8)*int(mx,8)) = &
+                            nc_buffer(:, jf)
+                    end do
+                end do
+            else
+                ! File C-order (time, lon, lat) -> API (lat, lon, time)
+                allocate(nc_buffer(my, mx))
+                do kk = 1, mt
+                    call check_netcdf_error(nf90_get_var(nc_file, z_var_id, &
+                        nc_buffer, start=(/ 1, 1, kk /), &
+                        count=(/ my, mx, 1 /)))
+                    do jj = 1, my
+                        if (south_to_north) then
+                            jf = my - jj + 1
+                        else
+                            jf = jj
+                        end if
+                        dtopo((kk-1)*mtot + (jj-1)*int(mx,8) + 1 : &
+                              (kk-1)*mtot + int(jj,8)*int(mx,8)) = &
+                            nc_buffer(jf, :)
+                    end do
+                end do
+            end if
+            deallocate(nc_buffer)
+
+            call check_netcdf_error(nf90_close(nc_file))
+#else
+            print *, "ERROR:  NetCDF library was not included in this"
+            print *, "  build of GeoClaw.  Cannot read dtopo file:"
+            print *, '   ', fname
+            stop 1
+#endif
       end select
 
     end subroutine read_dtopo
@@ -1779,13 +1953,18 @@ contains
     !   - dx,dy,dt - (dp) Distance between space (dx,dy) and time (dt) points
     ! ========================================================================
     subroutine read_dtopo_header(fname,topo_type,mx,my,mt,xlow,ylow,t0,xhi, &
-        yhi,tf,dx,dy,dt)
+        yhi,tf,dx,dy,dt,dtopo_idx)
+
+#ifdef NETCDF
+        use netcdf
+#endif
 
         implicit none
 
         ! Input Arguments
         character (len=150), intent(in) :: fname
         integer, intent(in) :: topo_type
+        integer, intent(in), optional :: dtopo_idx
 
         ! Output Arguments
         integer, intent(out) :: mx,my,mt
@@ -1797,6 +1976,14 @@ contains
         real(kind=8) :: x,y,t,y_old
         logical :: found_file
 
+        ! NetCDF locals (type 4)
+#ifdef NETCDF
+        integer(kind=4) :: nc_file, x_dim_id, y_dim_id, x_var_id, y_var_id
+        integer(kind=4) :: z_var_id, num_dims, dim_ids(3), n
+        character(len=64) :: dim_name
+        real(kind=8), allocatable :: xlocs(:), ylocs(:)
+#endif
+
         ! Open file
         inquire(file=fname,exist=found_file)
         if (.not.found_file) then
@@ -1804,7 +1991,9 @@ contains
             print *, '    ', fname
             stop
         endif
-        open(unit=iunit,file=fname,status='unknown',form='formatted')
+        if (abs(topo_type) /= 4) then
+            open(unit=iunit,file=fname,status='unknown',form='formatted')
+        endif
 
         select case(topo_type)
             ! Old style ASCII dtopo files
@@ -1867,6 +2056,97 @@ contains
                 xhi = xlow + dx*(mx-1)
                 yhi = ylow + dy*(my-1)
                 tf = t0 + dt*(mt-1)
+
+            ! NetCDF
+            case(4)
+#ifdef NETCDF
+                if (.not. present(dtopo_idx)) then
+                    print *, 'ERROR: dtopo_type=4 requires a dtopo index'
+                    stop 1
+                end if
+                if (.not. dnc_has_descriptor(dtopo_idx)) then
+                    print *, 'ERROR: dtopo_type=4 requires the NetCDF'
+                    print *, '  descriptor block in dtopo.data (written by'
+                    print *, '  DTopoData.write()).  Missing for file:'
+                    print *, '   ', trim(fname)
+                    stop 1
+                end if
+
+                call check_netcdf_error(nf90_open(fname, nf90_nowrite, &
+                                                  nc_file))
+
+                ! Spatial dimensions by descriptor name
+                call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                    trim(dnc_lon_name(dtopo_idx)), x_dim_id))
+                call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                    x_dim_id, dim_name, mx))
+                call check_netcdf_error(nf90_inq_dimid(nc_file, &
+                    trim(dnc_lat_name(dtopo_idx)), y_dim_id))
+                call check_netcdf_error(nf90_inquire_dimension(nc_file, &
+                    y_dim_id, dim_name, my))
+
+                ! Time dimension: the deformation variable's dimension that
+                ! is neither longitude nor latitude.
+                call check_netcdf_error(nf90_inq_varid(nc_file, &
+                    trim(dnc_var_name(dtopo_idx)), z_var_id))
+                call check_netcdf_error(nf90_inquire_variable(nc_file, &
+                    z_var_id, ndims=num_dims))
+                if (num_dims /= 3) then
+                    print *, 'ERROR: dtopo variable ', &
+                        trim(dnc_var_name(dtopo_idx)), ' in ', trim(fname)
+                    print *, '  must have 3 dimensions (time, lat, lon); ', &
+                        'found ', num_dims
+                    stop 1
+                end if
+                call check_netcdf_error(nf90_inquire_variable(nc_file, &
+                    z_var_id, dimids=dim_ids))
+                mt = -1
+                do n = 1, 3
+                    if (dim_ids(n) /= x_dim_id .and. &
+                        dim_ids(n) /= y_dim_id) then
+                        call check_netcdf_error(nf90_inquire_dimension( &
+                            nc_file, dim_ids(n), dim_name, mt))
+                    end if
+                end do
+                if (mt < 1) then
+                    print *, 'ERROR: cannot find time dimension of dtopo ', &
+                        'variable in ', trim(fname)
+                    stop 1
+                end if
+
+                ! Coordinates (CF convention: coord var name == dim name)
+                allocate(xlocs(mx), ylocs(my))
+                call check_netcdf_error(nf90_inq_varid(nc_file, &
+                    trim(dnc_lon_name(dtopo_idx)), x_var_id))
+                call check_netcdf_error(nf90_inq_varid(nc_file, &
+                    trim(dnc_lat_name(dtopo_idx)), y_var_id))
+                call check_netcdf_error(nf90_get_var(nc_file, x_var_id, &
+                    xlocs, start=(/ 1 /), count=(/ mx /)))
+                call check_netcdf_error(nf90_get_var(nc_file, y_var_id, &
+                    ylocs, start=(/ 1 /), count=(/ my /)))
+
+                xlow = min(xlocs(1), xlocs(mx)) + dnc_lon_offset(dtopo_idx)
+                xhi  = max(xlocs(1), xlocs(mx)) + dnc_lon_offset(dtopo_idx)
+                ylow = min(ylocs(1), ylocs(my))
+                yhi  = max(ylocs(1), ylocs(my))
+                dx = abs(xlocs(2) - xlocs(1))
+                dy = abs(ylocs(2) - ylocs(1))
+                deallocate(xlocs, ylocs)
+
+                ! Time axis from the descriptor: simulation seconds, uniform
+                ! spacing validated by Python's DTopoInspector.
+                t0 = dnc_t0(dtopo_idx)
+                dt = dnc_dt(dtopo_idx)
+                tf = t0 + dt*(mt-1)
+
+                call check_netcdf_error(nf90_close(nc_file))
+#else
+                print *, "ERROR:  NetCDF library was not included in this"
+                print *, "  build of GeoClaw.  Cannot read dtopo file:"
+                print *, '   ', fname
+                stop 1
+#endif
+
             case default
                 print *, 'ERROR:  Unrecognized topography type'
                 print *, '    topo_type = ',topo_type
@@ -1875,7 +2155,9 @@ contains
                 stop
         end select
 
-         close(iunit)
+        if (abs(topo_type) /= 4) then
+            close(iunit)
+        endif
     end subroutine read_dtopo_header
 
 
@@ -2190,6 +2472,99 @@ contains
             write(GEO_PARM_UNIT, *) '    crop_bounds    = ', nc_crop_bounds(:, idx)
 
     end subroutine read_netcdf_descriptor
+
+    ! ========================================================================
+    ! subroutine read_dtopo_netcdf_descriptor(iunit, idx)
+    !
+    ! Read the key=value block that follows the preprocessing lines in
+    ! dtopo.data for a type-4 (NetCDF) entry.  Same parser contract as
+    ! read_netcdf_descriptor: lines are consumed until a blank line or EOF.
+    ! Parsed values are stored in the module-level dnc_* arrays at idx.
+    !
+    ! Format (Python DescriptorWriter.write_dtopo_descriptor output):
+    !   var_name       = dz
+    !   lon_name       = lon
+    !   lat_name       = lat
+    !   time_name      = time
+    !   lon_offset     = 0.0
+    !   lat_order      = S_to_N
+    !   dim_order      = time,lat,lon
+    !   t0             = 0.0
+    !   dt             = 0.5
+    !
+    ! t0/dt are in simulation seconds (computed by Python's DTopoInspector,
+    ! which also validates uniform time spacing), so Fortran never parses
+    ! the file's time variable.  time_name and lat_order are informational:
+    ! latitude direction is detected from the coordinates at read time.
+    ! ========================================================================
+    subroutine read_dtopo_netcdf_descriptor(iunit, idx)
+
+        use geoclaw_module, only: GEO_PARM_UNIT
+
+        implicit none
+
+        integer, intent(in) :: iunit, idx
+
+        character(len=512) :: line, key, val
+        integer :: eq_pos, comment_pos, ios
+
+        do
+            read(iunit, '(a)', iostat=ios) line
+            if (ios /= 0) exit          ! EOF
+
+            ! Strip inline comment (! character)
+            comment_pos = index(line, '!')
+            if (comment_pos > 0) line = line(1:comment_pos-1)
+            line = adjustl(trim(line))
+
+            ! Blank line terminates the descriptor block
+            if (len_trim(line) == 0) exit
+
+            ! Skip lines without an '=' sign
+            eq_pos = index(line, '=')
+            if (eq_pos == 0) cycle
+
+            key = adjustl(trim(line(1:eq_pos-1)))
+            val = adjustl(trim(line(eq_pos+1:)))
+
+            select case (trim(key))
+                case ('var_name')
+                    dnc_var_name(idx) = trim(val)
+                case ('lon_name')
+                    dnc_lon_name(idx) = trim(val)
+                case ('lat_name')
+                    dnc_lat_name(idx) = trim(val)
+                case ('time_name')
+                    continue    ! informational; t0/dt carried directly
+                case ('lon_offset')
+                    read(val, *) dnc_lon_offset(idx)
+                case ('lat_order')
+                    continue    ! detected from coordinates at read time
+                case ('dim_order')
+                    dnc_dim_order(idx) = trim(val)
+                case ('t0')
+                    read(val, *) dnc_t0(idx)
+                case ('dt')
+                    read(val, *) dnc_dt(idx)
+                case default
+                    write(GEO_PARM_UNIT, *) &
+                        'WARNING: Unknown dtopo NetCDF descriptor key: ', &
+                        trim(key)
+            end select
+        end do
+
+        dnc_has_descriptor(idx) = .true.
+
+        ! Log what was parsed
+        write(GEO_PARM_UNIT, *) '  NetCDF descriptor for dtopo file ', idx, ':'
+        write(GEO_PARM_UNIT, *) '    var_name       = ', trim(dnc_var_name(idx))
+        write(GEO_PARM_UNIT, *) '    lon_name       = ', trim(dnc_lon_name(idx))
+        write(GEO_PARM_UNIT, *) '    lat_name       = ', trim(dnc_lat_name(idx))
+        write(GEO_PARM_UNIT, *) '    lon_offset     = ', dnc_lon_offset(idx)
+        write(GEO_PARM_UNIT, *) '    t0             = ', dnc_t0(idx)
+        write(GEO_PARM_UNIT, *) '    dt             = ', dnc_dt(idx)
+
+    end subroutine read_dtopo_netcdf_descriptor
 
 #ifdef NETCDF
     subroutine get_dim_info(nc_file, ndims, x_dim_id, x_dim_name, mx, &

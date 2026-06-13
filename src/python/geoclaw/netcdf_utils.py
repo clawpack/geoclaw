@@ -124,6 +124,21 @@ class TopoMetadata(FileMetadata):
 
 
 @dataclasses.dataclass
+class DTopoMetadata(FileMetadata):
+    """FileMetadata plus dtopo-specific fields.
+
+    The time axis is collapsed to (t0, dt) in simulation seconds: the
+    Fortran dtopo machinery requires uniform time spacing and reconstructs
+    times as t0 + k*dt, so Fortran never parses the file's time variable.
+    """
+    var_name: str        # the dZ (deformation) variable
+    t0: float            # first time, simulation seconds
+    dt: float            # uniform time step, seconds (0.0 when mt == 1)
+    mt: int              # number of times (informational; Fortran uses dims)
+    lon_offset: float = 0.0  # scalar Fortran adds: x_domain = x_file + offset
+
+
+@dataclasses.dataclass
 class MetVariableInfo:
     """Maps one NetCDF variable to its GeoClaw role."""
     var_name: str
@@ -670,6 +685,135 @@ class TopoInspector(NetCDFInspector):
 # Met inspector
 # ---------------------------------------------------------------------------
 
+class DTopoInspector(NetCDFInspector):
+    """
+    Interrogate a NetCDF moving-topography (dtopo) file.
+
+    Required roles: longitude, latitude, time, and the deformation (dZ)
+    variable.  Beyond the base class this:
+
+    * Discovers the deformation variable (by common names, else the unique
+      3-D data variable).
+    * Requires time to be the variable's slowest (first) dimension.
+    * Validates that the time axis is uniformly spaced — the Fortran dtopo
+      machinery reconstructs times as t0 + k*dt.
+    * Converts the time axis to simulation seconds: numeric time values pass
+      through unchanged; CF datetime values require an explicit
+      *time_reference* and become seconds since that reference.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the NetCDF file.
+    var_name : str, optional
+        Name of the deformation variable; auto-discovered if omitted.
+    time_reference : str or datetime-like, optional
+        Reference datetime when the file's time axis decodes to datetimes.
+    crop_bounds : tuple of four floats, optional
+        (lon_min, lon_max, lat_min, lat_max); validated against file extent.
+    """
+
+    _VAR_NAME_CANDIDATES = ('dz', 'dZ', 'deformation', 'displacement',
+                            'dtopo')
+
+    def __init__(
+        self,
+        path: str | Path,
+        var_name: Optional[str] = None,
+        time_reference: Optional[str] = None,
+        crop_bounds: Optional[tuple[float, float, float, float]] = None,
+    ) -> None:
+        super().__init__(path, crop_bounds)
+        self.var_name = var_name
+        self.time_reference = time_reference
+
+    def _find_dtopo_var_name(self) -> str:
+        """Find the deformation variable: common names, else unique 3-D var."""
+        names_lower = {str(n).lower(): str(n) for n in self.ds.data_vars}
+        for cand in self._VAR_NAME_CANDIDATES:
+            if cand.lower() in names_lower:
+                return names_lower[cand.lower()]
+
+        matches = [str(n) for n, v in self.ds.data_vars.items()
+                   if v.ndim == 3]
+        if len(matches) == 1:
+            return matches[0]
+        raise ValueError(
+            f"Cannot identify the deformation variable in '{self.path}'.  "
+            f"Expected a variable named one of {self._VAR_NAME_CANDIDATES} "
+            f"or a unique 3-D data variable; available: "
+            f"{list(self.ds.data_vars)}.  Pass var_name explicitly."
+        )
+
+    def _compute_time_axis(self, time_name: str) -> tuple[float, float, int]:
+        """Return (t0, dt, mt) in simulation seconds; validate uniform dt."""
+        tvals = self.ds[time_name].values
+        mt = len(tvals)
+
+        if np.issubdtype(tvals.dtype, np.datetime64):
+            if self.time_reference is None:
+                raise ValueError(
+                    f"Time axis '{time_name}' in '{self.path}' decodes to "
+                    f"datetimes; pass time_reference to define t=0 in "
+                    f"simulation seconds."
+                )
+            import pandas as pd
+            ref = np.datetime64(pd.Timestamp(self.time_reference))
+            seconds = (tvals - ref) / np.timedelta64(1, 's')
+        else:
+            seconds = np.asarray(tvals, dtype=float)
+
+        if mt < 2:
+            return float(seconds[0]), 0.0, mt
+
+        steps = np.diff(seconds)
+        dt = float(steps[0])
+        if dt <= 0.0 or not np.allclose(steps, dt, rtol=1e-6, atol=0.0):
+            raise ValueError(
+                f"Time axis '{time_name}' in '{self.path}' is not uniformly "
+                f"increasing (steps range [{steps.min()}, {steps.max()}] s). "
+                f"The GeoClaw dtopo reader requires uniform time spacing; "
+                f"resample the file first."
+            )
+        return float(seconds[0]), dt, mt
+
+    def inspect_dtopo(self) -> DTopoMetadata:
+        """Fully inspect the dtopo file and return a DTopoMetadata."""
+        if self.var_name is None:
+            self.var_name = self._find_dtopo_var_name()
+        base = self.inspect(self.var_name)
+
+        if base.time_name is None:
+            raise ValueError(
+                f"No time coordinate found in '{self.path}'.  "
+                f"dtopography requires a time axis."
+            )
+        if base.dim_order and base.dim_order[0] != 'time':
+            raise ValueError(
+                f"Variable '{self.var_name}' in '{self.path}' has dimension "
+                f"order {base.dim_order}; the GeoClaw dtopo reader requires "
+                f"time as the slowest (first) dimension."
+            )
+
+        t0, dt, mt = self._compute_time_axis(base.time_name)
+
+        if base.fill_value is not None:
+            warnings.warn(
+                f"Deformation variable '{self.var_name}' in '{self.path}' "
+                f"declares a fill value ({base.fill_value}); dtopography "
+                f"must not contain missing cells.",
+                UserWarning,
+            )
+
+        return DTopoMetadata(
+            **dataclasses.asdict(base),
+            var_name=self.var_name,
+            t0=t0,
+            dt=dt,
+            mt=mt,
+        )
+
+
 class MetInspector(NetCDFInspector):
     """
     Interrogate a NetCDF meteorological forcing file.
@@ -1190,6 +1334,34 @@ class DescriptorWriter:
         if meta.crop_bounds is not None:
             lon0, lon1, lat0, lat1 = meta.crop_bounds
             f.write(f"crop_bounds    = {lon0} {lon1} {lat0} {lat1}\n")
+        f.write("\n")  # blank line terminates block for Fortran parser
+
+    @staticmethod
+    def write_dtopo_descriptor(f, meta: 'DTopoMetadata') -> None:
+        """
+        Write the key=value descriptor block for one dtopo file.
+
+        Same format and parser contract as the topo descriptor (a blank
+        line terminates the block), written immediately after the 9-line
+        per-file block in *dtopo.data*.  The time axis is carried as
+        (t0, dt) in simulation seconds so Fortran never parses CF time.
+
+        Parameters
+        ----------
+        f : file-like object
+            Open for writing (text mode).
+        meta : DTopoMetadata
+            Output of ``DTopoInspector.inspect_dtopo()``.
+        """
+        f.write(f"var_name       = {meta.var_name}\n")
+        f.write(f"lon_name       = {meta.lon_name}\n")
+        f.write(f"lat_name       = {meta.lat_name}\n")
+        f.write(f"time_name      = {meta.time_name}\n")
+        f.write(f"lon_offset     = {meta.lon_offset!r}\n")
+        f.write(f"lat_order      = {meta.lat_order}\n")
+        f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
+        f.write(f"t0             = {meta.t0!r}\n")
+        f.write(f"dt             = {meta.dt!r}\n")
         f.write("\n")  # blank line terminates block for Fortran parser
 
     @staticmethod
