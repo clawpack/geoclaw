@@ -210,6 +210,94 @@ def test_dtopo_io(tmp_path, filename, dtopo_type, atol):
     assert np.allclose(test_dtopo.dZ, dtopo.dZ, atol=atol, rtol=0.0)
 
 
+def _make_synthetic_dtopo():
+    """Construct a small two-frame DTopography with a Gaussian uplift."""
+    x, y = _make_grid(0.0, 1.0, 0.0, 1.0)
+    X, Y = np.meshgrid(x, y)
+    dtopo = dtopotools.DTopography()
+    dtopo.x = x
+    dtopo.y = y
+    dtopo.X = X
+    dtopo.Y = Y
+    dtopo.times = [0.0, 1.0]
+    dZ_final = np.exp(-((X - 0.5)**2 + (Y - 0.5)**2) / 0.1)
+    dtopo.dZ = np.array([np.zeros(X.shape), dZ_final])
+    return dtopo
+
+
+@pytest.mark.python
+def test_dtopo_preprocessing_attributes(tmp_path):
+    r"""negate_z and z_shift are applied by DTopography.read()."""
+    path = tmp_path / "synthetic.tt3"
+    _make_synthetic_dtopo().write(path, dtopo_type=3, dZ_format="%.12e")
+
+    plain = dtopotools.DTopography()
+    plain.read(path=path, dtopo_type=3)
+
+    negated = dtopotools.DTopography()
+    negated.negate_z = True
+    negated.read(path=path, dtopo_type=3)
+    assert np.allclose(negated.dZ, -plain.dZ)
+
+    shifted = dtopotools.DTopography()
+    shifted.z_shift = 0.5
+    shifted.read(path=path, dtopo_type=3)
+    assert np.allclose(shifted.dZ, plain.dZ + 0.5)
+
+    # Order matches topotools: negate first, then shift.
+    both = dtopotools.DTopography()
+    both.negate_z = True
+    both.z_shift = 0.5
+    both.read(path=path, dtopo_type=3)
+    assert np.allclose(both.dZ, -plain.dZ + 0.5)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_netcdf_roundtrip(tmp_path):
+    r"""dtopo_type=4 write/read round-trips dZ, times, and coordinates."""
+    pytest.importorskip("netCDF4")
+
+    base = _make_synthetic_dtopo()
+    path = tmp_path / "synthetic.nc"
+    base.write(path, dtopo_type=4)
+
+    dtopo = dtopotools.DTopography()
+    dtopo.read(path=path)   # type 4 inferred from .nc extension
+
+    assert dtopo.dZ.shape == base.dZ.shape
+    assert np.allclose(dtopo.dZ, base.dZ)
+    assert np.allclose(dtopo.times, base.times)
+    assert np.allclose(dtopo.x, base.x)
+    assert np.allclose(dtopo.y, base.y)
+
+    # Preprocessing attributes also apply on the NetCDF read path.
+    shifted = dtopotools.DTopography()
+    shifted.negate_z = True
+    shifted.z_shift = 0.5
+    shifted.read(path=path)
+    assert np.allclose(shifted.dZ, -base.dZ + 0.5)
+
+
+@pytest.mark.python
+@pytest.mark.parametrize("attr, value", [
+    ("crop_extent", [0.0, 1.0, 0.0, 1.0]),
+    ("coarsen", 2),
+    ("buffer", 1.0),
+    ("align", (0.0, 0.5)),
+    ("x_shift", 0.5),
+])
+def test_dtopo_unsupported_preprocessing(tmp_path, attr, value):
+    r"""Unsupported preprocessing attributes raise in DTopography.read()."""
+    path = tmp_path / "synthetic.tt3"
+    _make_synthetic_dtopo().write(path, dtopo_type=3, dZ_format="%.12e")
+
+    dtopo = dtopotools.DTopography()
+    setattr(dtopo, attr, value)
+    with pytest.raises(NotImplementedError, match=attr):
+        dtopo.read(path=path, dtopo_type=3)
+
+
 @pytest.mark.python
 def test_geometry():
     r"""Test subfault geometry calculation."""

@@ -290,6 +290,20 @@ class DTopography(object):
         self.Y = None
         self.delta = None
         self.path = path
+        self.dtopo_type = dtopo_type
+
+        # Preprocessing attributes — same set and defaults as Topography so
+        # that DTopoData.write() can emit the same 9-line per-file block.
+        # Only z_shift and negate_z are currently applied to dtopo; the
+        # others raise NotImplementedError if set (see read()).
+        self.crop_extent = None     # [x1,x2,y1,y2]; None = full domain
+        self.coarsen = 1
+        self.buffer = 0.0
+        self.align = None
+        self.x_shift = 0.0
+        self.z_shift = 0.0
+        self.negate_z = False
+
         if path:
             self.read(path, dtopo_type)
 
@@ -314,7 +328,28 @@ class DTopography(object):
                 path = self.path
 
         if dtopo_type is None:
-            dtopo_type = topotools.determine_topo_type(path, default=3)
+            if self.dtopo_type is not None:
+                dtopo_type = self.dtopo_type
+            else:
+                dtopo_type = topotools.determine_topo_type(path, default=3)
+        self.dtopo_type = dtopo_type
+
+        # Unsupported preprocessing attributes: fail loudly rather than
+        # silently ignoring them (an ignored x_shift, for example, would
+        # mis-place the deformation).  Mirrors the Fortran guard in
+        # read_dtopo_settings.
+        unsupported = [name for name, is_set in (
+            ("crop_extent", self.crop_extent is not None),
+            ("coarsen", self.coarsen != 1),
+            ("buffer", self.buffer != 0.0),
+            ("align", self.align is not None),
+            ("x_shift", self.x_shift != 0.0),
+        ) if is_set]
+        if unsupported:
+            raise NotImplementedError(
+                "Preprocessing attributes %s are not implemented for "
+                "dtopography. Only z_shift and negate_z are supported."
+                % ", ".join(unsupported))
 
         if dtopo_type == 1:
             data = numpy.loadtxt(path)
@@ -403,9 +438,21 @@ class DTopography(object):
             self.times = times
             self.dZ = dZ
 
+        elif dtopo_type == 4:
+            self._read_netcdf(path)
+
         else:
-            raise ValueError("Only topography types 1, 2, and 3 are supported,",
-                             " given %s." % dtopo_type)
+            raise ValueError("Only topography types 1, 2, 3, and 4 are "
+                             "supported, given %s." % dtopo_type)
+
+        # Apply preprocessing attributes in-memory (original file unchanged).
+        # Fortran applies the same attributes independently in
+        # read_dtopo_settings so neither side needs a modified copy.
+        # No fill-cell guard: deformation grids have no no-data convention.
+        if self.negate_z:
+            self.dZ = -self.dZ
+        if self.z_shift != 0.0:
+            self.dZ = self.dZ + self.z_shift
 
 
     def write(self, path=None, dtopo_type=None, dZ_format="%.3f"):
@@ -436,6 +483,12 @@ class DTopography(object):
         # This is no longer required in GeoClaw...
         #if abs(dx - dy) >= 1e-12:
         #    raise ValueError("dx = %g not equal to dy = %g" % (dx,dy))
+
+        if dtopo_type == 4:
+            # CF-compliant NetCDF; binary output, handled outside the text
+            # file dispatch below.
+            self._write_netcdf(path, x, y)
+            return
 
         # Construct each interpolating function and evaluate at new grid
         ## Shouldn't need to interpolate in time.
@@ -499,6 +552,74 @@ class DTopography(object):
             else:
                 raise ValueError("Only topography types 1, 2, and 3 are ",
                                  "supported, given %s." % dtopo_type)
+
+
+    def _write_netcdf(self, path, x, y):
+        """Write a CF-compliant NetCDF dtopo file (dtopo_type=4).
+
+        Layout: dz(time, lat, lon) with time in plain (numeric) seconds so
+        the file round-trips without CF calendar decoding; lat ascending
+        (S-to-N, the in-memory dZ row order).
+        """
+        import xarray as xr
+
+        ds = xr.Dataset(
+            {"dz": (("time", "lat", "lon"),
+                    numpy.asarray(self.dZ, dtype=numpy.float64))},
+            coords={
+                "time": numpy.asarray(self.times, dtype=numpy.float64),
+                "lat": numpy.asarray(y, dtype=numpy.float64),
+                "lon": numpy.asarray(x, dtype=numpy.float64),
+            },
+        )
+        ds["dz"].attrs.update(long_name="seafloor deformation",
+                              units="meters")
+        ds["time"].attrs.update(standard_name="time", axis="T",
+                                units="seconds")
+        ds["lat"].attrs.update(standard_name="latitude", axis="Y",
+                               units="degrees_north")
+        ds["lon"].attrs.update(standard_name="longitude", axis="X",
+                               units="degrees_east")
+        # No fill value: deformation grids are complete, and xarray's default
+        # NaN _FillValue encoding would trip DTopoInspector's fill warning.
+        ds.to_netcdf(path, encoding={"dz": {"_FillValue": None}})
+
+
+    def _read_netcdf(self, path):
+        """Read a NetCDF dtopo file (dtopo_type=4) via DTopoInspector.
+
+        The inspector enforces the dtopo contract (time slowest dimension,
+        uniform time spacing) and provides CF-aware coordinate discovery;
+        data are normalized to the in-memory layout dZ(time, lat, lon) with
+        latitude ascending.
+        """
+        from clawpack.geoclaw.netcdf_utils import DTopoInspector
+
+        with DTopoInspector(path) as inspector:
+            meta = inspector.inspect_dtopo()
+            lon = inspector.ds[meta.lon_name].values.astype(numpy.float64)
+            lat = inspector.ds[meta.lat_name].values.astype(numpy.float64)
+            dZ = numpy.asarray(inspector.ds[meta.var_name].values,
+                               dtype=numpy.float64)
+
+        if meta.dim_order == ['time', 'lat', 'lon']:
+            pass
+        elif meta.dim_order == ['time', 'lon', 'lat']:
+            dZ = numpy.transpose(dZ, (0, 2, 1))
+        else:
+            raise ValueError(
+                f"Unsupported dimension order {meta.dim_order} in '{path}'; "
+                f"expected time first with lat/lon spatial dimensions.")
+
+        if meta.lat_order == 'N_to_S':
+            lat = lat[::-1].copy()
+            dZ = dZ[:, ::-1, :].copy()
+
+        self.x = lon
+        self.y = lat
+        self.X, self.Y = numpy.meshgrid(lon, lat)
+        self.times = meta.t0 + meta.dt * numpy.arange(meta.mt)
+        self.dZ = dZ
 
 
     def dZ_at_t(self, t):
