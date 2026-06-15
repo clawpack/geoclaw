@@ -21,6 +21,7 @@ Module provides provides utility functions.
 import io
 import os
 import os.path
+import warnings
 
 import numpy
 from urllib.parse import urlencode
@@ -299,13 +300,27 @@ def get_netcdf_names(path, lookup_type='dim', user_mapping=None, verbose=False):
      - verbose (bool)
 
     :Output:
-     - (dict) 
+     - (dict)
+
+    .. deprecated::
+        Use :class:`clawpack.geoclaw.netcdf_utils.NetCDFInspector` for
+        CF-aware coordinate discovery and
+        :class:`~clawpack.geoclaw.netcdf_utils.MetInspector` for met-variable
+        role discovery.  Those use CF ``axis``/``standard_name`` attributes
+        first and fall back to common names, superseding the name-only
+        matching here.
     """
+    warnings.warn(
+        "get_netcdf_names is deprecated; use netcdf_utils.NetCDFInspector "
+        "for coordinate discovery or MetInspector for met-variable roles.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     import xarray as xr
 
     # Open file and construct set of names
-    data = xr.open_dataset(path)
+    data = xr.open_dataset(path, decode_timedelta=False)
     if 'dim' in lookup_type.lower():
         _var_mapping = {"x": (False, ["x", "longitude", "lon"]), 
                         "y": (False, ["y", "latitude", "lat"]),
@@ -382,25 +397,29 @@ def wrap_coords(input_path, output_path=None, force=False, dim_mapping=None):
      - *force* (bool) By default this routine will not overwrite a file that
        alreaady exists.  The value *force = True* will overwrite the file.  
        Default is False
-     - *dim_mapping* (dict) Dimension mapping for all dimensions in the NetCDF
-       file, not just 'x'.  Default is {}.
+     - *dim_mapping* (dict) Optional override for the longitude coordinate
+       name, e.g. ``{'x': 'longitude'}``.  When omitted, the longitude
+       coordinate is discovered via CF conventions.  Default is None.
     """
 
     import xarray as xr
+    from clawpack.geoclaw.netcdf_utils import NetCDFInspector
 
     if not output_path:
-        output_path = (input_path.parent / 
+        output_path = (input_path.parent /
                                 f"{input_path.stem}_wrap{input_path.suffix}")
 
     if not output_path.exists() or force:
-        dim_mapping = get_netcdf_names(input_path, lookup_type='dim', 
-                                                       user_mapping=dim_mapping)
+        if dim_mapping is not None and 'x' in dim_mapping:
+            lon_name = dim_mapping['x']
+        else:
+            with NetCDFInspector(input_path) as inspector:
+                lon_name = inspector._find_lon_name()
         ds = xr.open_dataset(input_path)
-        lon_atrib = ds.coords[dim_mapping['x']].attrs
-        ds.coords[dim_mapping['x']] = \
-                                (ds.coords[dim_mapping['x']] + 180) % 360 - 180
-        wrapped_ds = ds.sortby(ds[dim_mapping['x']])
-        wrapped_ds.coords[dim_mapping['x']].attrs = lon_atrib
+        lon_atrib = ds.coords[lon_name].attrs
+        ds.coords[lon_name] = (ds.coords[lon_name] + 180) % 360 - 180
+        wrapped_ds = ds.sortby(ds[lon_name])
+        wrapped_ds.coords[lon_name].attrs = lon_atrib
         wrapped_ds.to_netcdf(output_path)
 
 

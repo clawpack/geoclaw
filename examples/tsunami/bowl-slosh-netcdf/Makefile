@@ -26,7 +26,7 @@ ifeq ($(HAVE_NETCDF), no)
   $(error This example requires NetCDF support, but none was found.)
 endif
 FFLAGS += -DNETCDF $(NETCDF_FFLAGS)
-LFLAGS += $(NETCDF_LFLAGS)
+LFLAGS += $(NETCDF_LFLAGS) $(FFLAGS)
 
 # ---------------------------------
 # package sources for this program:

@@ -107,23 +107,34 @@ class track_data(object):
 # ==========================================================================
 # Gauge functions
 # ==========================================================================
-def gauge_locations(current_data, gaugenos='all'):
+def gauge_locations(current_data, gaugenos='all') -> None:
     gaugetools.plot_gauge_locations(current_data.plotdata,
                                     gaugenos=gaugenos, format_string='kx',
                                     add_labels=True, xoffset=0.02,
                                     yoffset=0.02)
 
 
-def gauge_dry_regions(cd, dry_tolerance=1e-16):
+def gauge_dry_regions(cd, dry_tolerance: float=1e-16):
     """Masked array of zeros where gauge is dry."""
     return np.ma.masked_where(np.abs(cd.gaugesoln.q[0, :]) > dry_tolerance,
                               np.zeros(cd.gaugesoln.q[0, :].shape))
 
 
-def gauge_surface(cd, dry_tolerance=1e-16):
+def gauge_surface(cd, dry_tolerance: float=1e-16):
     """Sea surface at gauge masked when dry."""
     return np.ma.masked_where(np.abs(cd.gaugesoln.q[0, :]) < dry_tolerance,
                               cd.gaugesoln.q[3, :])
+
+
+def gauge_wind(cd, wind_x_idx: int=4, wind_y_idx: int=5):
+    """Wind speed at gauge"""
+    return np.sqrt(cd.gaugesoln.q[wind_x_idx, :]**2 
+                   + cd.gaugesoln.q[wind_y_idx, :]**2)
+
+
+def gauge_pressure(cd, pressure_idx: int=6):
+    """Wind speed at gauge"""
+    return cd.gaugesoln.q[pressure_idx, :]
 
 
 def plot_landfall_gauge(gauge, axes, landfall=0.0, style='b', kwargs={}):

@@ -22,14 +22,14 @@ except:
 # Scratch directory for storing topo and dtopo files:
 scratch_dir = os.path.join(CLAW, 'geoclaw', 'scratch')
 
-def get_topo(makeplots=False):
+def get_topo(path=scratch_dir, makeplots=False):
     """
     Retrieve the topo file from the GeoClaw repository.
     """
     from clawpack.geoclaw import topotools
     topo_fname = 'etopo10min120W60W60S0S.asc'
     url = 'http://depts.washington.edu/clawpack/geoclaw/topo/etopo/' + topo_fname
-    clawpack.clawutil.data.get_remote_file(url, output_dir=scratch_dir, 
+    clawpack.clawutil.data.get_remote_file(url, output_dir=path, 
             file_name=topo_fname, verbose=True)
 
     if makeplots:
@@ -40,9 +40,11 @@ def get_topo(makeplots=False):
         plt.savefig(fname)
         print("Created ",fname)
 
+    return os.path.join(scratch_dir, topo_fname)
+
 
     
-def make_dtopo(makeplots=False):
+def make_dtopo(path=scratch_dir, makeplots=False):
     """
     Create dtopo data file for deformation of sea floor due to earthquake.
     Uses the Okada model with fault parameters and mesh specified below.
@@ -50,7 +52,7 @@ def make_dtopo(makeplots=False):
     from clawpack.geoclaw import dtopotools
     import numpy
 
-    dtopo_fname = os.path.join(scratch_dir, "dtopo_usgs100227.tt3")
+    dtopo_fname = os.path.join(path, "dtopo_usgs100227.tt3")
 
     # Specify subfault parameters for this simple fault model consisting
     # of a single subfault:
@@ -106,6 +108,8 @@ def make_dtopo(makeplots=False):
         fname = os.path.splitext(os.path.split(dtopo_fname)[-1])[0] + '.png'
         plt.savefig(fname)
         print("Created ",fname)
+
+    return dtopo_fname
 
 
 if __name__=='__main__':

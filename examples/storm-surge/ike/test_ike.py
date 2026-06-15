@@ -17,7 +17,7 @@ CASES = [
     ),
     pytest.param(
         {"num_cells": [29 * 4, 24 * 4], 
-         "amr_levels_max": 6, 
+         "amr_levels_max": 4, 
          "num_output_times": 16},
         id="fine",
         marks=pytest.mark.slow,

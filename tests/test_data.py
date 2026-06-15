@@ -127,16 +127,23 @@ def test_read_fgmax_data_multiple_grids(tmp_path):
 
 # DTopoData round-trip test
 @pytest.mark.python
-@pytest.mark.xfail(reason="DTopoData.read currently fails to parse this written dtopo.data round-trip case.")
 def test_dtopo_data_roundtrip(tmp_path):
     r"""Test reading and writing of DTopoData files."""
+    import clawpack.geoclaw.dtopotools as dtopotools
+
     data_file = tmp_path / "dtopo.data"
+
+    d1 = dtopotools.DTopography()
+    d1.path = "dtopo_one.tt3"
+    d1.dtopo_type = 3
+    d1.z_shift = -0.25
+    d1.negate_z = True
 
     dtopo_data = clawpack.geoclaw.data.DTopoData()
     dtopo_data.dt_max_dtopo = 2.5
     dtopo_data.dtopofiles = [
-        [1, 2, 3, "dtopo_one.tt3"],
-        [3, 4, 1, "dtopo_two.tt1"],
+        d1,
+        [1, "dtopo_two.tt1"],   # legacy [dtopo_type, path] entry
     ]
 
     dtopo_data.write(out_file=data_file)
@@ -145,11 +152,79 @@ def test_dtopo_data_roundtrip(tmp_path):
     read_dtopo_data.read(data_file)
 
     assert np.allclose(read_dtopo_data.dt_max_dtopo, dtopo_data.dt_max_dtopo)
-    assert read_dtopo_data.dtopofiles == dtopo_data.dtopofiles
+    assert len(read_dtopo_data.dtopofiles) == 2
+
+    r1, r2 = read_dtopo_data.dtopofiles
+    assert r1.path.endswith("dtopo_one.tt3")
+    assert r1.dtopo_type == 3
+    assert np.allclose(r1.z_shift, -0.25)
+    assert r1.negate_z is True
+    assert r1.crop_extent is None
+    assert r2.path.endswith("dtopo_two.tt1")
+    assert r2.dtopo_type == 1
+    assert r2.negate_z is False
 
     text = _read_text(data_file)
     assert "dtopo_one.tt3" in text
     assert "dtopo_two.tt1" in text
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_data_netcdf_descriptor(tmp_path):
+    r"""DTopoData.write() emits the descriptor block for type-4 entries."""
+    pytest.importorskip("netCDF4")
+    import clawpack.geoclaw.dtopotools as dtopotools
+
+    # Build and write a small NetCDF dtopo file
+    x = np.linspace(0.0, 2.0, 5)
+    y = np.linspace(0.0, 1.0, 6)
+    X, Y = np.meshgrid(x, y)
+    src = dtopotools.DTopography()
+    src.x, src.y, src.X, src.Y = x, y, X, Y
+    src.times = [0.0, 0.5, 1.0]
+    src.dZ = np.zeros((3,) + X.shape)
+    nc_path = tmp_path / "dt.nc"
+    src.write(nc_path, dtopo_type=4)
+
+    entry = dtopotools.DTopography()
+    entry.path = str(nc_path)
+    entry.dtopo_type = 4
+
+    dtopo_data = clawpack.geoclaw.data.DTopoData()
+    dtopo_data.dtopofiles = [entry]
+    data_file = tmp_path / "dtopo.data"
+    dtopo_data.write(out_file=data_file)
+
+    text = _read_text(data_file)
+    assert "var_name       = dz" in text
+    assert "lon_name       = lon" in text
+    assert "lat_name       = lat" in text
+    assert "t0             = 0.0" in text
+    assert "dt             = 0.5" in text
+
+    # The reader still parses the file (descriptor lines are skipped).
+    read_back = clawpack.geoclaw.data.DTopoData()
+    read_back.read(data_file)
+    assert len(read_back.dtopofiles) == 1
+    assert read_back.dtopofiles[0].dtopo_type == 4
+
+
+@pytest.mark.python
+def test_dtopo_data_unsupported_preprocessing(tmp_path):
+    r"""Unsupported dtopo preprocessing attributes fail loudly at write."""
+    import clawpack.geoclaw.dtopotools as dtopotools
+
+    d = dtopotools.DTopography()
+    d.path = "dtopo.tt3"
+    d.dtopo_type = 3
+    d.x_shift = 0.5
+
+    dtopo_data = clawpack.geoclaw.data.DTopoData()
+    dtopo_data.dtopofiles = [d]
+
+    with pytest.raises(NotImplementedError, match="x_shift"):
+        dtopo_data.write(out_file=tmp_path / "dtopo.data")
 
 
 # SurgeData round-trip test
@@ -165,6 +240,9 @@ def test_surge_data_roundtrip(tmp_path):
     surge_data.wind_index = 6
     surge_data.pressure_index = 7
     surge_data.display_landfall_time = True
+    surge_data.storm_time_scale = 2.5
+    surge_data.t_ramp_on = 3600.0
+    surge_data.t_ramp_off = 1800.0
     surge_data.wind_refine = [20.0, 40.0, 60.0]
     surge_data.R_refine = [60.0e3, 40.0e3, 20.0e3]
     surge_data.storm_specification_type = "data"
@@ -181,6 +259,9 @@ def test_surge_data_roundtrip(tmp_path):
     assert read_surge_data.wind_index == surge_data.wind_index
     assert read_surge_data.pressure_index == surge_data.pressure_index
     assert read_surge_data.display_landfall_time == surge_data.display_landfall_time
+    assert np.allclose(read_surge_data.storm_time_scale, surge_data.storm_time_scale)
+    assert np.allclose(read_surge_data.t_ramp_on, surge_data.t_ramp_on)
+    assert np.allclose(read_surge_data.t_ramp_off, surge_data.t_ramp_off)
     assert np.allclose(read_surge_data.wind_refine, surge_data.wind_refine)
     assert np.allclose(read_surge_data.wind_refine, surge_data.wind_refine)
     assert np.allclose(read_surge_data.R_refine, surge_data.R_refine)

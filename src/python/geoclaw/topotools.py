@@ -442,6 +442,21 @@ class Topography(object):
 
         self.coordinate_transform = lambda x,y: (x,y)
 
+        # Preprocessing attributes — applied by read() after data is loaded.
+        # CONFLICT NOTE: 'extent' is already a @property backed by self._extent
+        # that returns the loaded-data spatial bounds.  The crop-target attribute
+        # is therefore named 'crop_extent' to avoid shadowing it.
+        # PATH NOTE: 'path' already exists as an instance attribute set above.
+        # No topo_path alias is needed; callers should use self.path.
+        self.crop_extent: list[float] | None = None  # [x1,x2,y1,y2]; None=full domain
+        self.coarsen: int = 1
+        self.buffer: float = 0.0
+        self.align = None
+        self.x_shift: float = 0.0
+        self.z_shift: float = 0.0
+        self.negate_z: bool = False
+        self._netcdf_meta = None  # TopoMetadata set by _normalize_topofiles for topo_entries() format
+
         if path:
             self.read(path=path, topo_type=topo_type,
                       unstructured=unstructured, **kwargs)
@@ -685,6 +700,34 @@ class Topography(object):
         else:
             # Data is in one of the GeoClaw supported formats
             if abs(self.topo_type) == 1:
+                import warnings
+                warnings.warn(
+                    "topo_type=1 is deprecated. Convert to topo_type=2, 3, or 4:\n"
+                    "  t.read()  # load the type-1 file\n"
+                    "  t.write('output.tt2', topo_type=2)  # save as type 2\n"
+                    "Note: topo_type=1 assumes regularly spaced data. Genuinely "
+                    "unstructured (scattered) point data must be gridded externally "
+                    "(e.g., scipy.interpolate, GMT) before use with GeoClaw.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                _preprocessing_requested = (
+                    self.crop_extent is not None
+                    or self.coarsen != 1
+                    or self.buffer != 0.0
+                    or self.align is not None
+                    or self.x_shift != 0.0
+                    or self.z_shift != 0.0
+                    or self.negate_z
+                )
+                if _preprocessing_requested:
+                    raise NotImplementedError(
+                        "Preprocessing attributes (crop_extent, coarsen, buffer, align, "
+                        "shift) are not supported for topo_type=1. Convert to type 2/3/4 first:\n"
+                        "  t_raw = Topography(path=self.path, topo_type=1)\n"
+                        "  t_raw.read()\n"
+                        "  t_raw.write('converted.tt2', topo_type=2)"
+                    )
                 data = numpy.loadtxt(self.path)
                 N = [0,0]
                 y0 = data[0,1]
@@ -719,46 +762,94 @@ class Topography(object):
                     self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
 
             elif abs(self.topo_type) == 4:
-                import netCDF4
+                from clawpack.geoclaw import netcdf_utils as _ncutils
+                from clawpack.geoclaw.units import (
+                    convert as _units_convert,
+                    GEOCLAW_NETCDF_UNITS as _NC_UNITS,
+                )
 
-                # NetCDF4 GEBCO topography
-                with netCDF4.Dataset(self.path, 'r', format="NETCDF4") as nc_file:
-                    x_var = nc_params.get('x_var', None)
-                    y_var = nc_params.get('y_var', None)
-                    z_var = nc_params.get('z_var', None)
-                    for (key, var) in nc_file.variables.items():
-                        if 'axis' in var.ncattrs():
-                            if var.axis.lower() == "x" and x_var is None:
-                                x_var = key
-                            elif var.axis.lower() == "y" and y_var is None:
-                                y_var = key
-                        else:
-                            if z_var is None:
-                                z_var = key
-                    if x_var is None or y_var is None or z_var is None:
-                        err_string = "".join(
-                                      ("Could not automatically determine ",
-                                       "variable ids.  Please check if the ",
-                                       "file has the 'axis' attribute attached",
-                                       " to the appropriate x and y variables ",
-                                       "or specify the variables directly via",
-                                       " the *nc_params* dictionary."))
-                        raise IOError(err_string)
+                # Allow explicit variable name override via nc_params (backward
+                # compat with old 'z_var' key).
+                _var_hint: str | None = nc_params.get('z_var', None)
 
-                    try:
-                        self._x = nc_file.variables[x_var][::stride[0]]
-                        self._y = nc_file.variables[y_var][::stride[1]]
-                        self._Z = nc_file.variables[z_var][::stride[0],
-                                                           ::stride[1]]
-                    except ValueError as e:
-                        print("Unable to read in variables.  Check variable mappings.")
-                        print(f"  x = '{x_var}'")
-                        print(f"  y = '{y_var}'")
-                        print(f"  z = '{z_var}'")
-                        raise e
+                with _ncutils.TopoInspector(
+                    self.path, var_name=_var_hint
+                ) as inspector:
+                    # Auto-detect elevation variable if not provided
+                    if inspector.var_name is None:
+                        inspector.var_name = inspector._find_topo_var_name()
+
+                    # Get CF coordinate metadata (no fill-value data scan here;
+                    # fill values are handled below via NaN replacement)
+                    _meta = inspector.inspect(inspector.var_name)
+                    # Check and record units; warns if conversion is needed
+                    _source_units = inspector._check_topo_units()
+
+                    ds = inspector.ds
+                    _lon_name = _meta.lon_name
+                    _lat_name = _meta.lat_name
+                    _var_name = inspector.var_name
+
+                    # Load coordinate 1-D arrays
+                    _lon_vals = numpy.asarray(
+                        ds[_lon_name].values[::stride[0]], dtype=float
+                    )
+                    _lat_vals = numpy.asarray(
+                        ds[_lat_name].values[::stride[1]], dtype=float
+                    )
+
+                    # Load variable, squeezing singleton non-spatial dims
+                    _da = ds[_var_name]
+                    for _dim in list(_da.dims):
+                        if _dim not in (_lon_name, _lat_name):
+                            if _da.sizes[_dim] == 1:
+                                _da = _da.isel({_dim: 0})
+                            else:
+                                raise ValueError(
+                                    f"NetCDF variable '{_var_name}' has "
+                                    f"non-singleton dimension '{_dim}' "
+                                    f"(size {_da.sizes[_dim]}).  Cannot load "
+                                    f"as static topography."
+                                )
+
+                    # Transpose to (lat, lon) = (y, x) order expected by
+                    # Topography, then apply stride
+                    _da = _da.transpose(_lat_name, _lon_name)
+                    _z_vals = numpy.asarray(
+                        _da.values[::stride[1], ::stride[0]], dtype=float
+                    )
+
+                    # Flip to S→N (y increasing) if file stores N→S
+                    if _meta.lat_order == 'N_to_S':
+                        _lat_vals = _lat_vals[::-1]
+                        _z_vals = _z_vals[::-1, :]
+
+                    # Apply unit conversion if source is not already meters
+                    _contract = _NC_UNITS.get('topo', 'm')
+                    _meters_aliases = frozenset(
+                        {'m', 'meter', 'meters', 'metre', 'metres'}
+                    )
+                    if _source_units and _source_units not in _meters_aliases:
+                        _canonical = _ncutils._normalize_cf_unit(_source_units)
+                        if _canonical is not None:
+                            _factor = _units_convert(1.0, _canonical, _contract)
+                            _z_vals = _z_vals * _factor
+
+                    # Replace decoded fill values (NaN from xarray mask_and_scale)
+                    # with no_data_value so downstream consumers see a consistent
+                    # sentinel, regardless of mask=True/False
+                    _nan_mask = numpy.isnan(_z_vals)
+                    if _nan_mask.any():
+                        _z_vals[_nan_mask] = self.no_data_value
+
+                self._x = _lon_vals
+                self._y = _lat_vals
+                self._Z = _z_vals
 
                 if mask:
-                    self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
+                    self._Z = numpy.ma.masked_values(
+                        self._Z, self.no_data_value, copy=False
+                    )
 
             elif abs(self.topo_type) == 5:
                 # GeoTIFF
@@ -817,6 +908,45 @@ class Topography(object):
                 # Modify Z array as well
                 self._Z = self._Z[region_index[2]:region_index[3],
                                   region_index[0]:region_index[1]]
+
+            # ---------------------------------------------------------------
+            # Apply preprocessing attributes in-memory (original file unchanged).
+            # Fortran applies the same attributes independently in read_topo_file
+            # and read_topo_settings so neither side needs to write a modified copy.
+            # Order:
+            #   1. negate_z
+            #   2. z_shift   (guard fill cells)
+            #   3. x_shift   (shift x array; Fortran shifts xlowtopo/xhitopo)
+            #   4+5. crop + coarsen via self.crop() (Fortran: crop+buffer done,
+            #        coarsen not yet implemented)
+            # Steps are skipped when the attribute equals its default value.
+            # ---------------------------------------------------------------
+            if self.negate_z:
+                self._Z = -self._Z
+            if self.z_shift != 0.0:
+                # Guard fill/missing cells so the sentinel value is preserved.
+                _fill_mask = (self._Z == self.no_data_value)
+                self._Z = self._Z + self.z_shift
+                if _fill_mask.any():
+                    self._Z[_fill_mask] = self.no_data_value
+            if self.x_shift != 0.0:
+                self._x = self._x + self.x_shift
+                self._extent = None
+            if self.crop_extent is not None or self.coarsen > 1:
+                _cropped = self.crop(
+                    filter_region=self.crop_extent,
+                    coarsen=int(self.coarsen),
+                    buffer=int(self.buffer),
+                    align=self.align,
+                )
+                if _cropped is not None:
+                    self._x = _cropped._x
+                    self._y = _cropped._y
+                    self._Z = _cropped._Z
+                    self._X = None
+                    self._Y = None
+                    self._extent = None
+                    self._delta = None
 
 
     def read_header(self):
@@ -916,15 +1046,29 @@ class Topography(object):
                 self._extent = [self._x[0],self._x[-1],self._y[0],self._y[-1]]
 
         elif abs(self.topo_type) == 4:
-            # netCDF
-            import netCDF4
-            f = netCDF4.Dataset(self.path, 'r')
-            self._x = f.variables['lon']
-            self._y = f.variables['lat']
-            self._extent = [self._x[0],self._x[-1],self._y[0],self._y[-1]]
-            dx = self._x[1] - self._x[0]
-            dy = self._y[1] - self._y[0]
-            self._delta = (dx, dy)
+            # NetCDF: use NetCDFInspector for CF-aware coordinate detection.
+            # Only coordinate arrays are loaded here; Z data is deferred.
+            from clawpack.geoclaw import netcdf_utils as _ncutils
+
+            with _ncutils.NetCDFInspector(self.path) as inspector:
+                _lon_name = inspector._find_lon_name()
+                _lat_name = inspector._find_lat_name()
+                ds = inspector.ds
+
+                _lon_vals = numpy.asarray(ds[_lon_name].values, dtype=float)
+                _lat_vals = numpy.asarray(ds[_lat_name].values, dtype=float)
+
+                # Normalise to S→N (increasing y) so extent/delta are consistent
+                if inspector._detect_lat_order(_lat_name) == 'N_to_S':
+                    _lat_vals = _lat_vals[::-1]
+
+            self._x = _lon_vals
+            self._y = _lat_vals
+            self._extent = [self._x[0], self._x[-1], self._y[0], self._y[-1]]
+            self._delta = (
+                float(self._x[1] - self._x[0]),
+                float(self._y[1] - self._y[0]),
+            )
             num_cells = (len(self._x), len(self._y))
 
         elif abs(self.topo_type) == 5:
@@ -1038,9 +1182,14 @@ class Topography(object):
                     outfile.write("%s %s %s\n" % (self.x[i], self.y[i], topo))
 
         elif topo_type == 1:
-            # longitudes = numpy.linspace(lower[0], lower[0] + delta * Z.shape[0], Z.shape[0])
-            # latitudes = numpy.linspace(lower[1], lower[1] + delta * Z.shape[1], Z.shape[1])
-
+            import warnings
+            warnings.warn(
+                "Writing topo_type=1 is deprecated. Prefer topo_type=2 or 3 for ASCII "
+                "output, or topo_type=4 for NetCDF. Type-1 output will be removed in "
+                "a future release.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             with open(path, 'w') as outfile:
                 for j in range(len(self.y)-1, -1, -1):
                     latitude = self.y[j]

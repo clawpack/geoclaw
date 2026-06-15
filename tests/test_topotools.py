@@ -29,11 +29,12 @@ def topo_bowl_hill(x, y):
 
 
 @pytest.mark.python
-@pytest.mark.parametrize("topo_type", [1, 2, 3])
+@pytest.mark.parametrize("topo_type", [2, 3])
 def test_read_write_topo_bowl(tmp_path, topo_type):
     """
     Test writing and reading topo files with a small number of points.
     Note that ordering should go from the NW corner.
+    topo_type=1 removed: deprecated in Prompt 3; covered by Group 7 tests.
     """
 
     topo = topotools.Topography(topo_func=topo_bowl)
@@ -127,9 +128,11 @@ def test_crop_topo_bowl():
 
 
 @pytest.mark.python
-@pytest.mark.parametrize("topo_type", [1, 2, 3])
+@pytest.mark.parametrize("topo_type", [2, 3])
 def test_read_write_topo_bowl_hill(tmp_path, topo_type):
-    """Test writing and reading topo files for the bowl-hill example."""
+    """Test writing and reading topo files for the bowl-hill example.
+    topo_type=1 removed: deprecated in Prompt 3; covered by Group 7 tests.
+    """
 
     topo = topotools.Topography(topo_func=topo_bowl_hill)
     topo.x = np.linspace(-1.5, 2.5, 101)
