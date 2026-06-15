@@ -240,6 +240,9 @@ def test_surge_data_roundtrip(tmp_path):
     surge_data.wind_index = 6
     surge_data.pressure_index = 7
     surge_data.display_landfall_time = True
+    surge_data.storm_time_scale = 2.5
+    surge_data.t_ramp_on = 3600.0
+    surge_data.t_ramp_off = 1800.0
     surge_data.wind_refine = [20.0, 40.0, 60.0]
     surge_data.R_refine = [60.0e3, 40.0e3, 20.0e3]
     surge_data.storm_specification_type = "data"
@@ -256,6 +259,9 @@ def test_surge_data_roundtrip(tmp_path):
     assert read_surge_data.wind_index == surge_data.wind_index
     assert read_surge_data.pressure_index == surge_data.pressure_index
     assert read_surge_data.display_landfall_time == surge_data.display_landfall_time
+    assert np.allclose(read_surge_data.storm_time_scale, surge_data.storm_time_scale)
+    assert np.allclose(read_surge_data.t_ramp_on, surge_data.t_ramp_on)
+    assert np.allclose(read_surge_data.t_ramp_off, surge_data.t_ramp_off)
     assert np.allclose(read_surge_data.wind_refine, surge_data.wind_refine)
     assert np.allclose(read_surge_data.wind_refine, surge_data.wind_refine)
     assert np.allclose(read_surge_data.R_refine, surge_data.R_refine)
