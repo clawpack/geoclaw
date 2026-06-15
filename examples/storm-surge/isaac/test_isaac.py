@@ -674,5 +674,53 @@ def test_isaac_netcdf_crop(tmp_path: Path) -> None:
             f"gauge {gauge_id} eta not at rest: {np.max(np.abs(g.q[3, :]))}"
 
 
+@pytest.mark.storm
+def test_isaac_model_storm_time_scale(tmp_path: Path) -> None:
+    """storm_time_scale changes the model-storm (Holland) forcing.
+
+    Slowing the storm 4x (storm_time_scale=4.0) shifts the eye position at
+    every sim time relative to the unscaled run, so the gauge series must
+    differ from the committed holland80 (scale=1.0) regression.  Confirms
+    the model-storm time-scale path in set_storm_fields is active.
+    """
+    import clawpack.pyclaw.gauges as gauges
+
+    example_dir = Path(__file__).parent
+    runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
+    runner.set_data()
+    runner.rundata.clawdata.t0 = days2seconds(-1)
+    runner.rundata.clawdata.tfinal = days2seconds(-0.5)
+    runner.rundata.clawdata.num_output_times = 1
+    runner.rundata.amrdata.amr_levels_max = 2
+
+    surge_data = runner.rundata.surge_data
+    surge_data.storm_file = tmp_path / "isaac.storm"
+    surge_data.storm_specification_type = "holland80"
+    surge_data.storm_time_scale = 4.0   # 4x slower storm
+
+    isaac = Storm(path=example_dir / "bal092012.dat", file_format="ATCF")
+    isaac.time_offset = np.datetime64("2012-08-29")
+    isaac.write(surge_data.storm_file, file_format="geoclaw")
+
+    # Confirm the parameter reached surge.data.
+    runner.write_data()
+    assert "storm_time_scale" in (runner.temp_path / "surge.data").read_text()
+
+    runner.build_executable()
+    runner.run_code()
+
+    scaled = gauges.GaugeSolution(1, path=runner.temp_path)
+    regression = gauges.GaugeSolution(
+        1, path=example_dir / "regression_data" / "holland80")
+
+    # Adaptive time-stepping gives different sample counts when the forcing
+    # differs, so interpolate the scaled surface elevation onto the
+    # regression's gauge times before comparing.
+    eta_scaled = np.interp(regression.t, scaled.t, scaled.q[3, :])
+    assert not np.allclose(eta_scaled, regression.q[3, :],
+                           rtol=1e-3, atol=1e-3), \
+        "storm_time_scale=4.0 produced the same gauge as the scale=1.0 baseline"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))

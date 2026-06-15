@@ -810,6 +810,15 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("pressure_index", 6)
         self.add_attribute("display_landfall_time", False)
 
+        # Model-storm time scaling and temporal onset/cutoff ramp.
+        # storm_time_scale: >1 slower, <1 faster (model storms; data storms
+        #   carry their own scale in the .storm descriptor).
+        # t_ramp_on / t_ramp_off: seconds over which the wind/pressure forcing
+        #   ramps on after t0 and off before tfinal (0 = no ramp).
+        self.add_attribute("storm_time_scale", 1.0)
+        self.add_attribute("t_ramp_on", 0.0)
+        self.add_attribute("t_ramp_off", 0.0)
+
         # AMR parameters
         self.add_attribute('wind_refine', [20.0,40.0,60.0])
         self.add_attribute('R_refine', [60.0e3, 40e3, 20e3])
@@ -840,6 +849,9 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             self.wind_index = int(data_file.readline().split("=:")[0]) - 1
             self.pressure_index = int(data_file.readline().split("=:")[0]) - 1
             self.display_landfall_time = bool(data_file.readline().split("=:")[0])
+            self.storm_time_scale = float(data_file.readline().split("=:")[0])
+            self.t_ramp_on = float(data_file.readline().split("=:")[0])
+            self.t_ramp_off = float(data_file.readline().split("=:")[0])
             data_file.readline()
             data_file.readline() # TODO: Extra empty line, should fix
 
@@ -888,6 +900,12 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                         description="(Index into aux array - fortran indexing)")
         self.data_write("display_landfall_time",
                         description='(Display time relative to landfall)')
+        self.data_write("storm_time_scale",
+                        description='(Model storm time scale: >1 slower, <1 faster)')
+        self.data_write("t_ramp_on",
+                        description='(Temporal onset ramp width in seconds)')
+        self.data_write("t_ramp_off",
+                        description='(Temporal cutoff ramp width in seconds)')
         self.data_write()
 
         # AMR storm refinement criteria
