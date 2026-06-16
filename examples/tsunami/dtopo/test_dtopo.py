@@ -78,16 +78,32 @@ def _make_dtopo1(example_dir: Path) -> "dtopotools.DTopography":
     return fault.create_dtopography(x, y, times=times)
 
 
+# A non-vacuous-guard gauge placed inside the dtopo1 footprint
+# (x in [-0.4, 0.6], y in [-0.4, 0.4]).  The seafloor deformation directly
+# perturbs the surface here, so this gauge registers a signal regardless of
+# which static topo wins or the bathymetry there -- unlike the example's
+# gauges 1/2 at (-0.45, 0.05), which sit *outside* the footprint and only see
+# a propagated wave whose amplitude depends on the topo ranking.
+_GUARD_GAUGE = [99, 0.1, 0.0, 0.0, 1e10]
+
+
 def _run_single_dtopo(run_path: Path, example_dir: Path, entry,
                       make_level: str = "new",
+                      guard_gauge=None,
                       **build_kwargs) -> test.GeoClawTestRunner:
-    """Run the example with a single dtopo file given by *entry*."""
+    """Run the example with a single dtopo file given by *entry*.
+
+    If *guard_gauge* (a ``[id, x, y, t1, t2]`` list) is given it is appended to
+    the example's gauges before the run.
+    """
     run_path.mkdir(exist_ok=True)
     runner = test.GeoClawTestRunner(run_path, test_path=example_dir)
     _make_topography_files(run_path)
 
     runner.set_data()
     runner.rundata.dtopo_data.dtopofiles = [entry]
+    if guard_gauge is not None:
+        runner.rundata.gaugedata.gauges.append(guard_gauge)
     runner.write_data()
     runner.build_executable(make_level=make_level, **build_kwargs)
     runner.run_code()
@@ -149,7 +165,8 @@ def test_dtopo_preprocessing_identity(tmp_path: Path) -> None:
     entry = dtopotools.DTopography()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
-    runner_a = _run_single_dtopo(path_a, example_dir, entry)
+    runner_a = _run_single_dtopo(path_a, example_dir, entry,
+                                 guard_gauge=_GUARD_GAUGE)
 
     # Run B: transformed file plus inverting preprocessing attributes.
     z_shift = 0.25
@@ -164,15 +181,18 @@ def test_dtopo_preprocessing_identity(tmp_path: Path) -> None:
     entry.negate_z = True
     entry.z_shift = z_shift
     runner_b = _run_single_dtopo(path_b, example_dir, entry,
-                                 make_level="exe")
+                                 make_level="exe", guard_gauge=_GUARD_GAUGE)
+
+    # Non-vacuous guard: the deformation must produce a real surface signal
+    # inside the dtopo footprint (gauge 99).  Unlike gauges 1/2, this does not
+    # depend on which static topo wins at an off-source point.
+    guard = gauges.GaugeSolution(99, path=runner_a.temp_path)
+    assert np.ptp(guard.q[3, :]) > 1e-3, \
+        "dtopo deformation produced no surface signal in its footprint"
 
     for gauge_id in (1, 2):
         ga = gauges.GaugeSolution(gauge_id, path=runner_a.temp_path)
         gb = gauges.GaugeSolution(gauge_id, path=runner_b.temp_path)
-        # Guard against a vacuous pass: if the dtopo were ignored in both
-        # runs, the gauges would agree trivially with no wave signal.
-        assert np.ptp(ga.q[3, :]) > 1e-3, \
-            f"gauge {gauge_id} shows no dtopo-generated wave"
         assert ga.q.shape == gb.q.shape, \
             f"gauge {gauge_id}: {ga.q.shape} vs {gb.q.shape}"
         np.testing.assert_allclose(ga.q, gb.q, rtol=1e-10, atol=1e-10)
@@ -202,7 +222,8 @@ def test_dtopo_netcdf_identity(tmp_path: Path) -> None:
     entry = dtopotools.DTopography()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
-    runner_a = _run_single_dtopo(path_a, example_dir, entry, **flags)
+    runner_a = _run_single_dtopo(path_a, example_dir, entry,
+                                 guard_gauge=_GUARD_GAUGE, **flags)
 
     # Run B: the same deformation as CF NetCDF type 4.
     path_b = tmp_path / "b"
@@ -212,13 +233,19 @@ def test_dtopo_netcdf_identity(tmp_path: Path) -> None:
     entry.path = "dtopo1.nc"
     entry.dtopo_type = 4
     runner_b = _run_single_dtopo(path_b, example_dir, entry,
-                                 make_level="exe", **flags)
+                                 make_level="exe", guard_gauge=_GUARD_GAUGE,
+                                 **flags)
+
+    # Non-vacuous guard: the deformation must produce a real surface signal
+    # inside the dtopo footprint (gauge 99).  Unlike gauges 1/2, this does not
+    # depend on which static topo wins at an off-source point.
+    guard = gauges.GaugeSolution(99, path=runner_a.temp_path)
+    assert np.ptp(guard.q[3, :]) > 1e-3, \
+        "dtopo deformation produced no surface signal in its footprint"
 
     for gauge_id in (1, 2):
         ga = gauges.GaugeSolution(gauge_id, path=runner_a.temp_path)
         gb = gauges.GaugeSolution(gauge_id, path=runner_b.temp_path)
-        assert np.ptp(ga.q[3, :]) > 1e-3, \
-            f"gauge {gauge_id} shows no dtopo-generated wave"
         assert ga.q.shape == gb.q.shape, \
             f"gauge {gauge_id}: {ga.q.shape} vs {gb.q.shape}"
         np.testing.assert_allclose(ga.q, gb.q, rtol=1e-7, atol=1e-7)

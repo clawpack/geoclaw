@@ -227,13 +227,14 @@ def _setup_coarsen_align(temp_path):
 
 
 def _setup_priority(temp_path):
-    # Two same-resolution files covering the same extent.  The first-listed
-    # file must win in the overlap (identity mtopoorder; the Python priority
-    # sort is stable for equal cell areas), so the run matches the baseline.
+    # Two same-resolution files covering the same extent.  The last-listed
+    # file wins in the overlap (reversed mtopoorder: last = highest priority;
+    # the Python priority sort is stable for equal cell areas), so listing the
+    # true bowl last makes the run match the baseline.
     _write_topo_file(temp_path / "bowl.topotype2")
     _write_topo_file(temp_path / "deep.topotype2",
                      zfunc=lambda x, y: _bowl(x, y) - 0.05)
-    return ([_topo_entry("bowl.topotype2"), _topo_entry("deep.topotype2")],
+    return ([_topo_entry("deep.topotype2"), _topo_entry("bowl.topotype2")],
             None)
 
 
@@ -291,15 +292,15 @@ def test_preprocessing_identity(tmp_path: Path, save: bool, variant: str):
 def test_priority_order_detectable(tmp_path: Path):
     """Negative control for the priority variant.
 
-    With the deeper file listed first it must win in the overlap, producing
+    With the deeper file listed last it must win in the overlap, producing
     gauge output that *differs* from the baseline reference.  This guards
     against the priority test passing vacuously (e.g. if overlapping files
-    were averaged or the second file always won).
+    were averaged or the first file always won).
     """
     _write_topo_file(tmp_path / "bowl.topotype2")
     _write_topo_file(tmp_path / "deep.topotype2",
                      zfunc=lambda x, y: _bowl(x, y) - 0.05)
-    topofiles = [_topo_entry("deep.topotype2"), _topo_entry("bowl.topotype2")]
+    topofiles = [_topo_entry("bowl.topotype2"), _topo_entry("deep.topotype2")]
     runner = _run_bowl(tmp_path, topofiles)
 
     with pytest.raises(AssertionError):

@@ -704,11 +704,11 @@ def _make_topo_with_delta(dx: float, tmp_path: Path, suffix: str = "") -> Topogr
     return t
 
 
-def test_priority_order_finest_first(tmp_path):
-    """Finest resolution (smallest dx*dy) must end up at index 0.
+def test_priority_order_finest_last(tmp_path):
+    """Finest resolution (smallest dx*dy) must end up last (highest priority).
 
-    Convention: cell area ascending = finest first = index 0 = written first
-    = highest Fortran priority (mtopoorder(1) = 1).
+    Convention: cell area descending = coarsest first, finest last = written
+    last = highest Fortran priority (the last file maps to rank 1).
     """
     coarse = _make_topo_with_delta(1.0, tmp_path, "c")
     medium = _make_topo_with_delta(0.5, tmp_path, "m")
@@ -717,9 +717,9 @@ def test_priority_order_finest_first(tmp_path):
     td = TopographyData()
     result = td._compute_priority_order([coarse, medium, fine])
 
-    assert result[0].delta == pytest.approx((0.25, 0.25))
+    assert result[0].delta == pytest.approx((1.0, 1.0))
     assert result[1].delta == pytest.approx((0.5, 0.5))
-    assert result[2].delta == pytest.approx((1.0, 1.0))
+    assert result[2].delta == pytest.approx((0.25, 0.25))
 
 
 def test_priority_order_stable_sort_equal_resolution(tmp_path):
@@ -737,9 +737,8 @@ def test_priority_order_stable_sort_equal_resolution(tmp_path):
 def test_priority_order_override_preserves_user_order(tmp_path):
     """override_order=True returns the list unchanged.
 
-    The user is responsible for placing highest-priority (finest) files first.
-    override_order=True returns user list unchanged. The user is responsible
-    for placing highest-priority (finest) files first.
+    The user is responsible for placing the highest-priority (finest) file
+    last.  override_order=True returns the user list unchanged.
     """
     coarse = _make_topo_with_delta(1.0, tmp_path, "c")
     fine = _make_topo_with_delta(0.25, tmp_path, "f")
@@ -753,34 +752,29 @@ def test_priority_order_override_preserves_user_order(tmp_path):
 
 
 def test_priority_order_override_vs_sorted_differ(tmp_path):
-    """Demonstrates that override_order=True with wrong input gives wrong priority."""
+    """override_order=True with wrong input gives the wrong winner.
+
+    The winner is the LAST file listed (highest Fortran priority).  Correct
+    order is finest-last, which sorting produces; override keeps user order.
+    """
     fine = _make_topo_with_delta(0.25, tmp_path, "f")
     coarse = _make_topo_with_delta(1.0, tmp_path, "c")
 
     td = TopographyData()
 
-    # [fine, coarse] with override=True → fine stays first ✓
+    # Wrong user order (finest first) with override: finest is not last, so
+    # the coarse file ends up as the winner.
     td.override_order = True
-    r1 = td._compute_priority_order([fine, coarse])
-    assert r1[0] is fine
+    r_override = td._compute_priority_order([fine, coarse])
+    assert r_override[-1] is coarse
 
-    # [fine, coarse] with override=False → fine sorted to first ✓
+    # Sorting reorders to coarsest-first, so the finest file is last and wins.
     td.override_order = False
-    r2 = td._compute_priority_order([fine, coarse])
-    assert r2[0] is fine
+    r_sorted = td._compute_priority_order([fine, coarse])
+    assert r_sorted[-1] is fine
 
-    # [coarse, fine] with override=True → coarse stays first (user error)
-    td.override_order = True
-    r3 = td._compute_priority_order([coarse, fine])
-    assert r3[0] is coarse
-
-    # [coarse, fine] with override=False → fine sorted to first ✓
-    td.override_order = False
-    r4 = td._compute_priority_order([coarse, fine])
-    assert r4[0] is fine
-
-    # The last two cases must differ
-    assert r3[0] is not r4[0]
+    # The winners (last file listed) differ.
+    assert r_override[-1] is not r_sorted[-1]
 
 
 def test_priority_order_without_z_loaded(tmp_path):
@@ -799,8 +793,8 @@ def test_priority_order_without_z_loaded(tmp_path):
     td = TopographyData()
     result = td._compute_priority_order([t_coarse, t_fine])
 
-    # Finest must be first
-    assert result[0].path == t_fine.path
+    # Finest must be last (highest priority)
+    assert result[-1].path == t_fine.path
     # Z must NOT have been loaded
     assert t_fine._Z is None
     assert t_coarse._Z is None
@@ -936,8 +930,8 @@ def test_write_ntopofiles_matches_list_length(tmp_path, tt2_path):
     assert int(ntopofiles_line.split()[0]) == 3
 
 
-def test_write_priority_order_finest_first_in_file(tmp_path):
-    """Finest topo written first in topo.data = highest Fortran priority."""
+def test_write_priority_order_finest_last_in_file(tmp_path):
+    """Finest topo written last in topo.data = highest Fortran priority."""
     coarse = _make_topo_with_delta(1.0, tmp_path, "c")
     fine = _make_topo_with_delta(0.5, tmp_path, "f")
 
@@ -950,8 +944,8 @@ def test_write_priority_order_finest_first_in_file(tmp_path):
     raw = out.read_text()
     coarse_pos = raw.find(Path(coarse.path).name)
     fine_pos = raw.find(Path(fine.path).name)
-    # Fine file must appear before coarse file in the output
-    assert fine_pos < coarse_pos
+    # Coarse file must appear before fine file in the output
+    assert coarse_pos < fine_pos
 
 
 # ===========================================================================

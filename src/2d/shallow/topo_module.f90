@@ -446,15 +446,17 @@ contains
                 ! rectintegral/topoarea use mtopoorder coarse-to-fine and finer files
                 ! always overwrite coarser contributions in overlapping regions.
                 !
-                ! Convention: first file listed in topo.data = rank 1 = highest priority.
-                ! Python's _compute_priority_order writes the finest file first, so the
-                ! identity assignment mtopoorder(i)=i preserves that ordering without
-                ! any Fortran-side re-sort. dtopo_for_topo files are inserted below.
+                ! Convention: last file listed in topo.data = rank 1 = highest priority.
+                ! Python's _compute_priority_order writes files coarsest-first (finest
+                ! last), matching the traditional GeoClaw listing order, so the reversed
+                ! assignment mtopoorder(i)=mtopofiles+1-i gives the last (finest) file
+                ! rank 1 without any Fortran-side re-sort.  dtopo_for_topo files are
+                ! inserted below by cell area, independent of this base ordering.
 
                 area_tol = 1.d-3  ! relative tol used in dtopo insertion below
 
                 do i=1,mtopofiles
-                    mtopoorder(i) = i
+                    mtopoorder(i) = mtopofiles + 1 - i
                 end do
 
                 ! now insert topo_for_dtopo arrays into ordering:

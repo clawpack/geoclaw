@@ -296,19 +296,22 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         return result
 
     def _compute_priority_order(self, topos):
-        """Return *topos* sorted finest-first (highest priority at index 0).
+        """Return *topos* sorted coarsest-first (finest = highest priority last).
 
-        Finest resolution (smallest dx*dy) is placed at index 0 and written
-        first in topo.data.  Fortran reads files in that order and assigns
-        rank 1 (highest priority) to the first file, so first-written =
-        first-read = highest priority in overlap resolution.
+        Coarsest resolution (largest dx*dy) is placed at index 0 and written
+        first in topo.data; the finest file is written last.  Fortran assigns
+        rank 1 (highest priority) to the *last* file listed, so last-written =
+        finest = highest priority in overlap resolution.  This matches the
+        traditional GeoClaw convention of listing topography files from
+        coarsest to finest.
 
-        Stable sort: equal-area files preserve their relative input order.
+        Stable sort: equal-area files preserve their relative input order, so
+        among equal-resolution files the last one listed wins.
 
         When override_order=True the input list is returned unchanged.  The
-        caller is responsible for placing highest-priority (finest) files
-        first.  Files are written in the order provided; the first file has
-        the highest priority in GeoClaw.
+        caller is responsible for placing the highest-priority (finest) file
+        last.  Files are written in the order provided; the last file has the
+        highest priority in GeoClaw.
 
         Header data is loaded via read_header() if coordinates are not yet
         available; the Z array is never loaded here.
@@ -330,7 +333,9 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             except Exception:
                 return float('inf')
 
-        return sorted(topos, key=_cell_area)
+        # Descending cell area => coarsest first, finest last.  reverse=True
+        # keeps the sort stable for equal-area files (they retain input order).
+        return sorted(topos, key=_cell_area, reverse=True)
 
     def write(self, data_source='setrun.py', out_file='topo.data'):
 
