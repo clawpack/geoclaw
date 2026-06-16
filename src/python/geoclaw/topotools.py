@@ -1496,6 +1496,7 @@ class Topography(object):
         """
 
         import scipy.interpolate as interpolate
+        from scipy.spatial import cKDTree
 
         # Convert meter inputs to degrees
         mean_latitude = numpy.mean(self.y)
@@ -1503,10 +1504,6 @@ class Topography(object):
                                                   mean_latitude)[0]
         delta_degrees = util.dist_meters2latlong(delta_limit, 0.0,
                                                  mean_latitude)[0]
-        if proximity_radius > 0.0:
-            proximity_radius_deg = util.dist_meters2latlong(proximity_radius,
-                                                            0.0,
-                                                            mean_latitude)[0]
 
         # Calculate new grid coordinates
         if extent is None:
@@ -1520,104 +1517,64 @@ class Topography(object):
         else:
             try:
                 delta_x, delta_y = delta   # tuple provided
-            except:
+            except TypeError:
                 delta_x = delta_y = delta  # assume float provided
 
         N = ( numpy.ceil((extent[1] - extent[0]) / delta_x),
               numpy.ceil((extent[3] - extent[2]) / delta_y) )
-        if not numpy.all(N[:] < numpy.ones((2)) * resolution_limit):
-            ValueError("Calculated resolution too high, N=%s!" % str(N))
+        if not numpy.all(numpy.array(N) < resolution_limit):
+            raise ValueError("Calculated resolution too high, N=%s!" % str(N))
         self._X, self._Y = numpy.meshgrid(
                                      numpy.linspace(extent[0], extent[1], int(N[0])),
                                      numpy.linspace(extent[2], extent[3], int(N[1])))
 
-        # Add the unstructured points to the data
+        # The object's own (real) unstructured points always survive.
         points = numpy.array([self.x, self.y]).transpose()
-        values = self.z
+        values = numpy.asarray(self.z)
 
-        # Mask fill topography and flatten the arrays if needed
+        # Build a KD-tree of the real points once for the proximity test: fill
+        # points within proximity_radius of any real point are dropped so the
+        # real data is preferred there.  The test is always against the
+        # original points, not fill added by earlier fill_topo entries.
+        if proximity_radius > 0.0:
+            proximity_radius_deg = util.dist_meters2latlong(
+                proximity_radius, 0.0, mean_latitude)[0]
+            data_tree = cKDTree(points)
+
+        # Mask each fill topography (structured or unstructured) and append the
+        # surviving points.
         if not isinstance(fill_topo, list):
             fill_topo = [fill_topo]
         for topo in fill_topo:
             if topo.unstructured:
-                x_fill = topo.x
-                y_fill = topo.y
-                z_fill = topo.z
-
-                extent_mask = extent[0] > x_fill
-                extent_mask = numpy.logical_or(extent_mask,extent[1] < x_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[2] > y_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[3] < y_fill)
-
-                # Create fill no-data value mask (missing cells are NaN in
-                # memory; also honor an explicit numeric no_data_value).
-                no_data_mask = numpy.logical_or(
-                    extent_mask,
-                    numpy.logical_or(numpy.isnan(z_fill), z_fill == no_data_value))
-
-                all_mask = numpy.logical_or(extent_mask, no_data_mask)
-
-                # Create proximity mask
-                if proximity_radius > 0.0:
-                    indices = (~all_mask).nonzero()
-                    for n in range(indices[0].shape[0]):
-                        i = indices[0][n]
-                        all_mask[i] = numpy.any(numpy.sqrt((self.x - x_fill[i])**2
-                                                         + (self.y - y_fill[i])**2)
-                                                     < proximity_radius_deg)
-
-                x_fill_masked = numpy.ma.masked_where(all_mask, x_fill)
-                y_fill_masked = numpy.ma.masked_where(all_mask, y_fill)
-                z_fill_masked = numpy.ma.masked_where(all_mask, z_fill)
-
-                # Add the fill bathymetry to points and values
-                fill_points = numpy.column_stack((x_fill_masked.compressed(),
-                                                  y_fill_masked.compressed()))
-
-                points = numpy.concatenate((fill_points, points))
-                values = numpy.concatenate((z_fill_masked.compressed(), values))
-
+                x_fill, y_fill, z_fill = topo.x, topo.y, topo.z
             else:
-                # Structured fill data
-                X_fill = topo.X
-                Y_fill = topo.Y
-                Z_fill = topo.Z
+                x_fill = topo.X.flatten()
+                y_fill = topo.Y.flatten()
+                z_fill = topo.Z.flatten()
+            x_fill = numpy.asarray(x_fill)
+            y_fill = numpy.asarray(y_fill)
+            z_fill = numpy.asarray(z_fill)
 
-                # Create extent mask
-                extent_mask = extent[0] > X_fill
-                extent_mask = numpy.logical_or(extent_mask,extent[1] < X_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[2] > Y_fill)
-                extent_mask = numpy.logical_or(extent_mask,extent[3] < Y_fill)
+            # Keep fill points inside the target extent with valid data
+            # (missing data is NaN in memory; also honor a numeric
+            # no_data_value).
+            keep = ((x_fill >= extent[0]) & (x_fill <= extent[1]) &
+                    (y_fill >= extent[2]) & (y_fill <= extent[3]) &
+                    ~numpy.isnan(z_fill) & (z_fill != no_data_value))
+            fill_points = numpy.column_stack((x_fill[keep], y_fill[keep]))
+            fill_values = z_fill[keep]
 
-                # Create fill no-data value mask (missing cells are NaN in
-                # memory; also honor an explicit numeric no_data_value).
-                no_data_mask = numpy.logical_or(
-                    extent_mask,
-                    numpy.logical_or(numpy.isnan(Z_fill), Z_fill == no_data_value))
+            # Drop fill points within proximity_radius of a real data point.
+            if proximity_radius > 0.0 and fill_points.shape[0] > 0:
+                near = data_tree.query_ball_point(fill_points,
+                                                  proximity_radius_deg)
+                far = numpy.array([len(hits) == 0 for hits in near], dtype=bool)
+                fill_points = fill_points[far]
+                fill_values = fill_values[far]
 
-                all_mask = numpy.logical_or(extent_mask, no_data_mask)
-
-                # Create proximity mask
-                if proximity_radius > 0.0:
-
-                    indices = (~all_mask).nonzero()
-                    for n in range(indices[0].shape[0]):
-                        i = indices[0][n]
-                        j = indices[1][n]
-                        all_mask[i,j] = numpy.any(numpy.sqrt((self.x - X_fill[i,j])**2
-                                                           + (self.y - Y_fill[i,j])**2)
-                                                     < proximity_radius_deg)
-
-                X_fill_masked = numpy.ma.masked_where(all_mask, X_fill)
-                Y_fill_masked = numpy.ma.masked_where(all_mask, Y_fill)
-                Z_fill_masked = numpy.ma.masked_where(all_mask, Z_fill)
-
-                # Add the fill bathymetry to points and values
-                fill_points = numpy.column_stack((X_fill_masked.compressed(),
-                                                  Y_fill_masked.compressed()))
-
-                points = numpy.concatenate((fill_points, points))
-                values = numpy.concatenate((Z_fill_masked.compressed(), values))
+            points = numpy.concatenate((fill_points, points))
+            values = numpy.concatenate((fill_values, values))
 
         # Use specified interpolation
         self._Z = interpolate.griddata(points, values, (self.X, self.Y),
