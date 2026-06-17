@@ -25,7 +25,6 @@ topography (bathymetry) files.
  - Add functions for creating topography based off a topo function, incorporate
    the create_topo_func into Topography class, maybe allow more broad
    initialization ability to the class to handle this?
- - Fix `in_poly` function
  - Add more robust plotting capabilities
 """
 
@@ -1585,61 +1584,35 @@ class Topography(object):
 
 
     def in_poly(self, polygon):
-        r"""Mask points (x,y) that are not in the specified polygon.
-
-        Uses simple ray casting algorithm for speed so beware of corner cases!
+        r"""Return a boolean mask of grid points inside *polygon*.
 
         :Input:
+         - *polygon* - sequence of ``(x, y)`` vertices describing a closed
+           polygon (the closing edge from the last vertex back to the first is
+           implied).
 
-         - *polygon* (list) List of points that comprise the polygon.  Note that
-           order of the points will effect if this works (positive versus negative
-           winding order).  Points should be in counter-clockwise arrangement.
+        :Output:
+         - *mask* (numpy.ndarray of bool) - ``True`` at points lying inside
+           *polygon*, ``False`` elsewhere.  For a structured grid the mask has
+           the same shape as ``self.X`` / ``self.Y``; for unstructured data it
+           is 1-D over the scattered ``self.x`` / ``self.y`` points.
 
-        :Returns:
+        Uses :class:`matplotlib.path.Path` for a robust point-in-polygon test:
+        it handles concave polygons and is independent of vertex winding order.
 
-         - *X_mask* (numpy.ma.MaskedArray) Masked array of X coordinates where those
-           points outside of the polygon have been masked.
-         - *Y* (numpy.ndarray) Coordinates in y direction in a meshgrid type of
-           configuration.
+        Example -- keep only topography inside a region of interest::
 
+            mask = topo.in_poly(region_vertices)
+            topo.Z[~mask] = numpy.nan
         """
-        raise NotImplementedError("This function is not quite working yet, please "+\
-                             "try again later")
+        from matplotlib.path import Path
 
-        TOLERANCE = 1e-6
-
-        # Flatten the input arrays to make this a bit easier
-        x = self.X.flatten()
-        y = self.Y.flatten()
-
-        # Construct edges
-        edges = []
-        for edge in range(len(polygon) - 1):
-            edges.append([polygon[edge], polygon[edge+1]])
-        edges.append([polygon[-1], polygon[0]])
-
-        # Check for intersections
-        num_intersections = numpy.zeros(x.shape[0])
-
-        for edge in edges:
-            # Check for a vertical line
-            if numpy.abs(edge[0][0] - edge[1][0]) < TOLERANCE:
-                x_intersect = edge[0][0]
-            else:
-                edge_slope = (edge[0][1] - edge[1][1]) / (edge[0][0] - edge[1][0])
-                x_intersect = (y - edge[0][1]) / edge_slope + edge[0][0]
-
-            num_intersections += (min(edge[0][1], edge[1][1]) <= y) * \
-                                 (max(edge[0][1], edge[1][1]) >= y) * \
-                                 (x_intersect <= x)
-
-
-        # General intersection of two lines
-        intersect = (numpy.mod(num_intersections, numpy.ones(x.shape) * 2) != 1)
-
-        # Return masked arrays that are reshaped back to the input shapes
-        return numpy.ma.masked_where(intersect, x, copy=False).reshape(self.X.shape), \
-               numpy.ma.masked_where(intersect, y, copy=False).reshape(self.Y.shape)
+        path = Path(numpy.asarray(polygon, dtype=float))
+        if self.unstructured:
+            points = numpy.column_stack((self.x, self.y))
+            return path.contains_points(points)
+        points = numpy.column_stack((self.X.ravel(), self.Y.ravel()))
+        return path.contains_points(points).reshape(self.X.shape)
 
 
     def replace_values(self, indices, value=numpy.nan, method='fill'):

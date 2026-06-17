@@ -403,6 +403,58 @@ def test_replace_no_data_values_noop_when_none():
     assert np.array_equal(topo.Z, Z0)
 
 
+@pytest.mark.python
+def test_in_poly_square():
+    """in_poly returns a grid-shaped mask True for points inside the polygon."""
+    pytest.importorskip("matplotlib")
+    topo = topotools.Topography()
+    topo.x = np.arange(5.0)          # 0,1,2,3,4
+    topo.y = np.arange(5.0)
+    topo.Z = np.zeros((5, 5))
+
+    # Vertices at half-integers so no grid point lies on the boundary.
+    poly = [(0.5, 0.5), (3.5, 0.5), (3.5, 3.5), (0.5, 3.5)]
+    mask = topo.in_poly(poly)
+
+    assert mask.shape == topo.X.shape
+    expected = np.zeros((5, 5), dtype=bool)
+    expected[1:4, 1:4] = True        # points with 1<=x,y<=3 are inside
+    assert np.array_equal(mask, expected)
+
+
+@pytest.mark.python
+def test_in_poly_triangle_concave_region():
+    """in_poly handles a non-rectangular (triangular) polygon."""
+    pytest.importorskip("matplotlib")
+    topo = topotools.Topography()
+    topo.x = np.arange(5.0)
+    topo.y = np.arange(5.0)
+    topo.Z = np.zeros((5, 5))
+
+    # Lower-left triangle; (1,1) clearly inside, (3,3) clearly outside.
+    poly = [(0.0, 0.0), (4.0, 0.0), (0.0, 4.0)]
+    mask = topo.in_poly(poly)
+
+    assert mask[1, 1]        # X[1,1]=1, Y[1,1]=1 -> inside
+    assert not mask[3, 3]    # X[3,3]=3, Y[3,3]=3 -> x+y=6 > 4, outside
+
+
+@pytest.mark.python
+def test_in_poly_unstructured():
+    """For unstructured data in_poly returns a 1-D mask over the points."""
+    pytest.importorskip("matplotlib")
+    topo = topotools.Topography(unstructured=True)
+    topo.x = np.array([0.0, 2.0, 5.0])
+    topo.y = np.array([0.0, 2.0, 5.0])
+    topo.z = np.zeros(3)
+
+    poly = [(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)]
+    mask = topo.in_poly(poly)
+
+    assert mask.shape == (3,)
+    assert list(mask) == [False, True, False]   # only (2,2) is inside
+
+
 def _make_unstructured_topo():
     """Construct a representative unstructured topography for interpolation tests."""
     # Create random test data
