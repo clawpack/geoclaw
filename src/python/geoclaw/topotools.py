@@ -26,7 +26,6 @@ topography (bathymetry) files.
    the create_topo_func into Topography class, maybe allow more broad
    initialization ability to the class to handle this?
  - Fix `in_poly` function
- - Add remove/fill no data value
  - Add more robust plotting capabilities
 """
 
@@ -1644,80 +1643,89 @@ class Topography(object):
 
 
     def replace_values(self, indices, value=numpy.nan, method='fill'):
-        r"""Replace the values at *indices* by the specified method
-
-        :Methods:
-         - "fill"
-         - "nearest"
-        """
-
-        # Average surrounding good data
-        if method == 'fill':
-            for index in indices:
-                r = 0
-                point_replaced = False
-                while not point_replaced and r < max(self.Z.shape):
-                    r = r + 1
-                    i_range = list(range(max(0, index[0] - r), min(index[0] + r + 1, self.Z.shape[0])))
-                    j_range = list(range(max(0, index[1] - r), min(index[1] + r + 1, self.Z.shape[1])))
-                    num_points = 0
-                    summation = 0.0
-                    for i in i_range:
-                        for j in j_range:
-                            if (i,j) not in indices:
-                                summation += self.Z[i,j]
-                                num_points += 1
-                    if num_points > 0:
-                        self.Z[index[0], index[1]] = summation / num_points
-                        point_replaced = True
-
-        elif method == "nearest":
-            pass
-
-
-    def replace_no_data_values(self, method='fill'):
-        r"""Replace *no_data_value* with other values as specified by *method*.
-
-        self.no_data_value
+        r"""Replace the Z values at *indices* in place using *method*.
 
         :Input:
-         - *method* can be one of:
+         - *indices* - sequence of ``(i, j)`` index pairs identifying the
+           cells to replace, e.g. the output of ``numpy.argwhere(condition)``.
+         - *value* (float) - constant used when ``method == 'value'``.
+           Default ``numpy.nan``.
+         - *method* (str) - how to choose replacement values:
 
-             - *fill* - Fill in all *no_data_value* locations with *value*
-             - *nearest* - Fill in *no_data_value* locations with
-               average of nearest neighbors.
+             - ``'value'``   - set the cells to the constant *value*.
+             - ``'nearest'`` - nearest-neighbor value from the remaining
+               (non-replaced) cells.
+             - ``'linear'``  - linear interpolation from the remaining cells;
+               cells outside the convex hull of the remaining data are left
+               as ``numpy.nan``.
+             - ``'fill'``    - replace each cell with the average of the
+               nearest surrounding non-replaced cells, growing the search box
+               until at least one is found (the default).
 
+        ``'nearest'`` and ``'linear'`` interpolate in index space, which is
+        equivalent to physical space for a regularly spaced grid.
         """
-        raise NotImplementedError("This functionality has not been added yet.")
-        # Missing cells are NaN in memory (the numeric no_data_value is only
-        # the on-file sentinel).
-        no_data_value_indices = numpy.isnan(self.Z).nonzero()
-        self.replace_values(no_data_value_indices, method=method)
+        indices = numpy.asarray(indices)
+        if indices.size == 0:
+            return
+        bad = numpy.zeros(self.Z.shape, dtype=bool)
+        bad[indices[:, 0], indices[:, 1]] = True
 
-        # nrows= shape(Z)[0]
-        # ncols= shape(Z)[1]
-        # npts = nrows*ncols
+        if method == 'value':
+            self.Z[bad] = value
 
-        # xi=X[0,:]
-        # yi=Y[:,0]
+        elif method in ('nearest', 'linear'):
+            import scipy.interpolate as interpolate
+            good = ~bad
+            if not good.any():
+                raise ValueError("Cannot interpolate: no valid data remains "
+                                 "outside *indices*.")
+            gi, gj = numpy.nonzero(good)
+            bi, bj = numpy.nonzero(bad)
+            self.Z[bad] = interpolate.griddata(
+                numpy.column_stack((gi, gj)), self.Z[good],
+                numpy.column_stack((bi, bj)), method=method)
 
-        # X.np.reshape(npts)
-        # Y.np.reshape(npts)
-        # Z.np.reshape(npts)
+        elif method == 'fill':
+            # Average the nearest surrounding non-replaced cells, growing the
+            # inf-norm search box until at least one good cell is found.
+            ny, nx = self.Z.shape
+            bad_pairs = set((int(i), int(j)) for i, j in indices)
+            for i0, j0 in indices:
+                i0, j0 = int(i0), int(j0)
+                r = 0
+                while r < max(ny, nx):
+                    r += 1
+                    summation = 0.0
+                    num_points = 0
+                    for i in range(max(0, i0 - r), min(i0 + r + 1, ny)):
+                        for j in range(max(0, j0 - r), min(j0 + r + 1, nx)):
+                            if (i, j) not in bad_pairs:
+                                summation += self.Z[i, j]
+                                num_points += 1
+                    if num_points > 0:
+                        self.Z[i0, j0] = summation / num_points
+                        break
 
-        # ind=np.where(Z!=nodata_value)
-        # X=X[ind]
-        # Y=Y[ind]
-        # Z=Z[ind]
+        else:
+            raise ValueError("Unrecognized method %r; expected 'value', "
+                             "'nearest', 'linear', or 'fill'." % method)
 
-        # ptsremove=npts-len(Z)
-        # if ptsremove>0:
-        #     print("Removing %s nodata_value points" % ptsremove)
 
-        # Z = pylab.griddata(X,Y,Z,xi,yi)
-        # (X,Y)=np.meshgrid(xi,yi)
+    def replace_no_data_values(self, value=numpy.nan, method='fill'):
+        r"""Replace missing (NaN) cells in Z using *method*.
 
-        # griddata2topofile(X,Y,Z,outputfile,topotypeout,nodata_value,nodata_value)
+        Missing data is represented in memory as ``numpy.nan`` (the numeric
+        ``no_data_value`` is only the on-file sentinel).  This locates those
+        cells and replaces them via :meth:`replace_values`.
+
+        :Input:
+         - *value* (float) - constant used when ``method == 'value'``.
+         - *method* (str) - one of ``'value'``, ``'nearest'``, ``'linear'``,
+           or ``'fill'``; see :meth:`replace_values`.
+        """
+        no_data_indices = numpy.argwhere(numpy.isnan(self.Z))
+        self.replace_values(no_data_indices, value=value, method=method)
 
 
     def smooth_data(self, indices, r=1):

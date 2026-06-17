@@ -321,6 +321,88 @@ def _import_pyplot():
     return plt
 
 
+@pytest.mark.python
+@pytest.mark.parametrize("method", ["value", "nearest", "linear", "fill"])
+def test_replace_values_methods(method):
+    """replace_values fills the given cells by each method.
+
+    On a planar field Z[i,j] = i + 10*j, replacing an interior cell with
+    'linear' or 'fill' recovers the exact planar value; 'value' sets the
+    constant; 'nearest' copies an adjacent cell.
+    """
+    if method in ("nearest", "linear"):
+        pytest.importorskip("scipy")
+    ny, nx = 5, 5
+    i = np.arange(ny).reshape(ny, 1)
+    j = np.arange(nx).reshape(1, nx)
+    Z0 = (i + 10.0 * j) * np.ones((ny, nx))
+
+    topo = topotools.Topography()
+    topo.x = np.arange(nx, dtype=float)
+    topo.y = np.arange(ny, dtype=float)
+    topo.Z = Z0.copy()
+
+    topo.replace_values([(2, 2)], value=-7.0, method=method)
+
+    if method == "value":
+        assert topo.Z[2, 2] == -7.0
+    elif method in ("linear", "fill"):
+        # Planar field: interpolation / symmetric average recovers true value.
+        assert np.isclose(topo.Z[2, 2], 22.0)
+    else:  # nearest -> one of the four edge neighbors
+        assert topo.Z[2, 2] in {Z0[1, 2], Z0[3, 2], Z0[2, 1], Z0[2, 3]}
+
+    # All other cells are untouched.
+    mask = np.ones((ny, nx), dtype=bool)
+    mask[2, 2] = False
+    assert np.array_equal(topo.Z[mask], Z0[mask])
+
+
+@pytest.mark.python
+def test_replace_values_empty_is_noop():
+    """An empty index set leaves Z unchanged (no error)."""
+    topo = topotools.Topography()
+    topo.x = np.arange(4, dtype=float)
+    topo.y = np.arange(4, dtype=float)
+    Z0 = np.arange(16, dtype=float).reshape(4, 4)
+    topo.Z = Z0.copy()
+    topo.replace_values(np.empty((0, 2), dtype=int), method="nearest")
+    assert np.array_equal(topo.Z, Z0)
+
+
+@pytest.mark.python
+def test_replace_no_data_values_fills_nan():
+    """replace_no_data_values locates NaN cells and fills via replace_values."""
+    pytest.importorskip("scipy")
+    ny, nx = 5, 5
+    i = np.arange(ny).reshape(ny, 1)
+    j = np.arange(nx).reshape(1, nx)
+    Z0 = (i + 10.0 * j) * np.ones((ny, nx))
+
+    topo = topotools.Topography()
+    topo.x = np.arange(nx, dtype=float)
+    topo.y = np.arange(ny, dtype=float)
+    Z = Z0.copy()
+    Z[2, 2] = np.nan          # missing cell (NaN in memory)
+    topo.Z = Z
+
+    topo.replace_no_data_values(method="linear")
+    assert not np.any(np.isnan(topo.Z))
+    assert np.isclose(topo.Z[2, 2], 22.0)
+
+
+@pytest.mark.python
+def test_replace_no_data_values_noop_when_none():
+    """With no missing cells, replace_no_data_values leaves Z unchanged."""
+    topo = topotools.Topography()
+    topo.x = np.arange(4, dtype=float)
+    topo.y = np.arange(4, dtype=float)
+    Z0 = np.arange(16, dtype=float).reshape(4, 4)
+    topo.Z = Z0.copy()
+    topo.replace_no_data_values(method="nearest")
+    assert np.array_equal(topo.Z, Z0)
+
+
 def _make_unstructured_topo():
     """Construct a representative unstructured topography for interpolation tests."""
     # Create random test data
