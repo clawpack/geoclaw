@@ -455,6 +455,39 @@ def test_in_poly_unstructured():
     assert list(mask) == [False, True, False]   # only (2,2) is inside
 
 
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_datum_netcdf_roundtrip(tmp_path):
+    """The optional vertical datum defaults to None and round-trips via NetCDF."""
+    pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.arange(4.0)
+    topo.y = np.arange(3.0)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    topo.Z = (X + Y).astype(float)
+    assert topo.datum is None                 # default
+
+    topo.datum = "NAVD88"
+    path = tmp_path / "with_datum.nc"
+    topo.write(path, topo_type=4)
+    back = topotools.Topography(path=str(path))
+    back.read()
+    assert back.datum == "NAVD88"
+
+    # A file written without a datum reads back as None.
+    plain = topotools.Topography()
+    plain.x = np.arange(4.0)
+    plain.y = np.arange(3.0)
+    Xp, Yp = np.meshgrid(plain.x, plain.y)
+    plain.Z = (Xp + Yp).astype(float)
+    p2 = tmp_path / "plain.nc"
+    plain.write(p2, topo_type=4)
+    back2 = topotools.Topography(path=str(p2))
+    back2.read()
+    assert back2.datum is None
+
+
 def _make_unstructured_topo():
     """Construct a representative unstructured topography for interpolation tests."""
     # Create random test data

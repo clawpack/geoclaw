@@ -277,6 +277,24 @@ def test_dtopo_netcdf_roundtrip(tmp_path):
 
 
 @pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_datum_netcdf_roundtrip(tmp_path):
+    r"""The optional vertical datum defaults to None and round-trips via NetCDF."""
+    pytest.importorskip("netCDF4")
+
+    base = _make_synthetic_dtopo()
+    assert base.datum is None              # default
+
+    base.datum = "MSL"
+    path = tmp_path / "dtopo_datum.nc"
+    base.write(path, dtopo_type=4)
+
+    back = dtopotools.DTopography()
+    back.read(path=path)
+    assert back.datum == "MSL"
+
+
+@pytest.mark.python
 @pytest.mark.parametrize("attr, value", [
     ("crop_extent", [0.0, 1.0, 0.0, 1.0]),
     ("coarsen", 2),

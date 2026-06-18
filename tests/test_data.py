@@ -170,6 +170,46 @@ def test_dtopo_data_roundtrip(tmp_path):
 
 
 @pytest.mark.python
+def test_dtopo_data_datum_mismatch_warns(tmp_path):
+    r"""DTopoData.write warns when dtopo files carry different datums."""
+    import clawpack.geoclaw.dtopotools as dtopotools
+
+    a = dtopotools.DTopography()
+    a.path = "a.tt3"
+    a.dtopo_type = 3
+    a.datum = "NAVD88"
+    b = dtopotools.DTopography()
+    b.path = "b.tt3"
+    b.dtopo_type = 3
+    b.datum = "MSL"
+
+    dtopo_data = clawpack.geoclaw.data.DTopoData()
+    dtopo_data.dtopofiles = [a, b]
+    with pytest.warns(UserWarning, match="mismatched vertical datums"):
+        dtopo_data.write(out_file=tmp_path / "dtopo.data")
+
+
+@pytest.mark.python
+def test_dtopo_data_no_datum_warning_when_consistent(tmp_path, recwarn):
+    r"""No datum warning when dtopo datums agree or only one is set."""
+    import clawpack.geoclaw.dtopotools as dtopotools
+
+    a = dtopotools.DTopography()
+    a.path = "a.tt3"
+    a.dtopo_type = 3
+    a.datum = "MSL"
+    b = dtopotools.DTopography()
+    b.path = "b.tt3"
+    b.dtopo_type = 3            # datum stays None -> single distinct datum
+
+    dtopo_data = clawpack.geoclaw.data.DTopoData()
+    dtopo_data.dtopofiles = [a, b]
+    dtopo_data.write(out_file=tmp_path / "dtopo.data")
+    assert not any("mismatched vertical datums" in str(w.message)
+                   for w in recwarn.list)
+
+
+@pytest.mark.python
 @pytest.mark.netcdf
 def test_dtopo_data_netcdf_descriptor(tmp_path):
     r"""DTopoData.write() emits the descriptor block for type-4 entries."""

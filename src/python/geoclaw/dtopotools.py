@@ -304,6 +304,11 @@ class DTopography(object):
         self.z_shift = 0.0
         self.negate_z = False
 
+        # Optional vertical datum / reference metadata (e.g. 'MSL', 'NAVD88').
+        # Informational only; populated from NetCDF attributes on read and
+        # written back out on NetCDF write.
+        self.datum = None
+
         if path:
             self.read(path, dtopo_type)
 
@@ -580,6 +585,8 @@ class DTopography(object):
                                units="degrees_north")
         ds["lon"].attrs.update(standard_name="longitude", axis="X",
                                units="degrees_east")
+        if self.datum is not None:
+            ds["dz"].attrs["vertical_datum"] = str(self.datum)
         # No fill value: deformation grids are complete, and xarray's default
         # NaN _FillValue encoding would trip DTopoInspector's fill warning.
         ds.to_netcdf(path, encoding={"dz": {"_FillValue": None}})
@@ -594,6 +601,7 @@ class DTopography(object):
         latitude ascending.
         """
         from clawpack.geoclaw.netcdf_utils import DTopoInspector
+        from clawpack.geoclaw.topotools import extract_datum
 
         with DTopoInspector(path) as inspector:
             meta = inspector.inspect_dtopo()
@@ -601,6 +609,9 @@ class DTopography(object):
             lat = inspector.ds[meta.lat_name].values.astype(numpy.float64)
             dZ = numpy.asarray(inspector.ds[meta.var_name].values,
                                dtype=numpy.float64)
+            # Optional vertical datum metadata (informational only).
+            self.datum = extract_datum(inspector.ds[meta.var_name].attrs,
+                                       inspector.ds.attrs)
 
         if meta.dim_order == ['time', 'lat', 'lon']:
             pass

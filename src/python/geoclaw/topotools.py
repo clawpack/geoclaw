@@ -39,6 +39,26 @@ import clawpack.geoclaw.data
 # ==============================================================================
 #  Topography Related Functions
 # ==============================================================================
+# Recognized NetCDF attribute names that carry a vertical datum / reference.
+_DATUM_ATTR_NAMES = ('vertical_datum', 'vertical_datum_name', 'datum',
+                     'geospatial_vertical_datum')
+
+
+def extract_datum(*attr_dicts):
+    r"""Return the first recognized vertical-datum attribute, or None.
+
+    Searches each mapping in *attr_dicts* (e.g. a NetCDF variable's attrs then
+    the dataset's global attrs) for any of :data:`_DATUM_ATTR_NAMES` and
+    returns the first value found.  Informational only; GeoClaw applies no
+    vertical-datum transformation.
+    """
+    for attrs in attr_dicts:
+        for name in _DATUM_ATTR_NAMES:
+            if name in attrs:
+                return attrs[name]
+    return None
+
+
 def determine_topo_type(path, default=None):
     r"""Using the file suffix of path, attempt to deterimine the topo type.
 
@@ -431,6 +451,12 @@ class Topography(object):
         # writing files and is read back from file headers.
         self.no_data_value = -99999
 
+        # Optional vertical datum / reference metadata (e.g. 'MSL', 'NAVD88').
+        # Informational only -- GeoClaw applies no vertical transformation; it
+        # is populated from NetCDF attributes on read (when present) and
+        # written back out on NetCDF write.
+        self.datum = None
+
         # Data storage for only calculating array shapes when needed
         self._z = None
         self._Z = None
@@ -788,6 +814,10 @@ class Topography(object):
                     _lat_name = _meta.lat_name
                     _var_name = inspector.var_name
 
+                    # Record an optional vertical datum from CF/common
+                    # attributes (informational only; no transformation).
+                    self.datum = extract_datum(ds[_var_name].attrs, ds.attrs)
+
                     # Load coordinate 1-D arrays
                     _lon_vals = numpy.asarray(
                         ds[_lon_name].values[::stride[0]], dtype=float
@@ -1052,6 +1082,12 @@ class Topography(object):
                 if inspector._detect_lat_order(_lat_name) == 'N_to_S':
                     _lat_vals = _lat_vals[::-1]
 
+                # Record an optional vertical datum (informational) so it is
+                # available without loading Z (e.g. for the consistency check
+                # in TopographyData.write).
+                self.datum = extract_datum(
+                    *[ds[v].attrs for v in ds.data_vars], ds.attrs)
+
             self._x = _lon_vals
             self._y = _lat_vals
             self._extent = [self._x[0], self._x[-1], self._y[0], self._y[-1]]
@@ -1271,6 +1307,8 @@ class Topography(object):
                     "positive": "up",
                 },
             )
+            if self.datum is not None:
+                elevation.attrs["vertical_datum"] = str(self.datum)
             ds = xr.Dataset({"elevation": elevation})
             ds.attrs.update({
                 "Conventions": "CF-1.7",

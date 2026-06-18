@@ -948,6 +948,34 @@ def test_write_priority_order_finest_last_in_file(tmp_path):
     assert coarse_pos < fine_pos
 
 
+def test_write_warns_on_mismatched_datums(tmp_path):
+    """TopographyData.write warns when topo files carry different datums."""
+    a = _make_topo_with_delta(1.0, tmp_path, "a")
+    b = _make_topo_with_delta(1.0, tmp_path, "b")
+    a.datum = "NAVD88"
+    b.datum = "MSL"
+
+    td = TopographyData()
+    td.topofiles = [a, b]
+    with pytest.warns(UserWarning, match="mismatched vertical datums"):
+        td.write(out_file=str(tmp_path / "topo.data"))
+
+
+def test_write_no_datum_warning_when_consistent(tmp_path, recwarn):
+    """No datum warning when datums agree or only one is set."""
+    a = _make_topo_with_delta(1.0, tmp_path, "a")
+    b = _make_topo_with_delta(1.0, tmp_path, "b")
+    a.datum = "NAVD88"
+    b.datum = "NAVD88"          # same datum
+    # (b could also be left as None -- a single distinct datum is fine.)
+
+    td = TopographyData()
+    td.topofiles = [a, b]
+    td.write(out_file=str(tmp_path / "topo.data"))
+    assert not any("mismatched vertical datums" in str(w.message)
+                   for w in recwarn.list)
+
+
 # ===========================================================================
 # Group 11 — Backward compatibility (deprecation shim round-trip)
 # ===========================================================================

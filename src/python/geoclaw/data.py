@@ -347,6 +347,22 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         if self.test_topography == 0:
             topos = self._normalize_topofiles()
             topos = self._compute_priority_order(topos)
+
+            # Warn if the topo files carry mismatched vertical datums: GeoClaw
+            # applies no vertical-datum transformation, so mixing references is
+            # a likely error.  Only datums that are actually available (set by
+            # the user or read from NetCDF) are compared; None is ignored.
+            datums = sorted({str(topo.datum) for topo in topos
+                             if getattr(topo, 'datum', None) is not None})
+            if len(datums) > 1:
+                warnings.warn(
+                    "Topography files have mismatched vertical datums (%s). "
+                    "GeoClaw does not transform between datums; verify the "
+                    "files share a common vertical reference."
+                    % ", ".join(datums),
+                    UserWarning, stacklevel=2,
+                )
+
             self.data_write(value=len(topos), alt_name='ntopofiles')
             for topo in topos:
                 # Resolve path relative to out_file's directory, same as before
@@ -644,10 +660,31 @@ class DTopoData(clawpack.clawutil.data.ClawData):
             # simulation seconds.
             if abs(d.dtopo_type) == 4:
                 from clawpack.geoclaw import netcdf_utils as _ncutils
+                from clawpack.geoclaw.topotools import extract_datum
                 with _ncutils.DTopoInspector(fname) as _insp:
                     _meta = _insp.inspect_dtopo()
+                    # Record an optional vertical datum (informational) for the
+                    # consistency check below, if not already set on the object.
+                    if d.datum is None:
+                        d.datum = extract_datum(
+                            *[_insp.ds[v].attrs for v in _insp.ds.data_vars],
+                            _insp.ds.attrs)
                 _ncutils.DescriptorWriter.write_dtopo_descriptor(
                     self._out_file, _meta)
+
+        # Warn if the dtopo files carry mismatched vertical datums: GeoClaw
+        # applies no vertical-datum transformation, so mixing references is a
+        # likely error.  Only datums that are actually available are compared.
+        datums = sorted({str(d.datum) for d in dtopos
+                         if getattr(d, 'datum', None) is not None})
+        if len(datums) > 1:
+            warnings.warn(
+                "dtopo files have mismatched vertical datums (%s). GeoClaw "
+                "does not transform between datums; verify the files share a "
+                "common vertical reference." % ", ".join(datums),
+                UserWarning, stacklevel=2,
+            )
+
         self.data_write()
         self.data_write(value=self.dt_max_dtopo,alt_name='dt_max_dtopo')
         self.close_data_file()
