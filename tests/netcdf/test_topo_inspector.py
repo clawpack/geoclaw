@@ -470,3 +470,57 @@ def test_autodetect_cf_standard_name_takes_priority(topo_file_factory):
     with TopoInspector(path) as insp:
         meta = insp.inspect_topo()
     assert meta.var_name == "cf_topo"
+
+
+# ============================================================
+# Geographic-axis gating of the 0-360 longitude wrap (Phase 3)
+# ============================================================
+
+def test_projected_axis_disables_lon_wrap(topo_file_factory):
+    """A non-geographic x axis (projected meters) reports lon_wrap=None and
+    never triggers the +/-360 wrap, even when cropped."""
+    ds = make_topo_dataset(
+        lon_name="x", lat_name="y",
+        lon_min=0.0, lon_max=500000.0,
+        lat_min=0.0, lat_max=400000.0,
+        nlon=6, nlat=5,
+        lon_axis_attr=True, lat_axis_attr=True,
+    )
+    ds["x"].attrs["units"] = "m"
+    ds["y"].attrs["units"] = "m"
+    path = topo_file_factory(ds=ds)
+
+    with TopoInspector(path, var_name="z") as insp:
+        assert insp.inspect_topo().lon_wrap is None
+
+    # A crop must yield a single identity-offset entry (no 360 wrap attempt).
+    with TopoInspector(path, var_name="z",
+                       crop_bounds=(100000.0, 300000.0, 50000.0, 350000.0)) as insp:
+        entries = insp.topo_entries()
+    assert len(entries) == 1
+    _, _, cropped_meta = entries[0]
+    assert cropped_meta.lon_wrap_offset == 0.0
+
+
+def test_length_units_mark_projected_even_with_small_values(topo_file_factory):
+    """Length units flag a projected axis even when the coordinate values
+    happen to fall within the degree range."""
+    ds = make_topo_dataset(
+        lon_name="x", lat_name="y",
+        lon_min=0.0, lon_max=300.0,
+        lat_min=0.0, lat_max=200.0,
+        lon_axis_attr=True, lat_axis_attr=True,
+    )
+    ds["x"].attrs["units"] = "km"
+    path = topo_file_factory(ds=ds)
+    with TopoInspector(path, var_name="z") as insp:
+        assert insp.inspect_topo().lon_wrap is None
+
+
+def test_geographic_axis_without_units_keeps_wrap(topo_file_factory):
+    """An unit-less lon/lat axis in [0, 360] is still treated as geographic,
+    so the wrap convention is detected as before."""
+    path = topo_file_factory(lon_min=170.0, lon_max=190.0,
+                             lat_min=-10.0, lat_max=10.0)
+    with TopoInspector(path, var_name="z") as insp:
+        assert insp.inspect_topo().lon_wrap == 360

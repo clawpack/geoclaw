@@ -85,6 +85,20 @@ _CF_TO_UNITS_PY: dict[str, str] = {
 }
 
 
+# Length unit strings (lower-cased) on an x axis that mark it as a projected /
+# rectilinear (non-geographic) grid, for which the 0-360 longitude wrap is
+# meaningless and must be skipped.  Detection defaults to geographic; only
+# positive evidence (these units, a projection standard_name, or values
+# outside the plausible degree range) disables the wrap.
+_PROJECTED_LENGTH_UNITS: frozenset[str] = frozenset({
+    'm', 'meter', 'meters', 'metre', 'metres',
+    'km', 'kilometer', 'kilometers', 'kilometre', 'kilometres',
+})
+_PROJECTED_STANDARD_NAMES: frozenset[str] = frozenset({
+    'projection_x_coordinate', 'projection_y_coordinate',
+})
+
+
 def _normalize_cf_unit(cf_unit: str) -> Optional[str]:
     """Return the units.py abbreviation for *cf_unit*, or None if unknown."""
     return _CF_TO_UNITS_PY.get(cf_unit.strip())
@@ -107,7 +121,7 @@ class FileMetadata:
     x_name: str
     y_name: str
     time_name: Optional[str]
-    lon_wrap: int                # 180 -> [-180, 180];  360 -> [0, 360]
+    lon_wrap: Optional[int]      # 180 -> [-180,180]; 360 -> [0,360]; None -> non-geographic
     y_increasing: bool           # True if y increases with array index
     dim_order: list[str]         # canonical role names, e.g. ['y', 'x']
     fill_value: Optional[float]  # resolved from _FillValue / missing_value
@@ -264,10 +278,33 @@ class NetCDFInspector:
     # Convention detection
     # ------------------------------------------------------------------
 
-    def _detect_lon_wrap(self, x_name: str) -> int:
-        """Return 180 if longitudes are in [-180, 180], else 360."""
-        lon_max = float(self.ds[x_name].max())
-        return 360 if lon_max > 180.0 else 180
+    def _detect_lon_wrap(self, x_name: str) -> Optional[int]:
+        """Longitude wrap convention for a geographic x axis, else None.
+
+        Returns 360 if longitudes span [0, 360], 180 if [-180, 180].
+
+        The axis is assumed geographic unless there is positive evidence it is
+        a projected / rectilinear grid (length units such as ``m``/``km``, a
+        projection ``standard_name``, or coordinate values outside the
+        plausible degree range [-360, 360]).  In that case it returns None and
+        the 0–360 wrap machinery is skipped entirely — such an axis never
+        wraps.  Defaulting to geographic preserves behavior for the many files
+        whose lon/lat coordinates carry no explicit CF units.
+        """
+        coord = self.ds[x_name]
+        units = str(coord.attrs.get('units', '')).strip().lower()
+        std_name = coord.attrs.get('standard_name', '')
+        x_min = float(coord.min())
+        x_max = float(coord.max())
+        projected = (
+            units in _PROJECTED_LENGTH_UNITS
+            or std_name in _PROJECTED_STANDARD_NAMES
+            or x_min < -360.0 - 1e-6
+            or x_max > 360.0 + 1e-6
+        )
+        if projected:
+            return None
+        return 360 if x_max > 180.0 else 180
 
     def _detect_y_increasing(self, y_name: str) -> bool:
         """Return True if y increases with array index, else False."""
@@ -662,9 +699,14 @@ class TopoInspector(NetCDFInspector):
             lon_resolution = 1e-10  # single-point file, no gap tolerance needed
         crop_lon_min, crop_lon_max, crop_lat_min, crop_lat_max = saved_crop
 
+        # The +/-360 wrap candidates only make sense for a geographic
+        # longitude axis.  For a non-geographic x axis (lon_wrap is None,
+        # e.g. projected meters) restrict to the identity offset so the crop
+        # is taken straight from the file extent.
         entries_spec = _compute_lon_entries(
             file_lon_min, file_lon_max, crop_lon_min, crop_lon_max,
             max_gap=lon_resolution,
+            allow_wrap=meta.lon_wrap is not None,
         )
 
         result = []
@@ -1294,6 +1336,7 @@ def _compute_lon_entries(
     domain_lon_min: float,
     domain_lon_max: float,
     max_gap: float = 1e-10,
+    allow_wrap: bool = True,
 ) -> list[tuple[float, float, float]]:
     """
     Compute (file_crop_min, file_crop_max, lon_offset) tuples needed to cover
@@ -1311,11 +1354,16 @@ def _compute_lon_entries(
     spacing to allow for the half-cell gap at the dateline that near-global
     files (e.g. GEBCO) have between their last and first longitude columns.
 
+    allow_wrap enables the +/-360 wrap candidate offsets (the default, for a
+    geographic longitude axis).  Pass False for a non-geographic x axis
+    (projected meters, etc.), which never wraps: only the identity offset 0
+    is considered.
+
     Raises ValueError if the file cannot cover the requested domain even
     with all candidate offsets, or if the remaining uncovered gap exceeds
     max_gap.
     """
-    candidate_offsets = [0.0, 360.0, -360.0]
+    candidate_offsets = [0.0, 360.0, -360.0] if allow_wrap else [0.0]
     entries: list[tuple[float, float, float]] = []
     total_coverage = 0.0
 
@@ -1465,7 +1513,11 @@ class DescriptorWriter:
         f.write(f"  y_name         = {meta.y_name}\n")
         f.write(f"  time_name      = {meta.time_name}\n")
         f.write(f"  dim_order      = {','.join(meta.dim_order)}\n")
-        f.write(f"  lon_wrap       = {meta.lon_wrap}\n")
+        # lon_wrap only applies to a geographic longitude axis.  Omit it for a
+        # non-geographic x axis (lon_wrap is None): Fortran defaults to 180
+        # (no 0-360 normalization), which is the correct no-wrap behavior.
+        if meta.lon_wrap is not None:
+            f.write(f"  lon_wrap       = {meta.lon_wrap}\n")
         f.write(f"  y_increasing   = {meta.y_increasing}\n")
         if meta.fill_value is not None:
             f.write(f"  fill_value     = {meta.fill_value!r}\n")
