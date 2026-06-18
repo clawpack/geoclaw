@@ -185,6 +185,7 @@ def _write_preprocessing_block(f, t):
         f.write(f"{vals}   # align [x y]\n")
 
     f.write(f"{float(t.x_shift)!r}   # x_shift\n")
+    f.write(f"{float(t.y_shift)!r}   # y_shift\n")
     f.write(f"{float(t.z_shift)!r}   # z_shift\n")
     f.write(f"{'T' if t.negate_z else 'F'}   # negate_z\n")
 
@@ -282,7 +283,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 if 'extent' in entry:
                     topo.crop_extent = entry['extent']
                 for attr in ('crop_extent', 'coarsen', 'buffer', 'align',
-                             'x_shift', 'z_shift', 'negate_z'):
+                             'x_shift', 'y_shift', 'z_shift', 'negate_z'):
                     if attr in entry:
                         setattr(topo, attr, entry[attr])
                 result.append(topo)
@@ -638,13 +639,12 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                 ("coarsen", d.coarsen != 1),
                 ("buffer", d.buffer != 0.0),
                 ("align", d.align is not None),
-                ("x_shift", d.x_shift != 0.0),
             ) if is_set]
             if unsupported:
                 raise NotImplementedError(
                     "Preprocessing attributes %s are not implemented for "
-                    "dtopography (file %s). Only z_shift and negate_z are "
-                    "supported." % (", ".join(unsupported), d.path))
+                    "dtopography (file %s). Only x_shift, y_shift, z_shift and "
+                    "negate_z are supported." % (", ".join(unsupported), d.path))
 
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
@@ -694,7 +694,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         r"""Read a dtopography data file written by write().
 
         Populates *dtopofiles* with DTopography objects carrying the path,
-        dtopo_type, and preprocessing attributes of each 9-line file block.
+        dtopo_type, and preprocessing attributes of each 10-line file block.
         """
         from clawpack.geoclaw.dtopotools import DTopography
 
@@ -719,8 +719,8 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                     self.dt_max_dtopo = float(value)
                 i += 1
             elif _data(line).startswith("'"):
-                # 9-line file block: path, dtopo_type, crop_extent, coarsen,
-                # buffer, align, x_shift, z_shift, negate_z
+                # 10-line file block: path, dtopo_type, crop_extent, coarsen,
+                # buffer, align, x_shift, y_shift, z_shift, negate_z
                 d = DTopography()
                 d.path = _data(line).strip("'")
                 d.dtopo_type = int(_data(lines[i + 1]).split()[0])
@@ -731,10 +731,11 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                 align = [float(v) for v in _data(lines[i + 5]).split()]
                 d.align = None if all(v == 0. for v in align) else align
                 d.x_shift = float(_data(lines[i + 6]))
-                d.z_shift = float(_data(lines[i + 7]))
-                d.negate_z = _data(lines[i + 8]).upper().startswith("T")
+                d.y_shift = float(_data(lines[i + 7]))
+                d.z_shift = float(_data(lines[i + 8]))
+                d.negate_z = _data(lines[i + 9]).upper().startswith("T")
                 self.dtopofiles.append(d)
-                i += 9
+                i += 10
             else:
                 i += 1
 

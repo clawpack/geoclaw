@@ -300,7 +300,6 @@ def test_dtopo_datum_netcdf_roundtrip(tmp_path):
     ("coarsen", 2),
     ("buffer", 1.0),
     ("align", (0.0, 0.5)),
-    ("x_shift", 0.5),
 ])
 def test_dtopo_unsupported_preprocessing(tmp_path, attr, value):
     r"""Unsupported preprocessing attributes raise in DTopography.read()."""
@@ -311,6 +310,33 @@ def test_dtopo_unsupported_preprocessing(tmp_path, attr, value):
     setattr(dtopo, attr, value)
     with pytest.raises(NotImplementedError, match=attr):
         dtopo.read(path=path, dtopo_type=3)
+
+
+@pytest.mark.parametrize("attr, axis", [("x_shift", "x"), ("y_shift", "y")])
+def test_dtopo_shift_applied(tmp_path, attr, axis):
+    r"""x_shift/y_shift no longer raise and translate the coordinate arrays."""
+    path = tmp_path / "synthetic.tt3"
+    _make_synthetic_dtopo().write(path, dtopo_type=3, dZ_format="%.12e")
+
+    # Reference (no shift) to compare coordinate arrays against.
+    ref = dtopotools.DTopography()
+    ref.read(path=path, dtopo_type=3)
+
+    shift = 0.5
+    dtopo = dtopotools.DTopography()
+    setattr(dtopo, attr, shift)
+    dtopo.read(path=path, dtopo_type=3)  # must NOT raise
+
+    if axis == "x":
+        np.testing.assert_allclose(dtopo.x, ref.x + shift)
+        np.testing.assert_allclose(dtopo.X, ref.X + shift)
+        np.testing.assert_allclose(dtopo.y, ref.y)
+    else:
+        np.testing.assert_allclose(dtopo.y, ref.y + shift)
+        np.testing.assert_allclose(dtopo.Y, ref.Y + shift)
+        np.testing.assert_allclose(dtopo.x, ref.x)
+    # dZ values are unchanged by a coordinate registration shift.
+    np.testing.assert_allclose(dtopo.dZ, ref.dZ)
 
 
 @pytest.mark.python

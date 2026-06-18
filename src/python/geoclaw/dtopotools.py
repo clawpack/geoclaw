@@ -293,14 +293,15 @@ class DTopography(object):
         self.dtopo_type = dtopo_type
 
         # Preprocessing attributes — same set and defaults as Topography so
-        # that DTopoData.write() can emit the same 9-line per-file block.
-        # Only z_shift and negate_z are currently applied to dtopo; the
+        # that DTopoData.write() can emit the same per-file block.
+        # x_shift, y_shift, z_shift and negate_z are applied to dtopo; the
         # others raise NotImplementedError if set (see read()).
         self.crop_extent = None     # [x1,x2,y1,y2]; None = full domain
         self.coarsen = 1
         self.buffer = 0.0
         self.align = None
         self.x_shift = 0.0
+        self.y_shift = 0.0
         self.z_shift = 0.0
         self.negate_z = False
 
@@ -348,13 +349,12 @@ class DTopography(object):
             ("coarsen", self.coarsen != 1),
             ("buffer", self.buffer != 0.0),
             ("align", self.align is not None),
-            ("x_shift", self.x_shift != 0.0),
         ) if is_set]
         if unsupported:
             raise NotImplementedError(
                 "Preprocessing attributes %s are not implemented for "
-                "dtopography. Only z_shift and negate_z are supported."
-                % ", ".join(unsupported))
+                "dtopography. Only x_shift, y_shift, z_shift and negate_z "
+                "are supported." % ", ".join(unsupported))
 
         if dtopo_type == 1:
             data = numpy.loadtxt(path)
@@ -458,6 +458,16 @@ class DTopography(object):
             self.dZ = -self.dZ
         if self.z_shift != 0.0:
             self.dZ = self.dZ + self.z_shift
+        if self.x_shift != 0.0:
+            if self.x is not None:
+                self.x = self.x + self.x_shift
+            if self.X is not None:
+                self.X = self.X + self.x_shift
+        if self.y_shift != 0.0:
+            if self.y is not None:
+                self.y = self.y + self.y_shift
+            if self.Y is not None:
+                self.Y = self.Y + self.y_shift
 
 
     def write(self, path=None, dtopo_type=None, dZ_format="%.3f"):

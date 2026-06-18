@@ -136,6 +136,8 @@ def test_dtopo_data_roundtrip(tmp_path):
     d1 = dtopotools.DTopography()
     d1.path = "dtopo_one.tt3"
     d1.dtopo_type = 3
+    d1.x_shift = 1.5
+    d1.y_shift = -2.0
     d1.z_shift = -0.25
     d1.negate_z = True
 
@@ -157,6 +159,8 @@ def test_dtopo_data_roundtrip(tmp_path):
     r1, r2 = read_dtopo_data.dtopofiles
     assert r1.path.endswith("dtopo_one.tt3")
     assert r1.dtopo_type == 3
+    assert np.allclose(r1.x_shift, 1.5)
+    assert np.allclose(r1.y_shift, -2.0)
     assert np.allclose(r1.z_shift, -0.25)
     assert r1.negate_z is True
     assert r1.crop_extent is None
@@ -258,12 +262,12 @@ def test_dtopo_data_unsupported_preprocessing(tmp_path):
     d = dtopotools.DTopography()
     d.path = "dtopo.tt3"
     d.dtopo_type = 3
-    d.x_shift = 0.5
+    d.crop_extent = [0.0, 1.0, 0.0, 1.0]
 
     dtopo_data = clawpack.geoclaw.data.DTopoData()
     dtopo_data.dtopofiles = [d]
 
-    with pytest.raises(NotImplementedError, match="x_shift"):
+    with pytest.raises(NotImplementedError, match="crop_extent"):
         dtopo_data.write(out_file=tmp_path / "dtopo.data")
 
 

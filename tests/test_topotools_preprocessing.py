@@ -67,13 +67,14 @@ _COORD_VARIANTS = [
 ]
 _COORD_IDS = ["lon/lat", "longitude/latitude", "x/y"]
 
-# The 7 preprocessing attributes and a non-default value for each.
+# The 8 preprocessing attributes and a non-default value for each.
 _PREPROCESSING_NONDEFAULTS = [
     ("crop_extent", [1.0, 8.0, 1.0, 8.0]),
     ("coarsen", 2),
     ("buffer", 1),
     ("align", (0.0, 0.0)),
     ("x_shift", 5.0),
+    ("y_shift", 7.0),
     ("z_shift", 10.0),
     ("negate_z", True),
 ]
@@ -194,6 +195,7 @@ def test_preprocessing_defaults_all_attributes():
     assert t.buffer == 0.0
     assert t.align is None
     assert t.x_shift == 0.0
+    assert t.y_shift == 0.0
     assert t.z_shift == 0.0
     assert t.negate_z is False
 
@@ -267,6 +269,20 @@ def test_preprocessing_x_shift_translates_coordinates(tt2_path):
     np.testing.assert_array_equal(t.Z, _analytic_Z())
     # x_shift modifies _x permanently; verify it is not a view of a fresh array
     assert not np.shares_memory(t._x, original_x)
+
+
+def test_preprocessing_y_shift_translates_coordinates(tt2_path):
+    original_y = np.arange(_NY, dtype=np.float64)
+
+    t = Topography()
+    t.y_shift = 10.0
+    t.read(tt2_path, topo_type=2)
+
+    np.testing.assert_allclose(t._y, original_y + 10.0, rtol=1e-12)
+    np.testing.assert_array_equal(t._x, np.arange(_NX, dtype=np.float64))
+    np.testing.assert_array_equal(t.Z, _analytic_Z())
+    # y_shift modifies _y permanently; verify it is not a view of a fresh array
+    assert not np.shares_memory(t._y, original_y)
 
 
 def test_preprocessing_crop_extent_clips_domain(tt2_path):
@@ -834,7 +850,7 @@ def test_write_global_header_three_lines(tmp_path, tt2_path):
     assert "override" not in parsed["raw"].lower()
 
 
-def test_write_per_file_block_9_lines_ascii(tmp_path, tt2_path):
+def test_write_per_file_block_10_lines_ascii(tmp_path, tt2_path):
     t = Topography()
     t.path = str(tt2_path)
     t.topo_type = 2
@@ -851,9 +867,9 @@ def test_write_per_file_block_9_lines_ascii(tmp_path, tt2_path):
                       if "topo_path" in l or "topo_type" in l
                       or "crop_extent" in l or "coarsen" in l
                       or "buffer" in l or "align" in l
-                      or "x_shift" in l or "z_shift" in l
+                      or "x_shift" in l or "y_shift" in l or "z_shift" in l
                       or "negate_z" in l]
-    assert len(per_file_lines) == 9
+    assert len(per_file_lines) == 10
 
     # Sentinel values
     assert any("0. 0. 0. 0." in l for l in per_file_lines), \
@@ -889,7 +905,7 @@ def test_write_per_file_block_non_default_values(tmp_path, tt2_path):
 
 
 def test_write_netcdf_descriptor_after_preprocessing_lines(tmp_path):
-    """NetCDF descriptor block must appear AFTER the 9 preprocessing lines."""
+    """NetCDF descriptor block must appear AFTER the 8 preprocessing lines."""
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
 
@@ -995,7 +1011,7 @@ def test_backward_compat_list_format_round_trip(tmp_path, tt2_path):
     # topo_type=2 appears
     topo_type_line = next(l for l in raw.splitlines() if "topo_type" in l)
     assert "2" in topo_type_line
-    # New 9-line format markers present
+    # New per-file block format markers present
     assert "crop_extent" in raw
     assert "negate_z" in raw
 

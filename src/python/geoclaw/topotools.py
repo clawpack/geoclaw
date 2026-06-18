@@ -494,6 +494,7 @@ class Topography(object):
         self.buffer: float = 0.0
         self.align = None
         self.x_shift: float = 0.0
+        self.y_shift: float = 0.0
         self.z_shift: float = 0.0
         self.negate_z: bool = False
         self._netcdf_meta = None  # TopoMetadata set by _normalize_topofiles for topo_entries() format
@@ -758,6 +759,7 @@ class Topography(object):
                     or self.buffer != 0.0
                     or self.align is not None
                     or self.x_shift != 0.0
+                    or self.y_shift != 0.0
                     or self.z_shift != 0.0
                     or self.negate_z
                 )
@@ -954,6 +956,7 @@ class Topography(object):
             #   1. negate_z
             #   2. z_shift   (missing cells are NaN and stay NaN under the shift)
             #   3. x_shift   (shift x array; Fortran shifts xlowtopo/xhitopo)
+            #   3b. y_shift  (shift y array; Fortran shifts ylowtopo/yhitopo)
             #   4+5. crop + coarsen via self.crop() (Fortran: crop+buffer done,
             #        coarsen not yet implemented)
             # Steps are skipped when the attribute equals its default value.
@@ -965,6 +968,9 @@ class Topography(object):
                 self._Z = self._Z + self.z_shift
             if self.x_shift != 0.0:
                 self._x = self._x + self.x_shift
+                self._extent = None
+            if self.y_shift != 0.0:
+                self._y = self._y + self.y_shift
                 self._extent = None
             if self.crop_extent is not None or self.coarsen > 1:
                 _cropped = self.crop(

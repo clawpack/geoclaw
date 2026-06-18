@@ -165,6 +165,17 @@ def _setup_x_shift(temp_path):
     return [_topo_entry("bowl.topotype2", x_shift=0.5)], None
 
 
+def _setup_y_shift(temp_path):
+    # File grid is registered 0.5 too far south; y_shift slides it back.
+    # The stored Z = _bowl(x, y + 0.5) on a y-grid shifted by -0.5, so after
+    # y_shift = 0.5 the (x, y) -> Z mapping reconstructs the true bowl.  If
+    # y_shift is silently dropped, the bathymetry under the gauge is wrong.
+    _write_topo_file(temp_path / "bowl.topotype2",
+                     zfunc=lambda x, y: _bowl(x, y + 0.5),
+                     y=np.linspace(-2.5, 1.5, 201))
+    return [_topo_entry("bowl.topotype2", y_shift=0.5)], None
+
+
 def _setup_crop(temp_path):
     # The first-listed (oversized) file is corrupted east of x=0 and cropped
     # to the western half; a second file supplies the correct eastern half.
@@ -244,6 +255,7 @@ _VARIANTS = {
     "negate_z": _setup_negate_z,
     "double_negate": _setup_double_negate,
     "x_shift": _setup_x_shift,
+    "y_shift": _setup_y_shift,
     "crop": _setup_crop,
     "crop_buffer": _setup_crop_buffer,
     "coarsen": _setup_coarsen,

@@ -51,13 +51,14 @@ module topo_module
     logical,           allocatable :: nc_has_fill(:)     ! fill_value was specified
     logical,           allocatable :: nc_has_crop(:)     ! crop_bounds was specified
 
-    ! Per-file preprocessing parameters — read from the 7 new lines in topo.data
+    ! Per-file preprocessing parameters — read from the 8 new lines in topo.data
     ! for all topo file types (2, 3, 4, 5). Type-1 files are skipped.
     real(kind=8), allocatable :: tp_crop_extent(:,:)  ! (4,n): x1,x2,y1,y2 domain coords; all-zero=no crop
     integer,      allocatable :: tp_coarsen(:)         ! subsampling factor (1=none)
     integer,      allocatable :: tp_buffer(:)          ! buffer cells (grid points) around crop region
     real(kind=8), allocatable :: tp_align(:,:)         ! (2,n): align offset; all-zero=none
-    real(kind=8), allocatable :: tp_x_shift(:)         ! coordinate registration offset
+    real(kind=8), allocatable :: tp_x_shift(:)         ! x coordinate registration offset
+    real(kind=8), allocatable :: tp_y_shift(:)         ! y coordinate registration offset
     real(kind=8), allocatable :: tp_z_shift(:)         ! bulk datum offset
     logical,      allocatable :: tp_negate_z(:)        ! explicit Z sign flip
 
@@ -68,9 +69,11 @@ module topo_module
     integer,      allocatable :: mxtopo_full(:), mytopo_full(:)
     integer,      allocatable :: tp_i_start(:), tp_j_start(:)
 
-    ! Per-file dtopo preprocessing parameters — read from the 7 preprocessing
-    ! lines in dtopo.data.  Only z_shift and negate_z are implemented for
-    ! dtopography; the others trigger a stop in read_dtopo_settings.
+    ! Per-file dtopo preprocessing parameters — read from the 8 preprocessing
+    ! lines in dtopo.data.  x_shift, y_shift, z_shift and negate_z are
+    ! implemented for dtopography; the others trigger a stop in
+    ! read_dtopo_settings.
+    real(kind=8), allocatable :: dtp_x_shift(:), dtp_y_shift(:)
     real(kind=8), allocatable :: dtp_z_shift(:)
     logical,      allocatable :: dtp_negate_z(:)
 
@@ -221,13 +224,15 @@ contains
 
                 allocate(tp_crop_extent(4, mtopofiles), tp_coarsen(mtopofiles))
                 allocate(tp_buffer(mtopofiles), tp_align(2, mtopofiles))
-                allocate(tp_x_shift(mtopofiles), tp_z_shift(mtopofiles))
+                allocate(tp_x_shift(mtopofiles), tp_y_shift(mtopofiles))
+                allocate(tp_z_shift(mtopofiles))
                 allocate(tp_negate_z(mtopofiles))
                 tp_crop_extent = 0.0d0
                 tp_coarsen     = 1
                 tp_buffer      = 0
                 tp_align       = 0.0d0
                 tp_x_shift     = 0.0d0
+                tp_y_shift     = 0.0d0
                 tp_z_shift     = 0.0d0
                 tp_negate_z    = .false.
 
@@ -251,7 +256,7 @@ contains
                         print *, "  not supported and will produce incorrect results."
                     end if
 
-                    ! Read the 7 new preprocessing parameter lines present in
+                    ! Read the 8 new preprocessing parameter lines present in
                     ! topo.data for ALL file types (written by TopographyData.write()).
                     read(iunit,*) tp_crop_extent(1,i), tp_crop_extent(2,i), &
                                   tp_crop_extent(3,i), tp_crop_extent(4,i)
@@ -259,6 +264,7 @@ contains
                     read(iunit,*) tp_buffer(i)
                     read(iunit,*) tp_align(1,i), tp_align(2,i)
                     read(iunit,*) tp_x_shift(i)
+                    read(iunit,*) tp_y_shift(i)
                     read(iunit,*) tp_z_shift(i)
                     read(iunit,*) tp_negate_z(i)
 
@@ -270,6 +276,7 @@ contains
                             any(tp_align(:,i) /= 0.0d0) .or. &
                             tp_negate_z(i) .or. &
                             tp_x_shift(i) /= 0.0d0 .or. &
+                            tp_y_shift(i) /= 0.0d0 .or. &
                             tp_z_shift(i) /= 0.0d0)) then
                         print *, "ERROR: preprocessing attributes (crop, coarsen, shift) are not"
                         print *, "  supported for topo_type=1. Convert to type 2/3/4 first."
@@ -313,8 +320,8 @@ contains
                             if (any(tp_crop_extent(:,i) /= 0.0d0)) then
                                 x1_c = tp_crop_extent(1,i) - tp_x_shift(i)
                                 x2_c = tp_crop_extent(2,i) - tp_x_shift(i)
-                                y1_c = tp_crop_extent(3,i)
-                                y2_c = tp_crop_extent(4,i)
+                                y1_c = tp_crop_extent(3,i) - tp_y_shift(i)
+                                y2_c = tp_crop_extent(4,i) - tp_y_shift(i)
                                 i_start = max(0, ceiling((x1_c - xlowtopo(i)) &
                                                 / dxtopo(i) - 1.0d-6))
                                 i_end   = min(mxtopo(i)-1, &
@@ -349,7 +356,7 @@ contains
                                 max(1, tp_coarsen(i)), tp_buffer(i))
                             call apply_align_buffer_coarsen(j_start, j_end, &
                                 mytopo(i), ylowtopo(i), dytopo(i), &
-                                tp_align(2,i), &
+                                tp_align(2,i) - tp_y_shift(i), &
                                 any(tp_align(:,i) /= 0.0d0), &
                                 max(1, tp_coarsen(i)), tp_buffer(i))
 
@@ -377,6 +384,10 @@ contains
                     if (tp_x_shift(i) /= 0.0d0) then
                         xlowtopo(i) = xlowtopo(i) + tp_x_shift(i)
                         xhitopo(i)  = xhitopo(i)  + tp_x_shift(i)
+                    end if
+                    if (tp_y_shift(i) /= 0.0d0) then
+                        ylowtopo(i) = ylowtopo(i) + tp_y_shift(i)
+                        yhitopo(i)  = yhitopo(i)  + tp_y_shift(i)
                     end if
 
                     topoID(i) = i
@@ -986,6 +997,9 @@ contains
                     if (tp_x_shift(topo_idx) /= 0.0d0) then
                         xlocs = xlocs + tp_x_shift(topo_idx)
                     end if
+                    if (tp_y_shift(topo_idx) /= 0.0d0) then
+                        ylocs = ylocs + tp_y_shift(topo_idx)
+                    end if
                 end if
 
                 ! Coarsening factor: the kept points are read with a strided
@@ -1461,8 +1475,8 @@ contains
                            - tp_x_shift(topo_idx)
                     x2_c = tp_crop_extent(2,topo_idx) - nc_lon_wrap_offset(topo_idx) &
                            - tp_x_shift(topo_idx)
-                    y1_c = tp_crop_extent(3,topo_idx)
-                    y2_c = tp_crop_extent(4,topo_idx)
+                    y1_c = tp_crop_extent(3,topo_idx) - tp_y_shift(topo_idx)
+                    y2_c = tp_crop_extent(4,topo_idx) - tp_y_shift(topo_idx)
                     x_in_dom = (xlocs >= x1_c) .and. (xlocs <= x2_c)
                     y_in_dom = (ylocs >= y1_c) .and. (ylocs <= y2_c)
                     nbuf4 = tp_buffer(topo_idx)
@@ -1504,7 +1518,7 @@ contains
                         ! include lon_wrap_offset but not tp_x_shift, so shift the
                         ! x target into the same frame.
                         al_x4 = tp_align(1,topo_idx) - tp_x_shift(topo_idx)
-                        al_y4 = tp_align(2,topo_idx)
+                        al_y4 = tp_align(2,topo_idx) - tp_y_shift(topo_idx)
                     else
                         cf4 = 1
                         has_al4 = .false.
@@ -1635,7 +1649,7 @@ contains
         real(kind=8) :: area_i,area_j
         integer :: i,j
         ! Unsupported preprocessing values: read, guarded, then discarded
-        real(kind=8) :: dtp_crop(4), dtp_align_v(2), dtp_x_shift_v
+        real(kind=8) :: dtp_crop(4), dtp_align_v(2)
         integer :: dtp_coarsen_v, dtp_buffer_v
 
         write(GEO_PARM_UNIT,*) ' '
@@ -1667,7 +1681,10 @@ contains
         allocate(index0_dtopowork1(num_dtopo),index0_dtopowork2(num_dtopo))
         allocate(tdtopo1(num_dtopo),tdtopo2(num_dtopo),taudtopo(num_dtopo))
         allocate(mdtopoorder(num_dtopo),topoaltered(num_dtopo))
+        allocate(dtp_x_shift(num_dtopo),dtp_y_shift(num_dtopo))
         allocate(dtp_z_shift(num_dtopo),dtp_negate_z(num_dtopo))
+        dtp_x_shift  = 0.0d0
+        dtp_y_shift  = 0.0d0
         dtp_z_shift  = 0.0d0
         dtp_negate_z = .false.
 
@@ -1688,25 +1705,24 @@ contains
             read(iunit,*) dtopofname(i)
             read(iunit,*) dtopotype(i)
 
-            ! Read the 7 preprocessing lines (same per-file block as
-            ! topo.data, written by DTopoData.write()).  Only z_shift and
-            ! negate_z are implemented for dtopography; fail loudly on the
-            ! rest rather than silently ignoring them (an ignored x_shift,
-            ! for example, would mis-place the deformation).
+            ! Read the 8 preprocessing lines (same per-file block as
+            ! topo.data, written by DTopoData.write()).  x_shift, y_shift,
+            ! z_shift and negate_z are implemented for dtopography; fail
+            ! loudly on the rest rather than silently ignoring them.
             read(iunit,*) dtp_crop(1), dtp_crop(2), dtp_crop(3), dtp_crop(4)
             read(iunit,*) dtp_coarsen_v
             read(iunit,*) dtp_buffer_v
             read(iunit,*) dtp_align_v(1), dtp_align_v(2)
-            read(iunit,*) dtp_x_shift_v
+            read(iunit,*) dtp_x_shift(i)
+            read(iunit,*) dtp_y_shift(i)
             read(iunit,*) dtp_z_shift(i)
             read(iunit,*) dtp_negate_z(i)
 
             if (any(dtp_crop /= 0.0d0) .or. dtp_coarsen_v > 1 .or. &
-                    dtp_buffer_v /= 0 .or. any(dtp_align_v /= 0.0d0) .or. &
-                    dtp_x_shift_v /= 0.0d0) then
-                print *, "ERROR: only z_shift and negate_z preprocessing are"
-                print *, "  implemented for dtopography files.  Unsupported"
-                print *, "  attribute set for file: ", trim(dtopofname(i))
+                    dtp_buffer_v /= 0 .or. any(dtp_align_v /= 0.0d0)) then
+                print *, "ERROR: only x_shift, y_shift, z_shift and negate_z"
+                print *, "  preprocessing are implemented for dtopography files."
+                print *, "  Unsupported attribute set for file: ", trim(dtopofname(i))
                 stop 1
             end if
 
@@ -1725,6 +1741,18 @@ contains
                 xhidtopo(i),yhidtopo(i),tfdtopo(i),dxdtopo(i),dydtopo(i), &
                 dtdtopo(i), i)
             mdtopo(i) = mxdtopo(i) * mydtopo(i) * mtdtopo(i)
+
+            ! Apply coordinate registration shifts to the stored domain
+            ! extents (domain = file + shift), mirroring the topo handling
+            ! and the Python DTopography.read() x/y_shift application.
+            if (dtp_x_shift(i) /= 0.0d0) then
+                xlowdtopo(i) = xlowdtopo(i) + dtp_x_shift(i)
+                xhidtopo(i)  = xhidtopo(i)  + dtp_x_shift(i)
+            end if
+            if (dtp_y_shift(i) /= 0.0d0) then
+                ylowdtopo(i) = ylowdtopo(i) + dtp_y_shift(i)
+                yhidtopo(i)  = yhidtopo(i)  + dtp_y_shift(i)
+            end if
         enddo
 
         read(iunit,*) dt_max_dtopo  

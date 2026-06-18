@@ -199,6 +199,69 @@ def test_dtopo_preprocessing_identity(tmp_path: Path) -> None:
 
 
 @pytest.mark.regression
+def test_dtopo_shift_identity(tmp_path: Path) -> None:
+    """x_shift + y_shift through the Fortran dtopo read reproduce baseline.
+
+    Run A reads the unmodified dtopo file.  Run B reads a file whose x and y
+    coordinate axes have been pre-shifted by ``-delta``; applying
+    ``x_shift = y_shift = +delta`` at read time must slide the deformation
+    back to the same physical footprint, so the two runs match gauge-to-gauge.
+    No stored reference data is involved.
+
+    Non-vacuous: the guard gauge (99) sits inside the *unshifted* footprint.
+    If the Fortran x/y_shift were dropped, run B's deformation would stay
+    displaced by ``delta`` in both axes (a 0.2-degree move, larger than the
+    gauge's margin from the footprint edge) and the gauge comparison and/or
+    the surface-signal guard would fail.
+    """
+    import clawpack.pyclaw.gauges as gauges
+
+    example_dir = Path(__file__).parent
+    delta = 0.2
+
+    # Run A: baseline.
+    path_a = tmp_path / "a"
+    path_a.mkdir()
+    dtopo = _make_dtopo1(example_dir)
+    dtopo.write(path_a / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
+    entry = dtopotools.DTopography()
+    entry.path = "dtopo1.tt3"
+    entry.dtopo_type = 3
+    runner_a = _run_single_dtopo(path_a, example_dir, entry,
+                                 guard_gauge=_GUARD_GAUGE)
+
+    # Run B: coordinates pre-shifted by -delta, with x_shift/y_shift undoing it.
+    path_b = tmp_path / "b"
+    path_b.mkdir()
+    shifted = _make_dtopo1(example_dir)
+    shifted.x = shifted.x - delta
+    shifted.y = shifted.y - delta
+    X, Y = np.meshgrid(shifted.x, shifted.y)
+    shifted.X, shifted.Y = X, Y
+    shifted.write(path_b / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
+    entry = dtopotools.DTopography()
+    entry.path = "dtopo1.tt3"
+    entry.dtopo_type = 3
+    entry.x_shift = delta
+    entry.y_shift = delta
+    runner_b = _run_single_dtopo(path_b, example_dir, entry,
+                                 make_level="exe", guard_gauge=_GUARD_GAUGE)
+
+    # Non-vacuous guard: the deformation must produce a real surface signal
+    # inside the (unshifted) footprint at gauge 99.
+    guard = gauges.GaugeSolution(99, path=runner_b.temp_path)
+    assert np.ptp(guard.q[3, :]) > 1e-3, \
+        "shifted dtopo produced no surface signal in the unshifted footprint"
+
+    for gauge_id in (1, 2):
+        ga = gauges.GaugeSolution(gauge_id, path=runner_a.temp_path)
+        gb = gauges.GaugeSolution(gauge_id, path=runner_b.temp_path)
+        assert ga.q.shape == gb.q.shape, \
+            f"gauge {gauge_id}: {ga.q.shape} vs {gb.q.shape}"
+        np.testing.assert_allclose(ga.q, gb.q, rtol=1e-8, atol=1e-8)
+
+
+@pytest.mark.regression
 @pytest.mark.netcdf
 def test_dtopo_netcdf_identity(tmp_path: Path) -> None:
     """dtopo_type=4 (NetCDF) reproduces the ASCII dtopo gauge output.
@@ -256,8 +319,10 @@ def test_dtopo_unsupported_preprocessing_guard(tmp_path: Path) -> None:
     """The Fortran guard stops the run for unsupported dtopo preprocessing.
 
     The Python writer raises before producing such a file, so this patches
-    the x_shift line of a valid dtopo.data directly to reach the Fortran
-    guard in read_dtopo_settings (``stop 1``).
+    the buffer line of a valid dtopo.data directly to reach the Fortran
+    guard in read_dtopo_settings (``stop 1``).  (x_shift/y_shift/z_shift and
+    negate_z are now supported, so an unsupported attribute such as buffer
+    must be used to trigger the guard.)
     """
     import subprocess
 
@@ -280,9 +345,9 @@ def test_dtopo_unsupported_preprocessing_guard(tmp_path: Path) -> None:
 
     data_path = run_path / "dtopo.data"
     text = data_path.read_text()
-    assert "0.0   # x_shift" in text
-    data_path.write_text(text.replace("0.0   # x_shift",
-                                      "0.5   # x_shift"))
+    assert "0   # buffer" in text
+    data_path.write_text(text.replace("0   # buffer",
+                                      "2   # buffer"))
 
     # Full rebuild: a preceding test may have left objects compiled with
     # different preprocessor flags (e.g. -DNETCDF), which "exe" would link.
