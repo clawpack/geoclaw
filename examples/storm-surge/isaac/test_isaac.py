@@ -224,7 +224,7 @@ def _read_owi_all_timesteps(pre_path: Path, win_path: Path):
 
 
 def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
-                       crop_extent=None) -> Path:
+                       crop_extent=None, x_shift=0.0, y_shift=0.0) -> Path:
     """Generate a NetCDF met-forcing file from the committed OWI Isaac files.
 
     Reads all time steps from ``isaac.PRE`` and ``isaac.WIN`` using minimal
@@ -284,9 +284,17 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
 
     time_offset = np.datetime64("2012-08-29T00:00:00")
 
+    # Registration-shift identity: offset the coordinates written to the file
+    # by +shift, and set the descriptor shift to -shift so Fortran's
+    # (domain = file + shift) maps the forcing back to its true location.
+    lon = lon + x_shift
+    lat = lat + y_shift
+
     isaac = Storm()
     isaac.time_offset = time_offset
     isaac.crop_extent = crop_extent
+    isaac.x_shift = -x_shift
+    isaac.y_shift = -y_shift
 
     if fmt == "netcdf_era5":
         nc_path = tmp_path / "isaac_era5.nc"
@@ -718,6 +726,43 @@ def test_isaac_netcdf_crop(tmp_path: Path, isaac_xgeoclaw: Path) -> None:
             f"gauge {gauge_id} hv not at rest: {np.max(np.abs(g.q[2, :]))}"
         assert np.max(np.abs(g.q[3, :])) < 1e-3, \
             f"gauge {gauge_id} eta not at rest: {np.max(np.abs(g.q[3, :]))}"
+
+
+@pytest.mark.storm
+@pytest.mark.netcdf
+def test_isaac_netcdf_shift_identity(tmp_path: Path, save: bool,
+                                     isaac_xgeoclaw: Path) -> None:
+    """met x_shift/y_shift re-register a deliberately offset forcing grid.
+
+    The ERA5 file is written with its coordinates offset by (+1.5, +0.75)
+    degrees; the descriptor carries x_shift/y_shift = (-1.5, -0.75) so the
+    Fortran mapping (domain = file + shift) puts the forcing back at its true
+    location.  The gauges must then match the unshifted owi_ascii baseline.
+    Non-vacuous: without the cancelling shift the forcing is displaced ~1.5
+    deg and the surge at the gauges differs from that baseline.
+    """
+    pytest.importorskip("netCDF4")
+
+    example_dir = Path(__file__).parent
+    runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
+    runner.set_data()
+    runner.rundata.clawdata.t0 = days2seconds(-1)
+    runner.rundata.clawdata.tfinal = days2seconds(-0.5)
+    runner.rundata.clawdata.num_output_times = 1
+    runner.rundata.amrdata.amr_levels_max = 2
+
+    surge_data = runner.rundata.surge_data
+    surge_data.storm_file = _make_isaac_netcdf(
+        "netcdf_era5", tmp_path, example_dir, x_shift=1.5, y_shift=0.75)
+    surge_data.storm_specification_type = "data"
+
+    runner.write_data()
+    _install_executable(runner, isaac_xgeoclaw)
+    runner.run_code()
+
+    gauge_regression_path = example_dir / "regression_data" / "owi_ascii"
+    runner.check_gauge(gauge_id=1, regression_path=gauge_regression_path, save=save)
+    runner.check_gauge(gauge_id=2, regression_path=gauge_regression_path, save=save)
 
 
 @pytest.mark.storm

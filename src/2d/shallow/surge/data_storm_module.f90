@@ -58,6 +58,12 @@ module data_storm_module
     logical :: has_met_crop
     real(kind=8) :: met_crop_extent(4), ramp_width
 
+    ! Registration shift (domain = file + shift) applied to the forcing grid
+    ! coordinates before cropping/placement.  Parallels topo/dtopo x_shift,
+    ! y_shift; lets a projected or mis-registered met grid be placed onto the
+    ! domain.  Zero = no shift.
+    real(kind=8) :: met_x_shift, met_y_shift
+
     ! Time tracking tolerance allowance - allows for the beginning of the storm
     ! track to be close to but not equal the start time of the simulation
     real(kind=8), parameter :: TRACKING_TOLERANCE = 1d-10
@@ -147,6 +153,12 @@ contains
             ! to simulate slower or faster storm translation speeds.
             read(data_unit, *) storm_time_scale
             write(log_unit, "('storm_time_scale = ',d16.8)") storm_time_scale
+
+            ! Registration shift of the forcing grid (domain = file + shift).
+            read(data_unit, *) met_x_shift
+            read(data_unit, *) met_y_shift
+            write(log_unit, "('met_x_shift = ',d16.8)") met_x_shift
+            write(log_unit, "('met_y_shift = ',d16.8)") met_y_shift
 
             if (DEBUG) then
                 print "('time_offset = ',a)", storm%time_offset
@@ -302,6 +314,9 @@ contains
                     do i = 1, my_full
                         lat_full(i) = sw_lat + i * dy
                     end do
+                    ! Registration shift (domain = file + shift) before crop.
+                    if (met_x_shift /= 0.0d0) lon_full = lon_full + met_x_shift
+                    if (met_y_shift /= 0.0d0) lat_full = lat_full + met_y_shift
                     call met_crop_indices(lon_full, mx_full, lat_full,       &
                                           my_full, i0, i1, j0, j1)
                     mx = i1 - i0 + 1
@@ -368,6 +383,11 @@ contains
                             lon_full = lon_full - 360.0d0
                         end where
                     end if
+
+                    ! Registration shift (domain = file + shift), after the
+                    ! geographic wrap normalization, before cropping.
+                    if (met_x_shift /= 0.0d0) lon_full = lon_full + met_x_shift
+                    if (met_y_shift /= 0.0d0) lat_full = lat_full + met_y_shift
 
                     call met_crop_indices(lon_full, mx_full, lat_full, my_full, &
                                           i0, i1, j0, j1)

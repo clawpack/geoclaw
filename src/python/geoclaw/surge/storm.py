@@ -231,6 +231,12 @@ class Storm(object):
         self.crop_extent = None
         self.ramp_width = 1e0               # 1 degree
 
+        # Registration shift (domain = file + shift) of the forcing grid,
+        # parallel to topo/dtopo x_shift, y_shift.  Lets a projected or
+        # mis-registered met grid be placed onto the domain.  0 = no shift.
+        self.x_shift = 0.0
+        self.y_shift = 0.0
+
         # NetCDF met-forcing metadata (populated by read_data for file_format==2)
         self.met_x_name = None
         self.met_y_name = None
@@ -968,6 +974,10 @@ class Storm(object):
                 self.crop_extent = None
             self.storm_time_scale = float(
                                 data_file.readline().partition("#")[0].rstrip())
+            self.x_shift = float(
+                                data_file.readline().partition("#")[0].rstrip())
+            self.y_shift = float(
+                                data_file.readline().partition("#")[0].rstrip())
             data_file.readline()  # "# Format Data Information"
 
             if self.file_format == 1:
@@ -1391,6 +1401,8 @@ class Storm(object):
             data_file.write(f"{str(self.ramp_width).ljust(20)} # Ramp width\n")
             data_file.write(f"{crop_str.ljust(20)} # Met crop extent [lon0 lon1 lat0 lat1]; all-zero = full file\n")
             data_file.write(f"{str(self.storm_time_scale).ljust(20)} # Storm time scale (>1 slower, <1 faster)\n")
+            data_file.write(f"{str(self.x_shift).ljust(20)} # Met x_shift (domain = file + shift)\n")
+            data_file.write(f"{str(self.y_shift).ljust(20)} # Met y_shift (domain = file + shift)\n")
             data_file.write("# Format Data Information\n")
             if file_format == 1:
                 # Check number of file paths
