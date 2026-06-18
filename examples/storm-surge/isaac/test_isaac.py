@@ -769,5 +769,119 @@ def test_isaac_model_storm_time_scale(tmp_path: Path,
         "storm_time_scale=4.0 produced the same gauge as the scale=1.0 baseline"
 
 
+@pytest.mark.storm
+def test_isaac_data_storm_time_scale(tmp_path: Path,
+                                     isaac_xgeoclaw: Path) -> None:
+    """storm_time_scale changes the data-storm (OWI/ASCII) forcing.
+
+    Unlike the model-storm path (which reads storm_time_scale from
+    ``surge.data``), the data-storm path reads it from the ``.storm``
+    descriptor, so it is set on the ``Storm`` object and written via
+    ``Storm.write(file_format="data")``.  ``data_storm_module`` stretches
+    ``storm%time`` about the first time step (anchor), so with scale=4.0 the
+    forcing at every sim time corresponds to an earlier storm state than the
+    unscaled run.  The gauge series must therefore differ from the committed
+    owi_ascii (scale=1.0) regression, confirming the data-storm time-scale
+    path is active.
+    """
+    import clawpack.pyclaw.gauges as gauges
+
+    example_dir = Path(__file__).parent
+    runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
+    runner.set_data()
+    runner.rundata.clawdata.t0 = days2seconds(-1)
+    runner.rundata.clawdata.tfinal = days2seconds(-0.5)
+    runner.rundata.clawdata.num_output_times = 1
+    runner.rundata.amrdata.amr_levels_max = 2
+
+    surge_data = runner.rundata.surge_data
+    surge_data.storm_file = tmp_path / "isaac.storm"
+    surge_data.storm_specification_type = "data"
+
+    isaac = Storm(path=example_dir / "bal092012.dat", file_format="ATCF")
+    isaac.time_offset = np.datetime64("2012-08-29")
+    isaac.file_format = "NWS12"
+    isaac.file_paths = [example_dir / "isaac.PRE", example_dir / "isaac.WIN"]
+    isaac.storm_time_scale = 4.0   # 4x slower storm
+    isaac.write(surge_data.storm_file, file_format="data")
+
+    runner.write_data()
+
+    # Confirm the scale reached the .storm descriptor (the data-storm reader's
+    # source for this parameter, not surge.data).
+    assert "4.0" in surge_data.storm_file.read_text()
+
+    _install_executable(runner, isaac_xgeoclaw)
+    runner.run_code()
+
+    scaled = gauges.GaugeSolution(1, path=runner.temp_path)
+    regression = gauges.GaugeSolution(
+        1, path=example_dir / "regression_data" / "owi_ascii")
+
+    # Adaptive time-stepping gives different sample counts when the forcing
+    # differs, so interpolate the scaled surface elevation onto the
+    # regression's gauge times before comparing.
+    eta_scaled = np.interp(regression.t, scaled.t, scaled.q[3, :])
+    assert not np.allclose(eta_scaled, regression.q[3, :],
+                           rtol=1e-3, atol=1e-3), \
+        "storm_time_scale=4.0 produced the same gauge as the scale=1.0 baseline"
+
+
+@pytest.mark.storm
+def test_isaac_temporal_ramp(tmp_path: Path,
+                             isaac_xgeoclaw: Path) -> None:
+    """t_ramp_on tapers the storm forcing on at the start of the run.
+
+    The temporal onset ramp (``temporal_ramp`` in storm_module) is applied in
+    ``set_storm_fields`` after the field routine fills the patch, so it covers
+    both model and data storms; here it is exercised through the model-storm
+    (holland80) path.  Setting ``t_ramp_on`` to the full run window
+    (t0..tfinal) ramps the wind from zero at t0 up to full strength only at
+    tfinal, and pulls the pressure toward ambient over the same interval, so
+    the suppressed early forcing must yield a gauge series that differs from
+    the committed holland80 (no-ramp) regression.
+    """
+    import clawpack.pyclaw.gauges as gauges
+
+    example_dir = Path(__file__).parent
+    runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
+    runner.set_data()
+    runner.rundata.clawdata.t0 = days2seconds(-1)
+    runner.rundata.clawdata.tfinal = days2seconds(-0.5)
+    runner.rundata.clawdata.num_output_times = 1
+    runner.rundata.amrdata.amr_levels_max = 2
+
+    surge_data = runner.rundata.surge_data
+    surge_data.storm_file = tmp_path / "isaac.storm"
+    surge_data.storm_specification_type = "holland80"
+    # Ramp on across the whole half-day window: zero forcing at t0 rising to
+    # full only at tfinal.
+    surge_data.t_ramp_on = days2seconds(0.5)
+
+    isaac = Storm(path=example_dir / "bal092012.dat", file_format="ATCF")
+    isaac.time_offset = np.datetime64("2012-08-29")
+    isaac.write(surge_data.storm_file, file_format="geoclaw")
+
+    runner.write_data()
+
+    # Confirm the parameter reached surge.data.
+    assert "t_ramp_on" in (runner.temp_path / "surge.data").read_text()
+
+    _install_executable(runner, isaac_xgeoclaw)
+    runner.run_code()
+
+    ramped = gauges.GaugeSolution(1, path=runner.temp_path)
+    regression = gauges.GaugeSolution(
+        1, path=example_dir / "regression_data" / "holland80")
+
+    # Adaptive time-stepping gives different sample counts when the forcing
+    # differs, so interpolate the ramped surface elevation onto the
+    # regression's gauge times before comparing.
+    eta_ramped = np.interp(regression.t, ramped.t, ramped.q[3, :])
+    assert not np.allclose(eta_ramped, regression.q[3, :],
+                           rtol=1e-3, atol=1e-3), \
+        "t_ramp_on produced the same gauge as the no-ramp baseline"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
