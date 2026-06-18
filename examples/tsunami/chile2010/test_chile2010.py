@@ -54,7 +54,7 @@ def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
     crop_bounds : tuple or None
         (lon_min, lon_max, lat_min, lat_max) in domain coordinates.  When
         provided, ``topo_entries()`` is called to compute the correct
-        ``lon_offset`` for the descriptor; the returned list has the same
+        ``lon_wrap_offset`` for the descriptor; the returned list has the same
         ``[ttype, path, meta]`` element format used by ``topo_data.topofiles``.
 
     Variants
@@ -156,9 +156,9 @@ def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
     else:
         raise ValueError(f"Unknown NetCDF variant '{variant}'.")
 
-    # Interrogate the written file to auto-detect lat_order, dim_order, etc.
+    # Interrogate the written file to auto-detect y_increasing, dim_order, etc.
     # When crop_bounds (domain coordinates) are given, topo_entries() is used
-    # so that the correct lon_offset is computed and written into the descriptor
+    # so that the correct lon_wrap_offset is computed and written into the descriptor
     # block that Fortran's read_netcdf_descriptor needs.
     from clawpack.geoclaw.netcdf_utils import TopoInspector
     with TopoInspector(output_path, 'elevation', crop_bounds=crop_bounds) as insp:
@@ -218,8 +218,8 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
         nc_path = tmp_path / f"chile_topo_{variant}.nc"
         clawdata = runner.rundata.clawdata
         # lon_360 needs domain crop bounds so topo_entries() can compute the
-        # correct lon_offset (-360.0) for the descriptor.  Other variants use
-        # inspect_topo() (lon_offset=0.0 is correct for [-180,180] files).
+        # correct lon_wrap_offset (-360.0) for the descriptor.  Other variants use
+        # inspect_topo() (lon_wrap_offset=0.0 is correct for [-180,180] files).
         crop = (clawdata.lower[0], clawdata.upper[0],
                 clawdata.lower[1], clawdata.upper[1]) if variant == "lon_360" else None
         entries = _write_netcdf_variant(topo, variant, nc_path, crop_bounds=crop)

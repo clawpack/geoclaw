@@ -44,9 +44,9 @@ def test_lon_convention_detected(topo_file_factory, lon_min, lon_max,
     path = topo_file_factory(lon_min=lon_min, lon_max=lon_max)
     with NetCDFInspector(path) as insp:
         meta = insp.inspect("z")
-    assert meta.lon_convention == expected_convention, (
-        f"Expected lon_convention={expected_convention} for lon range "
-        f"[{lon_min}, {lon_max}], got {meta.lon_convention}"
+    assert meta.lon_wrap == expected_convention, (
+        f"Expected lon_wrap={expected_convention} for lon range "
+        f"[{lon_min}, {lon_max}], got {meta.lon_wrap}"
     )
 
 
@@ -54,18 +54,19 @@ def test_lon_convention_detected(topo_file_factory, lon_min, lon_max,
 # Lat order detection
 # ============================================================
 
-@pytest.mark.parametrize("lat_direction,expected_order", [
-    ("S_to_N", "S_to_N"),
-    ("N_to_S", "N_to_S"),
+@pytest.mark.parametrize("lat_direction,expected_increasing", [
+    ("S_to_N", True),
+    ("N_to_S", False),
 ])
-def test_lat_order_detected(topo_file_factory, lat_direction, expected_order):
-    """Inspector reports the correct latitude order."""
+def test_lat_order_detected(topo_file_factory, lat_direction,
+                            expected_increasing):
+    """Inspector reports the correct y_increasing flag."""
     path = topo_file_factory(lat_direction=lat_direction)
     with NetCDFInspector(path) as insp:
         meta = insp.inspect("z")
-    assert meta.lat_order == expected_order, (
-        f"Expected lat_order={expected_order!r} for lat_direction="
-        f"{lat_direction!r}, got {meta.lat_order!r}"
+    assert meta.y_increasing == expected_increasing, (
+        f"Expected y_increasing={expected_increasing!r} for lat_direction="
+        f"{lat_direction!r}, got {meta.y_increasing!r}"
     )
 
 
@@ -77,12 +78,13 @@ def test_lat_order_detected(topo_file_factory, lat_direction, expected_order):
 def test_dim_order_detected_topo(topo_file_factory, dim_kwargs):
     """
     Inspector reports canonical dim order using role names
-    ('lat', 'lon') regardless of how the variable is stored.
+    ('y', 'x') regardless of how the variable is stored.
     """
     path = topo_file_factory(**dim_kwargs)
     with NetCDFInspector(path) as insp:
         meta = insp.inspect("z")
-    expected = list(dim_kwargs["dim_order"])
+    _role = {"lat": "y", "lon": "x", "time": "time"}
+    expected = [_role[d] for d in dim_kwargs["dim_order"]]
     assert meta.dim_order == expected, (
         f"Expected dim_order={expected}, got {meta.dim_order}"
     )
@@ -103,8 +105,8 @@ def test_coord_discovery_via_axis_attr(topo_file_factory):
     )
     with NetCDFInspector(path) as insp:
         meta = insp.inspect("z")
-    assert meta.lon_name == "x_coord"
-    assert meta.lat_name == "y_coord"
+    assert meta.x_name == "x_coord"
+    assert meta.y_name == "y_coord"
 
 
 def test_coord_discovery_via_fallback_name(topo_file_factory):
@@ -115,8 +117,8 @@ def test_coord_discovery_via_fallback_name(topo_file_factory):
     path = topo_file_factory(lon_name="lon", lat_name="lat")
     with NetCDFInspector(path) as insp:
         meta = insp.inspect("z")
-    assert meta.lon_name == "lon"
-    assert meta.lat_name == "lat"
+    assert meta.x_name == "lon"
+    assert meta.y_name == "lat"
 
 
 def test_missing_lon_coord_raises(topo_file_factory):
@@ -291,7 +293,7 @@ def test_coord_variants_smoke(topo_file_factory, coord_kwargs):
     lon_max = coord_kwargs["lon_max"]
     lat_dir = coord_kwargs["lat_direction"]
     expected_conv = 360 if lon_max > 180 else 180
-    expected_order = lat_dir
+    expected_increasing = (lat_dir == "S_to_N")
 
-    assert meta.lon_convention == expected_conv
-    assert meta.lat_order == expected_order
+    assert meta.lon_wrap == expected_conv
+    assert meta.y_increasing == expected_increasing

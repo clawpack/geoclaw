@@ -52,10 +52,10 @@ def test_inspect_dtopo_basics(tmp_path):
 
     assert isinstance(meta, DTopoMetadata)
     assert meta.var_name == "dz"
-    assert meta.lon_name == "lon"
-    assert meta.lat_name == "lat"
+    assert meta.x_name == "lon"
+    assert meta.y_name == "lat"
     assert meta.time_name == "time"
-    assert meta.dim_order == ["time", "lat", "lon"]
+    assert meta.dim_order == ["time", "y", "x"]
     assert np.isclose(meta.t0, 0.0)
     assert np.isclose(meta.dt, 0.5)
     assert meta.mt == 3
@@ -151,10 +151,10 @@ def test_descriptor_writer_output(tmp_path):
     DescriptorWriter.write_dtopo_descriptor(buf, meta)
     text = buf.getvalue()
 
-    for key in ("var_name", "lon_name", "lat_name", "time_name",
-                "lon_offset", "lat_order", "dim_order", "t0", "dt"):
+    for key in ("var_name", "x_name", "y_name", "time_name",
+                "lon_wrap_offset", "y_increasing", "dim_order", "t0", "dt"):
         assert key in text, f"missing descriptor key {key}"
-    assert "dim_order      = time,lat,lon" in text
+    assert "dim_order      = time,y,x" in text
     assert "dt             = 0.5" in text
     # Blank line terminates the block for the Fortran parser.
     assert text.endswith("\n\n")

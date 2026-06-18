@@ -104,14 +104,14 @@ def _unit_matches_contract(cf_unit: str, contract_unit: str) -> bool:
 class FileMetadata:
     """Coordinate and convention metadata for a single NetCDF file."""
     source_file: Path
-    lon_name: str
-    lat_name: str
+    x_name: str
+    y_name: str
     time_name: Optional[str]
-    lon_convention: int          # 180 -> [-180, 180];  360 -> [0, 360]
-    lat_order: str               # 'N_to_S' or 'S_to_N'
-    dim_order: list[str]         # canonical role names, e.g. ['lat', 'lon']
+    lon_wrap: int                # 180 -> [-180, 180];  360 -> [0, 360]
+    y_increasing: bool           # True if y increases with array index
+    dim_order: list[str]         # canonical role names, e.g. ['y', 'x']
     fill_value: Optional[float]  # resolved from _FillValue / missing_value
-    crop_bounds: Optional[tuple[float, float, float, float]]  # lon0,lon1,lat0,lat1
+    crop_bounds: Optional[tuple[float, float, float, float]]  # x0,x1,y0,y1
 
 
 @dataclasses.dataclass
@@ -120,7 +120,7 @@ class TopoMetadata(FileMetadata):
     var_name: str
     source_units: str    # units as found in file
     fill_action: str     # 'abort' (only value for topo; fill = fatal)
-    lon_offset: float = 0.0  # scalar Fortran adds to file coords: x_domain = x_file + lon_offset
+    lon_wrap_offset: float = 0.0  # scalar Fortran adds to file coords: x_domain = x_file + lon_wrap_offset
 
 
 @dataclasses.dataclass
@@ -135,7 +135,7 @@ class DTopoMetadata(FileMetadata):
     t0: float            # first time, simulation seconds
     dt: float            # uniform time step, seconds (0.0 when mt == 1)
     mt: int              # number of times (informational; Fortran uses dims)
-    lon_offset: float = 0.0  # scalar Fortran adds: x_domain = x_file + offset
+    lon_wrap_offset: float = 0.0  # scalar Fortran adds: x_domain = x_file + offset
 
 
 @dataclasses.dataclass
@@ -237,7 +237,7 @@ class NetCDFInspector:
             )
         return name
 
-    def _find_lon_name(self) -> str:
+    def _find_x_name(self) -> str:
         return self._require_coord(
             'X',
             ['longitude'],
@@ -245,7 +245,7 @@ class NetCDFInspector:
             'longitude',
         )
 
-    def _find_lat_name(self) -> str:
+    def _find_y_name(self) -> str:
         return self._require_coord(
             'Y',
             ['latitude'],
@@ -264,30 +264,28 @@ class NetCDFInspector:
     # Convention detection
     # ------------------------------------------------------------------
 
-    def _detect_lon_convention(self, lon_name: str) -> int:
+    def _detect_lon_wrap(self, x_name: str) -> int:
         """Return 180 if longitudes are in [-180, 180], else 360."""
-        lon_max = float(self.ds[lon_name].max())
+        lon_max = float(self.ds[x_name].max())
         return 360 if lon_max > 180.0 else 180
 
-    def _detect_lat_order(self, lat_name: str) -> str:
-        """Return 'N_to_S' if latitudes decrease, else 'S_to_N'."""
-        lat_vals = self.ds[lat_name].values
-        if lat_vals[0] > lat_vals[-1]:
-            return 'N_to_S'
-        return 'S_to_N'
+    def _detect_y_increasing(self, y_name: str) -> bool:
+        """Return True if y increases with array index, else False."""
+        y_vals = self.ds[y_name].values
+        return bool(y_vals[0] < y_vals[-1])
 
     def _detect_dim_order(
         self,
         var_name: str,
-        lon_name: str,
-        lat_name: str,
+        x_name: str,
+        y_name: str,
         time_name: Optional[str],
     ) -> list[str]:
         """
         Return dimension order for *var_name* using canonical role names
-        ('lon', 'lat', 'time').  Unknown dims are passed through as-is.
+        ('x', 'y', 'time').  Unknown dims are passed through as-is.
         """
-        dim_map: dict[str, str] = {lon_name: 'lon', lat_name: 'lat'}
+        dim_map: dict[str, str] = {x_name: 'x', y_name: 'y'}
         if time_name is not None:
             dim_map[time_name] = 'time'
         return [dim_map.get(d, d) for d in self.ds[var_name].dims]
@@ -320,26 +318,26 @@ class NetCDFInspector:
 
     def _validate_crop_bounds(
         self,
-        lon_name: str,
-        lat_name: str,
+        x_name: str,
+        y_name: str,
         crop_bounds: tuple[float, float, float, float],
     ) -> None:
         """Raise ValueError if crop_bounds exceed file spatial extent."""
         lon_min, lon_max, lat_min, lat_max = crop_bounds
-        flon_min = float(self.ds[lon_name].min())
-        flon_max = float(self.ds[lon_name].max())
-        flat_min = float(self.ds[lat_name].min())
-        flat_max = float(self.ds[lat_name].max())
+        fx_min = float(self.ds[x_name].min())
+        fx_max = float(self.ds[x_name].max())
+        fy_min = float(self.ds[y_name].min())
+        fy_max = float(self.ds[y_name].max())
 
-        if lon_min < flon_min or lon_max > flon_max:
+        if lon_min < fx_min or lon_max > fx_max:
             raise ValueError(
                 f"crop_bounds lon [{lon_min}, {lon_max}] exceed file extent "
-                f"[{flon_min}, {flon_max}] in '{self.path}'."
+                f"[{fx_min}, {fx_max}] in '{self.path}'."
             )
-        if lat_min < flat_min or lat_max > flat_max:
+        if lat_min < fy_min or lat_max > fy_max:
             raise ValueError(
                 f"crop_bounds lat [{lat_min}, {lat_max}] exceed file extent "
-                f"[{flat_min}, {flat_max}] in '{self.path}'."
+                f"[{fy_min}, {fy_max}] in '{self.path}'."
             )
 
     # ------------------------------------------------------------------
@@ -367,29 +365,29 @@ class NetCDFInspector:
                 f"Available: {list(self.ds.data_vars)}"
             )
 
-        lon_name = self._find_lon_name()
-        lat_name = self._find_lat_name()
+        x_name = self._find_x_name()
+        y_name = self._find_y_name()
         time_name = (
             time_name_override
             if time_name_override is not None
             else self._find_time_name()
         )
 
-        lon_convention = self._detect_lon_convention(lon_name)
-        lat_order = self._detect_lat_order(lat_name)
-        dim_order = self._detect_dim_order(var_name, lon_name, lat_name, time_name)
+        lon_wrap = self._detect_lon_wrap(x_name)
+        y_increasing = self._detect_y_increasing(y_name)
+        dim_order = self._detect_dim_order(var_name, x_name, y_name, time_name)
         fill_value = self._resolve_fill_value(var_name)
 
         if self.crop_bounds is not None:
-            self._validate_crop_bounds(lon_name, lat_name, self.crop_bounds)
+            self._validate_crop_bounds(x_name, y_name, self.crop_bounds)
 
         return FileMetadata(
             source_file=self.path,
-            lon_name=lon_name,
-            lat_name=lat_name,
+            x_name=x_name,
+            y_name=y_name,
             time_name=time_name,
-            lon_convention=lon_convention,
-            lat_order=lat_order,
+            lon_wrap=lon_wrap,
+            y_increasing=y_increasing,
             dim_order=dim_order,
             fill_value=fill_value,
             crop_bounds=self.crop_bounds,
@@ -565,9 +563,9 @@ class TopoInspector(NetCDFInspector):
 
     def _check_fill_in_crop(
         self,
-        lon_name: str,
-        lat_name: str,
-        lat_order: str,
+        x_name: str,
+        y_name: str,
+        y_increasing: bool,
     ) -> None:
         """
         Check for NaN / fill values within the crop region.
@@ -580,15 +578,15 @@ class TopoInspector(NetCDFInspector):
 
         if self.crop_bounds is not None:
             lon_min, lon_max, lat_min, lat_max = self.crop_bounds
-            # For a decreasing lat axis (N_to_S) the slice must be reversed.
+            # For a decreasing y axis the slice must be reversed.
             lat_slice = (
-                slice(lat_max, lat_min)
-                if lat_order == 'N_to_S'
-                else slice(lat_min, lat_max)
+                slice(lat_min, lat_max)
+                if y_increasing
+                else slice(lat_max, lat_min)
             )
             var = var.sel({
-                lon_name: slice(lon_min, lon_max),
-                lat_name: lat_slice,
+                x_name: slice(lon_min, lon_max),
+                y_name: lat_slice,
             })
 
         # This .compute() is intentional: we must confirm no fill values exist.
@@ -617,14 +615,14 @@ class TopoInspector(NetCDFInspector):
             self.var_name = self._find_topo_var_name()
         base = self.inspect(self.var_name)
         source_units = self._check_topo_units()
-        self._check_fill_in_crop(base.lon_name, base.lat_name, base.lat_order)
+        self._check_fill_in_crop(base.x_name, base.y_name, base.y_increasing)
 
         return TopoMetadata(
             **dataclasses.asdict(base),
             var_name=self.var_name,
             source_units=source_units,
             fill_action='abort',  # fill in topo crop region is always fatal
-            lon_offset=0.0,
+            lon_wrap_offset=0.0,
         )
 
     def topo_entries(self) -> list[list]:
@@ -634,12 +632,12 @@ class TopoInspector(NetCDFInspector):
         Each entry is [4, filepath, TopoMetadata]. When no wrapping is needed
         this returns a list of one entry. When crop_bounds straddle the file's
         lon cut point, returns two entries pointing to the same file with
-        different lon_offset and crop_bounds values.
+        different lon_wrap_offset and crop_bounds values.
 
         crop_bounds on the inspector are in domain coordinates; this method
         converts them to file coordinates before storing in the returned
         metadata. Fortran can then use crop_bounds directly against file
-        coordinate arrays before applying lon_offset.
+        coordinate arrays before applying lon_wrap_offset.
         """
 
         # Interrogate without crop validation: self.crop_bounds is in domain
@@ -652,10 +650,10 @@ class TopoInspector(NetCDFInspector):
             self.crop_bounds = saved_crop
 
         if saved_crop is None:
-            return [[4, self.path, dataclasses.replace(meta, lon_offset=0.0)]]
+            return [[4, self.path, dataclasses.replace(meta, lon_wrap_offset=0.0)]]
 
         assert saved_crop is not None  # narrowing hint: already returned above
-        lon_coords = self.ds[meta.lon_name].values
+        lon_coords = self.ds[meta.x_name].values
         file_lon_min = float(lon_coords.min())
         file_lon_max = float(lon_coords.max())
         if len(lon_coords) > 1:
@@ -674,7 +672,7 @@ class TopoInspector(NetCDFInspector):
             new_meta = dataclasses.replace(
                 meta,
                 crop_bounds=(file_crop_min, file_crop_max, crop_lat_min, crop_lat_max),
-                lon_offset=lon_offset,
+                lon_wrap_offset=lon_offset,
             )
             result.append([4, self.path, new_meta])
 
@@ -947,8 +945,8 @@ class MetInspector(NetCDFInspector):
 
     def _check_variable_consistency(
         self,
-        lon_name: str,
-        lat_name: str,
+        x_name: str,
+        y_name: str,
         time_name: str,
     ) -> None:
         """
@@ -975,8 +973,8 @@ class MetInspector(NetCDFInspector):
                 )
             # Verify that the expected coordinate dims are actually present
             for coord_name, label in [
-                (lon_name, 'longitude'),
-                (lat_name, 'latitude'),
+                (x_name, 'longitude'),
+                (y_name, 'latitude'),
                 (time_name, 'time'),
             ]:
                 if coord_name not in dims:
@@ -1155,9 +1153,9 @@ class MetInspector(NetCDFInspector):
                 f"Met forcing requires a time axis."
             )
 
-        known_dims = {base.lon_name, base.lat_name, base.time_name}
+        known_dims = {base.x_name, base.y_name, base.time_name}
         self._check_variable_consistency(
-            base.lon_name, base.lat_name, base.time_name
+            base.x_name, base.y_name, base.time_name
         )
         self._check_ensemble_dims(known_dims)
         variable_infos = self._check_met_units()
@@ -1399,22 +1397,23 @@ class DescriptorWriter:
         meta : TopoMetadata
             Output of ``TopoInspector.inspect_topo()``.
         """
-        # Fortran adds lon_offset to all file coordinate values after reading:
-        #   x_domain = x_file + lon_offset
+        # Fortran adds lon_wrap_offset to all file coordinate values after
+        # reading:
+        #   x_domain = x_file + lon_wrap_offset
         # crop_bounds written here are in FILE coordinates (converted from
         # domain coordinates by topo_entries()).
         f.write(f"var_name       = {meta.var_name}\n")
-        f.write(f"lon_name       = {meta.lon_name}\n")
-        f.write(f"lat_name       = {meta.lat_name}\n")
-        f.write(f"lon_offset     = {meta.lon_offset!r}\n")
-        f.write(f"lat_order      = {meta.lat_order}\n")
+        f.write(f"x_name         = {meta.x_name}\n")
+        f.write(f"y_name         = {meta.y_name}\n")
+        f.write(f"lon_wrap_offset = {meta.lon_wrap_offset!r}\n")
+        f.write(f"y_increasing   = {meta.y_increasing}\n")
         f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
         if meta.fill_value is not None:
             f.write(f"fill_value     = {meta.fill_value!r}\n")
         f.write(f"fill_action    = {meta.fill_action}\n")
         if meta.crop_bounds is not None:
-            lon0, lon1, lat0, lat1 = meta.crop_bounds
-            f.write(f"crop_bounds    = {lon0} {lon1} {lat0} {lat1}\n")
+            x0, x1, y0, y1 = meta.crop_bounds
+            f.write(f"crop_bounds    = {x0} {x1} {y0} {y1}\n")
         f.write("\n")  # blank line terminates block for Fortran parser
 
     @staticmethod
@@ -1435,11 +1434,11 @@ class DescriptorWriter:
             Output of ``DTopoInspector.inspect_dtopo()``.
         """
         f.write(f"var_name       = {meta.var_name}\n")
-        f.write(f"lon_name       = {meta.lon_name}\n")
-        f.write(f"lat_name       = {meta.lat_name}\n")
+        f.write(f"x_name         = {meta.x_name}\n")
+        f.write(f"y_name         = {meta.y_name}\n")
         f.write(f"time_name      = {meta.time_name}\n")
-        f.write(f"lon_offset     = {meta.lon_offset!r}\n")
-        f.write(f"lat_order      = {meta.lat_order}\n")
+        f.write(f"lon_wrap_offset = {meta.lon_wrap_offset!r}\n")
+        f.write(f"y_increasing   = {meta.y_increasing}\n")
         f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
         f.write(f"t0             = {meta.t0!r}\n")
         f.write(f"dt             = {meta.dt!r}\n")
@@ -1462,19 +1461,19 @@ class DescriptorWriter:
             Output of ``MetInspector.inspect_met()``.
         """
         f.write("&file_info\n")
-        f.write(f"  lon_name       = {meta.lon_name}\n")
-        f.write(f"  lat_name       = {meta.lat_name}\n")
+        f.write(f"  x_name         = {meta.x_name}\n")
+        f.write(f"  y_name         = {meta.y_name}\n")
         f.write(f"  time_name      = {meta.time_name}\n")
         f.write(f"  dim_order      = {','.join(meta.dim_order)}\n")
-        f.write(f"  lon_convention = {meta.lon_convention}\n")
-        f.write(f"  lat_order      = {meta.lat_order}\n")
+        f.write(f"  lon_wrap       = {meta.lon_wrap}\n")
+        f.write(f"  y_increasing   = {meta.y_increasing}\n")
         if meta.fill_value is not None:
             f.write(f"  fill_value     = {meta.fill_value!r}\n")
         f.write(f"  fill_action    = {meta.fill_action}\n")
         f.write(f"  time_offset    = {meta.time_offset!r}\n")
         if meta.crop_bounds is not None:
-            lon0, lon1, lat0, lat1 = meta.crop_bounds
-            f.write(f"  crop_bounds    = {lon0} {lon1} {lat0} {lat1}\n")
+            x0, x1, y0, y1 = meta.crop_bounds
+            f.write(f"  crop_bounds    = {x0} {x1} {y0} {y1}\n")
         f.write("/\n")
         for var in meta.variables:
             f.write(

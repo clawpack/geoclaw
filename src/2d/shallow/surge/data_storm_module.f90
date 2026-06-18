@@ -106,7 +106,7 @@ contains
 
         ! NetCDF descriptor parsing (format 2)
         real(kind=8) :: nc_time_offset
-        integer :: lon_convention
+        integer :: lon_wrap
         character(len=512) :: nc_line, nc_key, nc_val
         integer :: nc_eq_pos, nc_in_file_info
         integer :: nc_vn_start, nc_vn_end, nc_role_start, nc_role_end
@@ -162,7 +162,7 @@ contains
                 case(2) ! NetCDF - &file_info / &variable_info namelist format
                     read(data_unit, *)  ! "# Format Data Information"
                     nc_time_offset = 0.0d0
-                    lon_convention = 180
+                    lon_wrap = 180
                     nc_in_file_info = 0
                     dim_names = ''
                     var_names = ''
@@ -229,14 +229,14 @@ contains
                                 nc_key = adjustl(trim(nc_line(1:nc_eq_pos-1)))
                                 nc_val = adjustl(trim(nc_line(nc_eq_pos+1:)))
                                 select case(trim(nc_key))
-                                    case('lon_name')
+                                    case('x_name')
                                         dim_names(1) = trim(nc_val)
-                                    case('lat_name')
+                                    case('y_name')
                                         dim_names(2) = trim(nc_val)
                                     case('time_name')
                                         dim_names(3) = trim(nc_val)
-                                    case('lon_convention')
-                                        read(nc_val, *) lon_convention
+                                    case('lon_wrap')
+                                        read(nc_val, *) lon_wrap
                                     case('time_offset')
                                         read(nc_val, *) nc_time_offset
                                 end select
@@ -246,7 +246,7 @@ contains
 
                     write(log_unit, "('dims = ',3(1x,a))") dim_names
                     write(log_unit, "('vars = ',3(1x,a))") var_names
-                    write(log_unit, "('lon_convention = ',i4)") lon_convention
+                    write(log_unit, "('lon_wrap = ',i4)") lon_wrap
                     write(log_unit, "('nc_time_offset = ',d16.8)") nc_time_offset
 
                     if (DEBUG) then
@@ -363,7 +363,7 @@ contains
 
                     ! Normalize [0,360] longitude to [-180,180] before cropping
                     ! so met_crop_extent (domain coords) compares correctly.
-                    if (lon_convention == 360) then
+                    if (lon_wrap == 360) then
                         where (lon_full > 180.0d0)
                             lon_full = lon_full - 360.0d0
                         end where

@@ -416,11 +416,11 @@ def _check_netcdf_storm_descriptor(generated_path: Path, fmt: str) -> None:
                 var_info[kv["geoclaw_role"]] = kv["var_name"].rstrip("/").strip()
 
     if fmt == "netcdf_era5":
-        assert file_info.get("lon_name") == "longitude", (
-            f"ERA5 lon_name wrong: {file_info.get('lon_name')!r}"
+        assert file_info.get("x_name") == "longitude", (
+            f"ERA5 x_name wrong: {file_info.get('x_name')!r}"
         )
-        assert file_info.get("lat_name") == "latitude", (
-            f"ERA5 lat_name wrong: {file_info.get('lat_name')!r}"
+        assert file_info.get("y_name") == "latitude", (
+            f"ERA5 y_name wrong: {file_info.get('y_name')!r}"
         )
         assert file_info.get("time_name") == "valid_time", (
             f"ERA5 time_name wrong: {file_info.get('time_name')!r}"
@@ -435,11 +435,11 @@ def _check_netcdf_storm_descriptor(generated_path: Path, fmt: str) -> None:
             f"ERA5 pressure var wrong: {var_info.get('pressure')!r}"
         )
     elif fmt == "netcdf_nws13":
-        assert file_info.get("lon_name") == "lon", (
-            f"NWS13 lon_name wrong: {file_info.get('lon_name')!r}"
+        assert file_info.get("x_name") == "lon", (
+            f"NWS13 x_name wrong: {file_info.get('x_name')!r}"
         )
-        assert file_info.get("lat_name") == "lat", (
-            f"NWS13 lat_name wrong: {file_info.get('lat_name')!r}"
+        assert file_info.get("y_name") == "lat", (
+            f"NWS13 y_name wrong: {file_info.get('y_name')!r}"
         )
         assert file_info.get("time_name") == "time", (
             f"NWS13 time_name wrong: {file_info.get('time_name')!r}"

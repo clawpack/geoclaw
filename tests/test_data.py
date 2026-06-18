@@ -238,8 +238,8 @@ def test_dtopo_data_netcdf_descriptor(tmp_path):
 
     text = _read_text(data_file)
     assert "var_name       = dz" in text
-    assert "lon_name       = lon" in text
-    assert "lat_name       = lat" in text
+    assert "x_name         = lon" in text
+    assert "y_name         = lat" in text
     assert "t0             = 0.0" in text
     assert "dt             = 0.5" in text
 

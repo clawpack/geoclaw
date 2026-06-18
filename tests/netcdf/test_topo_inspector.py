@@ -158,10 +158,10 @@ def test_topo_metadata_required_fields_present(topo_file_factory):
     insp.close()
 
     assert meta.var_name == "z"
-    assert meta.lon_name is not None and len(meta.lon_name) > 0
-    assert meta.lat_name is not None and len(meta.lat_name) > 0
-    assert meta.lon_convention in (180, 360)
-    assert meta.lat_order in ("N_to_S", "S_to_N")
+    assert meta.x_name is not None and len(meta.x_name) > 0
+    assert meta.y_name is not None and len(meta.y_name) > 0
+    assert meta.lon_wrap in (180, 360)
+    assert meta.y_increasing in (True, False)
     assert len(meta.dim_order) == 2
     assert meta.fill_action == "abort"
     assert meta.source_units == "m"
@@ -184,15 +184,15 @@ def test_topo_metadata_crop_bounds_none_when_not_specified(topo_file_factory):
 def test_coord_variants(topo_file_factory, coord_kwargs):
     """
     inspect_topo() completes without error for every coordinate variant
-    and reports consistent lon_convention / lat_order values.
+    and reports consistent lon_wrap / y_increasing values.
     """
     path = topo_file_factory(**coord_kwargs)
     with TopoInspector(path, var_name="z") as insp:
         meta = insp.inspect_topo()
 
     expected_conv = 360 if coord_kwargs["lon_max"] > 180 else 180
-    assert meta.lon_convention == expected_conv
-    assert meta.lat_order == coord_kwargs["lat_direction"]
+    assert meta.lon_wrap == expected_conv
+    assert meta.y_increasing == (coord_kwargs["lat_direction"] == "S_to_N")
 
 
 @pytest.mark.parametrize("dim_kwargs", TOPO_DIM_ORDER_VARIANTS)
@@ -204,7 +204,8 @@ def test_dim_order_variants(topo_file_factory, dim_kwargs):
     path = topo_file_factory(**dim_kwargs)
     with TopoInspector(path, var_name="z") as insp:
         meta = insp.inspect_topo()
-    assert meta.dim_order == list(dim_kwargs["dim_order"])
+    _role = {"lat": "y", "lon": "x", "time": "time"}
+    assert meta.dim_order == [_role[d] for d in dim_kwargs["dim_order"]]
 
 
 # ============================================================
@@ -270,7 +271,7 @@ def test_topo_entries_no_wrap(topo_file_factory):
     assert len(entries) == 1
     ttype, fpath, meta = entries[0]
     assert ttype == 4
-    assert meta.lon_offset == pytest.approx(0.0)
+    assert meta.lon_wrap_offset == pytest.approx(0.0)
     assert meta.crop_bounds is not None
     lon0, lon1, lat0, lat1 = meta.crop_bounds
     assert lon0 == pytest.approx(-90.0)
@@ -291,7 +292,7 @@ def test_topo_entries_simple_shift(topo_file_factory):
     insp.close()
 
     assert len(entries) == 1
-    assert entries[0][2].lon_offset == pytest.approx(0.0)
+    assert entries[0][2].lon_wrap_offset == pytest.approx(0.0)
 
 
 def test_topo_entries_simple_shift_negative(topo_file_factory):
@@ -334,7 +335,7 @@ def test_topo_entries_wrap_required(topo_file_factory):
 
     # Collect (file_crop_min, file_crop_max, lon_offset) pairs (order not mandated).
     pairs = {
-        (meta.crop_bounds[0], meta.crop_bounds[1], meta.lon_offset)
+        (meta.crop_bounds[0], meta.crop_bounds[1], meta.lon_wrap_offset)
         for _, _, meta in entries
         if meta.crop_bounds is not None
     }

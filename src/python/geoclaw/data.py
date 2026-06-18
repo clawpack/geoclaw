@@ -383,7 +383,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     from clawpack.geoclaw import netcdf_utils as _ncutils
                     if getattr(topo, '_netcdf_meta', None) is not None:
                         # Pre-computed metadata from topo_entries() — already has
-                        # correct lon_offset and file-coordinate crop_bounds.
+                        # correct lon_wrap_offset and file-coordinate crop_bounds.
                         _meta = topo._netcdf_meta
                     else:
                         _crop = (tuple(topo.crop_extent)
@@ -400,7 +400,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                                 var_name=_insp.var_name,
                                 source_units=_src_units,
                                 fill_action='abort',
-                                lon_offset=0.0,
+                                lon_wrap_offset=0.0,
                             )
                     _ncutils.DescriptorWriter.write_topo_descriptor(f, _meta)
 

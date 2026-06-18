@@ -470,9 +470,23 @@ class Topography(object):
         self.coordinate_transform = lambda x,y: (x,y)
 
         # Preprocessing attributes — applied by read() after data is loaded.
-        # CONFLICT NOTE: 'extent' is already a @property backed by self._extent
-        # that returns the loaded-data spatial bounds.  The crop-target attribute
-        # is therefore named 'crop_extent' to avoid shadowing it.
+        #
+        # BOUNDS TERMINOLOGY (consistent across Python and Fortran):
+        #   * ``extent``      — the *actual* loaded-data bounds.  Read-only
+        #                       @property (below), in DOMAIN coordinates.
+        #   * ``crop_extent`` — the *requested* crop region, in DOMAIN
+        #                       coordinates.  Mirrors Fortran ``tp_crop_extent``
+        #                       and the storm module's ``met_crop_extent``.
+        #   * ``crop_bounds`` — the same region in FILE coordinates, carried
+        #                       only in the NetCDF (type-4) descriptor
+        #                       (``netcdf_utils.FileMetadata.crop_bounds`` ->
+        #                       Fortran ``nc_crop_bounds``).  The descriptor
+        #                       writer converts crop_extent -> crop_bounds by
+        #                       subtracting lon_wrap_offset/x_shift.
+        # Convention: the ``_extent`` suffix is domain coords; ``_bounds`` is
+        # file coords.  All 4-element vectors are ordered [x1, x2, y1, y2]
+        # (x-pair then y-pair).  'crop_extent' is named to avoid shadowing the
+        # 'extent' property above.
         # PATH NOTE: 'path' already exists as an instance attribute set above.
         # No topo_path alias is needed; callers should use self.path.
         self.crop_extent: list[float] | None = None  # [x1,x2,y1,y2]; None=full domain
@@ -810,8 +824,8 @@ class Topography(object):
                     _source_units = inspector._check_topo_units()
 
                     ds = inspector.ds
-                    _lon_name = _meta.lon_name
-                    _lat_name = _meta.lat_name
+                    _x_name = _meta.x_name
+                    _y_name = _meta.y_name
                     _var_name = inspector.var_name
 
                     # Record an optional vertical datum from CF/common
@@ -820,16 +834,16 @@ class Topography(object):
 
                     # Load coordinate 1-D arrays
                     _lon_vals = numpy.asarray(
-                        ds[_lon_name].values[::stride[0]], dtype=float
+                        ds[_x_name].values[::stride[0]], dtype=float
                     )
                     _lat_vals = numpy.asarray(
-                        ds[_lat_name].values[::stride[1]], dtype=float
+                        ds[_y_name].values[::stride[1]], dtype=float
                     )
 
                     # Load variable, squeezing singleton non-spatial dims
                     _da = ds[_var_name]
                     for _dim in list(_da.dims):
-                        if _dim not in (_lon_name, _lat_name):
+                        if _dim not in (_x_name, _y_name):
                             if _da.sizes[_dim] == 1:
                                 _da = _da.isel({_dim: 0})
                             else:
@@ -842,13 +856,13 @@ class Topography(object):
 
                     # Transpose to (lat, lon) = (y, x) order expected by
                     # Topography, then apply stride
-                    _da = _da.transpose(_lat_name, _lon_name)
+                    _da = _da.transpose(_y_name, _x_name)
                     _z_vals = numpy.asarray(
                         _da.values[::stride[1], ::stride[0]], dtype=float
                     )
 
                     # Flip to S→N (y increasing) if file stores N→S
-                    if _meta.lat_order == 'N_to_S':
+                    if not _meta.y_increasing:
                         _lat_vals = _lat_vals[::-1]
                         _z_vals = _z_vals[::-1, :]
 
@@ -1071,15 +1085,15 @@ class Topography(object):
             from clawpack.geoclaw import netcdf_utils as _ncutils
 
             with _ncutils.NetCDFInspector(self.path) as inspector:
-                _lon_name = inspector._find_lon_name()
-                _lat_name = inspector._find_lat_name()
+                _x_name = inspector._find_x_name()
+                _y_name = inspector._find_y_name()
                 ds = inspector.ds
 
-                _lon_vals = numpy.asarray(ds[_lon_name].values, dtype=float)
-                _lat_vals = numpy.asarray(ds[_lat_name].values, dtype=float)
+                _lon_vals = numpy.asarray(ds[_x_name].values, dtype=float)
+                _lat_vals = numpy.asarray(ds[_y_name].values, dtype=float)
 
                 # Normalise to S→N (increasing y) so extent/delta are consistent
-                if inspector._detect_lat_order(_lat_name) == 'N_to_S':
+                if not inspector._detect_y_increasing(_y_name):
                     _lat_vals = _lat_vals[::-1]
 
                 # Record an optional vertical datum (informational) so it is

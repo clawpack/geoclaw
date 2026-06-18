@@ -414,7 +414,7 @@ def wrap_coords(input_path, output_path=None, force=False, dim_mapping=None):
             lon_name = dim_mapping['x']
         else:
             with NetCDFInspector(input_path) as inspector:
-                lon_name = inspector._find_lon_name()
+                lon_name = inspector._find_x_name()
         ds = xr.open_dataset(input_path)
         lon_atrib = ds.coords[lon_name].attrs
         ds.coords[lon_name] = (ds.coords[lon_name] + 180) % 360 - 180

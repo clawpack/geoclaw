@@ -123,16 +123,16 @@ def _get_met_meta(met_file_factory, **kwargs) -> MetMetadata:
 
 def test_topo_descriptor_required_keys_present(topo_file_factory):
     """
-    write_topo_descriptor emits all mandatory keys: var_name, lon_name,
-    lat_name, lon_offset, lat_order, dim_order, fill_action.
+    write_topo_descriptor emits all mandatory keys: var_name, x_name,
+    y_name, lon_wrap_offset, y_increasing, dim_order, fill_action.
     """
     meta = _get_topo_meta(topo_file_factory)
     buf = io.StringIO()
     DescriptorWriter.write_topo_descriptor(buf, meta)
     parsed = _parse_topo_descriptor(buf.getvalue())
 
-    for key in ("var_name", "lon_name", "lat_name", "lon_offset",
-                "lat_order", "dim_order", "fill_action"):
+    for key in ("var_name", "x_name", "y_name", "lon_wrap_offset",
+                "y_increasing", "dim_order", "fill_action"):
         assert key in parsed, f"Missing required key '{key}' in topo descriptor"
 
 
@@ -149,10 +149,10 @@ def test_topo_descriptor_values_match_metadata(topo_file_factory):
     parsed = _parse_topo_descriptor(buf.getvalue())
 
     assert parsed["var_name"] == meta.var_name
-    assert parsed["lon_name"] == meta.lon_name
-    assert parsed["lat_name"] == meta.lat_name
-    assert float(parsed["lon_offset"]) == pytest.approx(meta.lon_offset)
-    assert parsed["lat_order"] == meta.lat_order
+    assert parsed["x_name"] == meta.x_name
+    assert parsed["y_name"] == meta.y_name
+    assert float(parsed["lon_wrap_offset"]) == pytest.approx(meta.lon_wrap_offset)
+    assert parsed["y_increasing"] == str(meta.y_increasing)
     assert parsed["dim_order"] == ",".join(meta.dim_order)
     assert parsed["fill_action"] == meta.fill_action
 
@@ -221,24 +221,24 @@ def test_topo_descriptor_crop_bounds_present_when_set(topo_file_factory):
 
 def test_descriptor_writes_lon_offset_not_convention(topo_file_factory):
     """
-    Topo descriptor must contain 'lon_offset' as a parseable float and must
-    NOT contain 'lon_convention'.  This verifies the format-version-2 change.
+    Topo descriptor must contain 'lon_wrap_offset' as a parseable float and
+    must NOT contain 'lon_wrap'.  This verifies the format-version-2 change.
     """
     import dataclasses
     meta = _get_topo_meta(topo_file_factory)
     # Exercise a non-zero offset to confirm the value round-trips.
-    meta = dataclasses.replace(meta, lon_offset=-360.0)
+    meta = dataclasses.replace(meta, lon_wrap_offset=-360.0)
 
     buf = io.StringIO()
     DescriptorWriter.write_topo_descriptor(buf, meta)
     text = buf.getvalue()
     parsed = _parse_topo_descriptor(text)
 
-    assert "lon_offset" in parsed, "Descriptor must contain 'lon_offset'"
-    assert "lon_convention" not in parsed, (
-        "Descriptor must NOT contain 'lon_convention' (superseded by lon_offset)"
+    assert "lon_wrap_offset" in parsed, "Descriptor must contain 'lon_wrap_offset'"
+    assert "lon_wrap" not in parsed, (
+        "Descriptor must NOT contain 'lon_wrap' (superseded by lon_wrap_offset)"
     )
-    assert float(parsed["lon_offset"]) == pytest.approx(-360.0)
+    assert float(parsed["lon_wrap_offset"]) == pytest.approx(-360.0)
 
 
 def test_topo_descriptor_ends_with_blank_line(topo_file_factory):
@@ -272,8 +272,8 @@ def test_met_descriptor_file_info_block_present(met_file_factory):
 
 def test_met_descriptor_file_info_required_keys(met_file_factory):
     """
-    &file_info block contains all mandatory keys: lon_name, lat_name,
-    time_name, dim_order, lon_convention, lat_order, fill_action, time_offset.
+    &file_info block contains all mandatory keys: x_name, y_name,
+    time_name, dim_order, lon_wrap, y_increasing, fill_action, time_offset.
     """
     meta = _get_met_meta(met_file_factory)
     buf = io.StringIO()
@@ -281,8 +281,8 @@ def test_met_descriptor_file_info_required_keys(met_file_factory):
     parsed = _parse_met_descriptor(buf.getvalue())
     fi = parsed["file_info"]
 
-    for key in ("lon_name", "lat_name", "time_name",
-                "dim_order", "lon_convention", "lat_order",
+    for key in ("x_name", "y_name", "time_name",
+                "dim_order", "lon_wrap", "y_increasing",
                 "fill_action", "time_offset"):
         assert key in fi, f"Missing key '{key}' in &file_info block"
 

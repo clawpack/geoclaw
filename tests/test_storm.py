@@ -443,8 +443,8 @@ def test_data_storm_roundtrip(file_format, tmp_path):
         # Verify the descriptor body contains the correct coordinate and
         # variable names in the new &file_info / &variable_info format.
         desc_text = storm_path.read_text()
-        assert "lon_name       = longitude" in desc_text
-        assert "lat_name       = latitude" in desc_text
+        assert "x_name         = longitude" in desc_text
+        assert "y_name         = latitude" in desc_text
         assert "time_name      = valid_time" in desc_text
         assert "var_name=u10" in desc_text
         assert "var_name=v10" in desc_text
@@ -473,8 +473,8 @@ def test_data_storm_roundtrip(file_format, tmp_path):
         # Verify the descriptor body contains the correct coordinate and
         # variable names in the new &file_info / &variable_info format.
         desc_text = storm_path.read_text()
-        assert "lon_name       = lon" in desc_text
-        assert "lat_name       = lat" in desc_text
+        assert "x_name         = lon" in desc_text
+        assert "y_name         = lat" in desc_text
         assert "time_name      = time" in desc_text
         assert "var_name=uwnd" in desc_text
         assert "var_name=vwnd" in desc_text
@@ -508,8 +508,8 @@ def test_netcdf_var_mapping(tmp_path):
     with MetInspector(storm_data_file) as mi:
         meta = mi.inspect_met()
 
-    assert meta.lon_name == "longitude"
-    assert meta.lat_name == "latitude"
+    assert meta.x_name == "longitude"
+    assert meta.y_name == "latitude"
     assert meta.time_name == "valid_time"
     assert _met_roles(meta) == {"wind_u": "u", "wind_v": "v",
                                 "pressure": "pressure"}
@@ -536,8 +536,8 @@ def test_netcdf_var_mapping_era5(tmp_path):
     with MetInspector(nc_path) as mi:
         meta = mi.inspect_met()
 
-    assert meta.lon_name == "longitude"
-    assert meta.lat_name == "latitude"
+    assert meta.x_name == "longitude"
+    assert meta.y_name == "latitude"
     assert meta.time_name == "valid_time"
     assert _met_roles(meta) == {"wind_u": "u10", "wind_v": "v10",
                                 "pressure": "msl"}
@@ -569,8 +569,8 @@ def test_netcdf_var_mapping_nws13(tmp_path):
             "wind_u": "uwnd", "wind_v": "vwnd", "pressure": "press"}) as mi:
         meta = mi.inspect_met()
 
-    assert meta.lon_name == "lon"
-    assert meta.lat_name == "lat"
+    assert meta.x_name == "lon"
+    assert meta.y_name == "lat"
     assert meta.time_name == "time"
     assert _met_roles(meta) == {"wind_u": "uwnd", "wind_v": "vwnd",
                                 "pressure": "press"}

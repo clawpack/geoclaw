@@ -287,7 +287,7 @@ def test_coord_variants(met_file_factory, coord_kwargs):
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
         meta = insp.inspect_met()
     expected_conv = 360 if coord_kwargs["lon_max"] > 180 else 180
-    assert meta.lon_convention == expected_conv
+    assert meta.lon_wrap == expected_conv
 
 
 @pytest.mark.parametrize("dim_kwargs", MET_DIM_ORDER_VARIANTS)
@@ -296,6 +296,6 @@ def test_dim_order_variants(met_file_factory, dim_kwargs):
     path = met_file_factory(**dim_kwargs)
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
         meta = insp.inspect_met()
-    expected = [{"lat": "lat", "lon": "lon", "time": "time"}.get(d, d)
+    expected = [{"lat": "y", "lon": "x", "time": "time"}.get(d, d)
                 for d in dim_kwargs["dim_order"]]
     assert meta.dim_order == expected

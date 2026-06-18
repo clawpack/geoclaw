@@ -232,11 +232,11 @@ class Storm(object):
         self.ramp_width = 1e0               # 1 degree
 
         # NetCDF met-forcing metadata (populated by read_data for file_format==2)
-        self.met_lon_name = None
-        self.met_lat_name = None
+        self.met_x_name = None
+        self.met_y_name = None
         self.met_time_name = None
-        self.met_lon_convention = None
-        self.met_lat_order = None
+        self.met_lon_wrap = None
+        self.met_y_increasing = None
         self.met_fill_value = None
         self.met_fill_action = None
         self.met_time_offset = None
@@ -1012,12 +1012,13 @@ class Storm(object):
                         variable_infos.append(var_info)
 
                 # Store fields on Storm object for Fortran to consume
-                self.met_lon_name = file_info.get('lon_name')
-                self.met_lat_name = file_info.get('lat_name')
+                self.met_x_name = file_info.get('x_name')
+                self.met_y_name = file_info.get('y_name')
                 self.met_time_name = file_info.get('time_name')
-                _conv = file_info.get('lon_convention')
-                self.met_lon_convention = int(_conv) if _conv is not None else None
-                self.met_lat_order = file_info.get('lat_order')
+                _conv = file_info.get('lon_wrap')
+                self.met_lon_wrap = int(_conv) if _conv is not None else None
+                _yi = file_info.get('y_increasing')
+                self.met_y_increasing = (_yi == 'True') if _yi is not None else None
                 _fv = file_info.get('fill_value')
                 self.met_fill_value = float(_fv) if _fv is not None else None
                 self.met_fill_action = file_info.get('fill_action', 'warn')

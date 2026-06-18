@@ -605,24 +605,24 @@ class DTopography(object):
 
         with DTopoInspector(path) as inspector:
             meta = inspector.inspect_dtopo()
-            lon = inspector.ds[meta.lon_name].values.astype(numpy.float64)
-            lat = inspector.ds[meta.lat_name].values.astype(numpy.float64)
+            lon = inspector.ds[meta.x_name].values.astype(numpy.float64)
+            lat = inspector.ds[meta.y_name].values.astype(numpy.float64)
             dZ = numpy.asarray(inspector.ds[meta.var_name].values,
                                dtype=numpy.float64)
             # Optional vertical datum metadata (informational only).
             self.datum = extract_datum(inspector.ds[meta.var_name].attrs,
                                        inspector.ds.attrs)
 
-        if meta.dim_order == ['time', 'lat', 'lon']:
+        if meta.dim_order == ['time', 'y', 'x']:
             pass
-        elif meta.dim_order == ['time', 'lon', 'lat']:
+        elif meta.dim_order == ['time', 'x', 'y']:
             dZ = numpy.transpose(dZ, (0, 2, 1))
         else:
             raise ValueError(
                 f"Unsupported dimension order {meta.dim_order} in '{path}'; "
                 f"expected time first with lat/lon spatial dimensions.")
 
-        if meta.lat_order == 'N_to_S':
+        if not meta.y_increasing:
             lat = lat[::-1].copy()
             dZ = dZ[:, ::-1, :].copy()
 

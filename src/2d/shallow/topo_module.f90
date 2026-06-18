@@ -40,12 +40,12 @@ module topo_module
     ! NetCDF descriptor fields — one slot per topo file, populated from the
     ! key=value block in topo.data by read_netcdf_descriptor (type 4 only).
     character(len=64), allocatable :: nc_var_name(:)     ! topo variable name
-    character(len=64), allocatable :: nc_lon_name(:)     ! longitude coord name
-    character(len=64), allocatable :: nc_lat_name(:)     ! latitude coord name
-    character(len=32), allocatable :: nc_lat_order(:)    ! 'N_to_S' or 'S_to_N'
-    character(len=32), allocatable :: nc_dim_order(:)    ! e.g. 'lat,lon'
+    character(len=64), allocatable :: nc_x_name(:)     ! x coordinate variable name
+    character(len=64), allocatable :: nc_y_name(:)     ! y coordinate variable name
+    logical,           allocatable :: nc_y_increasing(:) ! y rises with array index (logged only)
+    character(len=32), allocatable :: nc_dim_order(:)    ! e.g. 'y,x' (logged only)
     character(len=8),  allocatable :: nc_fill_action(:)  ! 'abort' or 'warn'
-    real(kind=8),      allocatable :: nc_lon_offset(:)     ! scalar added to file coords: x_domain = x_file + offset
+    real(kind=8),      allocatable :: nc_lon_wrap_offset(:) ! longitude 0-360 wrap: x_domain = x_file + lon_wrap_offset
     real(kind=8),      allocatable :: nc_fill_value(:)   ! fill/nodata sentinel
     real(kind=8),      allocatable :: nc_crop_bounds(:,:) ! (4, n): lon0,lon1,lat0,lat1
     logical,           allocatable :: nc_has_fill(:)     ! fill_value was specified
@@ -78,9 +78,9 @@ module topo_module
     ! key=value block in dtopo.data by read_dtopo_netcdf_descriptor.  The
     ! time axis is carried as (t0, dt) in simulation seconds — computed by
     ! Python's DTopoInspector — so Fortran never parses CF time metadata.
-    character(len=64), allocatable :: dnc_var_name(:), dnc_lon_name(:), &
-                                      dnc_lat_name(:), dnc_dim_order(:)
-    real(kind=8), allocatable :: dnc_lon_offset(:), dnc_t0(:), dnc_dt(:)
+    character(len=64), allocatable :: dnc_var_name(:), dnc_x_name(:), &
+                                      dnc_y_name(:), dnc_dim_order(:)
+    real(kind=8), allocatable :: dnc_lon_wrap_offset(:), dnc_t0(:), dnc_dt(:)
     logical, allocatable :: dnc_has_descriptor(:)
 
     ! dtopo variables
@@ -201,19 +201,19 @@ contains
 
                 ! NetCDF descriptor arrays — allocated for all files; only
                 ! filled in for type 4 entries by read_netcdf_descriptor.
-                allocate(nc_var_name(mtopofiles), nc_lon_name(mtopofiles))
-                allocate(nc_lat_name(mtopofiles), nc_lat_order(mtopofiles))
+                allocate(nc_var_name(mtopofiles), nc_x_name(mtopofiles))
+                allocate(nc_y_name(mtopofiles), nc_y_increasing(mtopofiles))
                 allocate(nc_dim_order(mtopofiles), nc_fill_action(mtopofiles))
-                allocate(nc_lon_offset(mtopofiles), nc_fill_value(mtopofiles))
+                allocate(nc_lon_wrap_offset(mtopofiles), nc_fill_value(mtopofiles))
                 allocate(nc_crop_bounds(4, mtopofiles))
                 allocate(nc_has_fill(mtopofiles), nc_has_crop(mtopofiles))
                 nc_var_name      = ''
-                nc_lon_name      = ''
-                nc_lat_name      = ''
-                nc_lat_order     = 'S_to_N'
-                nc_dim_order     = 'lat,lon'
+                nc_x_name      = ''
+                nc_y_name      = ''
+                nc_y_increasing  = .true.
+                nc_dim_order     = 'y,x'
                 nc_fill_action   = 'abort'
-                nc_lon_offset    = 0.0d0
+                nc_lon_wrap_offset    = 0.0d0
                 nc_fill_value    = 0.0d0
                 nc_crop_bounds   = 0.0d0
                 nc_has_fill      = .false.
@@ -949,13 +949,13 @@ contains
                 ! Dimension discovery: descriptor or fallback heuristic.
                 ! ----------------------------------------------------------------
                 if (present(topo_idx) .and. &
-                        len_trim(nc_lon_name(topo_idx)) > 0) then
+                        len_trim(nc_x_name(topo_idx)) > 0) then
                     call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                        trim(nc_lon_name(topo_idx)), x_dim_id))
+                        trim(nc_x_name(topo_idx)), x_dim_id))
                     call check_netcdf_error(nf90_inquire_dimension(nc_file, &
                         x_dim_id, x_dim_name, mx_tot))
                     call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                        trim(nc_lat_name(topo_idx)), y_dim_id))
+                        trim(nc_y_name(topo_idx)), y_dim_id))
                     call check_netcdf_error(nf90_inquire_dimension(nc_file, &
                         y_dim_id, y_dim_name, my_tot))
                 else
@@ -975,13 +975,13 @@ contains
                 call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
                     start=(/ 1 /), count=(/ my_tot /)))
 
-                ! Apply lon_offset then tp_x_shift to convert file coordinates
+                ! Apply lon_wrap_offset then tp_x_shift to convert file coordinates
                 ! to domain coordinates, so xstart matches the domain-coord xll
                 ! that was computed by read_topo_header (which also has both
                 ! offsets applied via read_topo_settings).
                 if (present(topo_idx)) then
-                    if (nc_lon_offset(topo_idx) /= 0.0d0) then
-                        xlocs = xlocs + nc_lon_offset(topo_idx)
+                    if (nc_lon_wrap_offset(topo_idx) /= 0.0d0) then
+                        xlocs = xlocs + nc_lon_wrap_offset(topo_idx)
                     end if
                     if (tp_x_shift(topo_idx) /= 0.0d0) then
                         xlocs = xlocs + tp_x_shift(topo_idx)
@@ -1368,21 +1368,21 @@ contains
 
                 ! ----------------------------------------------------------------
                 ! Discover spatial dimensions.
-                ! When a descriptor was provided (topo_idx present, lon_name set)
+                ! When a descriptor was provided (topo_idx present, x_name set)
                 ! look up dimension IDs by name directly.  Otherwise fall back to
                 ! the name-heuristic in get_dim_info.
                 ! ----------------------------------------------------------------
                 call check_netcdf_error(nf90_inquire(nc_file, num_dims_tot, num_vars))
 
                 if (present(topo_idx) .and. &
-                        len_trim(nc_lon_name(topo_idx)) > 0) then
+                        len_trim(nc_x_name(topo_idx)) > 0) then
                     ! Descriptor path: exact name look-up
                     call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                        trim(nc_lon_name(topo_idx)), x_dim_id))
+                        trim(nc_x_name(topo_idx)), x_dim_id))
                     call check_netcdf_error(nf90_inquire_dimension(nc_file, &
                         x_dim_id, x_dim_name, mx))
                     call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                        trim(nc_lat_name(topo_idx)), y_dim_id))
+                        trim(nc_y_name(topo_idx)), y_dim_id))
                     call check_netcdf_error(nf90_inquire_dimension(nc_file, &
                         y_dim_id, y_dim_name, my))
                 else
@@ -1445,21 +1445,21 @@ contains
                 nbuf4 = 0
                 if (present(topo_idx) .and. nc_has_crop(topo_idx)) then
                     ! nc_crop_bounds are in FILE coordinates; compare against
-                    ! file-coord xlocs before applying lon_offset.
+                    ! file-coord xlocs before applying lon_wrap_offset.
                     x_in_dom = (xlocs >= nc_crop_bounds(1, topo_idx)) .and. &
                                (xlocs <= nc_crop_bounds(2, topo_idx))
                     y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
                                (ylocs <= nc_crop_bounds(4, topo_idx))
                 else if (present(topo_idx) .and. &
                          any(tp_crop_extent(:,topo_idx) /= 0.0d0)) then
-                    ! tp_crop_extent is in domain coordinates (after nc_lon_offset
+                    ! tp_crop_extent is in domain coordinates (after nc_lon_wrap_offset
                     ! and tp_x_shift).  Convert to file coordinates for comparison
                     ! against raw xlocs (which have neither offset applied yet).
                     ! tp_buffer is applied in index space below, mirroring
                     ! Python Topography.crop().
-                    x1_c = tp_crop_extent(1,topo_idx) - nc_lon_offset(topo_idx) &
+                    x1_c = tp_crop_extent(1,topo_idx) - nc_lon_wrap_offset(topo_idx) &
                            - tp_x_shift(topo_idx)
-                    x2_c = tp_crop_extent(2,topo_idx) - nc_lon_offset(topo_idx) &
+                    x2_c = tp_crop_extent(2,topo_idx) - nc_lon_wrap_offset(topo_idx) &
                            - tp_x_shift(topo_idx)
                     y1_c = tp_crop_extent(3,topo_idx)
                     y2_c = tp_crop_extent(4,topo_idx)
@@ -1473,13 +1473,13 @@ contains
                                (ylocs < (yupper + dy + hyposs(1)*nghost))
                 end if
 
-                ! Apply lon_offset AFTER crop_bounds selection: converts file
+                ! Apply lon_wrap_offset AFTER crop_bounds selection: converts file
                 ! coordinates to domain coordinates.  crop_bounds above were
                 ! compared against file-coord xlocs; xll/xhi below will be in
                 ! domain coordinates as GeoClaw expects.
                 if (present(topo_idx)) then
-                    if (nc_lon_offset(topo_idx) /= 0.0d0) then
-                        xlocs = xlocs + nc_lon_offset(topo_idx)
+                    if (nc_lon_wrap_offset(topo_idx) /= 0.0d0) then
+                        xlocs = xlocs + nc_lon_wrap_offset(topo_idx)
                     end if
                 end if
 
@@ -1501,7 +1501,7 @@ contains
                         cf4 = max(1, tp_coarsen(topo_idx))
                         has_al4 = any(tp_align(:,topo_idx) /= 0.0d0)
                         ! Align targets are in domain coordinates; xlocs now
-                        ! include lon_offset but not tp_x_shift, so shift the
+                        ! include lon_wrap_offset but not tp_x_shift, so shift the
                         ! x target into the same frame.
                         al_x4 = tp_align(1,topo_idx) - tp_x_shift(topo_idx)
                         al_y4 = tp_align(2,topo_idx)
@@ -1671,15 +1671,15 @@ contains
         dtp_z_shift  = 0.0d0
         dtp_negate_z = .false.
 
-        allocate(dnc_var_name(num_dtopo),dnc_lon_name(num_dtopo))
-        allocate(dnc_lat_name(num_dtopo),dnc_dim_order(num_dtopo))
-        allocate(dnc_lon_offset(num_dtopo),dnc_t0(num_dtopo),dnc_dt(num_dtopo))
+        allocate(dnc_var_name(num_dtopo),dnc_x_name(num_dtopo))
+        allocate(dnc_y_name(num_dtopo),dnc_dim_order(num_dtopo))
+        allocate(dnc_lon_wrap_offset(num_dtopo),dnc_t0(num_dtopo),dnc_dt(num_dtopo))
         allocate(dnc_has_descriptor(num_dtopo))
         dnc_var_name = ''
-        dnc_lon_name = ''
-        dnc_lat_name = ''
+        dnc_x_name = ''
+        dnc_y_name = ''
         dnc_dim_order = ''
-        dnc_lon_offset = 0.0d0
+        dnc_lon_wrap_offset = 0.0d0
         dnc_t0 = 0.0d0
         dnc_dt = 0.0d0
         dnc_has_descriptor = .false.
@@ -1861,9 +1861,9 @@ contains
 
             call check_netcdf_error(nf90_open(fname, nf90_nowrite, nc_file))
             call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                trim(dnc_lon_name(dtopo_idx)), x_dim_id))
+                trim(dnc_x_name(dtopo_idx)), x_dim_id))
             call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                trim(dnc_lat_name(dtopo_idx)), y_dim_id))
+                trim(dnc_y_name(dtopo_idx)), y_dim_id))
             call check_netcdf_error(nf90_inq_varid(nc_file, &
                 trim(dnc_var_name(dtopo_idx)), z_var_id))
             call check_netcdf_error(nf90_inquire_variable(nc_file, &
@@ -1880,7 +1880,7 @@ contains
             ! Latitude direction: in-memory dtopo rows run N-to-S.
             allocate(ylocs(my))
             call check_netcdf_error(nf90_inq_varid(nc_file, &
-                trim(dnc_lat_name(dtopo_idx)), y_var_id))
+                trim(dnc_y_name(dtopo_idx)), y_var_id))
             call check_netcdf_error(nf90_get_var(nc_file, y_var_id, ylocs, &
                 start=(/ 1 /), count=(/ my /)))
             south_to_north = (ylocs(1) < ylocs(my))
@@ -2079,11 +2079,11 @@ contains
 
                 ! Spatial dimensions by descriptor name
                 call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                    trim(dnc_lon_name(dtopo_idx)), x_dim_id))
+                    trim(dnc_x_name(dtopo_idx)), x_dim_id))
                 call check_netcdf_error(nf90_inquire_dimension(nc_file, &
                     x_dim_id, dim_name, mx))
                 call check_netcdf_error(nf90_inq_dimid(nc_file, &
-                    trim(dnc_lat_name(dtopo_idx)), y_dim_id))
+                    trim(dnc_y_name(dtopo_idx)), y_dim_id))
                 call check_netcdf_error(nf90_inquire_dimension(nc_file, &
                     y_dim_id, dim_name, my))
 
@@ -2119,16 +2119,16 @@ contains
                 ! Coordinates (CF convention: coord var name == dim name)
                 allocate(xlocs(mx), ylocs(my))
                 call check_netcdf_error(nf90_inq_varid(nc_file, &
-                    trim(dnc_lon_name(dtopo_idx)), x_var_id))
+                    trim(dnc_x_name(dtopo_idx)), x_var_id))
                 call check_netcdf_error(nf90_inq_varid(nc_file, &
-                    trim(dnc_lat_name(dtopo_idx)), y_var_id))
+                    trim(dnc_y_name(dtopo_idx)), y_var_id))
                 call check_netcdf_error(nf90_get_var(nc_file, x_var_id, &
                     xlocs, start=(/ 1 /), count=(/ mx /)))
                 call check_netcdf_error(nf90_get_var(nc_file, y_var_id, &
                     ylocs, start=(/ 1 /), count=(/ my /)))
 
-                xlow = min(xlocs(1), xlocs(mx)) + dnc_lon_offset(dtopo_idx)
-                xhi  = max(xlocs(1), xlocs(mx)) + dnc_lon_offset(dtopo_idx)
+                xlow = min(xlocs(1), xlocs(mx)) + dnc_lon_wrap_offset(dtopo_idx)
+                xhi  = max(xlocs(1), xlocs(mx)) + dnc_lon_wrap_offset(dtopo_idx)
                 ylow = min(ylocs(1), ylocs(my))
                 yhi  = max(ylocs(1), ylocs(my))
                 dx = abs(xlocs(2) - xlocs(1))
@@ -2390,14 +2390,14 @@ contains
     ! level nc_* arrays at position idx.
     !
     ! Format (Python DescriptorWriter output):
-    !   var_name       = z
-    !   lon_name       = longitude
-    !   lat_name       = latitude
-    !   lon_offset     = 0.0
-    !   lat_order      = N_to_S
-    !   dim_order      = lat,lon
-    !   fill_value     = -9999.0
-    !   fill_action    = abort
+    !   var_name        = z
+    !   x_name          = longitude
+    !   y_name          = latitude
+    !   lon_wrap_offset = 0.0
+    !   y_increasing    = False
+    !   dim_order       = y,x
+    !   fill_value      = -9999.0
+    !   fill_action     = abort
     !   crop_bounds    = -180.0 180.0 -90.0 90.0
     !
     ! Unknown keys produce a warning and are skipped.
@@ -2435,14 +2435,16 @@ contains
             select case (trim(key))
                 case ('var_name')
                     nc_var_name(idx) = trim(val)
-                case ('lon_name')
-                    nc_lon_name(idx) = trim(val)
-                case ('lat_name')
-                    nc_lat_name(idx) = trim(val)
-                case ('lon_offset')
-                    read(val, *) nc_lon_offset(idx)
-                case ('lat_order')
-                    nc_lat_order(idx) = trim(val)
+                case ('x_name')
+                    nc_x_name(idx) = trim(val)
+                case ('y_name')
+                    nc_y_name(idx) = trim(val)
+                case ('lon_wrap_offset')
+                    read(val, *) nc_lon_wrap_offset(idx)
+                case ('y_increasing')
+                    ! Python writes the bool as 'True'/'False'; list-directed
+                    ! logical read accepts the leading T/F.  Logged only.
+                    read(val, *) nc_y_increasing(idx)
                 case ('dim_order')
                     nc_dim_order(idx) = trim(val)
                 case ('fill_value')
@@ -2462,12 +2464,12 @@ contains
 
         ! Log what was parsed
         write(GEO_PARM_UNIT, *) '  NetCDF descriptor for topo file ', idx, ':'
-        write(GEO_PARM_UNIT, *) '    var_name       = ', trim(nc_var_name(idx))
-        write(GEO_PARM_UNIT, *) '    lon_name       = ', trim(nc_lon_name(idx))
-        write(GEO_PARM_UNIT, *) '    lat_name       = ', trim(nc_lat_name(idx))
-        write(GEO_PARM_UNIT, *) '    lon_offset     = ', nc_lon_offset(idx)
-        write(GEO_PARM_UNIT, *) '    lat_order      = ', trim(nc_lat_order(idx))
-        write(GEO_PARM_UNIT, *) '    fill_action    = ', trim(nc_fill_action(idx))
+        write(GEO_PARM_UNIT, *) '    var_name        = ', trim(nc_var_name(idx))
+        write(GEO_PARM_UNIT, *) '    x_name          = ', trim(nc_x_name(idx))
+        write(GEO_PARM_UNIT, *) '    y_name          = ', trim(nc_y_name(idx))
+        write(GEO_PARM_UNIT, *) '    lon_wrap_offset = ', nc_lon_wrap_offset(idx)
+        write(GEO_PARM_UNIT, *) '    y_increasing    = ', nc_y_increasing(idx)
+        write(GEO_PARM_UNIT, *) '    fill_action     = ', trim(nc_fill_action(idx))
         if (nc_has_fill(idx)) &
             write(GEO_PARM_UNIT, *) '    fill_value     = ', nc_fill_value(idx)
         if (nc_has_crop(idx)) &
@@ -2484,20 +2486,20 @@ contains
     ! Parsed values are stored in the module-level dnc_* arrays at idx.
     !
     ! Format (Python DescriptorWriter.write_dtopo_descriptor output):
-    !   var_name       = dz
-    !   lon_name       = lon
-    !   lat_name       = lat
-    !   time_name      = time
-    !   lon_offset     = 0.0
-    !   lat_order      = S_to_N
-    !   dim_order      = time,lat,lon
-    !   t0             = 0.0
-    !   dt             = 0.5
+    !   var_name        = dz
+    !   x_name          = lon
+    !   y_name          = lat
+    !   time_name       = time
+    !   lon_wrap_offset = 0.0
+    !   y_increasing    = True
+    !   dim_order       = time,y,x
+    !   t0              = 0.0
+    !   dt              = 0.5
     !
     ! t0/dt are in simulation seconds (computed by Python's DTopoInspector,
     ! which also validates uniform time spacing), so Fortran never parses
-    ! the file's time variable.  time_name and lat_order are informational:
-    ! latitude direction is detected from the coordinates at read time.
+    ! the file's time variable.  time_name and y_increasing are informational:
+    ! the y-axis direction is detected from the coordinates at read time.
     ! ========================================================================
     subroutine read_dtopo_netcdf_descriptor(iunit, idx)
 
@@ -2532,15 +2534,15 @@ contains
             select case (trim(key))
                 case ('var_name')
                     dnc_var_name(idx) = trim(val)
-                case ('lon_name')
-                    dnc_lon_name(idx) = trim(val)
-                case ('lat_name')
-                    dnc_lat_name(idx) = trim(val)
+                case ('x_name')
+                    dnc_x_name(idx) = trim(val)
+                case ('y_name')
+                    dnc_y_name(idx) = trim(val)
                 case ('time_name')
                     continue    ! informational; t0/dt carried directly
-                case ('lon_offset')
-                    read(val, *) dnc_lon_offset(idx)
-                case ('lat_order')
+                case ('lon_wrap_offset')
+                    read(val, *) dnc_lon_wrap_offset(idx)
+                case ('y_increasing')
                     continue    ! detected from coordinates at read time
                 case ('dim_order')
                     dnc_dim_order(idx) = trim(val)
@@ -2559,10 +2561,10 @@ contains
 
         ! Log what was parsed
         write(GEO_PARM_UNIT, *) '  NetCDF descriptor for dtopo file ', idx, ':'
-        write(GEO_PARM_UNIT, *) '    var_name       = ', trim(dnc_var_name(idx))
-        write(GEO_PARM_UNIT, *) '    lon_name       = ', trim(dnc_lon_name(idx))
-        write(GEO_PARM_UNIT, *) '    lat_name       = ', trim(dnc_lat_name(idx))
-        write(GEO_PARM_UNIT, *) '    lon_offset     = ', dnc_lon_offset(idx)
+        write(GEO_PARM_UNIT, *) '    var_name        = ', trim(dnc_var_name(idx))
+        write(GEO_PARM_UNIT, *) '    x_name          = ', trim(dnc_x_name(idx))
+        write(GEO_PARM_UNIT, *) '    y_name          = ', trim(dnc_y_name(idx))
+        write(GEO_PARM_UNIT, *) '    lon_wrap_offset = ', dnc_lon_wrap_offset(idx)
         write(GEO_PARM_UNIT, *) '    t0             = ', dnc_t0(idx)
         write(GEO_PARM_UNIT, *) '    dt             = ', dnc_dt(idx)
 
