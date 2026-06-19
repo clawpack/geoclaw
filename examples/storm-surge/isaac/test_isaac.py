@@ -765,6 +765,7 @@ def test_isaac_netcdf_shift_identity(tmp_path: Path, save: bool,
     runner.check_gauge(gauge_id=2, regression_path=gauge_regression_path, save=save)
 
 
+@pytest.mark.slow
 @pytest.mark.storm
 def test_isaac_model_storm_time_scale(tmp_path: Path,
                                       isaac_xgeoclaw: Path) -> None:
@@ -814,6 +815,7 @@ def test_isaac_model_storm_time_scale(tmp_path: Path,
         "storm_time_scale=4.0 produced the same gauge as the scale=1.0 baseline"
 
 
+@pytest.mark.slow
 @pytest.mark.storm
 def test_isaac_data_storm_time_scale(tmp_path: Path,
                                      isaac_xgeoclaw: Path) -> None:
@@ -872,6 +874,7 @@ def test_isaac_data_storm_time_scale(tmp_path: Path,
         "storm_time_scale=4.0 produced the same gauge as the scale=1.0 baseline"
 
 
+@pytest.mark.slow
 @pytest.mark.storm
 def test_isaac_temporal_ramp(tmp_path: Path,
                              isaac_xgeoclaw: Path) -> None:
