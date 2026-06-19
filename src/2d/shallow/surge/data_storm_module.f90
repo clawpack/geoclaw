@@ -462,6 +462,22 @@ contains
 #endif
             end select
 
+            ! Normalize the latitude axis to ascending order for all read
+            ! paths.  Some met files (e.g. NetCDF with y_increasing = .false.)
+            ! store latitude N-to-S; the extent tests in set_data_fields and
+            ! the bilinear interpolation in spatial_interp assume monotonically
+            ! increasing latitude.  Reverse the coordinate and the lat
+            ! dimension of the field arrays once here so every downstream
+            ! consumer sees an ascending axis.  No-op when already ascending.
+            if (my > 1) then
+                if (storm%latitude(1) > storm%latitude(my)) then
+                    storm%latitude = storm%latitude(my:1:-1)
+                    storm%pressure = storm%pressure(:, my:1:-1, :)
+                    storm%wind_u   = storm%wind_u(:, my:1:-1, :)
+                    storm%wind_v   = storm%wind_v(:, my:1:-1, :)
+                end if
+            end if
+
             ! Stretch (>1) or compress (<1) the time axis relative to the
             ! first time step (anchor), for both ASCII/OWI and NetCDF paths.
             ! No-op when scale is 1.0.
