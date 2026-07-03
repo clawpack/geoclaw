@@ -43,6 +43,7 @@ def run_chile2010_adjoint_stage(output_dir: Path):
 @pytest.mark.tsunami
 @pytest.mark.remote
 @pytest.mark.adjoint
+@pytest.mark.slow
 def test_chile2010_adjoint(tmp_path: Path, save: bool) -> None:
     """Smoke test for the Chile 2010 adjoint stage."""
     runner = run_chile2010_adjoint_stage(tmp_path)

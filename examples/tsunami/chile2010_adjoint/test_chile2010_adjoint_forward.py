@@ -12,6 +12,7 @@ import clawpack.geoclaw.test as test
 @pytest.mark.regression
 @pytest.mark.tsunami
 @pytest.mark.remote
+@pytest.mark.slow
 @pytest.mark.xfail(reason="Slight gauge mismatch.")
 def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
     """Regression test for the Chile 2010 forward run using adjoint output."""
