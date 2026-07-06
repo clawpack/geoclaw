@@ -295,6 +295,29 @@ def test_dtopo_datum_netcdf_roundtrip(tmp_path):
 
 
 @pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_netcdf_default_dtype_is_float32(tmp_path):
+    r"""dz is stored as float32 on disk by default to halve file size.
+
+    Deformation values are well under 10,000 m, so float32 still gives
+    sub-millimeter precision; the in-memory array read back stays float64.
+    """
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    base = _make_synthetic_dtopo()
+    path = tmp_path / "synthetic.nc"
+    base.write(path, dtopo_type=4)
+
+    with netCDF4.Dataset(path) as nc:
+        assert nc.variables["dz"].dtype == np.dtype("float32")
+
+    back = dtopotools.DTopography()
+    back.read(path=path)
+    assert back.dZ.dtype == np.float64
+    assert np.allclose(back.dZ, base.dZ)
+
+
+@pytest.mark.python
 @pytest.mark.parametrize("attr, value", [
     ("crop_extent", [0.0, 1.0, 0.0, 1.0]),
     ("coarsen", 2),

@@ -243,5 +243,49 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
     tol = {"atol": 1e-2} if variant == "lon_360" else {}
     runner.check_gauge(save=save, gauge_id=32412, **tol)
 
+@pytest.mark.regression
+@pytest.mark.remote
+@pytest.mark.tsunami
+@pytest.mark.netcdf
+def test_chile2010_dtopo_netcdf(tmp_path: Path, save: bool):
+    """Chile 2010 regression test exercising the dtopo NetCDF (type=4) path.
+
+    Regression coverage for a bug where a NetCDF dtopo file's time
+    coordinate -- written as a bare-duration ("seconds") unit, as
+    ``DTopography._write_netcdf`` does -- could decode via xarray into
+    timedelta64.  ``DTopoInspector._compute_time_axis`` then cast that
+    straight to float, reinterpreting the raw nanosecond tick count as
+    seconds: t0dtopo came out ~1e9 instead of ~1.  Since the chile2010
+    dtopo is a single-frame deformation at t=1s, that inflated t0dtopo
+    meant the simulated time (max 9 hours) never reached it, so the
+    coseismic deformation was never applied at all -- and because
+    ``topo_finalized`` also never becomes true, ``dt_max_dtopo=0.2`` pins
+    the timestep for the entire run.  Both symptoms are checked here: the
+    gauge must show the same tsunami signal as the ASCII dtopo baseline
+    (not a flat, undeformed sea surface), and the run must actually finish.
+    """
+    pytest.importorskip("netCDF4")
+
+    runner = test.GeoClawTestRunner(tmp_path, test_path=Path(__file__).parent)
+    topo, dtopo = _get_topography(runner)
+
+    runner.set_data()
+    runner.rundata.amrdata.amr_levels_max = 1
+    runner.rundata.topo_data.topofiles = [[2, topo.path]]
+
+    dtopo_nc_path = tmp_path / "dtopo_usgs100227.nc"
+    dtopo.write(dtopo_nc_path, dtopo_type=4)
+    runner.rundata.dtopo_data.dtopofiles = [[4, str(dtopo_nc_path)]]
+
+    runner.write_data()
+
+    print(f"Testing dtopo netCDF variant with dtopo file: {dtopo_nc_path.name}")
+    runner.build_executable(FFLAGS="-DNETCDF $(NETCDF_FFLAGS)",
+                            LFLAGS="$(NETCDF_LFLAGS)")
+    runner.run_code()
+
+    runner.check_gauge(save=save, gauge_id=32412)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))

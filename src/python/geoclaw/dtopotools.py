@@ -598,8 +598,17 @@ class DTopography(object):
         if self.datum is not None:
             ds["dz"].attrs["vertical_datum"] = str(self.datum)
         # No fill value: deformation grids are complete, and xarray's default
-        # NaN _FillValue encoding would trip DTopoInspector's fill warning.
-        ds.to_netcdf(path, encoding={"dz": {"_FillValue": None}})
+        # NaN _FillValue encoding would trip DTopoInspector's fill warning (and
+        # applies that same default to coordinate variables, which must not
+        # carry missing-value semantics at all).  dz is stored as float32 on
+        # disk by default: topo deformations are well under 10,000 m, so this
+        # still gives sub-millimeter precision while halving file size.
+        ds.to_netcdf(path, encoding={
+            "dz": {"_FillValue": None, "dtype": "float32"},
+            "time": {"_FillValue": None},
+            "lat": {"_FillValue": None},
+            "lon": {"_FillValue": None},
+        })
 
 
     def _read_netcdf(self, path):

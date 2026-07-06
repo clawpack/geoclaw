@@ -123,6 +123,36 @@ def test_datetime_time_requires_reference(tmp_path):
     assert meta.mt == 3
 
 
+def test_timedelta_time_axis_converts_correctly(tmp_path):
+    """Regression test: a time coordinate xarray decodes to timedelta64 must
+    convert to seconds via true unit conversion, not have its raw tick count
+    reinterpreted as a plain float.
+
+    Some xarray versions decode a bare duration-style ``units`` attribute
+    (e.g. ``"seconds"``, as ``DTopography._write_netcdf`` writes) into
+    ``timedelta64[ns]`` even though the on-disk data is a plain float.  Prior
+    to this fix, ``_compute_time_axis`` fell through to
+    ``np.asarray(tvals, dtype=float)`` for anything that wasn't
+    ``datetime64``, which reinterprets the underlying nanosecond tick count
+    as if it were already in seconds -- e.g. t=1 second (1e9 ns) read back
+    as t=1e9 "seconds".  That is exactly the billion-fold inflation reported
+    against the chile2010 example, where ``dt_max_dtopo`` never triggered
+    because ``tfdtopo`` looked a billion seconds in the future.
+    """
+    ds = write_dataset(make_dtopo_dataset(times=[0.0, 0.5, 1.0]),
+                       tmp_path / "dt.nc")
+    with DTopoInspector(ds) as insp:
+        # Simulate the timedelta64-decoded scenario directly, since whether
+        # this happens at xr.open_dataset() time is xarray-version-dependent.
+        insp.ds = insp.ds.assign_coords(
+            time=(np.array([0.0, 0.5, 1.0]) * 1e9).astype("timedelta64[ns]"))
+        t0, dt, mt = insp._compute_time_axis("time")
+
+    assert np.isclose(t0, 0.0)
+    assert np.isclose(dt, 0.5)
+    assert mt == 3
+
+
 def test_single_time_gives_zero_dt(tmp_path):
     ds = make_dtopo_dataset(times=[7.0])
     path = write_dataset(ds, tmp_path / "dt.nc")

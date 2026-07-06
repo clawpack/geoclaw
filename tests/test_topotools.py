@@ -488,6 +488,34 @@ def test_datum_netcdf_roundtrip(tmp_path):
     assert back2.datum is None
 
 
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_topo_netcdf_default_dtype_is_float32(tmp_path):
+    r"""elevation is stored as float32 on disk by default to halve file size.
+
+    Topography values are well under 10,000 m, so float32 still gives
+    sub-millimeter precision; the in-memory array read back stays float64.
+    """
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.linspace(-1.0, 1.0, 10)
+    topo.y = np.linspace(-1.0, 1.0, 8)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    topo.Z = (np.sin(X) + np.cos(Y)) * 5000.0
+
+    path = tmp_path / "elevation.nc"
+    topo.write(path, topo_type=4)
+
+    with netCDF4.Dataset(path) as nc:
+        assert nc.variables["elevation"].dtype == np.dtype("float32")
+
+    back = topotools.Topography(path=str(path))
+    back.read()
+    assert back.Z.dtype == np.float64
+    assert np.allclose(back.Z, topo.Z)
+
+
 def _make_unstructured_topo():
     """Construct a representative unstructured topography for interpolation tests."""
     # Create random test data

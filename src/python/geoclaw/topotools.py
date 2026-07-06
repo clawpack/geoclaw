@@ -1347,8 +1347,17 @@ class Topography(object):
 
             # Encode the numeric file sentinel as the CF _FillValue so the
             # reader masks those cells (xarray decodes _FillValue -> NaN).
-            ds.to_netcdf(path,
-                         encoding={"elevation": {"_FillValue": no_data_value}})
+            # elevation is stored as float32 on disk by default: topo values
+            # are well under 10,000 m, so this still gives sub-millimeter
+            # precision while halving file size.  Coordinate variables must
+            # not carry xarray's default NaN _FillValue (nonsensical for a
+            # monotonic axis), so it's explicitly cleared for those too.
+            coord_names = [name for name in ds.coords if name != "elevation"]
+            encoding = {"elevation": {"_FillValue": no_data_value,
+                                       "dtype": "float32"}}
+            encoding.update({name: {"_FillValue": None}
+                             for name in coord_names})
+            ds.to_netcdf(path, encoding=encoding)
 
 
         else:

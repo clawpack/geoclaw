@@ -204,8 +204,15 @@ class NetCDFInspector:
         except ImportError:
             chunks = None
         # mask_and_scale=True (default) so fill values appear as NaN.
+        # decode_timedelta=False: a numeric time coordinate with a bare
+        # duration-style units attribute (e.g. "seconds", as written by
+        # DTopography._write_netcdf) must stay a plain float array here.
+        # Some xarray versions otherwise auto-decode it into timedelta64[ns],
+        # and naively casting that to float (as a "seconds" value) reads back
+        # the raw nanosecond tick count -- a billion-fold error.
         self.ds: xr.Dataset = xr.open_dataset(
-            self.path, chunks=chunks, mask_and_scale=True
+            self.path, chunks=chunks, mask_and_scale=True,
+            decode_timedelta=False,
         )
 
     # ------------------------------------------------------------------
@@ -800,6 +807,12 @@ class DTopoInspector(NetCDFInspector):
             import pandas as pd
             ref = np.datetime64(pd.Timestamp(self.time_reference))
             seconds = (tvals - ref) / np.timedelta64(1, 's')
+        elif np.issubdtype(tvals.dtype, np.timedelta64):
+            # A duration-style units attribute (e.g. "seconds") decoded to
+            # timedelta64 despite decode_timedelta=False (older xarray, or a
+            # third-party file with an explicit timedelta64 dtype attribute).
+            # Convert properly rather than casting the raw tick count.
+            seconds = tvals / np.timedelta64(1, 's')
         else:
             seconds = np.asarray(tvals, dtype=float)
 
