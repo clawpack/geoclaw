@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from clawpack.clawutil.util import fullpath_import
+import clawpack.clawutil.test as clawtest
 import clawpack.geoclaw.test as test
 
 def set_adjoint_data(runner):
