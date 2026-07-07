@@ -31,13 +31,16 @@ scratch_dir = os.path.join(os.environ["CLAW"], 'geoclaw', 'scratch')
 
 
 # ------------------------------
-def setrun(claw_pkg='geoclaw'):
+def setrun(claw_pkg='geoclaw', download_dir=None):
 
     """
     Define the parameters used for running Clawpack.
 
     INPUT:
         claw_pkg expected to be "geoclaw" for this setrun.
+        download_dir: directory to download remote topography into.
+            Defaults to the shared $CLAW/geoclaw/scratch directory; tests
+            should pass their own isolated directory instead.
 
     OUTPUT:
         rundata - object of class ClawRunData
@@ -333,7 +336,7 @@ def setrun(claw_pkg='geoclaw'):
     # ------------------------------------------------------------------
     # GeoClaw specific parameters:
     # ------------------------------------------------------------------
-    rundata = setgeo(rundata)
+    rundata = setgeo(rundata, download_dir=download_dir)
 
     return rundata
     # end of function setrun
@@ -341,11 +344,13 @@ def setrun(claw_pkg='geoclaw'):
 
 
 # -------------------
-def setgeo(rundata):
+def setgeo(rundata, download_dir=None):
     """
     Set GeoClaw specific runtime parameters.
     For documentation see ....
     """
+    if download_dir is None:
+        download_dir = scratch_dir
 
     geo_data = rundata.geo_data
 
@@ -381,9 +386,9 @@ def setgeo(rundata):
     #   [topotype, fname]
     # See regions for control over these regions, need better bathy data for
     # the smaller domains
-    clawutil.data.get_remote_file(
-           "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2")
-    topo_path = os.path.join(scratch_dir, 'gulf_caribbean.tt3')
+    topo_path = clawutil.data.get_remote_file(
+           "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2",
+           output_dir=download_dir)
     topo_data.topofiles.append([3, topo_path])
 
     # == fgout grids ==

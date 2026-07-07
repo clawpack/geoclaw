@@ -143,15 +143,19 @@ def _check_data_storm_descriptor(generated_path: Path, regression_path: Path) ->
 
 @pytest.mark.regression
 @pytest.mark.storm
+@pytest.mark.remote
 @pytest.mark.parametrize(
     "data_file_format",
     ["holland80", "owi_ascii"],
 )
-def test_isaac(tmp_path: Path, data_file_format: str, save: bool) -> None:
+def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save: bool) -> None:
     """Regression test for Isaac storm surge using several storm-input modes."""
     runner = test.GeoClawTestRunner(tmp_path, test_path=Path(__file__).parent)
 
-    runner.set_data()
+    # Setup data for test.  setrun.py downloads gulf_caribbean.tt3 and writes
+    # a storm descriptor file; direct both into pytest-managed directories
+    # instead of $CLAW/geoclaw/scratch and the current working directory.
+    runner.set_data(download_dir=download_cache, storm_dir=tmp_path)
     # TODO: Decide on time range for Isaac test; this is currently set to match
     # the Isaac test, but may need to be adjusted.
     runner.rundata.clawdata.t0 = days2seconds(-1)

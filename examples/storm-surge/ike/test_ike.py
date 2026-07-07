@@ -3,10 +3,8 @@
 
 from pathlib import Path
 import pytest
-import numpy as np
 
 import clawpack.geoclaw.test as test
-import clawpack.geoclaw.topotools as topotools
 
 CASES = [
     pytest.param(
@@ -32,14 +30,16 @@ CASES = [
 
 @pytest.mark.storm
 @pytest.mark.regression
+@pytest.mark.remote
 @pytest.mark.parametrize("case", CASES)
-def test_ike(case: dict, tmp_path: Path, save: bool):
+def test_ike(case: dict, tmp_path: Path, download_cache: Path, save: bool):
     r"""Hurricane Ike regression test for GeoClaw"""
 
     runner = test.GeoClawTestRunner(tmp_path, test_path=Path(__file__).parent)
 
-    # Setup data for test
-    runner.set_data()
+    # Setup data for test.  setrun.py downloads gulf_caribbean.tt3; direct it
+    # into the shared download_cache instead of $CLAW/geoclaw/scratch.
+    runner.set_data(download_dir=download_cache)
 
     runner.rundata.clawdata.num_cells = case["num_cells"]
     runner.rundata.clawdata.num_output_times = case["num_output_times"]
@@ -47,14 +47,6 @@ def test_ike(case: dict, tmp_path: Path, save: bool):
     runner.rundata.surge_data.storm_file = runner.test_path / 'ike.storm'
 
     runner.write_data()
-
-    # Build Topography - called the same as in the default setrun.py
-    topo = topotools.Topography()
-    topo.x = np.linspace(-100, -69, 125)
-    topo.y = np.linspace(7.0, 33.0, 105)
-    topo.Z = 25.0 * ((topo.X + 84.5)**2 + (topo.Y - 20.0)**2) - 4000.0
-    topo.write(runner.temp_path / 'gulf_caribbean.tt3', topo_type=2,
-                Z_format="%22.15e")
 
     # Build and run test
     runner.build_executable()

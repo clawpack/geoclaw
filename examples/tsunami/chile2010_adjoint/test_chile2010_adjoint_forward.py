@@ -14,7 +14,7 @@ import clawpack.geoclaw.test as test
 @pytest.mark.remote
 @pytest.mark.slow
 @pytest.mark.xfail(reason="Slight gauge mismatch.")
-def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
+def test_chile2010_adjoint_forward(tmp_path: Path, download_cache: Path, save: bool) -> None:
     """Regression test for the Chile 2010 forward run using adjoint output."""
     example_path = Path(__file__).parent
     adjoint_path = example_path / "adjoint"
@@ -28,12 +28,14 @@ def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
         test.GeoClawTestRunner,
         adjoint_output,
         adjoint_path,
-        configure_runner=adjoint_setup.set_adjoint_data,
+        configure_runner=lambda r: adjoint_setup.set_adjoint_data(r, topo_dir=download_cache),
     )
 
-    # Create topo and qinit inputs
+    # Create topo and dtopo inputs.  The (downloaded) etopo file is shared
+    # across tests via download_cache; the dtopo file is cheap to regenerate
+    # and specific to this test, so it lives in tmp_path.
     maketopo_module = util.fullpath_import(runner.test_path / "maketopo.py")
-    maketopo_module.get_topo(tmp_path, verbose=True)
+    maketopo_module.get_topo(download_cache, verbose=True)
     maketopo_module.make_dtopo(tmp_path)
 
     runner.set_data()
@@ -54,6 +56,15 @@ def test_chile2010_adjoint_forward(tmp_path: Path, save: bool) -> None:
     runner.rundata.gaugedata.gauges = [[1, -76, -36., 0., 1.e10]]
 
     runner.rundata.adjointdata.adjoint_outdir = str(adjoint_output)
+
+    # setrun.py hardcodes these to a shared $CLAW/geoclaw/scratch path;
+    # point them at wherever the files actually were downloaded/generated.
+    runner.rundata.topo_data.topofiles = [
+        [2, download_cache / "etopo10min120W60W60S0S.asc"],
+    ]
+    runner.rundata.dtopo_data.dtopofiles = [
+        [3, tmp_path / "dtopo_usgs100227.tt3"],
+    ]
     runner.write_data()
 
     runner.build_executable()
