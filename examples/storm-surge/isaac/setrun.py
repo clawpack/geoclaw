@@ -29,13 +29,19 @@ def seconds2days(seconds):
 scratch_dir = (Path(os.environ["CLAW"]) / "geoclaw" / "scratch").resolve()
 
 # ------------------------------
-def setrun(claw_pkg='geoclaw'):
+def setrun(claw_pkg='geoclaw', download_dir=None, storm_dir=None):
 
     """
     Define the parameters used for running Clawpack.
 
     INPUT:
         claw_pkg expected to be "geoclaw" for this setrun.
+        download_dir: directory to download remote topography into.
+            Defaults to the shared $CLAW/geoclaw/scratch directory; tests
+            should pass their own isolated directory instead.
+        storm_dir: directory to write the generated storm descriptor
+            file(s) into.  Defaults to the current working directory; tests
+            should pass their own isolated directory instead.
 
     OUTPUT:
         rundata - object of class ClawRunData
@@ -326,7 +332,7 @@ def setrun(claw_pkg='geoclaw'):
     # ------------------------------------------------------------------
     # GeoClaw specific parameters:
     # ------------------------------------------------------------------
-    rundata = setgeo(rundata)
+    rundata = setgeo(rundata, download_dir=download_dir, storm_dir=storm_dir)
 
     return rundata
     # end of function setrun
@@ -334,11 +340,17 @@ def setrun(claw_pkg='geoclaw'):
 
 
 # -------------------
-def setgeo(rundata):
+def setgeo(rundata, download_dir=None, storm_dir=None):
     """
     Set GeoClaw specific runtime parameters.
     For documentation see ....
     """
+    if download_dir is None:
+        download_dir = scratch_dir
+    if storm_dir is None:
+        storm_dir = Path()
+    else:
+        storm_dir = Path(storm_dir)
 
     try:
         geo_data = rundata.geo_data
@@ -376,9 +388,9 @@ def setgeo(rundata):
     #   [topotype, fname]
     # See regions for control over these regions, need better bathy data for
     # the smaller domains
-    clawutil.data.get_remote_file(
-           "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2")
-    topo_path = scratch_dir / 'gulf_caribbean.tt3'
+    topo_path = clawutil.data.get_remote_file(
+           "https://depts.washington.edu/clawpack/geoclaw/topo/gulf_caribbean.tt3.tar.bz2",
+           output_dir=download_dir)
     topo_data.topofiles.append([3, topo_path])
 
     # == fgout grids ==
@@ -408,7 +420,7 @@ def setgeo(rundata):
     # Storm parameters - Parameterized storm (Holland 1980)
     data.storm_specification_type = 'holland80'
     # data.storm_specification_type = 'data'
-    data.storm_file = (Path() / 'isaac.storm').resolve()
+    data.storm_file = (storm_dir / 'isaac.storm').resolve()
     
     isaac = Storm()
     atcf_path = (Path(__file__).parent / "bal092012.dat").resolve()
@@ -424,12 +436,12 @@ def setgeo(rundata):
         # ASCII
         isaac.file_format = 'NWS12'
         isaac.file_paths = []
-        isaac.file_paths.append((Path() / "isaac.PRE").resolve())
-        isaac.file_paths.append((Path() / "isaac.WIN").resolve())
+        isaac.file_paths.append((storm_dir / "isaac.PRE").resolve())
+        isaac.file_paths.append((storm_dir / "isaac.WIN").resolve())
 
         # NetCDF
         # isaac.file_format = "NWS13"
-        # isaac.file_paths.append((Path() / "isaac.nc").resolve())
+        # isaac.file_paths.append((storm_dir / "isaac.nc").resolve())
         # # For NetCDF we need to set this to the epoch or things do not work yet
         # isaac.time_offset = np.datetime64("1970-01-01")
 
