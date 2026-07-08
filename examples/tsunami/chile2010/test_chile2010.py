@@ -122,10 +122,11 @@ def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
 
     elif variant == "lat_flip":
         import netCDF4  # guaranteed available; test already called importorskip
+        from clawpack.geoclaw.netcdf_utils import suppress_netcdf4_shape_warning
 
         # Write latitude N-to-S (descending) — a common non-standard convention.
         # Flip Z rows so each row still corresponds to the correct latitude.
-        with netCDF4.Dataset(output_path, "w") as out:
+        with netCDF4.Dataset(output_path, "w") as out, suppress_netcdf4_shape_warning():
             out.createDimension("lat", len(topo.y))
             out.createDimension("lon", len(topo.x))
 
@@ -139,9 +140,10 @@ def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
 
     elif variant == "lon_360":
         import netCDF4  # guaranteed available; test already called importorskip
+        from clawpack.geoclaw.netcdf_utils import suppress_netcdf4_shape_warning
 
         # Write longitude in [0, 360] convention instead of [-180, 180].
-        with netCDF4.Dataset(output_path, "w") as out:
+        with netCDF4.Dataset(output_path, "w") as out, suppress_netcdf4_shape_warning():
             out.createDimension("lat", len(topo.y))
             out.createDimension("lon", len(topo.x))
 

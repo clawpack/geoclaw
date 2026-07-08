@@ -35,6 +35,7 @@ FileMetadata, TopoMetadata, MetVariableInfo, MetMetadata
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import warnings
 from pathlib import Path
@@ -108,6 +109,27 @@ def _unit_matches_contract(cf_unit: str, contract_unit: str) -> bool:
     """Return True if *cf_unit* is equivalent to *contract_unit*."""
     aliases = _CONTRACT_UNIT_CF_ALIASES.get(contract_unit, frozenset())
     return cf_unit.strip() in aliases
+
+
+@contextlib.contextmanager
+def suppress_netcdf4_shape_warning():
+    r"""Silence netCDF4-python's spurious NumPy 2.5 shape-assignment warning.
+
+    ``netCDF4.Variable.__setitem__`` reshapes the incoming array in place via
+    ``data.shape = ...`` (see ``netCDF4/_netCDF4.pyx``), which NumPy >= 2.5
+    now deprecates in favor of ``np.reshape``. This is entirely internal to
+    netCDF4-python (as of 1.7.4, the latest release) and not something callers
+    can avoid, so wrap ``var[:] = ...`` assignments in this context manager
+    rather than letting the warning leak into test output. Safe to remove
+    once netCDF4-python ships a fix upstream.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Setting the shape on a NumPy array has been deprecated",
+            category=DeprecationWarning,
+        )
+        yield
 
 
 # ---------------------------------------------------------------------------

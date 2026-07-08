@@ -940,6 +940,7 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
     from datetime import datetime, timedelta
     from cftime import num2date, date2num
     import time
+    from clawpack.geoclaw.netcdf_utils import suppress_netcdf4_shape_warning
     timestr = time.ctime(time.time())  # current time for metadata
 
     fg_times = numpy.array([fg.t for fg in fgout_frames])
@@ -959,7 +960,7 @@ def write_netcdf(fgout_frames, fname_nc='fgout_frames.nc',
     units = {'h':'meters', 'eta':'meters', 'hu':'m^2/s', 'hv':'m^2/s',
              'u':'m/s', 'v':'m/s', 's':'m/s', 'hss':'m^3/s^2', 'B':'meters'}
 
-    with netCDF4.Dataset(fname_nc, 'w') as rootgrp:
+    with netCDF4.Dataset(fname_nc, 'w') as rootgrp, suppress_netcdf4_shape_warning():
 
         rootgrp.description = description
         rootgrp.history = "Created " + timestr
