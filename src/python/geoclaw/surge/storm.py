@@ -222,13 +222,13 @@ class Storm(object):
         self.storm_time_scale = 1.0        # >1 slower storm, <1 faster storm
 
         # Spatial cropping + edge ramping - only applies to data storms.
-        # met_crop_extent = [lon0, lon1, lat0, lat1] restricts the forcing to
+        # crop_extent = [lon0, lon1, lat0, lat1] restricts the forcing to
         # a sub-region read directly from the file (NetCDF: strided read;
         # OWI/ASCII: read full then subset).  ramp_width tapers the wind and
         # pressure forcing to ambient over this many degrees inside the crop
-        # (equivalently the file) edges.  met_crop_extent=None reads the full
+        # (equivalently the file) edges.  crop_extent=None reads the full
         # file extent.
-        self.met_crop_extent = None
+        self.crop_extent = None
         self.ramp_width = 1e0               # 1 degree
 
         # NetCDF met-forcing metadata (populated by read_data for file_format==2)
@@ -963,9 +963,9 @@ class Storm(object):
             # All-zero is the "no crop" sentinel (a valid extent requires
             # lon0<lon1 and lat0<lat1).
             if len(_crop_vals) == 4 and any(v != 0.0 for v in _crop_vals):
-                self.met_crop_extent = _crop_vals
+                self.crop_extent = _crop_vals
             else:
-                self.met_crop_extent = None
+                self.crop_extent = None
             self.storm_time_scale = float(
                                 data_file.readline().partition("#")[0].rstrip())
             data_file.readline()  # "# Format Data Information"
@@ -1362,16 +1362,16 @@ class Storm(object):
             raise TypeError(f"Unknown storm data file format type" +
                             f" '{self.file_format}' provided.")
 
-        # met_crop_extent: write a 4-value crop region or the all-zero "no
+        # crop_extent: write a 4-value crop region or the all-zero "no
         # crop" sentinel (a valid extent requires lon0<lon1 and lat0<lat1).
-        if self.met_crop_extent is None:
+        if self.crop_extent is None:
             crop_str = "0. 0. 0. 0."
         else:
-            if len(self.met_crop_extent) != 4:
+            if len(self.crop_extent) != 4:
                 raise ValueError(
-                    "met_crop_extent must be [lon0, lon1, lat0, lat1], got "
-                    f"{self.met_crop_extent!r}")
-            crop_str = ' '.join(repr(float(v)) for v in self.met_crop_extent)
+                    "crop_extent must be [lon0, lon1, lat0, lat1], got "
+                    f"{self.crop_extent!r}")
+            crop_str = ' '.join(repr(float(v)) for v in self.crop_extent)
 
         with path.open("w") as data_file:
             # Write header
@@ -1422,7 +1422,7 @@ class Storm(object):
                     meta = met_inspector.inspect_met()
 
                 # The spatial crop is carried by the top-level
-                # met_crop_extent line (read by set_storm and applied at file
+                # crop_extent line (read by set_storm and applied at file
                 # read for both formats), so it is intentionally not also
                 # emitted in the NetCDF descriptor's crop_bounds.
                 DescriptorWriter.write_met_descriptor(data_file, meta)

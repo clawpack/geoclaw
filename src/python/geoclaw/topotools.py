@@ -428,6 +428,9 @@ class Topography(object):
         self.topo_type = topo_type
 
         self.unstructured = unstructured
+        # On-file / Fortran missing-data sentinel.  In memory, missing cells
+        # are represented as NaN (see read()); this value is only used when
+        # writing files and is read back from file headers.
         self.no_data_value = -99999
 
         # Data storage for only calculating array shapes when needed
@@ -703,8 +706,8 @@ class Topography(object):
                 import warnings
                 warnings.warn(
                     "topo_type=1 is deprecated. Convert to topo_type=2, 3, or 4:\n"
-                    "  t.read()  # load the type-1 file\n"
-                    "  t.write('output.tt2', topo_type=2)  # save as type 2\n"
+                    "  topo.read()  # load the type-1 file\n"
+                    "  topo.write('output.tt2', topo_type=2)  # save as type 2\n"
                     "Note: topo_type=1 assumes regularly spaced data. Genuinely "
                     "unstructured (scattered) point data must be gridded externally "
                     "(e.g., scipy.interpolate, GMT) before use with GeoClaw.",
@@ -724,9 +727,9 @@ class Topography(object):
                     raise NotImplementedError(
                         "Preprocessing attributes (crop_extent, coarsen, buffer, align, "
                         "shift) are not supported for topo_type=1. Convert to type 2/3/4 first:\n"
-                        "  t_raw = Topography(path=self.path, topo_type=1)\n"
-                        "  t_raw.read()\n"
-                        "  t_raw.write('converted.tt2', topo_type=2)"
+                        "  topo_raw = Topography(path=self.path, topo_type=1)\n"
+                        "  topo_raw.read()\n"
+                        "  topo_raw.write('converted.tt2', topo_type=2)"
                     )
                 data = numpy.loadtxt(self.path)
                 N = [0,0]
@@ -757,9 +760,6 @@ class Topography(object):
                 elif abs(self.topo_type) == 3:
                     # Data is read in starting at the top right corner
                     self._Z = numpy.flipud(numpy.loadtxt(self.path, skiprows=6))
-
-                if mask:
-                    self._Z = numpy.ma.masked_values(self._Z, self.no_data_value, copy=False)
 
             elif abs(self.topo_type) == 4:
                 from clawpack.geoclaw import netcdf_utils as _ncutils
@@ -835,21 +835,13 @@ class Topography(object):
                             _factor = _units_convert(1.0, _canonical, _contract)
                             _z_vals = _z_vals * _factor
 
-                    # Replace decoded fill values (NaN from xarray mask_and_scale)
-                    # with no_data_value so downstream consumers see a consistent
-                    # sentinel, regardless of mask=True/False
-                    _nan_mask = numpy.isnan(_z_vals)
-                    if _nan_mask.any():
-                        _z_vals[_nan_mask] = self.no_data_value
+                    # Decoded fill values are already NaN (from xarray
+                    # mask_and_scale).  NaN is the in-memory missing-data
+                    # representation, so they pass through unchanged.
 
                 self._x = _lon_vals
                 self._y = _lat_vals
                 self._Z = _z_vals
-
-                if mask:
-                    self._Z = numpy.ma.masked_values(
-                        self._Z, self.no_data_value, copy=False
-                    )
 
             elif abs(self.topo_type) == 5:
                 # GeoTIFF
@@ -886,28 +878,31 @@ class Topography(object):
             self._X = None
             self._Y = None
 
-            # Perform region filtering
+            # Normalize missing data to NaN in memory.  The numeric
+            # self.no_data_value is only the on-file/Fortran sentinel (written
+            # back out by write() and read from file headers); in memory
+            # missing cells are NaN so that min/max, arithmetic (e.g. z_shift)
+            # and masking behave consistently across all topo_types.
+            if not isinstance(self._Z, numpy.ma.MaskedArray):
+                self._Z = numpy.where(self._Z == self.no_data_value,
+                                      numpy.nan, self._Z)
+            if mask:
+                self._Z = numpy.ma.masked_invalid(self._Z)
+
+            # Perform region filtering by delegating to crop() so the index
+            # bounds are computed in exactly one place and are inclusive of the
+            # filter_region edges (the previous inline slice dropped the upper
+            # edge row/column).
             if filter_region is not None:
-                # Find indices of region
-                region_index = [None, None, None, None]
-                region_index[0] = (self.x >= filter_region[0]).nonzero()[0][0]
-                region_index[1] = (self.x <= filter_region[1]).nonzero()[0][-1]
-                region_index[2] = (self.y >= filter_region[2]).nonzero()[0][0]
-                region_index[3] = (self.y <= filter_region[3]).nonzero()[0][-1]
-
-                self._x = self._x[region_index[0]:region_index[1]]
-                self._y = self._y[region_index[2]:region_index[3]]
-
-                # Force regeneration of 2d coordinate arrays and extent
-                if self._X is not None or self._Y is not None:
-                    del self._X, self._Y
+                _filtered = self.crop(filter_region=filter_region)
+                if _filtered is not None:
+                    self._x = _filtered._x
+                    self._y = _filtered._y
+                    self._Z = _filtered._Z
                     self._X = None
                     self._Y = None
-                self._extent = None
-
-                # Modify Z array as well
-                self._Z = self._Z[region_index[2]:region_index[3],
-                                  region_index[0]:region_index[1]]
+                    self._extent = None
+                    self._delta = None
 
             # ---------------------------------------------------------------
             # Apply preprocessing attributes in-memory (original file unchanged).
@@ -915,7 +910,7 @@ class Topography(object):
             # and read_topo_settings so neither side needs to write a modified copy.
             # Order:
             #   1. negate_z
-            #   2. z_shift   (guard fill cells)
+            #   2. z_shift   (missing cells are NaN and stay NaN under the shift)
             #   3. x_shift   (shift x array; Fortran shifts xlowtopo/xhitopo)
             #   4+5. crop + coarsen via self.crop() (Fortran: crop+buffer done,
             #        coarsen not yet implemented)
@@ -924,11 +919,8 @@ class Topography(object):
             if self.negate_z:
                 self._Z = -self._Z
             if self.z_shift != 0.0:
-                # Guard fill/missing cells so the sentinel value is preserved.
-                _fill_mask = (self._Z == self.no_data_value)
+                # Missing cells are NaN and remain NaN under the offset.
                 self._Z = self._Z + self.z_shift
-                if _fill_mask.any():
-                    self._Z[_fill_mask] = self.no_data_value
             if self.x_shift != 0.0:
                 self._x = self._x + self.x_shift
                 self._extent = None
@@ -1260,55 +1252,51 @@ class Topography(object):
                 del Z_flipped
 
         elif topo_type == 4:
-            # Write out netCDF4 topography
-            import netCDF4
+            # Write a CF-compliant NetCDF file via xarray, normalized through
+            # netcdf_utils.CFNormalizer so the output matches exactly what the
+            # TopoInspector read path (and the Fortran descriptor) expect:
+            # CF coordinate names (longitude/latitude) with standard_name/axis/
+            # units, and a CF _FillValue rather than a custom no_data_value
+            # attribute.  This is the writer counterpart to read(topo_type=4).
+            import xarray as xr
+            from clawpack.geoclaw.netcdf_utils import CFNormalizer
 
-            with netCDF4.Dataset(path, 'w') as outfile:
-                # Add root attributes
-                outfile.Conventions = "CF-1.6"
-                outfile.title = "Topography Data"
-                outfile.institution = "Unknown"
-                outfile.source = "Unknown"
-                outfile.history = "" # TODO: Add current date here
-                outfile.references = ""
-                outfile.comment = "Created by GeoClaw"
+            elevation = xr.DataArray(
+                Z,
+                dims=("latitude", "longitude"),
+                coords={"latitude": self.y, "longitude": self.x},
+                name="elevation",
+                attrs={
+                    "standard_name": "height_above_reference_ellipsoid",
+                    "long_name": "Elevation relative to sea level",
+                    "units": "m",
+                    "positive": "up",
+                },
+            )
+            ds = xr.Dataset({"elevation": elevation})
+            ds.attrs.update({
+                "Conventions": "CF-1.7",
+                "title": "Topography Data",
+                "institution": "Unknown",
+                "source": "Unknown",
+                "history": "",
+                "references": "",
+                "comment": "Created by GeoClaw",
+            })
 
-                outfile.createDimension("lon", self.x.shape[0])
-                outfile.createDimension("lat", self.y.shape[0])
+            # CFNormalizer adds standard_name/axis/units to the coordinate
+            # variables and resolves fill-value attributes; running it here
+            # guarantees the file is already in normalized form on read.
+            ds = CFNormalizer(ds).normalize()
 
-                lon = outfile.createVariable('lon', 'f8', ('lon',))
-                lon.standard_name = "longitude"
-                lon.long_name = "longitude"
-                lon.units = "degrees_east"
-                lon.axis = "X"
-                lon[:] = self.x
-
-                lat = outfile.createVariable('lat', 'f8', ('lat',))
-                lat.standard_name = "latitude"
-                lat.long_name = "latitude"
-                lat.units = "degrees_north"
-                lat.axis = "Y"
-                lat[:] = self.y
-
-                elevation = outfile.createVariable('elevation', 'f8',
-                    ('lat','lon',))
-                elevation.standard_name  = "height_above_reference_ellipsoid"
-                elevation.long_name  = "Elevation relative to sea level"
-                elevation.units  = "m"
-                elevation.scale_factor  = 1.0
-                elevation.add_offset  = 0.0
-                elevation.sdn_parameter_urn  = "SDN:P01::BATHHGHT"
-                elevation.sdn_parameter_name  = "Sea floor height (above mean sea level) {bathymetric height}"
-                elevation.sdn_uom_urn  = "SDN:P06:ULAA"
-                elevation.sdn_uom_name  = "Metres"
-                elevation.positive = "up"
-                elevation[:, :] = Z  # note this has masked values replaced by fill_value
-
-                elevation.no_data_value = self.no_data_value
+            # Encode the numeric file sentinel as the CF _FillValue so the
+            # reader masks those cells (xarray decodes _FillValue -> NaN).
+            ds.to_netcdf(path,
+                         encoding={"elevation": {"_FillValue": no_data_value}})
 
 
         else:
-            raise NotImplemented("Output type %s not implemented." % topo_type)
+            raise NotImplementedError("Output type %s not implemented." % topo_type)
 
 
     def plot(self, axes=None, contour_levels=None, contour_kwargs={},
@@ -1373,9 +1361,9 @@ class Topography(object):
 
         if limits is None:
             if self.unstructured:
-                topo_extent = (numpy.min(self.z), numpy.max(self.z))
+                topo_extent = (numpy.nanmin(self.z), numpy.nanmax(self.z))
             else:
-                topo_extent = (numpy.min(self.Z), numpy.max(self.Z))
+                topo_extent = (numpy.nanmin(self.Z), numpy.nanmax(self.Z))
         else:
             topo_extent = limits
 
@@ -1561,8 +1549,11 @@ class Topography(object):
                 extent_mask = numpy.logical_or(extent_mask,extent[2] > y_fill)
                 extent_mask = numpy.logical_or(extent_mask,extent[3] < y_fill)
 
-                # Create fill no-data value mask
-                no_data_mask = numpy.logical_or(extent_mask, z_fill == no_data_value)
+                # Create fill no-data value mask (missing cells are NaN in
+                # memory; also honor an explicit numeric no_data_value).
+                no_data_mask = numpy.logical_or(
+                    extent_mask,
+                    numpy.logical_or(numpy.isnan(z_fill), z_fill == no_data_value))
 
                 all_mask = numpy.logical_or(extent_mask, no_data_mask)
 
@@ -1598,8 +1589,11 @@ class Topography(object):
                 extent_mask = numpy.logical_or(extent_mask,extent[2] > Y_fill)
                 extent_mask = numpy.logical_or(extent_mask,extent[3] < Y_fill)
 
-                # Create fill no-data value mask
-                no_data_mask = numpy.logical_or(extent_mask, Z_fill == no_data_value)
+                # Create fill no-data value mask (missing cells are NaN in
+                # memory; also honor an explicit numeric no_data_value).
+                no_data_mask = numpy.logical_or(
+                    extent_mask,
+                    numpy.logical_or(numpy.isnan(Z_fill), Z_fill == no_data_value))
 
                 all_mask = numpy.logical_or(extent_mask, no_data_mask)
 
@@ -1653,7 +1647,7 @@ class Topography(object):
            configuration.
 
         """
-        raise NotImplemented("This function is not quite working yet, please "+\
+        raise NotImplementedError("This function is not quite working yet, please "+\
                              "try again later")
 
         TOLERANCE = 1e-6
@@ -1737,8 +1731,10 @@ class Topography(object):
                average of nearest neighbors.
 
         """
-        raise NotImplemented("This functionality has not been added yet.")
-        no_data_value_indices = (self.Z == self.no_data_value).nonzero()
+        raise NotImplementedError("This functionality has not been added yet.")
+        # Missing cells are NaN in memory (the numeric no_data_value is only
+        # the on-file sentinel).
+        no_data_value_indices = numpy.isnan(self.Z).nonzero()
         self.replace_values(no_data_value_indices, method=method)
 
         # nrows= shape(Z)[0]
@@ -1850,7 +1846,7 @@ class Topography(object):
         """
 
         if self.unstructured:
-            raise NotImplemented("*** Cannot currently crop unstructured topo")
+            raise NotImplementedError("*** Cannot currently crop unstructured topo")
 
         if filter_region is None:
             # only want to coarsen, so this is entire region:

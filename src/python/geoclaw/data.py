@@ -245,11 +245,11 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 if len(entry) == 3:
                     from clawpack.geoclaw.netcdf_utils import TopoMetadata
                     if isinstance(entry[2], TopoMetadata):
-                        t = Topography()
-                        t.topo_type = int(entry[0])
-                        t.path = str(entry[1])
-                        t._netcdf_meta = entry[2]
-                        result.append(t)
+                        topo = Topography()
+                        topo.topo_type = int(entry[0])
+                        topo.path = str(entry[1])
+                        topo._netcdf_meta = entry[2]
+                        result.append(topo)
                         continue
 
                 # [topo_type, path] — legacy deprecated format
@@ -260,10 +260,10 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                         "rundata.topo_data.topofiles instead.",
                         DeprecationWarning, stacklevel=3,
                     )
-                    t = Topography()
-                    t.topo_type = int(entry[0])
-                    t.path = str(entry[1])
-                    result.append(t)
+                    topo = Topography()
+                    topo.topo_type = int(entry[0])
+                    topo.path = str(entry[1])
+                    result.append(topo)
                     continue
 
             if isinstance(entry, dict):
@@ -273,19 +273,19 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     "Note: dict key 'extent' maps to Topography.crop_extent.",
                     DeprecationWarning, stacklevel=3,
                 )
-                t = Topography()
-                t.path = entry.get('topo_path', None)
+                topo = Topography()
+                topo.path = entry.get('topo_path', None)
                 raw_type = entry.get('topo_type', None)
                 if raw_type is not None:
-                    t.topo_type = int(raw_type)
+                    topo.topo_type = int(raw_type)
                 # 'extent' in the dict spec maps to 'crop_extent' on Topography
                 if 'extent' in entry:
-                    t.crop_extent = entry['extent']
+                    topo.crop_extent = entry['extent']
                 for attr in ('crop_extent', 'coarsen', 'buffer', 'align',
                              'x_shift', 'z_shift', 'negate_z'):
                     if attr in entry:
-                        setattr(t, attr, entry[attr])
-                result.append(t)
+                        setattr(topo, attr, entry[attr])
+                result.append(topo)
                 continue
 
             raise ValueError(
@@ -316,16 +316,16 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         if self.override_order:
             return list(topos)
 
-        def _cell_area(t):
-            if t.path is None:
+        def _cell_area(topo):
+            if topo.path is None:
                 return float('inf')
-            if t._x is None:
+            if topo._x is None:
                 try:
-                    t.read_header()
+                    topo.read_header()
                 except Exception:
                     return float('inf')
             try:
-                dx, dy = t.delta
+                dx, dy = topo.delta
                 return float(dx) * float(dy)
             except Exception:
                 return float('inf')
@@ -343,30 +343,30 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             topos = self._normalize_topofiles()
             topos = self._compute_priority_order(topos)
             self.data_write(value=len(topos), alt_name='ntopofiles')
-            for t in topos:
+            for topo in topos:
                 # Resolve path relative to out_file's directory, same as before
                 fname = os.path.abspath(
-                    os.path.join(os.path.dirname(out_file), t.path))
+                    os.path.join(os.path.dirname(out_file), topo.path))
 
                 f = self._out_file
                 f.write(f"\n'{fname}'   # topo_path\n")
-                f.write(f"{t.topo_type:3d}   # topo_type\n")
-                _write_preprocessing_block(f, t)
+                f.write(f"{topo.topo_type:3d}   # topo_type\n")
+                _write_preprocessing_block(f, topo)
 
                 # For NetCDF (type 4): write the CF descriptor block that
                 # Fortran's read_netcdf_descriptor parses (key=value lines
                 # terminated by a blank line).  Uses inspect() rather than
                 # inspect_topo() to avoid an expensive full-file fill scan.
-                if abs(t.topo_type) == 4:
+                if abs(topo.topo_type) == 4:
                     import dataclasses
                     from clawpack.geoclaw import netcdf_utils as _ncutils
-                    if getattr(t, '_netcdf_meta', None) is not None:
+                    if getattr(topo, '_netcdf_meta', None) is not None:
                         # Pre-computed metadata from topo_entries() — already has
                         # correct lon_offset and file-coordinate crop_bounds.
-                        _meta = t._netcdf_meta
+                        _meta = topo._netcdf_meta
                     else:
-                        _crop = (tuple(t.crop_extent)
-                                 if t.crop_extent is not None else None)
+                        _crop = (tuple(topo.crop_extent)
+                                 if topo.crop_extent is not None else None)
                         with _ncutils.TopoInspector(
                             fname, crop_bounds=_crop
                         ) as _insp:

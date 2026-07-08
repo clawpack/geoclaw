@@ -88,6 +88,44 @@ def test_read_write_topo_bowl(tmp_path, topo_type):
 
 
 @pytest.mark.python
+@pytest.mark.parametrize("topo_type, ext", [(2, "tt2"), (3, "tt3"), (4, "nc")])
+def test_no_data_value_nan_roundtrip(tmp_path, topo_type, ext):
+    """Missing data is NaN in memory and round-trips through the numeric
+    on-file sentinel.
+
+    A missing cell is written as the numeric ``no_data_value`` (ASCII header /
+    NetCDF ``_FillValue``) and read back as NaN; no numeric sentinel should
+    leak into the in-memory array.
+    """
+    if topo_type == 4:
+        pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.linspace(-2.0, 2.0, 5)
+    topo.y = np.linspace(1.0, 3.0, 3)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    Z = (X + Y).astype(float)
+    Z[1, 2] = np.nan       # one missing cell
+    topo.Z = Z
+
+    path = tmp_path / f"missing.{ext}"
+    topo.write(path, topo_type=topo_type, Z_format="%22.15e")
+
+    if topo_type in (2, 3):
+        assert str(int(topo.no_data_value)) in path.read_text(), \
+            "Numeric no_data_value sentinel not written to ASCII file."
+
+    topo_in = topotools.Topography(path)
+    topo_in.read()
+
+    assert np.isnan(topo_in.Z[1, 2]), "Missing cell did not round-trip to NaN."
+    assert not np.any(topo_in.Z == topo_in.no_data_value), \
+        "Numeric sentinel leaked into the in-memory array."
+    assert np.allclose(topo_in.Z[~np.isnan(topo_in.Z)], Z[~np.isnan(Z)]), \
+        "Non-missing values changed across the round-trip."
+
+
+@pytest.mark.python
 def test_crop_topo_bowl():
     """
     Test cropping a topo file.
@@ -353,7 +391,7 @@ def plot_unstructured_topo_baseline(output_dir):
     axes.set_title("True Field")
 
     axes = fig.add_subplot(1, 3, 2)
-    topo.plot(axes=axes, region_extent=[0, 1, 0, 1])
+    topo.plot(axes=axes)
     axes.set_title("Unstructured Field")
 
     axes = fig.add_subplot(1, 3, 3)

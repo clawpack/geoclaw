@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -223,7 +224,7 @@ def _read_owi_all_timesteps(pre_path: Path, win_path: Path):
 
 
 def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
-                       met_crop_extent=None) -> Path:
+                       crop_extent=None) -> Path:
     """Generate a NetCDF met-forcing file from the committed OWI Isaac files.
 
     Reads all time steps from ``isaac.PRE`` and ``isaac.WIN`` using minimal
@@ -285,7 +286,7 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
 
     isaac = Storm()
     isaac.time_offset = time_offset
-    isaac.met_crop_extent = met_crop_extent
+    isaac.crop_extent = crop_extent
 
     if fmt == "netcdf_era5":
         nc_path = tmp_path / "isaac_era5.nc"
@@ -496,11 +497,32 @@ def _check_data_storm_descriptor(generated_path: Path, regression_path: Path) ->
     assert generated.file_format == regression.file_format
     assert len(generated.file_paths) == len(regression.file_paths)
     np.testing.assert_allclose(generated.scaling, regression.scaling)
-    assert generated.met_crop_extent == regression.met_crop_extent
+    assert generated.crop_extent == regression.crop_extent
     np.testing.assert_allclose(generated.ramp_width, regression.ramp_width)
     assert [path.name for path in generated.file_paths] == [
         path.name for path in regression.file_paths
     ]
+
+
+@pytest.fixture(scope="module")
+def isaac_xgeoclaw(tmp_path_factory):
+    """Build ``xgeoclaw`` once for the whole module.
+
+    Every Isaac test runs the identical executable -- the storm-input mode
+    (holland80 / owi_ascii / netcdf / time-scale / crop) is a runtime data
+    choice, not a compile-time one -- so a single ``make new`` serves them all
+    and avoids the redundant ~6 s rebuilds the per-test ``build_executable``
+    calls used to incur.
+    """
+    build_dir = tmp_path_factory.mktemp("isaac_build")
+    builder = test.GeoClawTestRunner(build_dir, test_path=Path(__file__).parent)
+    builder.build_executable()
+    return build_dir / builder.executable_name
+
+
+def _install_executable(runner, prebuilt: Path) -> None:
+    """Place the shared prebuilt executable where ``run_code`` expects it."""
+    shutil.copy(prebuilt, runner.temp_path / runner.executable_name)
 
 
 @pytest.mark.regression
@@ -515,13 +537,10 @@ def _check_data_storm_descriptor(generated_path: Path, regression_path: Path) ->
             "netcdf_era5",
             marks=[pytest.mark.netcdf],
         ),
-        pytest.param(
-            "netcdf_nws13",
-            marks=[pytest.mark.netcdf],
-        ),
     ],
 )
-def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save: bool) -> None:
+def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save: bool,
+               isaac_xgeoclaw: Path) -> None:
     """Regression test for Isaac storm surge using several storm-input modes.
 
     The ``netcdf_era5`` and ``netcdf_nws13`` variants generate NetCDF met-
@@ -614,7 +633,7 @@ def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save
     # _check_netcdf_storm_descriptor; no committed regression .storm file.
 
     # Run geoclaw
-    runner.build_executable()
+    _install_executable(runner, isaac_xgeoclaw)
     runner.run_code()
 
     # Gauge checks.
@@ -632,8 +651,24 @@ def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save
 
 @pytest.mark.storm
 @pytest.mark.netcdf
-def test_isaac_netcdf_crop(tmp_path: Path) -> None:
-    """met_crop_extent restricts the forcing to the cropped sub-region.
+def test_isaac_nws13_descriptor(tmp_path: Path) -> None:
+    """NWS13-style NetCDF (non-standard var/dim names) yields a valid descriptor.
+
+    The NWS13 file differs from the ERA5 file only in variable/dimension
+    naming (``uwnd``/``vwnd``/``press``, ``time``/``lat``/``lon``).  That name
+    discovery is unit-tested in ``tests/netcdf/test_met_inspector.py``, and the
+    end-to-end gauge match for the NetCDF Fortran read path is covered by the
+    ``test_isaac[netcdf_era5]`` variant (identical reader path).  So this stops
+    at descriptor validation rather than rebuilding and rerunning GeoClaw.
+    """
+    storm_path = _make_isaac_netcdf("netcdf_nws13", tmp_path, Path(__file__).parent)
+    _check_netcdf_storm_descriptor(storm_path, "netcdf_nws13")
+
+
+@pytest.mark.storm
+@pytest.mark.netcdf
+def test_isaac_netcdf_crop(tmp_path: Path, isaac_xgeoclaw: Path) -> None:
+    """crop_extent restricts the forcing to the cropped sub-region.
 
     The met file is cropped to the southern Gulf (lat 8-15), well south of
     both Isaac gauges (lat ~29).  With the forcing cropped out at the gauges,
@@ -650,14 +685,18 @@ def test_isaac_netcdf_crop(tmp_path: Path) -> None:
     runner.set_data()
     runner.rundata.amrdata.amr_levels_max = 2
     # Short run: the crop's effect at the gauges is time-independent (forcing
-    # there is always ambient), so a brief integration suffices.
+    # there is always ambient), so a brief integration suffices.  Use the same
+    # half-day window as the test_isaac variants (the default setrun window is
+    # 3.5 days, ~7x longer, with no added coverage here).
+    runner.rundata.clawdata.t0 = days2seconds(-1)
+    runner.rundata.clawdata.tfinal = days2seconds(-0.5)
     runner.rundata.clawdata.num_output_times = 1
 
     surge_data = runner.rundata.surge_data
     # Crop to the southern Gulf, excluding both gauges (lat ~29).
     surge_data.storm_file = _make_isaac_netcdf(
         "netcdf_era5", tmp_path, example_dir,
-        met_crop_extent=[-99.0, -70.0, 8.0, 15.0],
+        crop_extent=[-99.0, -70.0, 8.0, 15.0],
     )
     surge_data.storm_specification_type = "data"
 
@@ -666,7 +705,7 @@ def test_isaac_netcdf_crop(tmp_path: Path) -> None:
            "8.0" in surge_data.storm_file.read_text()
 
     runner.write_data()
-    runner.build_executable()
+    _install_executable(runner, isaac_xgeoclaw)
     runner.run_code()
 
     for gauge_id in (1, 2):
@@ -682,7 +721,8 @@ def test_isaac_netcdf_crop(tmp_path: Path) -> None:
 
 
 @pytest.mark.storm
-def test_isaac_model_storm_time_scale(tmp_path: Path) -> None:
+def test_isaac_model_storm_time_scale(tmp_path: Path,
+                                      isaac_xgeoclaw: Path) -> None:
     """storm_time_scale changes the model-storm (Holland) forcing.
 
     Slowing the storm 4x (storm_time_scale=4.0) shifts the eye position at
@@ -713,7 +753,7 @@ def test_isaac_model_storm_time_scale(tmp_path: Path) -> None:
     runner.write_data()
     assert "storm_time_scale" in (runner.temp_path / "surge.data").read_text()
 
-    runner.build_executable()
+    _install_executable(runner, isaac_xgeoclaw)
     runner.run_code()
 
     scaled = gauges.GaugeSolution(1, path=runner.temp_path)

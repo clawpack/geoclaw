@@ -399,7 +399,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
     storm_path = tmp_path / "test.storm"
     data_storm = storm.Storm()
     data_storm.time_offset = np.datetime64("2012-08-29")
-    data_storm.met_crop_extent = [-100.0, -60.0, 10.0, 40.0]
+    data_storm.crop_extent = [-100.0, -60.0, 10.0, 40.0]
     data_storm.ramp_width = 3
 
     if file_format == "ascii":
@@ -482,7 +482,7 @@ def test_data_storm_roundtrip(file_format, tmp_path):
 
     assert data_storm.time_offset == read_storm.time_offset
     assert data_storm.file_format in DATA_FILE_FORMAT_MAP[read_storm.file_format]
-    assert data_storm.met_crop_extent == read_storm.met_crop_extent
+    assert data_storm.crop_extent == read_storm.crop_extent
     assert data_storm.ramp_width == read_storm.ramp_width
     assert data_storm.storm_time_scale == read_storm.storm_time_scale
     assert len(data_storm.file_paths) == len(read_storm.file_paths)

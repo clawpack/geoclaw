@@ -226,20 +226,24 @@ def test_preprocessing_negate_z_inverts_sign(tt2_path):
 
 
 def test_preprocessing_z_shift_offsets_valid_cells(tt2_path_with_missing):
-    """z_shift preserves the missing-value sentinel; only real cells are shifted."""
+    """z_shift shifts only real cells; missing cells are NaN in memory and stay
+    NaN under the offset (the numeric sentinel is only used on file)."""
     t = Topography()
     t.z_shift = 5.0
     t.no_data_value = _TOPO_MISSING
     t.read(tt2_path_with_missing, topo_type=2)
 
     Z_expected = _analytic_Z() + 5.0
-    Z_expected[5, 5] = _TOPO_MISSING  # sentinel must not be shifted
 
-    # Check all non-missing cells
-    mask = (_analytic_Z() != _TOPO_MISSING)
-    np.testing.assert_allclose(t.Z[mask], Z_expected[mask], rtol=1e-12)
-    # Check the missing cell explicitly
-    assert t.Z[5, 5] == _TOPO_MISSING
+    # Non-missing cells (everything but the injected missing cell at [5, 5])
+    # are shifted by z_shift.
+    real = np.ones(t.Z.shape, dtype=bool)
+    real[5, 5] = False
+    np.testing.assert_allclose(t.Z[real], Z_expected[real], rtol=1e-12)
+    # The missing cell is NaN in memory: not shifted, and the numeric sentinel
+    # does not leak into the array.
+    assert np.isnan(t.Z[5, 5])
+    assert not np.any(t.Z == _TOPO_MISSING)
 
 
 def test_preprocessing_z_shift_negative(tt2_path):

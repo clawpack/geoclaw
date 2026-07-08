@@ -183,31 +183,28 @@ def test_subdivided_plane_fault_make_dtopo():
 
 @pytest.mark.python
 @pytest.mark.parametrize(
-    "filename, dtopo_type, atol",
+    "filename, dtopo_type",
     [
-        ("alaska1964.tt1", 1, 5e-4),
-        ("alaska1964.tt3", 3, 1e-10),
+        ("alaska1964.tt1", 1),
+        ("alaska1964.tt3", 3),
     ],
 )
-@pytest.mark.xfail(
-    reason="DTopography round-trip currently changes values by about 5e-4 for both tt1 and tt3; investigate write/read precision handling."
-)
-def test_dtopo_io(tmp_path, filename, dtopo_type, atol):
+def test_dtopo_io(tmp_path, filename, dtopo_type):
+    # Written with full floating-point precision, the write/read round-trip is
+    # exact; any loss seen with the default ``dZ_format="%.3f"`` is text-format
+    # rounding (~5e-4), not a defect in the reader/writer.
     test_data_path = data_dir / "alaska1964_test_data.tt3"
     test_dtopo = dtopotools.DTopography(path=test_data_path)
     test_dtopo.read(path=test_data_path, dtopo_type=3)
 
     path = tmp_path / filename
-    test_dtopo.write(path, dtopo_type=dtopo_type)
+    test_dtopo.write(path, dtopo_type=dtopo_type, dZ_format="%.12e")
 
     dtopo = dtopotools.DTopography()
     dtopo.read(path=path, dtopo_type=dtopo_type)
 
-    max_diff = np.max(np.abs(test_dtopo.dZ - dtopo.dZ))
-    print(f"filename: {filename}, dtopo_type: {dtopo_type}, max_diff: {max_diff}")
-
     assert test_dtopo.dZ.shape == dtopo.dZ.shape
-    assert np.allclose(test_dtopo.dZ, dtopo.dZ, atol=atol, rtol=0.0)
+    assert np.allclose(test_dtopo.dZ, dtopo.dZ, atol=1e-10, rtol=0.0)
 
 
 def _make_synthetic_dtopo():
