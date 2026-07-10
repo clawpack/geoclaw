@@ -133,6 +133,7 @@ def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
             latitudes = out.createVariable("lat", "f8", ("lat",))
             longitudes = out.createVariable("lon", "f8", ("lon",))
             elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+            elevations.units = "m"
 
             latitudes[:] = topo.y[::-1]      # descending: N → S
             longitudes[:] = topo.x
@@ -150,6 +151,7 @@ def _write_netcdf_variant(topo, variant, output_path, crop_bounds=None):
             latitudes = out.createVariable("lat", "f8", ("lat",))
             longitudes = out.createVariable("lon", "f8", ("lon",))
             elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+            elevations.units = "m"
 
             latitudes[:] = topo.y
             longitudes[:] = topo.x % 360    # map [-180, 180] → [0, 360]

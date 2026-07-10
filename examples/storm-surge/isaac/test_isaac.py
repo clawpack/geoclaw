@@ -325,10 +325,10 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
 
     elif fmt == "netcdf_nws13":
         nc_path = tmp_path / "isaac_nws13.nc"
-        # NWS13 file: same Pa pressure (Fortran no-conversion path),
-        # NWS13 variable names.  The "mb" units attribute in
-        # create_nws13_storm_file is overridden by passing Pa values;
-        # the Fortran uses only the variable name, not the units attribute.
+        # NWS13 file with NWS13 variable names, in contract units: we pass the
+        # Pa-converted pressure, which create_nws13_storm_file now labels with
+        # the required 'Pa' units attribute (the inspector rejects non-contract
+        # units rather than converting).
         create_nws13_storm_file(
             nc_path,
             pressure_fields=pressure_pa,

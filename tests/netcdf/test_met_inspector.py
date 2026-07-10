@@ -128,39 +128,47 @@ def test_non_singleton_ensemble_dim_raises(met_file_factory):
 @pytest.mark.parametrize("unit_cfg", PRESSURE_UNIT_VARIANTS)
 def test_pressure_unit_variants(met_file_factory, unit_cfg):
     """
-    Pressure unit recorded in MetVariableInfo.source_units matches the unit
-    string in the file.  Conversion-needed cases emit a warning; Pa passes
-    silently.
+    Pressure in the contract unit (Pa) passes and is recorded in
+    source_units; any non-contract unit (hPa, mbar) is rejected rather than
+    silently misread, since the read path does not convert.
     """
     pressure_units = unit_cfg["pressure_units"]
     expected_source = unit_cfg["expected_source"]
 
     path = met_file_factory(pressure_units=pressure_units)
-    with MetInspector(path, variable_map=_VAR_MAP) as insp:
-        meta = insp.inspect_met()
-
-    pressure_info = next(v for v in meta.variables if v.geoclaw_role == "pressure")
-    assert pressure_info.source_units == expected_source, (
-        f"For pressure_units={pressure_units!r}: expected source_units="
-        f"{expected_source!r}, got {pressure_info.source_units!r}"
-    )
+    if pressure_units == "Pa":
+        with MetInspector(path, variable_map=_VAR_MAP) as insp:
+            meta = insp.inspect_met()
+        pressure_info = next(v for v in meta.variables
+                             if v.geoclaw_role == "pressure")
+        assert pressure_info.source_units == expected_source
+    else:
+        with MetInspector(path, variable_map=_VAR_MAP) as insp:
+            with pytest.raises(ValueError, match=pressure_units):
+                insp.inspect_met()
 
 
 @pytest.mark.parametrize("unit_cfg", WIND_UNIT_VARIANTS)
 def test_wind_unit_variants(met_file_factory, unit_cfg):
     """
-    Wind unit recorded in MetVariableInfo.source_units matches the unit
-    string in the file.  knots triggers a warning; m/s passes silently.
+    Wind in the contract unit (m/s) passes and is recorded in source_units;
+    a non-contract unit (knots) is rejected rather than silently misread,
+    since the read path does not convert.
     """
     wind_units = unit_cfg["wind_units"]
     expected_source = unit_cfg["expected_source"]
 
     path = met_file_factory(wind_units=wind_units)
-    with MetInspector(path, variable_map=_VAR_MAP) as insp:
-        meta = insp.inspect_met()
-
-    wind_u_info = next(v for v in meta.variables if v.geoclaw_role == "wind_u")
-    assert wind_u_info.source_units == expected_source
+    if wind_units == "m/s":
+        with MetInspector(path, variable_map=_VAR_MAP) as insp:
+            meta = insp.inspect_met()
+        wind_u_info = next(v for v in meta.variables
+                           if v.geoclaw_role == "wind_u")
+        assert wind_u_info.source_units == expected_source
+    else:
+        with MetInspector(path, variable_map=_VAR_MAP) as insp:
+            with pytest.raises(ValueError, match="m/s|" + wind_units):
+                insp.inspect_met()
 
 
 def test_contract_units_no_warning(met_file_factory):
@@ -180,6 +188,29 @@ def test_unrecognised_pressure_unit_raises(met_file_factory):
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
         with pytest.raises(ValueError, match="[Uu]nrecogni"):
             insp.inspect_met()
+
+
+def test_missing_units_raises(met_file_factory):
+    """A forcing variable with no units attribute raises -- units are required
+    and never silently assumed."""
+    path = met_file_factory(wind_units="", pressure_units="")
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        with pytest.raises(ValueError, match="no 'units'"):
+            insp.inspect_met()
+
+
+def test_missing_units_assume_units_opt_in(met_file_factory):
+    """The explicit assume_units escape hatch assumes each variable's contract
+    unit for a unitless file, without raising or warning."""
+    path = met_file_factory(wind_units="", pressure_units="")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with MetInspector(path, variable_map=_VAR_MAP,
+                          assume_units=True) as insp:
+            meta = insp.inspect_met()
+    roles = {v.geoclaw_role: v.source_units for v in meta.variables}
+    assert roles["pressure"] == "Pa"
+    assert roles["wind_u"] == "m/s"
 
 
 # ============================================================
@@ -214,6 +245,19 @@ def test_time_offset_custom_reference(met_file_factory):
     assert meta.time_offset == pytest.approx(0.0, abs=1.0), (
         f"Expected time_offset≈0, got {meta.time_offset}"
     )
+
+
+def test_numeric_time_axis_raises(tmp_path):
+    """A bare numeric met time axis (a duration with no 'since' reference) is
+    rejected rather than silently interpreted as nanoseconds by pd.Timestamp."""
+    ds = make_met_dataset()
+    ds = ds.assign_coords(time=np.array([0.0, 6.0, 12.0]))
+    ds["time"].attrs["units"] = "hours"
+    path = tmp_path / "met_numeric_time.nc"
+    ds.to_netcdf(path)
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        with pytest.raises(ValueError, match="absolute time reference"):
+            insp.inspect_met()
 
 
 # ============================================================

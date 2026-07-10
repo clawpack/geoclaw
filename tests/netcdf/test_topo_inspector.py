@@ -90,19 +90,16 @@ def test_units_meters_passes_without_warning(topo_file_factory):
     assert meta.source_units in {"m", "meter", "meters", "metre", "metres"}
 
 
-def test_units_convertible_warns_and_records_source(topo_file_factory):
+def test_units_convertible_raises(topo_file_factory):
     """
-    A variable with units convertible to meters (e.g. 'cm') triggers a
-    UserWarning and records the original unit string in source_units so
-    that a downstream conversion factor can be applied.
+    A recognised but non-meter unit (e.g. 'cm') is rejected, not silently
+    misread: the read paths do not convert, so the file must be pre-converted
+    to meters.  (Unit mixing must never be silently assumed.)
     """
     path = topo_file_factory(units="cm")
-    with pytest.warns(UserWarning, match="cm"):
-        with TopoInspector(path, var_name="z") as insp:
-            meta = insp.inspect_topo()
-    assert meta.source_units == "cm", (
-        f"Expected source_units='cm', got {meta.source_units!r}"
-    )
+    with TopoInspector(path, var_name="z") as insp:
+        with pytest.raises(ValueError, match="cm"):
+            insp.inspect_topo()
 
 
 def test_units_unrecognised_raises(topo_file_factory):
@@ -115,18 +112,28 @@ def test_units_unrecognised_raises(topo_file_factory):
             insp.inspect_topo()
 
 
-def test_units_missing_warns_and_assumes_meters(topo_file_factory):
+def test_units_missing_raises(topo_file_factory):
     """
-    A variable with no units attribute emits a UserWarning and assumes 'm'.
-    The inspection itself must not raise.
+    A variable with no units attribute raises ValueError -- units are required
+    and never silently assumed to be meters.
     """
     path = topo_file_factory(units="")   # empty string → no 'units' attr written
-    with pytest.warns(UserWarning):
-        with TopoInspector(path, var_name="z") as insp:
+    with TopoInspector(path, var_name="z") as insp:
+        with pytest.raises(ValueError, match="no 'units'"):
+            insp.inspect_topo()
+
+
+def test_units_missing_assume_units_opt_in(topo_file_factory):
+    """
+    The explicit assume_units escape hatch lets a caller declare the unit for
+    a file that has no units attribute, without raising.
+    """
+    path = topo_file_factory(units="")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")   # opt-in must be silent, not warn
+        with TopoInspector(path, var_name="z", assume_units="m") as insp:
             meta = insp.inspect_topo()
-    assert meta.source_units == "m", (
-        f"Expected assumed source_units='m', got {meta.source_units!r}"
-    )
+    assert meta.source_units == "m"
 
 
 # ============================================================

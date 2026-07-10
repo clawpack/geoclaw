@@ -213,6 +213,32 @@ def test_netcdf(tmp_path):
         pytest.skip("NetCDF topography test skipped due to runtime failure.")
 
 
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_netcdf_z_dtype_override(tmp_path):
+    r"""z_dtype defaults to float32 on disk; 'float64' overrides it."""
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography(topo_func=topo_bowl)
+    topo.x = np.linspace(-1.0, 1.0, 8)
+    topo.y = np.linspace(-1.0, 1.0, 6)
+    _ = topo.Z   # realize Z
+
+    default_path = tmp_path / "default.nc"
+    topo.write(default_path, topo_type=4)
+    with netCDF4.Dataset(default_path) as nc:
+        assert nc.variables["elevation"].dtype == np.dtype("float32")
+
+    f64_path = tmp_path / "f64.nc"
+    topo.write(f64_path, topo_type=4, z_dtype="float64")
+    with netCDF4.Dataset(f64_path) as nc:
+        assert nc.variables["elevation"].dtype == np.dtype("float64")
+
+    back = topotools.Topography(path=f64_path)
+    back.read()
+    assert np.allclose(back.Z, topo.Z)
+
+
 # Remote/network integration test: keep opt-in and out of the default suite.
 @pytest.mark.python
 @pytest.mark.remote

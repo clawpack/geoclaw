@@ -676,7 +676,16 @@ class Topography(object):
          - *stride* (list) - List of strides for the x and y dimensions
            respectively.  Default is *[1, 1]*.  Note that this is only
            implemented for NetCDF reading currently.
-         - *nc_params* (dict) -
+         - *nc_params* (dict) - options for NetCDF (`topo_type=4`) reading:
+
+             - `z_var` (str): name of the elevation variable, if it cannot be
+               auto-detected by CF `standard_name` or common names.
+             - `assume_units` (str): unit to assume for the elevation variable
+               when the file has **no** `units` attribute (e.g. `"m"`).  Units
+               are otherwise required and never silently assumed: a file whose
+               elevation variable lacks `units`, or whose units are not meters,
+               raises `ValueError` (GeoClaw does not convert on read; pre-
+               convert non-meter data to meters first).
 
         The first three might have already been set when instatiating object.
 
@@ -811,9 +820,12 @@ class Topography(object):
                 # Allow explicit variable name override via nc_params (backward
                 # compat with old 'z_var' key).
                 _var_hint: str | None = nc_params.get('z_var', None)
+                # Opt-in escape hatch for a file with no 'units' attribute;
+                # units are otherwise required, never silently assumed.
+                _assume_units: str | None = nc_params.get('assume_units', None)
 
                 with _ncutils.TopoInspector(
-                    self.path, var_name=_var_hint
+                    self.path, var_name=_var_hint, assume_units=_assume_units
                 ) as inspector:
                     # Auto-detect elevation variable if not provided
                     if inspector.var_name is None:
@@ -1145,7 +1157,8 @@ class Topography(object):
         return num_cells
 
     def write(self, path, topo_type=None, no_data_value=None, fill_value=None,
-                header_style='geoclaw', Z_format="%15.7e", grid_registration=None):
+                header_style='geoclaw', Z_format="%15.7e", grid_registration=None,
+                z_dtype="float32"):
         r"""Write out a topography file to path of type *topo_type*.
 
         Writes out a topography file of topo type specified with *topo_type* or
@@ -1179,6 +1192,13 @@ class Topography(object):
            with `Z_format = "%7i"`, for example.
          - *grid_registration* (str) - 'lower', 'llcorner', 'llcenter'
                 or None for defaults described above.
+         - *z_dtype* (str) - on-disk dtype of the elevation variable when
+                writing NetCDF (`topo_type=4`).  Default `"float32"`, which
+                still gives sub-millimeter precision for Earth topography
+                (abs(Z) < 10000 m) while halving file size; pass `"float64"`
+                for full double precision.  Ignored for ASCII topo types.
+                The elevation is always written with a CF `units = "m"`
+                attribute (GeoClaw requires meters; see :ref:`topo_netcdf`).
 
         """
 
@@ -1347,14 +1367,15 @@ class Topography(object):
 
             # Encode the numeric file sentinel as the CF _FillValue so the
             # reader masks those cells (xarray decodes _FillValue -> NaN).
-            # elevation is stored as float32 on disk by default: topo values
-            # are well under 10,000 m, so this still gives sub-millimeter
-            # precision while halving file size.  Coordinate variables must
-            # not carry xarray's default NaN _FillValue (nonsensical for a
-            # monotonic axis), so it's explicitly cleared for those too.
+            # elevation is stored as *z_dtype* (float32 by default): topo values
+            # are well under 10,000 m, so float32 still gives sub-millimeter
+            # precision while halving file size; pass z_dtype='float64' for full
+            # precision.  Coordinate variables must not carry xarray's default
+            # NaN _FillValue (nonsensical for a monotonic axis), so it's
+            # explicitly cleared for those too.
             coord_names = [name for name in ds.coords if name != "elevation"]
             encoding = {"elevation": {"_FillValue": no_data_value,
-                                       "dtype": "float32"}}
+                                       "dtype": z_dtype}}
             encoding.update({name: {"_FillValue": None}
                              for name in coord_names})
             ds.to_netcdf(path, encoding=encoding)

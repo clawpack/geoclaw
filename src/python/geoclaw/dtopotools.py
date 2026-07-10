@@ -275,7 +275,7 @@ class DTopography(object):
     """
 
 
-    def __init__(self, path=None, dtopo_type=None):
+    def __init__(self, path=None, dtopo_type=None, time_reference=None):
         r"""DTopography initialization routine.
 
         See :class:`DTopography` for more info.
@@ -291,6 +291,14 @@ class DTopography(object):
         self.delta = None
         self.path = path
         self.dtopo_type = dtopo_type
+
+        # Optional CF reference epoch (e.g. earthquake origin time) for the
+        # NetCDF time axis.  When set, DTopography._write_netcdf emits a
+        # CF datetime axis ("seconds since <time_reference>") that a plain
+        # xr.open_dataset decodes to datetime64; when None, a bare "seconds"
+        # duration axis is written (simulation-relative, the default).
+        # Populated from the file on NetCDF read.
+        self.time_reference = time_reference
 
         # Preprocessing attributes — same set and defaults as Topography so
         # that DTopoData.write() can emit the same per-file block.
@@ -311,10 +319,11 @@ class DTopography(object):
         self.datum = None
 
         if path:
-            self.read(path, dtopo_type)
+            self.read(path, dtopo_type, time_reference=time_reference)
 
 
-    def read(self, path=None, dtopo_type=None, verbose=False):
+    def read(self, path=None, dtopo_type=None, verbose=False,
+             time_reference=None):
         r"""
         Read in a dtopo file and use to set attributes of this object.
 
@@ -323,6 +332,10 @@ class DTopography(object):
          - *path* (path) - Path to existing dtopo file to read in.
          - *dtopo_type* (int) - Type of topography file to read.  Default is 3
             if not specified or apparent from file extension.
+         - *time_reference* - for a NetCDF (dtopo_type=4) file whose time axis
+            is CF datetime ("<unit> since <date>"), the reference epoch that
+            defines simulation t=0.  If omitted, the file's own CF reference
+            epoch is used (so a file written with a time_reference round-trips).
         """
 
         if path is not None:
@@ -444,7 +457,7 @@ class DTopography(object):
             self.dZ = dZ
 
         elif dtopo_type == 4:
-            self._read_netcdf(path)
+            self._read_netcdf(path, time_reference=time_reference)
 
         else:
             raise ValueError("Only topography types 1, 2, 3, and 4 are "
@@ -470,7 +483,8 @@ class DTopography(object):
                 self.Y = self.Y + self.y_shift
 
 
-    def write(self, path=None, dtopo_type=None, dZ_format="%.3f"):
+    def write(self, path=None, dtopo_type=None, dZ_format="%.3f",
+              dz_dtype="float32"):
         r"""Write out subfault resulting dtopo to file at *path*.
 
         :input:
@@ -478,6 +492,10 @@ class DTopography(object):
          - *path* (path) - Path to the output file to written to.
          - *dtopo_type* (int) - Type of topography file to write out. Default 3.
          - *dZ_format* (str) - format for dZ values printed. Default '%.3f'
+         - *dz_dtype* (str) - on-disk dtype for the deformation variable in a
+            NetCDF (dtopo_type=4) file. Default 'float32' (sub-millimeter for
+            Earth deformations, half the size); pass 'float64' for full
+            precision.
 
         """
 
@@ -502,7 +520,7 @@ class DTopography(object):
         if dtopo_type == 4:
             # CF-compliant NetCDF; binary output, handled outside the text
             # file dispatch below.
-            self._write_netcdf(path, x, y)
+            self._write_netcdf(path, x, y, dz_dtype=dz_dtype)
             return
 
         # Construct each interpolating function and evaluate at new grid
@@ -569,20 +587,53 @@ class DTopography(object):
                                  "supported, given %s." % dtopo_type)
 
 
-    def _write_netcdf(self, path, x, y):
+    def _write_netcdf(self, path, x, y, dz_dtype="float32"):
         """Write a CF-compliant NetCDF dtopo file (dtopo_type=4).
 
-        Layout: dz(time, lat, lon) with time in plain (numeric) seconds so
-        the file round-trips without CF calendar decoding; lat ascending
-        (S-to-N, the in-memory dZ row order).
+        Layout: dz(time, lat, lon); lat ascending (S-to-N, the in-memory dZ
+        row order).
+
+        Time encoding depends on self.time_reference:
+
+        * ``None`` (default): a bare numeric ``seconds`` duration axis --
+          simulation-relative, the historical behavior.  A plain
+          ``xr.open_dataset`` decodes this to ``timedelta64``.
+        * set (e.g. the earthquake origin time): a CF datetime axis
+          ``units="seconds since <time_reference>"`` -- interoperable, and a
+          plain ``xr.open_dataset`` decodes it to friendly ``datetime64``.
+
+        In both cases the on-disk time *values* are identical (elapsed
+        seconds); only the ``units`` string differs, and the reader recovers
+        the same simulation-relative times either way.
         """
         import xarray as xr
+
+        times = numpy.asarray(self.times, dtype=numpy.float64)
+        time_reference = getattr(self, "time_reference", None)
+
+        if time_reference is None:
+            time_coord = times
+            time_extra_attrs = {"units": "seconds"}
+            time_encoding = {"_FillValue": None}
+        else:
+            import pandas as pd
+            ref = pd.Timestamp(time_reference)
+            # Absolute datetimes = ref + elapsed seconds.  The explicit
+            # encoding units below make xarray write the numeric seconds-since
+            # -ref values back to disk (identical to the bare case) while a
+            # direct open decodes to datetime64.
+            time_coord = (numpy.datetime64(ref)
+                          + (times * 1e9).round().astype("timedelta64[ns]"))
+            time_extra_attrs = {}
+            time_encoding = {"_FillValue": None,
+                             "units": f"seconds since {ref.isoformat()}",
+                             "dtype": "float64"}
 
         ds = xr.Dataset(
             {"dz": (("time", "lat", "lon"),
                     numpy.asarray(self.dZ, dtype=numpy.float64))},
             coords={
-                "time": numpy.asarray(self.times, dtype=numpy.float64),
+                "time": time_coord,
                 "lat": numpy.asarray(y, dtype=numpy.float64),
                 "lon": numpy.asarray(x, dtype=numpy.float64),
             },
@@ -590,7 +641,7 @@ class DTopography(object):
         ds["dz"].attrs.update(long_name="seafloor deformation",
                               units="meters")
         ds["time"].attrs.update(standard_name="time", axis="T",
-                                units="seconds")
+                                **time_extra_attrs)
         ds["lat"].attrs.update(standard_name="latitude", axis="Y",
                                units="degrees_north")
         ds["lon"].attrs.update(standard_name="longitude", axis="X",
@@ -600,29 +651,49 @@ class DTopography(object):
         # No fill value: deformation grids are complete, and xarray's default
         # NaN _FillValue encoding would trip DTopoInspector's fill warning (and
         # applies that same default to coordinate variables, which must not
-        # carry missing-value semantics at all).  dz is stored as float32 on
-        # disk by default: topo deformations are well under 10,000 m, so this
-        # still gives sub-millimeter precision while halving file size.
+        # carry missing-value semantics at all).  dz is stored as *dz_dtype*
+        # (float32 by default): topo deformations are well under 10,000 m, so
+        # float32 still gives sub-millimeter precision while halving file size.
         ds.to_netcdf(path, encoding={
-            "dz": {"_FillValue": None, "dtype": "float32"},
-            "time": {"_FillValue": None},
+            "dz": {"_FillValue": None, "dtype": dz_dtype},
+            "time": time_encoding,
             "lat": {"_FillValue": None},
             "lon": {"_FillValue": None},
         })
 
 
-    def _read_netcdf(self, path):
+    def _read_netcdf(self, path, time_reference=None):
         """Read a NetCDF dtopo file (dtopo_type=4) via DTopoInspector.
 
         The inspector enforces the dtopo contract (time slowest dimension,
         uniform time spacing) and provides CF-aware coordinate discovery;
         data are normalized to the in-memory layout dZ(time, lat, lon) with
         latitude ascending.
+
+        *time_reference* pins simulation t=0 for a CF datetime time axis; when
+        omitted, the file's own CF reference epoch (from its "<unit> since
+        <date>" units) is adopted, so a file written with a time_reference
+        round-trips to the same simulation-relative times.
         """
+        import pandas as pd
+
         from clawpack.geoclaw.netcdf_utils import DTopoInspector
         from clawpack.geoclaw.topotools import extract_datum
 
-        with DTopoInspector(path) as inspector:
+        with DTopoInspector(path, time_reference=time_reference) as inspector:
+            # Adopt the file's own reference epoch when the caller gave none
+            # and the time axis is CF datetime ("<unit> since <date>").
+            if inspector.time_reference is None:
+                tname = inspector._find_time_name()
+                if tname is not None:
+                    raw_units = (inspector.ds[tname].encoding.get("units")
+                                 or inspector.ds[tname].attrs.get("units", ""))
+                    if isinstance(raw_units, str):
+                        idx = raw_units.lower().find(" since ")
+                        if idx != -1:
+                            inspector.time_reference = \
+                                raw_units[idx + len(" since "):].strip()
+
             meta = inspector.inspect_dtopo()
             lon = inspector.ds[meta.x_name].values.astype(numpy.float64)
             lat = inspector.ds[meta.y_name].values.astype(numpy.float64)
@@ -631,6 +702,11 @@ class DTopography(object):
             # Optional vertical datum metadata (informational only).
             self.datum = extract_datum(inspector.ds[meta.var_name].attrs,
                                        inspector.ds.attrs)
+            # Record the epoch (if any) so a subsequent write reproduces it.
+            self.time_reference = (
+                pd.Timestamp(inspector.time_reference)
+                if inspector.time_reference is not None else None
+            )
 
         if meta.dim_order == ['time', 'y', 'x']:
             pass

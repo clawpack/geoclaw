@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import importlib.util
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -109,6 +110,29 @@ def _unit_matches_contract(cf_unit: str, contract_unit: str) -> bool:
     """Return True if *cf_unit* is equivalent to *contract_unit*."""
     aliases = _CONTRACT_UNIT_CF_ALIASES.get(contract_unit, frozenset())
     return cf_unit.strip() in aliases
+
+
+# units.py time-unit abbreviations (the canonical forms _CF_TO_UNITS_PY maps
+# time strings onto): used to validate that a bare time-axis units attribute
+# really is a duration before scaling it to seconds.
+_TIME_UNIT_ABBREVS: frozenset[str] = frozenset({'s', 'min', 'h', 'days'})
+
+
+def _cf_time_units_to_seconds_factor(cf_unit: str) -> float:
+    """Multiplicative factor converting a value in *cf_unit* to seconds.
+
+    *cf_unit* must be a bare CF duration unit (``seconds``, ``minutes``,
+    ``hours``, ``days`` and their aliases).  Raises ValueError if it is not a
+    recognised time unit -- callers must never silently assume seconds for an
+    unrecognised or non-time unit string.
+    """
+    canonical = _normalize_cf_unit(cf_unit)
+    if canonical is None or canonical not in _TIME_UNIT_ABBREVS:
+        raise ValueError(
+            f"Unrecognised time units {cf_unit!r}; expected a CF duration unit "
+            f"such as 'seconds', 'minutes', 'hours', or 'days'."
+        )
+    return float(units_convert(1.0, canonical, 's'))
 
 
 @contextlib.contextmanager
@@ -225,6 +249,18 @@ class NetCDFInspector:
             chunks: dict | str = {}
         except ImportError:
             chunks = None
+        # Choose an explicit engine so files whose extension xarray does not
+        # recognise still open.  GeoClaw dtopo/topo files are often named with
+        # domain-specific suffixes (e.g. '.dtt3'), and xarray's extension-based
+        # engine guessing raises "did not find a match in any of xarray's ...
+        # IO backends" for those even though the bytes are valid NetCDF.
+        # Prefer netcdf4, fall back to h5netcdf, else leave as None so xarray
+        # guesses (and raises its own clear error if no engine is installed).
+        engine = next(
+            (name for name in ("netcdf4", "h5netcdf")
+             if importlib.util.find_spec(name) is not None),
+            None,
+        )
         # mask_and_scale=True (default) so fill values appear as NaN.
         # decode_timedelta=False: a numeric time coordinate with a bare
         # duration-style units attribute (e.g. "seconds", as written by
@@ -233,7 +269,7 @@ class NetCDFInspector:
         # and naively casting that to float (as a "seconds" value) reads back
         # the raw nanosecond tick count -- a billion-fold error.
         self.ds: xr.Dataset = xr.open_dataset(
-            self.path, chunks=chunks, mask_and_scale=True,
+            self.path, engine=engine, chunks=chunks, mask_and_scale=True,
             decode_timedelta=False,
         )
 
@@ -499,6 +535,11 @@ class TopoInspector(NetCDFInspector):
         …).  A ``ValueError`` is raised if no match is found.
     crop_bounds : tuple of four floats, optional
         (lon_min, lon_max, lat_min, lat_max).
+    assume_units : str, optional
+        Explicit escape hatch for a file whose elevation variable has *no*
+        ``units`` attribute.  When given (e.g. ``'m'``), that unit is assumed
+        instead of raising.  This must be set deliberately by the caller;
+        missing units are never silently assumed.
     """
 
     def __init__(
@@ -506,9 +547,11 @@ class TopoInspector(NetCDFInspector):
         path: str | Path,
         var_name: Optional[str] = None,
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
+        assume_units: Optional[str] = None,
     ) -> None:
         super().__init__(path, crop_bounds)
         self.var_name = var_name
+        self.assume_units = assume_units
 
     # ------------------------------------------------------------------
     # Variable auto-detection
@@ -577,51 +620,50 @@ class TopoInspector(NetCDFInspector):
 
     def _check_topo_units(self) -> str:
         """
-        Verify units of *var_name* match GEOCLAW_NETCDF_UNITS['topo'] ('m').
+        Verify units of *var_name* are meters (GEOCLAW_NETCDF_UNITS['topo']).
 
-        Returns the units string found in the file.  Raises ValueError if the
-        units are not recognisable or not convertible to meters.
+        Returns the units string found in the file.  Units are never silently
+        assumed or mixed: a missing ``units`` attribute raises ValueError
+        (unless *assume_units* was set explicitly), and any non-meter unit --
+        even a recognised, convertible one such as ``km`` -- also raises,
+        because the Fortran read path (and the in-memory read here) consume the
+        raw values as meters with no conversion.  Pre-convert such files to
+        meters first.
         """
         contract = GEOCLAW_NETCDF_UNITS['topo']  # 'm'
         cf_unit = self.ds[self.var_name].attrs.get('units', '')
 
         if not cf_unit:
-            warnings.warn(
+            if self.assume_units is not None:
+                # Deliberate caller override for a known-unitless file.
+                return self.assume_units
+            raise ValueError(
                 f"Variable '{self.var_name}' in '{self.path}' has no 'units' "
-                f"attribute.  Assuming '{contract}' (contract unit for topo).  "
-                f"If the data are not in meters, results will be incorrect.",
-                stacklevel=3,
+                f"attribute.  Units are required and never assumed: add a CF "
+                f"'units' attribute (e.g. 'm') to the file, or pass "
+                f"assume_units='m' if you are certain the data are in meters."
             )
-            return contract
 
         if _unit_matches_contract(cf_unit, contract):
             return cf_unit
 
-        # Try to find a conversion path via units.py
+        # Any other unit -- recognised-but-non-meter (e.g. 'km') or entirely
+        # unrecognised -- is rejected: the read paths do not convert, so
+        # proceeding would silently corrupt the bathymetry.
         canonical = _normalize_cf_unit(cf_unit)
-        if canonical is None:
+        if canonical is not None:
             raise ValueError(
-                f"Unrecognised units '{cf_unit}' on variable '{self.var_name}' "
-                f"in '{self.path}'.  Contract requires '{contract}'.  "
-                f"Add the unit string to _CF_TO_UNITS_PY or pre-convert the file."
+                f"Variable '{self.var_name}' in '{self.path}' has units "
+                f"'{cf_unit}'; contract requires '{contract}'.  Unit conversion "
+                f"on the read path is not supported, so this file is rejected "
+                f"rather than silently misread.  Pre-convert the data to meters "
+                f"first."
             )
-        # Verify units.convert() can handle the conversion (raises if not)
-        try:
-            units_convert(1.0, canonical, contract)
-        except (ValueError, KeyError) as exc:
-            raise ValueError(
-                f"Cannot convert units '{cf_unit}' -> '{contract}' for variable "
-                f"'{self.var_name}' in '{self.path}': {exc}"
-            ) from exc
-
-        warnings.warn(
-            f"Variable '{self.var_name}' has units '{cf_unit}'; contract is "
-            f"'{contract}'.  A unit conversion will be needed before Fortran "
-            f"reads this file.  Pre-convert the data or implement unit scaling "
-            f"in the descriptor.",
-            stacklevel=3,
+        raise ValueError(
+            f"Unrecognised units '{cf_unit}' on variable '{self.var_name}' "
+            f"in '{self.path}'.  Contract requires '{contract}'.  Pre-convert "
+            f"the file to meters."
         )
-        return cf_unit
 
     # ------------------------------------------------------------------
     # Fill value check within crop region
@@ -836,7 +878,18 @@ class DTopoInspector(NetCDFInspector):
             # Convert properly rather than casting the raw tick count.
             seconds = tvals / np.timedelta64(1, 's')
         else:
-            seconds = np.asarray(tvals, dtype=float)
+            # Numeric time axis (decode_timedelta=False keeps a bare
+            # duration-style axis numeric).  Scale to seconds using the
+            # coordinate's own 'units' attribute: a "hours"/"minutes" axis
+            # would otherwise be read 3600x/60x too fast.  Only when no units
+            # attribute is present do we fall back to assuming seconds -- the
+            # long-standing contract for a bare numeric dtopo time axis.
+            arr = np.asarray(tvals, dtype=float)
+            cf_unit = str(self.ds[time_name].attrs.get('units', '')).strip()
+            if cf_unit:
+                seconds = arr * _cf_time_units_to_seconds_factor(cf_unit)
+            else:
+                seconds = arr
 
         if mt < 2:
             return float(seconds[0]), 0.0, mt
@@ -923,6 +976,11 @@ class MetInspector(NetCDFInspector):
     fill_action : str, optional
         'abort' or 'warn'.  Met files may legitimately have fill values at
         the domain edges (Fortran handles edge fill).  Default is 'warn'.
+    assume_units : bool, optional
+        Explicit escape hatch for a file whose forcing variables have *no*
+        ``units`` attribute.  When True, each variable is assumed to already
+        be in its contract unit instead of raising.  This must be set
+        deliberately; missing units are never silently assumed.
     """
 
     # Role discovery, in priority order: CF standard_name, then common
@@ -948,6 +1006,7 @@ class MetInspector(NetCDFInspector):
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
         time_reference: Optional[str] = None,
         fill_action: str = 'warn',
+        assume_units: bool = False,
     ) -> None:
         super().__init__(path, crop_bounds)
         # {geoclaw_role: var_name_in_file}; missing roles auto-discovered
@@ -957,6 +1016,7 @@ class MetInspector(NetCDFInspector):
         if fill_action not in ('abort', 'warn'):
             raise ValueError(f"fill_action must be 'abort' or 'warn', got '{fill_action}'")
         self.fill_action = fill_action
+        self.assume_units = assume_units
 
     # ------------------------------------------------------------------
     # Variable role discovery
@@ -1093,10 +1153,15 @@ class MetInspector(NetCDFInspector):
 
     def _check_met_units(self) -> list[MetVariableInfo]:
         """
-        Verify or convert units for each variable to contract units.
+        Verify units for each variable match its contract unit.
 
-        Returns a list of MetVariableInfo with source_units populated.
-        Raises ValueError for unrecognised or unconvertible units.
+        Returns a list of MetVariableInfo with source_units populated.  Units
+        are never silently assumed or mixed: a missing ``units`` attribute
+        raises ValueError (unless *assume_units* was set explicitly), and any
+        non-contract unit -- even a recognised, convertible one such as
+        ``hPa`` or ``knots`` -- also raises, because the Fortran read path
+        consumes the raw values with no conversion.  Pre-convert such files to
+        the contract units first.
         """
         result: list[MetVariableInfo] = []
         for role, var_name in self.variable_map.items():
@@ -1118,18 +1183,21 @@ class MetInspector(NetCDFInspector):
 
             cf_unit = self.ds[var_name].attrs.get('units', '')
             if not cf_unit:
-                warnings.warn(
-                    f"Variable '{var_name}' (role '{role}') has no 'units' "
-                    f"attribute.  Assuming contract unit '{contract}'.  "
-                    f"Verify the data are actually in '{contract}'.",
-                    stacklevel=3,
+                if self.assume_units:
+                    # Deliberate caller override for a known-unitless file.
+                    result.append(MetVariableInfo(
+                        var_name=var_name,
+                        geoclaw_role=role,
+                        source_units=contract,
+                    ))
+                    continue
+                raise ValueError(
+                    f"Variable '{var_name}' (role '{role}') in '{self.path}' "
+                    f"has no 'units' attribute.  Units are required and never "
+                    f"assumed: add a CF 'units' attribute (e.g. '{contract}') "
+                    f"to the file, or pass assume_units=True if you are certain "
+                    f"the data are already in '{contract}'."
                 )
-                result.append(MetVariableInfo(
-                    var_name=var_name,
-                    geoclaw_role=role,
-                    source_units=contract,
-                ))
-                continue
 
             if _unit_matches_contract(cf_unit, contract):
                 result.append(MetVariableInfo(
@@ -1139,34 +1207,24 @@ class MetInspector(NetCDFInspector):
                 ))
                 continue
 
-            # Attempt conversion path
+            # Any other unit -- recognised-but-non-contract (e.g. 'hPa',
+            # 'knots') or entirely unrecognised -- is rejected: the read path
+            # does not convert, so proceeding would silently corrupt the
+            # forcing.  Pre-convert the file to the contract units first.
             canonical = _normalize_cf_unit(cf_unit)
-            if canonical is None:
+            if canonical is not None:
                 raise ValueError(
-                    f"Unrecognised units '{cf_unit}' on variable '{var_name}' "
-                    f"(role '{role}') in '{self.path}'.  "
-                    f"Contract requires '{contract}'.  "
-                    f"Add the unit to _CF_TO_UNITS_PY or pre-convert the file."
+                    f"Variable '{var_name}' (role '{role}') in '{self.path}' "
+                    f"has units '{cf_unit}'; contract requires '{contract}'.  "
+                    f"Unit conversion on the read path is not supported, so "
+                    f"this file is rejected rather than silently misread.  "
+                    f"Pre-convert the data to '{contract}' first."
                 )
-            try:
-                units_convert(1.0, canonical, contract)
-            except (ValueError, KeyError) as exc:
-                raise ValueError(
-                    f"Cannot convert units '{cf_unit}' -> '{contract}' for "
-                    f"variable '{var_name}' (role '{role}'): {exc}"
-                ) from exc
-
-            warnings.warn(
-                f"Variable '{var_name}' (role '{role}') has units '{cf_unit}'; "
-                f"contract is '{contract}'.  A unit conversion factor must be "
-                f"applied before Fortran reads this data.",
-                stacklevel=3,
+            raise ValueError(
+                f"Unrecognised units '{cf_unit}' on variable '{var_name}' "
+                f"(role '{role}') in '{self.path}'.  Contract requires "
+                f"'{contract}'.  Pre-convert the file to '{contract}'."
             )
-            result.append(MetVariableInfo(
-                var_name=var_name,
-                geoclaw_role=role,
-                source_units=cf_unit,
-            ))
 
         return result
 
@@ -1189,6 +1247,26 @@ class MetInspector(NetCDFInspector):
         time_coord = self.ds[time_name]
         # Access only the first element (.values[0] fetches one chunk element)
         t0_raw = time_coord.values[0]
+
+        # A bare numeric time axis (e.g. units "hours" with no reference date)
+        # is not an absolute time.  Feeding it to pd.Timestamp would silently
+        # interpret the raw number as nanoseconds and produce a wildly wrong
+        # offset (the same class of bug as the dtopo time-axis reader), so
+        # reject it explicitly rather than assuming.  A CF datetime axis
+        # ("<unit> since <date>") is decoded by xarray to datetime64 and passes
+        # through; cftime objects (non-standard calendars) remain object dtype
+        # and are handled by the try/except below.
+        _t0_arr = np.asarray(t0_raw)
+        if (np.issubdtype(_t0_arr.dtype, np.floating)
+                or np.issubdtype(_t0_arr.dtype, np.integer)):
+            cf_unit = str(time_coord.attrs.get('units', '')).strip()
+            raise ValueError(
+                f"Time axis '{time_name}' in '{self.path}' is numeric "
+                f"(units {cf_unit!r}); met/storm forcing needs an absolute time "
+                f"reference.  Give the time coordinate CF units of the form "
+                f"'<unit> since <date>' (e.g. 'hours since 2020-01-01'), not a "
+                f"bare duration."
+            )
 
         try:
             t0 = pd.Timestamp(t0_raw)

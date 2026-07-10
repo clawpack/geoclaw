@@ -46,6 +46,7 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
             latitudes = out.createVariable("lat", "f8", ("lat",))
             longitudes = out.createVariable("lon", "f8", ("lon",))
             elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+            elevations.units = "m"
 
             latitudes[:] = topo.y
             longitudes[:] = topo.x
@@ -61,6 +62,7 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
             latitudes = out.createVariable("lat", "f8", ("lat",))
             longitudes = out.createVariable("lon", "f8", ("lon",))
             elevations = out.createVariable("elevation", "f8", ("lon", "lat"))
+            elevations.units = "m"
 
             latitudes[:] = topo.y
             longitudes[:] = topo.x
@@ -73,7 +75,7 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
         import xarray as xr
 
         ds = xr.Dataset(
-            {"elevation": (["lat", "lon"], topo.Z)},
+            {"elevation": (["lat", "lon"], topo.Z, {"units": "m"})},
             coords={"lat": topo.y, "lon": topo.x},
         )
         ds_norm = CFNormalizer(ds).normalize()
@@ -97,6 +99,7 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
             latitudes = out.createVariable("lat", "f8", ("lat",))
             longitudes = out.createVariable("lon", "f8", ("lon",))
             elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+            elevations.units = "m"
 
             latitudes[:] = topo_crop.y
             longitudes[:] = topo_crop.x
@@ -124,6 +127,7 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
             latitudes = out.createVariable("lat", "f8", ("lat",))
             longitudes = out.createVariable("lon", "f8", ("lon",))
             elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+            elevations.units = "m"
 
             latitudes[:] = y
             longitudes[:] = x

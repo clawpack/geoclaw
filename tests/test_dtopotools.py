@@ -318,6 +318,65 @@ def test_dtopo_netcdf_default_dtype_is_float32(tmp_path):
 
 
 @pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_netcdf_dtype_override(tmp_path):
+    r"""dz_dtype='float64' overrides the default float32 on-disk storage."""
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    base = _make_synthetic_dtopo()
+    path = tmp_path / "synthetic_f64.nc"
+    base.write(path, dtopo_type=4, dz_dtype="float64")
+
+    with netCDF4.Dataset(path) as nc:
+        assert nc.variables["dz"].dtype == np.dtype("float64")
+
+    back = dtopotools.DTopography()
+    back.read(path=path)
+    assert np.allclose(back.dZ, base.dZ)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_netcdf_time_reference_roundtrip(tmp_path):
+    r"""With time_reference set, dtopo_type=4 writes a CF datetime axis that a
+    plain xr.open_dataset decodes to datetime64, and the file round-trips to
+    the same simulation-relative times and epoch."""
+    xr = pytest.importorskip("xarray")
+
+    base = _make_synthetic_dtopo()
+    base.time_reference = "2011-03-11T05:46:00"
+    path = tmp_path / "synthetic_epoch.nc"
+    base.write(path, dtopo_type=4)
+
+    # A direct open decodes the time axis to friendly datetime64.
+    ds = xr.open_dataset(path)
+    assert np.issubdtype(ds.time.dtype, np.datetime64)
+    assert "seconds since 2011-03-11T05:46:00" in ds.time.encoding.get("units", "")
+
+    # Round-trip via DTopography recovers simulation-relative times + epoch.
+    back = dtopotools.DTopography(path, dtopo_type=4)
+    assert np.allclose(back.times, base.times)
+    assert np.allclose(back.dZ, base.dZ)
+    assert str(back.time_reference) == "2011-03-11 05:46:00"
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_netcdf_bare_seconds_default(tmp_path):
+    r"""Without time_reference the writer emits a bare 'seconds' axis
+    (simulation-relative) and time_reference reads back as None."""
+    pytest.importorskip("netCDF4")
+
+    base = _make_synthetic_dtopo()
+    path = tmp_path / "synthetic_bare.nc"
+    base.write(path, dtopo_type=4)
+
+    back = dtopotools.DTopography(path, dtopo_type=4)
+    assert back.time_reference is None
+    assert np.allclose(back.times, base.times)
+
+
+@pytest.mark.python
 @pytest.mark.parametrize("attr, value", [
     ("crop_extent", [0.0, 1.0, 0.0, 1.0]),
     ("coarsen", 2),

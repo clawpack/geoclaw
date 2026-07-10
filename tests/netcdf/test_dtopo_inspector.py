@@ -172,6 +172,43 @@ def test_fill_value_warns(tmp_path):
             insp.inspect_dtopo()
 
 
+@pytest.mark.parametrize("cf_unit,factor", [
+    ("seconds", 1.0), ("minutes", 60.0), ("hours", 3600.0), ("days", 86400.0),
+])
+def test_numeric_time_units_scaled_to_seconds(tmp_path, cf_unit, factor):
+    """A bare numeric time axis is scaled to seconds using its units attribute,
+    not assumed to already be seconds (regression for the finding that a
+    'hours'/'minutes' axis was read too fast)."""
+    ds = make_dtopo_dataset(times=[0.0, 1.0, 2.0])
+    ds["time"].attrs["units"] = cf_unit
+    path = write_dataset(ds, tmp_path / "dt.nc")
+    with DTopoInspector(path) as insp:
+        meta = insp.inspect_dtopo()
+    assert np.isclose(meta.t0, 0.0)
+    assert np.isclose(meta.dt, 1.0 * factor)
+
+
+def test_numeric_time_unrecognised_units_raise(tmp_path):
+    """An unrecognised time-units string is rejected, never assumed seconds."""
+    ds = make_dtopo_dataset(times=[0.0, 1.0, 2.0])
+    ds["time"].attrs["units"] = "fortnights"
+    path = write_dataset(ds, tmp_path / "dt.nc")
+    with DTopoInspector(path) as insp:
+        with pytest.raises(ValueError, match="[Uu]nrecognised time units"):
+            insp.inspect_dtopo()
+
+
+def test_open_nonstandard_extension(tmp_path):
+    """A valid NetCDF file with a non-NetCDF extension (e.g. '.dtt3') still
+    opens: the inspector selects an explicit engine rather than relying on
+    xarray's extension-based backend guessing."""
+    ds = make_dtopo_dataset()
+    path = write_dataset(ds, tmp_path / "quake.dtt3")
+    with DTopoInspector(path) as insp:
+        meta = insp.inspect_dtopo()
+    assert meta.mt == 3
+
+
 def test_descriptor_writer_output(tmp_path):
     path = write_dataset(make_dtopo_dataset(), tmp_path / "dt.nc")
     with DTopoInspector(path) as insp:

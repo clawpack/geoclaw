@@ -44,10 +44,15 @@ def create_netcdf_storm_file(path):
     ]
 
     values = np.arange(np.prod(size), dtype=float).reshape(size)
-    wind_x = xr.DataArray(values, coords=coords)
-    wind_y = xr.DataArray(values + 100.0, coords=coords)
-    pressure = xr.DataArray(values + 1000.0, coords=coords)
+    # Units are required (never assumed); variable/coord *names* still carry no
+    # CF standard_name, so this file continues to exercise name-based discovery.
+    wind_x = xr.DataArray(values, coords=coords, attrs={"units": "m/s"})
+    wind_y = xr.DataArray(values + 100.0, coords=coords, attrs={"units": "m/s"})
+    pressure = xr.DataArray(values + 1000.0, coords=coords, attrs={"units": "Pa"})
     ds = xr.Dataset({"u": wind_x, "v": wind_y, "pressure": pressure})
+    # Met forcing needs an absolute time reference; a bare numeric axis is
+    # rejected.  Give valid_time CF datetime units so it decodes to datetime64.
+    ds["valid_time"].attrs["units"] = "seconds since 1970-01-01T00:00:00"
     ds.to_netcdf(path)
 
 
@@ -183,12 +188,12 @@ def create_nws13_storm_file(path, pressure_fields=None, u_fields=None,
     NWS13 (NOAA Weather Service format 13) is the OWI NetCDF met-forcing
     schema used by ADCIRC and GeoClaw.  This function produces the canonical
     NWS13 variable and dimension names: dims ``(time, lat, lon)``, variables
-    ``uwnd`` (m/s), ``vwnd`` (m/s), ``press`` (mb).
+    ``uwnd`` (m/s), ``vwnd`` (m/s), ``press`` (Pa).
 
-    Pressure is stored in millibar (mb) to exercise the unit-awareness path
-    in tests.  Note that the Fortran NetCDF reader does **not** perform unit
-    conversion; callers responsible for running Fortran should convert to Pa
-    before calling this function.
+    Units must be the GeoClaw contract units (wind m/s, pressure Pa): the
+    inspector rejects non-contract units (e.g. mb/hPa) rather than converting,
+    since the Fortran NetCDF reader performs no unit conversion.  Callers with
+    millibar OWI data must convert to Pa before calling this function.
 
     The dimension order ``(time, lat, lon)`` = ``(nt, nlat, nlon)`` is
     correct for the Fortran column-major allocation ``pressure(nlon, nlat,
@@ -199,7 +204,7 @@ def create_nws13_storm_file(path, pressure_fields=None, u_fields=None,
     path : Path or str
         Output NetCDF file path.
     pressure_fields : ndarray, shape (nt, nlat, nlon), optional
-        Pressure in **mb**.  Defaults to 1013.0 mb everywhere.
+        Pressure in **Pa**.  Defaults to 101300.0 Pa everywhere.
     u_fields : ndarray, shape (nt, nlat, nlon), optional
         Eastward wind in m/s.  Defaults to zero.
     v_fields : ndarray, shape (nt, nlat, nlon), optional
@@ -232,7 +237,7 @@ def create_nws13_storm_file(path, pressure_fields=None, u_fields=None,
     shape = (nt, nlat, nlon)
 
     if pressure_fields is None:
-        pressure_fields = np.full(shape, 1013.0)  # mb
+        pressure_fields = np.full(shape, 101300.0)  # Pa
     if u_fields is None:
         u_fields = np.zeros(shape)
     if v_fields is None:
@@ -243,7 +248,7 @@ def create_nws13_storm_file(path, pressure_fields=None, u_fields=None,
             "press": (
                 ["time", "lat", "lon"],
                 pressure_fields,
-                {"units": "mb", "long_name": "Sea-level pressure"},
+                {"units": "Pa", "long_name": "Sea-level pressure"},
             ),
             "uwnd": (
                 ["time", "lat", "lon"],
