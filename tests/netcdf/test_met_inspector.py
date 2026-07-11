@@ -253,10 +253,24 @@ def test_numeric_time_axis_raises(tmp_path):
     ds = make_met_dataset()
     ds = ds.assign_coords(time=np.array([0.0, 6.0, 12.0]))
     ds["time"].attrs["units"] = "hours"
+    ds["time"].encoding = {}
     path = tmp_path / "met_numeric_time.nc"
     ds.to_netcdf(path)
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
         with pytest.raises(ValueError, match="absolute time reference"):
+            insp.inspect_met()
+
+
+def test_non_seconds_time_axis_raises(tmp_path):
+    """The met time axis must be 'seconds since <date>'.  An 'hours since'
+    (or other non-second) datetime axis is rejected, because the Fortran met
+    reader treats raw time values as integer seconds without unit scaling."""
+    ds = make_met_dataset()
+    ds["time"].encoding = {}
+    path = tmp_path / "met_hours.nc"
+    ds.to_netcdf(path, encoding={"time": {"units": "hours since 2020-01-01"}})
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        with pytest.raises(ValueError, match="requires the time axis"):
             insp.inspect_met()
 
 

@@ -164,7 +164,14 @@ def make_met_dataset(
 
         data_vars[var_name] = xr.DataArray(data, dims=dims, attrs=attrs)
 
-    return xr.Dataset(data_vars, coords=coords)
+    ds = xr.Dataset(data_vars, coords=coords)
+    # Store the time axis as integer "seconds since <time_start>" so the file
+    # is a valid GeoClaw met file: the Fortran met reader treats raw time
+    # values as integer seconds.  Without this, xarray auto-picks
+    # "hours since ..." for the 6-hourly default, which MetInspector rejects.
+    ds[time_name].encoding['units'] = f'seconds since {time_start}'
+    ds[time_name].encoding['dtype'] = 'int64'
+    return ds
 
 
 # ============================================================

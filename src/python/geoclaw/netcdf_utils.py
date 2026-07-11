@@ -1264,9 +1264,29 @@ class MetInspector(NetCDFInspector):
                 f"Time axis '{time_name}' in '{self.path}' is numeric "
                 f"(units {cf_unit!r}); met/storm forcing needs an absolute time "
                 f"reference.  Give the time coordinate CF units of the form "
-                f"'<unit> since <date>' (e.g. 'hours since 2020-01-01'), not a "
-                f"bare duration."
+                f"'seconds since <date>' (e.g. 'seconds since 2020-01-01'), not "
+                f"a bare duration."
             )
+
+        # The met time axis must be in seconds.  Fortran reads the raw time
+        # values into an integer array and computes raw[i] - raw[0] +
+        # nc_time_offset, treating them as seconds without scaling by the CF
+        # unit, so an "hours since"/"days since" axis (e.g. a raw ERA5 file)
+        # would be silently misread.  xarray moves the original units string to
+        # .encoding when it decodes the datetime axis; reject any non-second
+        # unit here rather than producing wrong forcing.
+        _raw_units = str(time_coord.encoding.get('units')
+                         or time_coord.attrs.get('units', '')).strip()
+        if ' since ' in _raw_units.lower():
+            _unit_part = _raw_units.lower().split(' since ', 1)[0].strip()
+            if _unit_part not in ('s', 'sec', 'secs', 'second', 'seconds'):
+                raise ValueError(
+                    f"Time axis '{time_name}' in '{self.path}' has units "
+                    f"'{_raw_units}'; met/storm forcing requires the time axis "
+                    f"in seconds ('seconds since <date>').  GeoClaw reads the "
+                    f"raw time values as integer seconds without unit scaling, "
+                    f"so convert the file to 'seconds since ...' first."
+                )
 
         try:
             t0 = pd.Timestamp(t0_raw)

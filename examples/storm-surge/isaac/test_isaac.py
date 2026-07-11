@@ -576,11 +576,11 @@ def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save
     """
     runner = test.GeoClawTestRunner(tmp_path, test_path=Path(__file__).parent)
 
-    runner.set_data()
-    # TODO: Decide on time range for Isaac test, currently is just a half day
     # Setup data for test.  setrun.py downloads gulf_caribbean.tt3 and writes
     # a storm descriptor file; direct both into pytest-managed directories
     # instead of $CLAW/geoclaw/scratch and the current working directory.
+    # (Call set_data exactly once, with these dirs: a bare set_data() runs
+    # setrun with storm_dir defaulting to the CWD and leaks ./isaac.storm.)
     runner.set_data(download_dir=download_cache, storm_dir=tmp_path)
     # TODO: Decide on time range for Isaac test; this is currently set to match
     # the Isaac test, but may need to be adjusted.
@@ -690,7 +690,7 @@ def test_isaac_netcdf_crop(tmp_path: Path, isaac_xgeoclaw: Path) -> None:
 
     example_dir = Path(__file__).parent
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
-    runner.set_data()
+    runner.set_data(storm_dir=tmp_path)
     runner.rundata.amrdata.amr_levels_max = 2
     # Short run: the crop's effect at the gauges is time-independent (forcing
     # there is always ambient), so a brief integration suffices.  Use the same
@@ -745,7 +745,7 @@ def test_isaac_netcdf_shift_identity(tmp_path: Path, save: bool,
 
     example_dir = Path(__file__).parent
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
-    runner.set_data()
+    runner.set_data(storm_dir=tmp_path)
     runner.rundata.clawdata.t0 = days2seconds(-1)
     runner.rundata.clawdata.tfinal = days2seconds(-0.5)
     runner.rundata.clawdata.num_output_times = 1
@@ -780,7 +780,7 @@ def test_isaac_model_storm_time_scale(tmp_path: Path,
 
     example_dir = Path(__file__).parent
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
-    runner.set_data()
+    runner.set_data(storm_dir=tmp_path)
     runner.rundata.clawdata.t0 = days2seconds(-1)
     runner.rundata.clawdata.tfinal = days2seconds(-0.5)
     runner.rundata.clawdata.num_output_times = 1
@@ -835,7 +835,7 @@ def test_isaac_data_storm_time_scale(tmp_path: Path,
 
     example_dir = Path(__file__).parent
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
-    runner.set_data()
+    runner.set_data(storm_dir=tmp_path)
     runner.rundata.clawdata.t0 = days2seconds(-1)
     runner.rundata.clawdata.tfinal = days2seconds(-0.5)
     runner.rundata.clawdata.num_output_times = 1
@@ -893,7 +893,7 @@ def test_isaac_temporal_ramp(tmp_path: Path,
 
     example_dir = Path(__file__).parent
     runner = test.GeoClawTestRunner(tmp_path, test_path=example_dir)
-    runner.set_data()
+    runner.set_data(storm_dir=tmp_path)
     runner.rundata.clawdata.t0 = days2seconds(-1)
     runner.rundata.clawdata.tfinal = days2seconds(-0.5)
     runner.rundata.clawdata.num_output_times = 1
