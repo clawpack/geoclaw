@@ -367,9 +367,15 @@ class NetCDFInspector:
         # IO backends" for those even though the bytes are valid NetCDF.
         # Prefer netcdf4, fall back to h5netcdf, else leave as None so xarray
         # guesses (and raises its own clear error if no engine is installed).
+        # NB: the Python *module* is imported as ``netCDF4`` (mixed case) while
+        # xarray registers the *engine* as ``netcdf4`` (lower case), so the
+        # existence check and the engine name differ -- probing find_spec with
+        # the lower-case engine name silently fails and defeats this logic.
         engine = next(
-            (name for name in ("netcdf4", "h5netcdf")
-             if importlib.util.find_spec(name) is not None),
+            (engine_name
+             for module_name, engine_name in (("netCDF4", "netcdf4"),
+                                              ("h5netcdf", "h5netcdf"))
+             if importlib.util.find_spec(module_name) is not None),
             None,
         )
         # mask_and_scale=True (default) so fill values appear as NaN.
