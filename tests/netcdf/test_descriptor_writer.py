@@ -124,7 +124,8 @@ def _get_met_meta(met_file_factory, **kwargs) -> MetMetadata:
 def test_topo_descriptor_required_keys_present(topo_file_factory):
     """
     write_topo_descriptor emits all mandatory keys: var_name, x_name,
-    y_name, lon_wrap_offset, y_increasing, dim_order, fill_action.
+    y_name, lon_wrap_offset, scale_factor, y_increasing, dim_order,
+    fill_action.
     """
     meta = _get_topo_meta(topo_file_factory)
     buf = io.StringIO()
@@ -132,8 +133,9 @@ def test_topo_descriptor_required_keys_present(topo_file_factory):
     parsed = _parse_topo_descriptor(buf.getvalue())
 
     for key in ("var_name", "x_name", "y_name", "lon_wrap_offset",
-                "y_increasing", "dim_order", "fill_action"):
+                "scale_factor", "y_increasing", "dim_order", "fill_action"):
         assert key in parsed, f"Missing required key '{key}' in topo descriptor"
+    assert float(parsed["scale_factor"]) == pytest.approx(meta.scale_factor)
 
 
 def test_topo_descriptor_values_match_metadata(topo_file_factory):

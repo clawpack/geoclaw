@@ -351,6 +351,95 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
             },
         )
 
+    elif fmt == "netcdf_era5_hpa":
+        # Same forcing as netcdf_era5 but pressure stored in hPa (units='hPa')
+        # rather than pre-converted to Pa.  The descriptor scale_factor (100)
+        # must convert it to Pa on the Fortran read, reproducing the Pa
+        # baseline.  Exercises the met per-variable unit scaling end-to-end.
+        import xarray as xr
+        nc_path = tmp_path / "isaac_era5_hpa.nc"
+        time_offset_s = int(
+            (time_offset - unix_epoch) / np.timedelta64(1, "s")
+        )
+        t_rel = (times_unix - time_offset_s).astype("int64")
+        dims = ("valid_time", "latitude", "longitude")
+        ds = xr.Dataset(
+            {
+                # mb and hPa are numerically identical; store the raw OWI mb
+                # values labeled 'hPa' so scale_factor=100 -> Pa.
+                "msl": (dims, pressure_mb,
+                        {"units": "hPa",
+                         "standard_name": "air_pressure_at_mean_sea_level"}),
+                "u10": (dims, u_wind,
+                        {"units": "m/s", "standard_name": "eastward_wind"}),
+                "v10": (dims, v_wind,
+                        {"units": "m/s", "standard_name": "northward_wind"}),
+            },
+            coords={
+                "longitude": (["longitude"], lon,
+                              {"units": "degrees_east", "axis": "X",
+                               "standard_name": "longitude"}),
+                "latitude": (["latitude"], lat,
+                             {"units": "degrees_north", "axis": "Y",
+                              "standard_name": "latitude"}),
+                "valid_time": (["valid_time"], t_rel,
+                               {"units": "seconds since 2012-08-29T00:00:00",
+                                "axis": "T", "standard_name": "time"}),
+            },
+            attrs={"Conventions": "CF-1.7"},
+        )
+        ds.to_netcdf(nc_path)
+        isaac.file_format = "netcdf"
+        isaac.file_paths = [nc_path]
+        storm_path = tmp_path / "isaac_era5_hpa.storm"
+        isaac.write(storm_path, file_format="data",
+                    dim_mapping={"t": "valid_time"})
+
+    elif fmt == "netcdf_era5_hours":
+        # Same forcing as netcdf_era5 (pressure in Pa) but the TIME axis is in
+        # "hours since <epoch>" -- as real ERA5 files are -- rather than
+        # seconds.  The descriptor time_scale (3600) must convert elapsed hours
+        # to seconds on the Fortran read, reproducing the baseline.  Isolates
+        # the met time_scale end-to-end.  (Isaac OWI cadence is 6-hourly, so the
+        # hour values on disk are exact integers, matching the integer
+        # storm%time read.)
+        import xarray as xr
+        nc_path = tmp_path / "isaac_era5_hours.nc"
+        time_offset_s = int(
+            (time_offset - unix_epoch) / np.timedelta64(1, "s")
+        )
+        t_rel_hours = ((times_unix - time_offset_s) // 3600).astype("int64")
+        dims = ("valid_time", "latitude", "longitude")
+        ds = xr.Dataset(
+            {
+                "msl": (dims, pressure_pa,
+                        {"units": "Pa",
+                         "standard_name": "air_pressure_at_mean_sea_level"}),
+                "u10": (dims, u_wind,
+                        {"units": "m/s", "standard_name": "eastward_wind"}),
+                "v10": (dims, v_wind,
+                        {"units": "m/s", "standard_name": "northward_wind"}),
+            },
+            coords={
+                "longitude": (["longitude"], lon,
+                              {"units": "degrees_east", "axis": "X",
+                               "standard_name": "longitude"}),
+                "latitude": (["latitude"], lat,
+                             {"units": "degrees_north", "axis": "Y",
+                              "standard_name": "latitude"}),
+                "valid_time": (["valid_time"], t_rel_hours,
+                               {"units": "hours since 2012-08-29T00:00:00",
+                                "axis": "T", "standard_name": "time"}),
+            },
+            attrs={"Conventions": "CF-1.7"},
+        )
+        ds.to_netcdf(nc_path)
+        isaac.file_format = "netcdf"
+        isaac.file_paths = [nc_path]
+        storm_path = tmp_path / "isaac_era5_hours.storm"
+        isaac.write(storm_path, file_format="data",
+                    dim_mapping={"t": "valid_time"})
+
     else:
         raise ValueError(f"Unknown fmt={fmt!r}")
 
@@ -545,6 +634,14 @@ def _install_executable(runner, prebuilt: Path) -> None:
             "netcdf_era5",
             marks=[pytest.mark.netcdf],
         ),
+        pytest.param(
+            "netcdf_era5_hpa",
+            marks=[pytest.mark.netcdf],
+        ),
+        pytest.param(
+            "netcdf_era5_hours",
+            marks=[pytest.mark.netcdf],
+        ),
     ],
 )
 def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save: bool,
@@ -614,14 +711,21 @@ def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save
         # TODO: Generate pressure and wind fields from the ATCF data, requires
         # storm field generation, which is not yet supported.
 
-    elif data_file_format in ("netcdf_era5", "netcdf_nws13"):
+    elif data_file_format in ("netcdf_era5", "netcdf_nws13",
+                              "netcdf_era5_hpa", "netcdf_era5_hours"):
         # Generate NetCDF file + descriptor from committed OWI data.
         surge_data.storm_file = _make_isaac_netcdf(
             data_file_format, tmp_path, runner.test_path
         )
         surge_data.storm_specification_type = "data"
-        # Validate descriptor structure before running.
-        _check_netcdf_storm_descriptor(surge_data.storm_file, data_file_format)
+        # Validate descriptor structure before running.  The hPa/hours variants
+        # share the ERA5 variable/dimension layout (differing only in pressure
+        # units / time units).
+        _check_netcdf_storm_descriptor(
+            surge_data.storm_file,
+            "netcdf_era5" if data_file_format in ("netcdf_era5_hpa",
+                                                  "netcdf_era5_hours")
+            else data_file_format)
 
     else:
         raise ValueError(f"Unsupported data_file_format={data_file_format}")
@@ -649,7 +753,8 @@ def test_isaac(tmp_path: Path, download_cache: Path, data_file_format: str, save
     # underlying forcing (from the same committed OWI files, unit-converted)
     # is identical.  If the simulation results differ from the owi_ascii
     # baseline, stop and investigate before generating new reference files.
-    if data_file_format in ("netcdf_era5", "netcdf_nws13"):
+    if data_file_format in ("netcdf_era5", "netcdf_nws13", "netcdf_era5_hpa",
+                            "netcdf_era5_hours"):
         gauge_regression_path = runner.test_path / "regression_data" / "owi_ascii"
     else:
         gauge_regression_path = check_path

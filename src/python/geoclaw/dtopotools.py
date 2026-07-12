@@ -677,7 +677,8 @@ class DTopography(object):
         """
         import pandas as pd
 
-        from clawpack.geoclaw.netcdf_utils import DTopoInspector
+        from clawpack.geoclaw.netcdf_utils import (DTopoInspector,
+                                                   _normalize_cf_unit)
         from clawpack.geoclaw.topotools import extract_datum
 
         with DTopoInspector(path, time_reference=time_reference) as inspector:
@@ -694,11 +695,23 @@ class DTopography(object):
                             inspector.time_reference = \
                                 raw_units[idx + len(" since "):].strip()
 
-            meta = inspector.inspect_dtopo()
+            # allow_conversion=True: an in-memory read converts a recognized
+            # non-meter deformation unit (e.g. km) to meters; a missing or
+            # unrecognized unit still raises (units are never assumed for
+            # NetCDF dtopo -- ASCII dtopo types remain meters-implied).
+            meta = inspector.inspect_dtopo(allow_conversion=True)
             lon = inspector.ds[meta.x_name].values.astype(numpy.float64)
             lat = inspector.ds[meta.y_name].values.astype(numpy.float64)
             dZ = numpy.asarray(inspector.ds[meta.var_name].values,
                                dtype=numpy.float64)
+            # Convert deformation to meters if the file declared another
+            # (recognized) unit; contract is meters (GEOCLAW_NETCDF_UNITS).
+            _src_units = getattr(inspector, "source_units", "m")
+            _meters_aliases = ("m", "meter", "meters", "metre", "metres")
+            if _src_units and _src_units not in _meters_aliases:
+                _canonical = _normalize_cf_unit(_src_units)
+                if _canonical is not None:
+                    dZ = dZ * units.convert(1.0, _canonical, "m")
             # Optional vertical datum metadata (informational only).
             self.datum = extract_datum(inspector.ds[meta.var_name].attrs,
                                        inspector.ds.attrs)

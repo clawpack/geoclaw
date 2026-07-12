@@ -835,7 +835,11 @@ class Topography(object):
                     # fill values are handled below via NaN replacement)
                     _meta = inspector.inspect(inspector.var_name)
                     # Check and record units; warns if conversion is needed
-                    _source_units = inspector._check_topo_units()
+                    # In-memory read converts recognized non-meter units to
+                    # meters (the conversion block below applies the factor);
+                    # the Fortran descriptor path stays strict for now.
+                    _source_units = inspector._check_topo_units(
+                        allow_conversion=True)
 
                     ds = inspector.ds
                     _x_name = _meta.x_name

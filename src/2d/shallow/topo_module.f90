@@ -46,6 +46,7 @@ module topo_module
     character(len=32), allocatable :: nc_dim_order(:)    ! e.g. 'y,x' (logged only)
     character(len=8),  allocatable :: nc_fill_action(:)  ! 'abort' or 'warn'
     real(kind=8),      allocatable :: nc_lon_wrap_offset(:) ! longitude 0-360 wrap: x_domain = x_file + lon_wrap_offset
+    real(kind=8),      allocatable :: nc_scale_factor(:) ! multiply elevation by this on read (unit conversion -> meters)
     real(kind=8),      allocatable :: nc_fill_value(:)   ! fill/nodata sentinel
     real(kind=8),      allocatable :: nc_crop_bounds(:,:) ! (4, n): lon0,lon1,lat0,lat1
     logical,           allocatable :: nc_has_fill(:)     ! fill_value was specified
@@ -84,6 +85,7 @@ module topo_module
     character(len=64), allocatable :: dnc_var_name(:), dnc_x_name(:), &
                                       dnc_y_name(:), dnc_dim_order(:)
     real(kind=8), allocatable :: dnc_lon_wrap_offset(:), dnc_t0(:), dnc_dt(:)
+    real(kind=8), allocatable :: dnc_scale_factor(:) ! multiply deformation by this on read (-> meters)
     logical, allocatable :: dnc_has_descriptor(:)
 
     ! dtopo variables
@@ -208,6 +210,7 @@ contains
                 allocate(nc_y_name(mtopofiles), nc_y_increasing(mtopofiles))
                 allocate(nc_dim_order(mtopofiles), nc_fill_action(mtopofiles))
                 allocate(nc_lon_wrap_offset(mtopofiles), nc_fill_value(mtopofiles))
+                allocate(nc_scale_factor(mtopofiles))
                 allocate(nc_crop_bounds(4, mtopofiles))
                 allocate(nc_has_fill(mtopofiles), nc_has_crop(mtopofiles))
                 nc_var_name      = ''
@@ -217,6 +220,7 @@ contains
                 nc_dim_order     = 'y,x'
                 nc_fill_action   = 'abort'
                 nc_lon_wrap_offset    = 0.0d0
+                nc_scale_factor  = 1.0d0
                 nc_fill_value    = 0.0d0
                 nc_crop_bounds   = 0.0d0
                 nc_has_fill      = .false.
@@ -1130,6 +1134,19 @@ contains
                         end do
                     end if
 
+                    ! Unit conversion: multiply elevation to meters if the
+                    ! descriptor recorded a non-unit scale_factor (Python
+                    ! computed it from the file's 'units').  topo_missing
+                    ! markers are left untouched; scale 1.0 is a no-op so
+                    ! contract-unit (meters) files are bit-identical.
+                    if (present(topo_idx)) then
+                        if (nc_scale_factor(topo_idx) /= 1.0d0) then
+                            where (topo(1:mtot) /= topo_missing) &
+                                topo(1:mtot) = topo(1:mtot) &
+                                               * nc_scale_factor(topo_idx)
+                        end if
+                    end if
+
                     ! Honour 'positive = down' attribute (flip sign for depth-positive files).
                     ! Only flip when topo_type > 0 to avoid double-flip for negative types.
                     ios = nf90_get_att(nc_file, z_var_id, 'positive', direction)
@@ -1691,12 +1708,14 @@ contains
         allocate(dnc_var_name(num_dtopo),dnc_x_name(num_dtopo))
         allocate(dnc_y_name(num_dtopo),dnc_dim_order(num_dtopo))
         allocate(dnc_lon_wrap_offset(num_dtopo),dnc_t0(num_dtopo),dnc_dt(num_dtopo))
+        allocate(dnc_scale_factor(num_dtopo))
         allocate(dnc_has_descriptor(num_dtopo))
         dnc_var_name = ''
         dnc_x_name = ''
         dnc_y_name = ''
         dnc_dim_order = ''
         dnc_lon_wrap_offset = 0.0d0
+        dnc_scale_factor = 1.0d0
         dnc_t0 = 0.0d0
         dnc_dt = 0.0d0
         dnc_has_descriptor = .false.
@@ -1952,6 +1971,16 @@ contains
                 end do
             end if
             deallocate(nc_buffer)
+
+            ! Unit conversion: multiply deformation to meters if the descriptor
+            ! recorded a non-unit scale_factor (Python computed it from the
+            ! file's 'units').  Scale 1.0 is a no-op so contract-unit (meters)
+            ! files are bit-identical.
+            if (present(dtopo_idx)) then
+                if (dnc_scale_factor(dtopo_idx) /= 1.0d0) then
+                    dtopo(:) = dtopo(:) * dnc_scale_factor(dtopo_idx)
+                end if
+            end if
 
             call check_netcdf_error(nf90_close(nc_file))
 #else
@@ -2469,6 +2498,8 @@ contains
                     nc_y_name(idx) = trim(val)
                 case ('lon_wrap_offset')
                     read(val, *) nc_lon_wrap_offset(idx)
+                case ('scale_factor')
+                    read(val, *) nc_scale_factor(idx)
                 case ('y_increasing')
                     ! Python writes the bool as 'True'/'False'; list-directed
                     ! logical read accepts the leading T/F.  Logged only.
@@ -2496,6 +2527,7 @@ contains
         write(GEO_PARM_UNIT, *) '    x_name          = ', trim(nc_x_name(idx))
         write(GEO_PARM_UNIT, *) '    y_name          = ', trim(nc_y_name(idx))
         write(GEO_PARM_UNIT, *) '    lon_wrap_offset = ', nc_lon_wrap_offset(idx)
+        write(GEO_PARM_UNIT, *) '    scale_factor    = ', nc_scale_factor(idx)
         write(GEO_PARM_UNIT, *) '    y_increasing    = ', nc_y_increasing(idx)
         write(GEO_PARM_UNIT, *) '    fill_action     = ', trim(nc_fill_action(idx))
         if (nc_has_fill(idx)) &
@@ -2570,6 +2602,8 @@ contains
                     continue    ! informational; t0/dt carried directly
                 case ('lon_wrap_offset')
                     read(val, *) dnc_lon_wrap_offset(idx)
+                case ('scale_factor')
+                    read(val, *) dnc_scale_factor(idx)
                 case ('y_increasing')
                     continue    ! detected from coordinates at read time
                 case ('dim_order')
@@ -2593,6 +2627,7 @@ contains
         write(GEO_PARM_UNIT, *) '    x_name          = ', trim(dnc_x_name(idx))
         write(GEO_PARM_UNIT, *) '    y_name          = ', trim(dnc_y_name(idx))
         write(GEO_PARM_UNIT, *) '    lon_wrap_offset = ', dnc_lon_wrap_offset(idx)
+        write(GEO_PARM_UNIT, *) '    scale_factor    = ', dnc_scale_factor(idx)
         write(GEO_PARM_UNIT, *) '    t0             = ', dnc_t0(idx)
         write(GEO_PARM_UNIT, *) '    dt             = ', dnc_dt(idx)
 

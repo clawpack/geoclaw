@@ -118,6 +118,25 @@ def _unit_matches_contract(cf_unit: str, contract_unit: str) -> bool:
 _TIME_UNIT_ABBREVS: frozenset[str] = frozenset({'s', 'min', 'h', 'days'})
 
 
+def _units_scale(cf_unit: str, contract: str) -> float:
+    """Multiplicative factor converting a value in *cf_unit* to *contract*.
+
+    Returns 1.0 when *cf_unit* is a recognised alias of *contract* (no
+    conversion needed).  Assumes *cf_unit* has already been validated as
+    convertible (see NetCDFInspector._check_units); raises ValueError if it
+    cannot be normalised, as a defensive guard.
+    """
+    if _unit_matches_contract(cf_unit, contract):
+        return 1.0
+    canonical = _normalize_cf_unit(cf_unit)
+    if canonical is None:
+        raise ValueError(
+            f"Cannot compute a scale factor for units '{cf_unit}' -> "
+            f"'{contract}': unit not recognised."
+        )
+    return float(units_convert(1.0, canonical, contract))
+
+
 def _cf_time_units_to_seconds_factor(cf_unit: str) -> float:
     """Multiplicative factor converting a value in *cf_unit* to seconds.
 
@@ -181,6 +200,7 @@ class TopoMetadata(FileMetadata):
     source_units: str    # units as found in file
     fill_action: str     # 'abort' (only value for topo; fill = fatal)
     lon_wrap_offset: float = 0.0  # scalar Fortran adds to file coords: x_domain = x_file + lon_wrap_offset
+    scale_factor: float = 1.0  # multiply elevation by this on read to get meters
 
 
 @dataclasses.dataclass
@@ -196,6 +216,7 @@ class DTopoMetadata(FileMetadata):
     dt: float            # uniform time step, seconds (0.0 when mt == 1)
     mt: int              # number of times (informational; Fortran uses dims)
     lon_wrap_offset: float = 0.0  # scalar Fortran adds: x_domain = x_file + offset
+    scale_factor: float = 1.0  # multiply deformation by this on read to get meters
 
 
 @dataclasses.dataclass
@@ -204,6 +225,7 @@ class MetVariableInfo:
     var_name: str
     geoclaw_role: str    # 'wind_u', 'wind_v', 'pressure'
     source_units: str    # units as found in file
+    scale_factor: float = 1.0  # multiply this variable by this on read (-> contract unit)
 
 
 @dataclasses.dataclass
@@ -212,6 +234,7 @@ class MetMetadata(FileMetadata):
     variables: list[MetVariableInfo]
     time_offset: float   # seconds; Fortran adds this to times read from file
     fill_action: str     # 'abort' or 'warn'
+    time_scale: float = 1.0  # seconds per file time unit; Fortran multiplies elapsed time by this
 
 
 # ---------------------------------------------------------------------------
@@ -504,6 +527,68 @@ class NetCDFInspector:
     def __exit__(self, *args: object) -> None:
         self.close()
 
+    # ------------------------------------------------------------------
+    # Shared unit resolution (used by Topo and DTopo inspectors)
+    # ------------------------------------------------------------------
+
+    def _check_units(self, contract: str,
+                     allow_conversion: bool = False) -> str:
+        """
+        Resolve ``self.var_name``'s units against *contract*.
+
+        Returns the source unit string; the caller converts the data when it
+        is a recognised non-contract unit.  Units are never silently assumed
+        or mixed:
+
+        * missing ``units`` -> ValueError unless ``self.assume_units`` is set
+          (the assumed unit is then treated as if it were declared);
+        * unrecognised / dimensionally-incompatible unit -> ValueError;
+        * recognised non-contract unit -> returned for conversion when
+          *allow_conversion* is True (the in-memory read paths convert via
+          ``units.convert``); otherwise ValueError, because the Fortran
+          descriptor read path cannot yet apply a scale factor (Fortran-side
+          scaling is a later phase of the NetCDF unit strategy).
+        """
+        var_name = self.var_name
+        cf_unit = self.ds[var_name].attrs.get('units', '')
+        assume = getattr(self, 'assume_units', None)
+
+        if not cf_unit:
+            if assume is None:
+                raise ValueError(
+                    f"Variable '{var_name}' in '{self.path}' has no 'units' "
+                    f"attribute.  Units are required and never assumed: add a "
+                    f"CF 'units' attribute (e.g. '{contract}') to the file, or "
+                    f"pass assume_units if you are certain of the units."
+                )
+            cf_unit = assume  # treat the assumed unit as if declared
+
+        if _unit_matches_contract(cf_unit, contract):
+            return cf_unit
+
+        canonical = _normalize_cf_unit(cf_unit)
+        if canonical is None:
+            raise ValueError(
+                f"Unrecognised units '{cf_unit}' on variable '{var_name}' "
+                f"in '{self.path}'.  Contract requires '{contract}'.  "
+                f"Pre-convert the file to '{contract}'."
+            )
+
+        if not allow_conversion:
+            raise ValueError(
+                f"Variable '{var_name}' in '{self.path}' has units '{cf_unit}'; "
+                f"contract requires '{contract}'.  Automatic unit conversion on "
+                f"the Fortran (descriptor) read path is not yet supported, so "
+                f"this file is rejected rather than silently misread.  Read it "
+                f"into memory (which converts) or pre-convert the file first."
+            )
+        warnings.warn(
+            f"Variable '{var_name}' in '{self.path}' has units '{cf_unit}'; "
+            f"converting to '{contract}' on read.",
+            stacklevel=3,
+        )
+        return cf_unit
+
 
 # ---------------------------------------------------------------------------
 # Topo inspector
@@ -618,52 +703,25 @@ class TopoInspector(NetCDFInspector):
     # Unit verification
     # ------------------------------------------------------------------
 
-    def _check_topo_units(self) -> str:
+    def _check_topo_units(self, allow_conversion: bool = False) -> str:
         """
-        Verify units of *var_name* are meters (GEOCLAW_NETCDF_UNITS['topo']).
+        Resolve the elevation variable's units against the meters contract.
 
-        Returns the units string found in the file.  Units are never silently
-        assumed or mixed: a missing ``units`` attribute raises ValueError
-        (unless *assume_units* was set explicitly), and any non-meter unit --
-        even a recognised, convertible one such as ``km`` -- also raises,
-        because the Fortran read path (and the in-memory read here) consume the
-        raw values as meters with no conversion.  Pre-convert such files to
-        meters first.
+        Returns the source unit string; the caller converts the data to meters
+        when it is a recognised non-meter unit.  Units are never silently
+        assumed or mixed:
+
+        * missing ``units`` -> ValueError unless ``assume_units`` was set
+          (the assumed unit is then treated as if it were declared);
+        * unrecognised / dimensionally-incompatible unit -> ValueError;
+        * recognised non-meter unit (e.g. ``km``) -> returned for conversion
+          when ``allow_conversion`` is True (the in-memory ``Topography.read``
+          path converts via ``units.convert``); otherwise ValueError, because
+          the Fortran descriptor read path cannot yet apply a scale factor
+          (Fortran-side scaling is a later phase of the NetCDF unit strategy).
         """
-        contract = GEOCLAW_NETCDF_UNITS['topo']  # 'm'
-        cf_unit = self.ds[self.var_name].attrs.get('units', '')
-
-        if not cf_unit:
-            if self.assume_units is not None:
-                # Deliberate caller override for a known-unitless file.
-                return self.assume_units
-            raise ValueError(
-                f"Variable '{self.var_name}' in '{self.path}' has no 'units' "
-                f"attribute.  Units are required and never assumed: add a CF "
-                f"'units' attribute (e.g. 'm') to the file, or pass "
-                f"assume_units='m' if you are certain the data are in meters."
-            )
-
-        if _unit_matches_contract(cf_unit, contract):
-            return cf_unit
-
-        # Any other unit -- recognised-but-non-meter (e.g. 'km') or entirely
-        # unrecognised -- is rejected: the read paths do not convert, so
-        # proceeding would silently corrupt the bathymetry.
-        canonical = _normalize_cf_unit(cf_unit)
-        if canonical is not None:
-            raise ValueError(
-                f"Variable '{self.var_name}' in '{self.path}' has units "
-                f"'{cf_unit}'; contract requires '{contract}'.  Unit conversion "
-                f"on the read path is not supported, so this file is rejected "
-                f"rather than silently misread.  Pre-convert the data to meters "
-                f"first."
-            )
-        raise ValueError(
-            f"Unrecognised units '{cf_unit}' on variable '{self.var_name}' "
-            f"in '{self.path}'.  Contract requires '{contract}'.  Pre-convert "
-            f"the file to meters."
-        )
+        return self._check_units(GEOCLAW_NETCDF_UNITS['topo'],
+                                 allow_conversion=allow_conversion)
 
     # ------------------------------------------------------------------
     # Fill value check within crop region
@@ -722,13 +780,18 @@ class TopoInspector(NetCDFInspector):
         if self.var_name is None:
             self.var_name = self._find_topo_var_name()
         base = self.inspect(self.var_name)
-        source_units = self._check_topo_units()
+        # Descriptor/Fortran path converts recognized non-meter units: record
+        # the source unit and a multiplicative scale_factor that Fortran
+        # applies on read (missing/unrecognized units still raise).
+        source_units = self._check_topo_units(allow_conversion=True)
+        scale_factor = _units_scale(source_units, GEOCLAW_NETCDF_UNITS['topo'])
         self._check_fill_in_crop(base.x_name, base.y_name, base.y_increasing)
 
         return TopoMetadata(
             **dataclasses.asdict(base),
             var_name=self.var_name,
             source_units=source_units,
+            scale_factor=scale_factor,
             fill_action='abort',  # fill in topo crop region is always fatal
             lon_wrap_offset=0.0,
         )
@@ -833,10 +896,21 @@ class DTopoInspector(NetCDFInspector):
         var_name: Optional[str] = None,
         time_reference: Optional[str] = None,
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
+        assume_units: Optional[str] = None,
     ) -> None:
         super().__init__(path, crop_bounds)
         self.var_name = var_name
         self.time_reference = time_reference
+        # Explicit escape hatch for a deformation variable with no 'units'
+        # attribute; otherwise missing units raise (units are never assumed).
+        self.assume_units = assume_units
+
+    def _check_dtopo_units(self, allow_conversion: bool = False) -> str:
+        """Resolve the deformation variable's units against the meters
+        contract (see NetCDFInspector._check_units).  dtopo deformation is in
+        meters, the same contract as topography."""
+        return self._check_units(GEOCLAW_NETCDF_UNITS['topo'],
+                                 allow_conversion=allow_conversion)
 
     def _find_dtopo_var_name(self) -> str:
         """Find the deformation variable: common names, else unique 3-D var."""
@@ -905,10 +979,21 @@ class DTopoInspector(NetCDFInspector):
             )
         return float(seconds[0]), dt, mt
 
-    def inspect_dtopo(self) -> DTopoMetadata:
-        """Fully inspect the dtopo file and return a DTopoMetadata."""
+    def inspect_dtopo(self, allow_conversion: bool = True) -> DTopoMetadata:
+        """Fully inspect the dtopo file and return a DTopoMetadata.
+
+        Verifies deformation units (meters), records the source unit on
+        ``self.source_units``, and stores a ``scale_factor`` in the metadata.
+        With *allow_conversion* True (the default) a recognised non-meter unit
+        yields a scale_factor (applied in memory by ``DTopography.read`` or by
+        Fortran via the descriptor); a missing or unrecognised unit still
+        raises (units are never assumed).  Pass False to hard-reject any
+        non-meter unit.
+        """
         if self.var_name is None:
             self.var_name = self._find_dtopo_var_name()
+        self.source_units = self._check_dtopo_units(
+            allow_conversion=allow_conversion)
         base = self.inspect(self.var_name)
 
         if base.time_name is None:
@@ -939,6 +1024,8 @@ class DTopoInspector(NetCDFInspector):
             t0=t0,
             dt=dt,
             mt=mt,
+            scale_factor=_units_scale(self.source_units,
+                                      GEOCLAW_NETCDF_UNITS['topo']),
         )
 
 
@@ -1155,13 +1242,12 @@ class MetInspector(NetCDFInspector):
         """
         Verify units for each variable match its contract unit.
 
-        Returns a list of MetVariableInfo with source_units populated.  Units
-        are never silently assumed or mixed: a missing ``units`` attribute
-        raises ValueError (unless *assume_units* was set explicitly), and any
-        non-contract unit -- even a recognised, convertible one such as
-        ``hPa`` or ``knots`` -- also raises, because the Fortran read path
-        consumes the raw values with no conversion.  Pre-convert such files to
-        the contract units first.
+        Returns a list of MetVariableInfo with source_units and a
+        scale_factor populated.  A recognised non-contract unit (e.g. ``hPa``,
+        ``mbar``, ``knots``) yields a multiplicative scale_factor that Fortran
+        applies on read.  Units are never silently assumed: a missing ``units``
+        attribute raises ValueError (unless *assume_units* was set), and an
+        unrecognised / dimensionally-incompatible unit also raises.
         """
         result: list[MetVariableInfo] = []
         for role, var_name in self.variable_map.items():
@@ -1207,24 +1293,29 @@ class MetInspector(NetCDFInspector):
                 ))
                 continue
 
-            # Any other unit -- recognised-but-non-contract (e.g. 'hPa',
-            # 'knots') or entirely unrecognised -- is rejected: the read path
-            # does not convert, so proceeding would silently corrupt the
-            # forcing.  Pre-convert the file to the contract units first.
+            # Recognised non-contract unit (e.g. 'hPa', 'mbar', 'knots'):
+            # compute a scale_factor Fortran applies on read.  An
+            # unrecognised unit is rejected (never silently misread).
             canonical = _normalize_cf_unit(cf_unit)
-            if canonical is not None:
+            if canonical is None:
                 raise ValueError(
-                    f"Variable '{var_name}' (role '{role}') in '{self.path}' "
-                    f"has units '{cf_unit}'; contract requires '{contract}'.  "
-                    f"Unit conversion on the read path is not supported, so "
-                    f"this file is rejected rather than silently misread.  "
-                    f"Pre-convert the data to '{contract}' first."
+                    f"Unrecognised units '{cf_unit}' on variable '{var_name}' "
+                    f"(role '{role}') in '{self.path}'.  Contract requires "
+                    f"'{contract}'.  Pre-convert the file to '{contract}'."
                 )
-            raise ValueError(
-                f"Unrecognised units '{cf_unit}' on variable '{var_name}' "
-                f"(role '{role}') in '{self.path}'.  Contract requires "
-                f"'{contract}'.  Pre-convert the file to '{contract}'."
+            scale = _units_scale(cf_unit, contract)
+            warnings.warn(
+                f"Variable '{var_name}' (role '{role}') in '{self.path}' has "
+                f"units '{cf_unit}'; converting to '{contract}' on read "
+                f"(scale_factor={scale}).",
+                stacklevel=3,
             )
+            result.append(MetVariableInfo(
+                var_name=var_name,
+                geoclaw_role=role,
+                source_units=cf_unit,
+                scale_factor=scale,
+            ))
 
         return result
 
@@ -1232,12 +1323,14 @@ class MetInspector(NetCDFInspector):
     # CF time -> seconds offset
     # ------------------------------------------------------------------
 
-    def _compute_time_offset(self, time_name: str) -> float:
+    def _compute_time_offset(self, time_name: str) -> tuple[float, float]:
         """
-        Compute time_offset in seconds.
+        Compute (time_offset, time_scale).
 
         time_offset = seconds between *time_reference* and the first time
-        value in the file (after CF decoding by xarray).
+        value in the file (after CF decoding by xarray);
+        time_scale = seconds per file time unit (1.0 for "seconds since ...",
+        3600.0 for "hours since ...", etc.), applied by Fortran on read.
 
         This reads only the first element of the time coordinate — a minimal
         data fetch, not a full array load.
@@ -1268,26 +1361,6 @@ class MetInspector(NetCDFInspector):
                 f"a bare duration."
             )
 
-        # The met time axis must be in seconds.  Fortran reads the raw time
-        # values into an integer array and computes raw[i] - raw[0] +
-        # nc_time_offset, treating them as seconds without scaling by the CF
-        # unit, so an "hours since"/"days since" axis (e.g. a raw ERA5 file)
-        # would be silently misread.  xarray moves the original units string to
-        # .encoding when it decodes the datetime axis; reject any non-second
-        # unit here rather than producing wrong forcing.
-        _raw_units = str(time_coord.encoding.get('units')
-                         or time_coord.attrs.get('units', '')).strip()
-        if ' since ' in _raw_units.lower():
-            _unit_part = _raw_units.lower().split(' since ', 1)[0].strip()
-            if _unit_part not in ('s', 'sec', 'secs', 'second', 'seconds'):
-                raise ValueError(
-                    f"Time axis '{time_name}' in '{self.path}' has units "
-                    f"'{_raw_units}'; met/storm forcing requires the time axis "
-                    f"in seconds ('seconds since <date>').  GeoClaw reads the "
-                    f"raw time values as integer seconds without unit scaling, "
-                    f"so convert the file to 'seconds since ...' first."
-                )
-
         try:
             t0 = pd.Timestamp(t0_raw)
         except Exception as exc:
@@ -1303,7 +1376,22 @@ class MetInspector(NetCDFInspector):
             ref = pd.Timestamp(self.time_reference)
 
         offset_s = (t0 - ref).total_seconds()
-        return float(offset_s)
+
+        # Seconds per file time unit.  Fortran reads the raw time values as
+        # integers and computes
+        #   storm_time = nint((raw - raw[0]) * time_scale) + nint(nc_time_offset)
+        # so a "hours since"/"days since" axis (e.g. a raw ERA5 file) is
+        # converted to seconds via time_scale; a "seconds since" axis gives
+        # 1.0 (unchanged).  xarray moves the original units to .encoding after
+        # decoding the datetime axis.  An unrecognised time unit raises.
+        time_scale = 1.0
+        _raw_units = str(time_coord.encoding.get('units')
+                         or time_coord.attrs.get('units', '')).strip()
+        if ' since ' in _raw_units.lower():
+            _unit_part = _raw_units.lower().split(' since ', 1)[0].strip()
+            time_scale = _cf_time_units_to_seconds_factor(_unit_part)
+
+        return float(offset_s), float(time_scale)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -1334,13 +1422,14 @@ class MetInspector(NetCDFInspector):
         )
         self._check_ensemble_dims(known_dims)
         variable_infos = self._check_met_units()
-        time_offset = self._compute_time_offset(base.time_name)
+        time_offset, time_scale = self._compute_time_offset(base.time_name)
 
         return MetMetadata(
             **dataclasses.asdict(base),
             variables=variable_infos,
             time_offset=time_offset,
             fill_action=self.fill_action,
+            time_scale=time_scale,
         )
 
 
@@ -1589,6 +1678,7 @@ class DescriptorWriter:
         f.write(f"lon_wrap_offset = {meta.lon_wrap_offset!r}\n")
         f.write(f"y_increasing   = {meta.y_increasing}\n")
         f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
+        f.write(f"scale_factor   = {meta.scale_factor!r}\n")
         if meta.fill_value is not None:
             f.write(f"fill_value     = {meta.fill_value!r}\n")
         f.write(f"fill_action    = {meta.fill_action}\n")
@@ -1619,6 +1709,7 @@ class DescriptorWriter:
         f.write(f"y_name         = {meta.y_name}\n")
         f.write(f"time_name      = {meta.time_name}\n")
         f.write(f"lon_wrap_offset = {meta.lon_wrap_offset!r}\n")
+        f.write(f"scale_factor   = {meta.scale_factor!r}\n")
         f.write(f"y_increasing   = {meta.y_increasing}\n")
         f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
         f.write(f"t0             = {meta.t0!r}\n")
@@ -1656,6 +1747,7 @@ class DescriptorWriter:
             f.write(f"  fill_value     = {meta.fill_value!r}\n")
         f.write(f"  fill_action    = {meta.fill_action}\n")
         f.write(f"  time_offset    = {meta.time_offset!r}\n")
+        f.write(f"  time_scale     = {meta.time_scale!r}\n")
         if meta.crop_bounds is not None:
             x0, x1, y0, y1 = meta.crop_bounds
             f.write(f"  crop_bounds    = {x0} {x1} {y0} {y1}\n")
@@ -1665,5 +1757,6 @@ class DescriptorWriter:
                 f"&variable_info"
                 f"  var_name={var.var_name}"
                 f"  geoclaw_role={var.geoclaw_role}"
+                f"  scale_factor={var.scale_factor!r}"
                 f"  /\n"
             )

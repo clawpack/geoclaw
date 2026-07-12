@@ -24,8 +24,12 @@ pytestmark = [pytest.mark.python, pytest.mark.netcdf]
 
 
 def make_dtopo_dataset(times=None, var_name="dz", dims=("time", "lat", "lon"),
-                       nlat=6, nlon=5):
-    """Build a small in-memory dtopo dataset with deterministic values."""
+                       nlat=6, nlon=5, units="meters"):
+    """Build a small in-memory dtopo dataset with deterministic values.
+
+    The deformation variable declares ``units`` (meters by default); the
+    dtopo inspector requires a units attribute on the NetCDF read path.
+    """
     if times is None:
         times = np.array([0.0, 0.5, 1.0])
     coords = {
@@ -36,7 +40,8 @@ def make_dtopo_dataset(times=None, var_name="dz", dims=("time", "lat", "lon"),
     sizes = {"time": len(coords["time"]), "lat": nlat, "lon": nlon}
     shape = [sizes[d] for d in dims]
     data = np.arange(np.prod(shape), dtype=float).reshape(shape)
-    return xr.Dataset({var_name: (list(dims), data)},
+    attrs = {"units": units} if units else {}
+    return xr.Dataset({var_name: (list(dims), data, attrs)},
                       coords={d: coords[d] for d in dims})
 
 

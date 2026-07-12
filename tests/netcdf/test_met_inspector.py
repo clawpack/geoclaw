@@ -128,47 +128,40 @@ def test_non_singleton_ensemble_dim_raises(met_file_factory):
 @pytest.mark.parametrize("unit_cfg", PRESSURE_UNIT_VARIANTS)
 def test_pressure_unit_variants(met_file_factory, unit_cfg):
     """
-    Pressure in the contract unit (Pa) passes and is recorded in
-    source_units; any non-contract unit (hPa, mbar) is rejected rather than
-    silently misread, since the read path does not convert.
+    Pressure in a recognized unit is converted to Pa on read via a
+    scale_factor recorded in the metadata (Pa -> 1.0, hPa/mbar -> 100.0),
+    which Fortran applies on read.
     """
     pressure_units = unit_cfg["pressure_units"]
     expected_source = unit_cfg["expected_source"]
+    expected_scale = {"Pa": 1.0, "hPa": 100.0, "mbar": 100.0}[pressure_units]
 
     path = met_file_factory(pressure_units=pressure_units)
-    if pressure_units == "Pa":
-        with MetInspector(path, variable_map=_VAR_MAP) as insp:
-            meta = insp.inspect_met()
-        pressure_info = next(v for v in meta.variables
-                             if v.geoclaw_role == "pressure")
-        assert pressure_info.source_units == expected_source
-    else:
-        with MetInspector(path, variable_map=_VAR_MAP) as insp:
-            with pytest.raises(ValueError, match=pressure_units):
-                insp.inspect_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
+    pressure_info = next(v for v in meta.variables
+                         if v.geoclaw_role == "pressure")
+    assert pressure_info.source_units == expected_source
+    assert pressure_info.scale_factor == pytest.approx(expected_scale)
 
 
 @pytest.mark.parametrize("unit_cfg", WIND_UNIT_VARIANTS)
 def test_wind_unit_variants(met_file_factory, unit_cfg):
     """
-    Wind in the contract unit (m/s) passes and is recorded in source_units;
-    a non-contract unit (knots) is rejected rather than silently misread,
-    since the read path does not convert.
+    Wind in a recognized unit is converted to m/s on read via a scale_factor
+    (m/s -> 1.0, knots -> ~0.514), which Fortran applies on read.
     """
     wind_units = unit_cfg["wind_units"]
     expected_source = unit_cfg["expected_source"]
+    expected_scale = {"m/s": 1.0, "knots": 0.51444444}[wind_units]
 
     path = met_file_factory(wind_units=wind_units)
-    if wind_units == "m/s":
-        with MetInspector(path, variable_map=_VAR_MAP) as insp:
-            meta = insp.inspect_met()
-        wind_u_info = next(v for v in meta.variables
-                           if v.geoclaw_role == "wind_u")
-        assert wind_u_info.source_units == expected_source
-    else:
-        with MetInspector(path, variable_map=_VAR_MAP) as insp:
-            with pytest.raises(ValueError, match="m/s|" + wind_units):
-                insp.inspect_met()
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
+    wind_u_info = next(v for v in meta.variables
+                       if v.geoclaw_role == "wind_u")
+    assert wind_u_info.source_units == expected_source
+    assert wind_u_info.scale_factor == pytest.approx(expected_scale)
 
 
 def test_contract_units_no_warning(met_file_factory):
@@ -261,17 +254,17 @@ def test_numeric_time_axis_raises(tmp_path):
             insp.inspect_met()
 
 
-def test_non_seconds_time_axis_raises(tmp_path):
-    """The met time axis must be 'seconds since <date>'.  An 'hours since'
-    (or other non-second) datetime axis is rejected, because the Fortran met
-    reader treats raw time values as integer seconds without unit scaling."""
+def test_non_seconds_time_axis_scale(tmp_path):
+    """A non-second CF datetime axis ('hours since ...', e.g. a raw ERA5 file)
+    yields a time_scale (seconds per file time unit) that Fortran applies on
+    read -- hours -> 3600.  A 'seconds since' axis gives time_scale == 1.0."""
     ds = make_met_dataset()
     ds["time"].encoding = {}
     path = tmp_path / "met_hours.nc"
     ds.to_netcdf(path, encoding={"time": {"units": "hours since 2020-01-01"}})
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
-        with pytest.raises(ValueError, match="requires the time axis"):
-            insp.inspect_met()
+        meta = insp.inspect_met()
+    assert meta.time_scale == pytest.approx(3600.0)
 
 
 # ============================================================

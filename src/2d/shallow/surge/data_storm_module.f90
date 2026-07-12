@@ -112,10 +112,13 @@ contains
 
         ! NetCDF descriptor parsing (format 2)
         real(kind=8) :: nc_time_offset
+        real(kind=8) :: nc_time_scale       ! seconds per file time unit (unit conversion)
+        real(kind=8) :: var_scale(3), nc_sf ! per-variable unit-conversion scale factors
         integer :: lon_wrap
         character(len=512) :: nc_line, nc_key, nc_val
         integer :: nc_eq_pos, nc_in_file_info
         integer :: nc_vn_start, nc_vn_end, nc_role_start, nc_role_end
+        integer :: nc_sf_pos, nc_sf_start, nc_sf_end
 
         if (.not.module_setup) then
             ! Open data file
@@ -174,6 +177,8 @@ contains
                 case(2) ! NetCDF - &file_info / &variable_info namelist format
                     read(data_unit, *)  ! "# Format Data Information"
                     nc_time_offset = 0.0d0
+                    nc_time_scale = 1.0d0
+                    var_scale = 1.0d0
                     lon_wrap = 180
                     nc_in_file_info = 0
                     dim_names = ''
@@ -223,13 +228,31 @@ contains
                             end do
                             nc_key = nc_line(nc_role_start:nc_role_end-1)
 
+                            ! Optional scale_factor= token (unit conversion);
+                            ! defaults to 1.0 when absent (older descriptors).
+                            nc_sf = 1.0d0
+                            nc_sf_pos = index(nc_line, 'scale_factor=')
+                            if (nc_sf_pos > 0) then
+                                nc_sf_start = nc_sf_pos + 13
+                                nc_sf_end = nc_sf_start
+                                do while (nc_sf_end <= len_trim(nc_line) .and. &
+                                          nc_line(nc_sf_end:nc_sf_end) /= ' ' .and. &
+                                          nc_line(nc_sf_end:nc_sf_end) /= '/')
+                                    nc_sf_end = nc_sf_end + 1
+                                end do
+                                read(nc_line(nc_sf_start:nc_sf_end-1), *) nc_sf
+                            end if
+
                             select case(trim(nc_key))
                                 case('wind_u')
                                     var_names(1) = trim(nc_val)
+                                    var_scale(1) = nc_sf
                                 case('wind_v')
                                     var_names(2) = trim(nc_val)
+                                    var_scale(2) = nc_sf
                                 case('pressure')
                                     var_names(3) = trim(nc_val)
+                                    var_scale(3) = nc_sf
                             end select
                             cycle
                         end if
@@ -251,6 +274,8 @@ contains
                                         read(nc_val, *) lon_wrap
                                     case('time_offset')
                                         read(nc_val, *) nc_time_offset
+                                    case('time_scale')
+                                        read(nc_val, *) nc_time_scale
                                 end select
                             end if
                         end if
@@ -420,9 +445,14 @@ contains
                     ! nc_time_offset = (first_file_time - storm_offset) in s.
                     ! Subtracting raw[0] handles files where time is stored as
                     ! absolute seconds (e.g. Unix epoch) rather than relative.
-                    ! storm_time_scale is applied uniformly after the select.
-                    storm%time(:) = storm%time(:) - storm%time(1) &
-                                    + nint(nc_time_offset)
+                    ! nc_time_scale (seconds per file time unit; 1.0 for a
+                    ! "seconds since" axis) converts the elapsed raw time to
+                    ! seconds -- e.g. an "hours since" ERA5 axis uses 3600.
+                    ! (Distinct from the physical storm_time_scale applied
+                    ! uniformly after the select.)
+                    storm%time(:) = &
+                        nint(dble(storm%time(:) - storm%time(1)) * nc_time_scale) &
+                        + nint(nc_time_offset)
 
                     ! Wind/pressure: strided read of the [i0:i1, j0:j1] crop
                     ! window over all times.  Variable dims are (lon, lat, time)
@@ -432,6 +462,7 @@ contains
                         call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(1)), var_ID))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_ID, &
                             storm%wind_u, start=[i0, j0, 1], count=[mx, my, mt]))
+                        storm%wind_u = storm%wind_u * var_scale(1)   ! -> m/s
                     else
                         write(log_unit, *) "Warning: wind_u not in descriptor, setting to zero."
                         storm%wind_u = 0.0d0
@@ -440,6 +471,7 @@ contains
                         call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(2)), var_ID))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_ID, &
                             storm%wind_v, start=[i0, j0, 1], count=[mx, my, mt]))
+                        storm%wind_v = storm%wind_v * var_scale(2)   ! -> m/s
                     else
                         write(log_unit, *) "Warning: wind_v not in descriptor, setting to zero."
                         storm%wind_v = 0.0d0
@@ -449,6 +481,7 @@ contains
                         call check_netcdf_error(nf90_inq_varid(nc_fid, trim(var_names(3)), var_ID))
                         call check_netcdf_error(nf90_get_var(nc_fid, var_ID, &
                             storm%pressure, start=[i0, j0, 1], count=[mx, my, mt]))
+                        storm%pressure = storm%pressure * var_scale(3)   ! -> Pa
                     else
                         write(log_unit, *) "Warning: pressure not in descriptor, setting to zero."
                         storm%pressure = 0.0d0

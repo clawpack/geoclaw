@@ -215,6 +215,40 @@ def test_netcdf(tmp_path):
 
 @pytest.mark.python
 @pytest.mark.netcdf
+def test_netcdf_read_converts_units(tmp_path):
+    r"""Topography.read(topo_type=4) converts a recognized non-meter elevation
+    unit (km) to meters in memory; the Fortran descriptor path records an
+    equivalent scale_factor (applied by Fortran on read)."""
+    xr = pytest.importorskip("xarray")
+    from clawpack.geoclaw.netcdf_utils import TopoInspector
+
+    x = np.linspace(-1.0, 1.0, 5)
+    y = np.linspace(-2.0, 2.0, 4)
+    Z_m = np.outer(np.linspace(-1000.0, 1000.0, 4), np.ones(5))
+
+    # File declares km; on-disk values are the meter values / 1000.
+    ds = xr.Dataset(
+        {"elevation": (("latitude", "longitude"), Z_m / 1000.0,
+                       {"units": "km", "standard_name": "height"})},
+        coords={"latitude": y, "longitude": x},
+    )
+    path = tmp_path / "topo_km.nc"
+    ds.to_netcdf(path)
+
+    # In-memory read converts km -> m.
+    topo = topotools.Topography(path=str(path), topo_type=4)
+    topo.read()
+    assert np.allclose(topo.Z, Z_m), "km elevation was not converted to meters"
+
+    # Descriptor (Fortran) path now also converts: it records a scale_factor
+    # (km -> m) that Fortran applies on read.
+    with TopoInspector(str(path), var_name="elevation") as insp:
+        meta = insp.inspect_topo()
+    assert meta.scale_factor == pytest.approx(1000.0)   # km value * 1000 = m
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
 def test_netcdf_z_dtype_override(tmp_path):
     r"""z_dtype defaults to float32 on disk; 'float64' overrides it."""
     netCDF4 = pytest.importorskip("netCDF4")

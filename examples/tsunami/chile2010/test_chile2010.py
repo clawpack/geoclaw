@@ -251,7 +251,8 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
 @pytest.mark.remote
 @pytest.mark.tsunami
 @pytest.mark.netcdf
-def test_chile2010_dtopo_netcdf(tmp_path: Path, save: bool):
+@pytest.mark.parametrize("dz_units", ["meters", "km"])
+def test_chile2010_dtopo_netcdf(tmp_path: Path, save: bool, dz_units: str):
     """Chile 2010 regression test exercising the dtopo NetCDF (type=4) path.
 
     Regression coverage for a bug where a NetCDF dtopo file's time
@@ -278,7 +279,29 @@ def test_chile2010_dtopo_netcdf(tmp_path: Path, save: bool):
     runner.rundata.topo_data.topofiles = [[2, topo.path]]
 
     dtopo_nc_path = tmp_path / "dtopo_usgs100227.nc"
-    dtopo.write(dtopo_nc_path, dtopo_type=4)
+    if dz_units == "meters":
+        dtopo.write(dtopo_nc_path, dtopo_type=4)
+    else:
+        # Same deformation stored in kilometers (units='km'): the descriptor
+        # scale_factor (1000) must convert it to meters on the Fortran read,
+        # reproducing the meters baseline exactly.  Exercises the Fortran-side
+        # unit scaling for dtopo_type=4.
+        import numpy as np
+        import xarray as xr
+        x = dtopo.X[0, :]
+        y = dtopo.Y[:, 0]
+        ds = xr.Dataset(
+            {"dz": (("time", "lat", "lon"),
+                    np.asarray(dtopo.dZ, dtype=float) / 1000.0,
+                    {"units": "km", "long_name": "seafloor deformation"})},
+            coords={"time": np.asarray(dtopo.times, dtype=float),
+                    "lat": np.asarray(y, dtype=float),
+                    "lon": np.asarray(x, dtype=float)},
+        )
+        ds["time"].attrs.update(units="seconds")
+        ds.to_netcdf(dtopo_nc_path, encoding={
+            "dz": {"_FillValue": None}, "time": {"_FillValue": None},
+            "lat": {"_FillValue": None}, "lon": {"_FillValue": None}})
     runner.rundata.dtopo_data.dtopofiles = [[4, str(dtopo_nc_path)]]
 
     runner.write_data()

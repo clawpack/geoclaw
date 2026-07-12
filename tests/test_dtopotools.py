@@ -319,6 +319,71 @@ def test_dtopo_netcdf_default_dtype_is_float32(tmp_path):
 
 @pytest.mark.python
 @pytest.mark.netcdf
+def test_dtopo_netcdf_read_converts_units(tmp_path):
+    r"""DTopography.read(dtopo_type=4) converts a recognized non-meter
+    deformation unit (km) to meters in memory; the descriptor (Fortran) path
+    still rejects such a file."""
+    xr = pytest.importorskip("xarray")
+    from clawpack.geoclaw.netcdf_utils import DTopoInspector
+
+    base = _make_synthetic_dtopo()
+    # Write a km file: on-disk dz = meters / 1000, units='km'.
+    x = base.X[0, :]
+    y = base.Y[:, 0]
+    ds = xr.Dataset(
+        {"dz": (("time", "lat", "lon"),
+                np.asarray(base.dZ, dtype=float) / 1000.0,
+                {"units": "km", "long_name": "seafloor deformation"})},
+        coords={"time": np.asarray(base.times, dtype=float),
+                "lat": np.asarray(y, dtype=float),
+                "lon": np.asarray(x, dtype=float)},
+    )
+    ds["time"].attrs.update(units="seconds")
+    path = tmp_path / "dtopo_km.nc"
+    ds.to_netcdf(path, encoding={"dz": {"_FillValue": None},
+                                 "time": {"_FillValue": None},
+                                 "lat": {"_FillValue": None},
+                                 "lon": {"_FillValue": None}})
+
+    back = dtopotools.DTopography(path=str(path), dtopo_type=4)
+    assert np.allclose(back.dZ, base.dZ), "km deformation not converted to meters"
+
+    # Descriptor (Fortran) path now also converts: records a scale_factor
+    # (km value * 1000 = m) that Fortran applies on read.
+    with DTopoInspector(str(path)) as insp:
+        meta = insp.inspect_dtopo()
+    assert meta.scale_factor == pytest.approx(1000.0)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_netcdf_missing_units_raises(tmp_path):
+    r"""A NetCDF dtopo file whose deformation variable has no units attribute
+    is rejected (units are never assumed on the NetCDF path)."""
+    xr = pytest.importorskip("xarray")
+
+    base = _make_synthetic_dtopo()
+    x = base.X[0, :]
+    y = base.Y[:, 0]
+    ds = xr.Dataset(
+        {"dz": (("time", "lat", "lon"), np.asarray(base.dZ, dtype=float))},
+        coords={"time": np.asarray(base.times, dtype=float),
+                "lat": np.asarray(y, dtype=float),
+                "lon": np.asarray(x, dtype=float)},
+    )
+    ds["time"].attrs.update(units="seconds")
+    path = tmp_path / "dtopo_nounits.nc"
+    ds.to_netcdf(path, encoding={"dz": {"_FillValue": None},
+                                 "time": {"_FillValue": None},
+                                 "lat": {"_FillValue": None},
+                                 "lon": {"_FillValue": None}})
+
+    with pytest.raises(ValueError, match="no 'units'"):
+        dtopotools.DTopography(path=str(path), dtopo_type=4)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
 def test_dtopo_netcdf_dtype_override(tmp_path):
     r"""dz_dtype='float64' overrides the default float32 on-disk storage."""
     netCDF4 = pytest.importorskip("netCDF4")

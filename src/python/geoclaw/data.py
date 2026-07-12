@@ -395,11 +395,19 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                             if _insp.var_name is None:
                                 _insp.var_name = _insp._find_topo_var_name()
                             _file_meta = _insp.inspect(_insp.var_name)
-                            _src_units = _insp._check_topo_units()
+                            # allow_conversion=True: a recognized non-meter
+                            # unit yields a scale_factor Fortran applies on
+                            # read (missing/unrecognized still raise).
+                            _src_units = _insp._check_topo_units(
+                                allow_conversion=True)
+                            _scale = _ncutils._units_scale(
+                                _src_units,
+                                _ncutils.GEOCLAW_NETCDF_UNITS['topo'])
                             _meta = _ncutils.TopoMetadata(
                                 **dataclasses.asdict(_file_meta),
                                 var_name=_insp.var_name,
                                 source_units=_src_units,
+                                scale_factor=_scale,
                                 fill_action='abort',
                                 lon_wrap_offset=0.0,
                             )
@@ -662,7 +670,9 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                 from clawpack.geoclaw import netcdf_utils as _ncutils
                 from clawpack.geoclaw.topotools import extract_datum
                 with _ncutils.DTopoInspector(fname) as _insp:
-                    _meta = _insp.inspect_dtopo()
+                    # allow_conversion=True: a recognized non-meter deformation
+                    # unit yields a scale_factor Fortran applies on read.
+                    _meta = _insp.inspect_dtopo(allow_conversion=True)
                     # Record an optional vertical datum (informational) for the
                     # consistency check below, if not already set on the object.
                     if d.datum is None:

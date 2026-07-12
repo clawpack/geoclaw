@@ -90,16 +90,17 @@ def test_units_meters_passes_without_warning(topo_file_factory):
     assert meta.source_units in {"m", "meter", "meters", "metre", "metres"}
 
 
-def test_units_convertible_raises(topo_file_factory):
+def test_units_convertible_records_scale_factor(topo_file_factory):
     """
-    A recognised but non-meter unit (e.g. 'cm') is rejected, not silently
-    misread: the read paths do not convert, so the file must be pre-converted
-    to meters.  (Unit mixing must never be silently assumed.)
+    A recognised non-meter unit (e.g. 'cm') is converted on the descriptor
+    (Fortran) path: inspect_topo records the source unit and a multiplicative
+    scale_factor to meters (applied by Fortran on read).
     """
     path = topo_file_factory(units="cm")
     with TopoInspector(path, var_name="z") as insp:
-        with pytest.raises(ValueError, match="cm"):
-            insp.inspect_topo()
+        meta = insp.inspect_topo()
+    assert meta.source_units == "cm"
+    assert meta.scale_factor == pytest.approx(0.01)   # cm -> m
 
 
 def test_units_unrecognised_raises(topo_file_factory):

@@ -133,6 +133,24 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
             longitudes[:] = x
             elevations[:] = Z
 
+    elif variant == "km":
+        # Same bathymetry, but elevation stored in kilometers (units='km').
+        # The descriptor scale_factor (1000) must convert it to meters on the
+        # Fortran read, reproducing the meters baseline exactly.  Exercises the
+        # Fortran-side unit scaling for topo_type=4.
+        with netCDF4.Dataset(output_dir / filename, "w") as out:
+            out.createDimension("lat", len(topo.y))
+            out.createDimension("lon", len(topo.x))
+
+            latitudes = out.createVariable("lat", "f8", ("lat",))
+            longitudes = out.createVariable("lon", "f8", ("lon",))
+            elevations = out.createVariable("elevation", "f8", ("lat", "lon"))
+            elevations.units = "km"
+
+            latitudes[:] = topo.y
+            longitudes[:] = topo.x
+            elevations[:] = topo.Z / 1000.0
+
     else:
         raise ValueError(f"Unknown variant '{variant}'.")
 
@@ -140,7 +158,7 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
 @pytest.mark.regression
 @pytest.mark.netcdf
 @pytest.mark.parametrize("variant", ["standard", "dim_order", "cf_compliant",
-                                     "cropped", "coarsened"])
+                                     "cropped", "coarsened", "km"])
 def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str) -> None:
     """
     Parametrized regression test exercising non-standard NetCDF coordinate layouts.
