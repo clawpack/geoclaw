@@ -823,9 +823,12 @@ class Topography(object):
                 # Opt-in escape hatch for a file with no 'units' attribute;
                 # units are otherwise required, never silently assumed.
                 _assume_units: str | None = nc_params.get('assume_units', None)
+                # Opt-out of the post-conversion magnitude sanity check.
+                _skip_sanity: bool = nc_params.get('skip_sanity_check', False)
 
                 with _ncutils.TopoInspector(
-                    self.path, var_name=_var_hint, assume_units=_assume_units
+                    self.path, var_name=_var_hint, assume_units=_assume_units,
+                    skip_sanity_check=_skip_sanity,
                 ) as inspector:
                     # Auto-detect elevation variable if not provided
                     if inspector.var_name is None:
@@ -834,12 +837,12 @@ class Topography(object):
                     # Get CF coordinate metadata (no fill-value data scan here;
                     # fill values are handled below via NaN replacement)
                     _meta = inspector.inspect(inspector.var_name)
-                    # Check and record units; warns if conversion is needed
+                    # Check and record units; warns if conversion is needed.
                     # In-memory read converts recognized non-meter units to
                     # meters (the conversion block below applies the factor);
-                    # the Fortran descriptor path stays strict for now.
-                    _source_units = inspector._check_topo_units(
-                        allow_conversion=True)
+                    # the Fortran descriptor path applies the same factor via
+                    # the descriptor scale_factor.
+                    _source_units = inspector._check_topo_units()
 
                     ds = inspector.ds
                     _x_name = _meta.x_name
@@ -894,6 +897,15 @@ class Topography(object):
                         if _canonical is not None:
                             _factor = _units_convert(1.0, _canonical, _contract)
                             _z_vals = _z_vals * _factor
+
+                    # Magnitude sanity check on the resolved (meters) field.
+                    if not _skip_sanity:
+                        _ncutils._check_magnitude(
+                            'topo',
+                            float(numpy.nanmin(_z_vals)),
+                            float(numpy.nanmax(_z_vals)),
+                            var_name=_var_name, path=str(self.path),
+                        )
 
                     # Decoded fill values are already NaN (from xarray
                     # mask_and_scale).  NaN is the in-memory missing-data

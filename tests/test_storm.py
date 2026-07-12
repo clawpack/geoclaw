@@ -46,9 +46,12 @@ def create_netcdf_storm_file(path):
     values = np.arange(np.prod(size), dtype=float).reshape(size)
     # Units are required (never assumed); variable/coord *names* still carry no
     # CF standard_name, so this file continues to exercise name-based discovery.
+    # Field values are physically plausible (wind < 120 m/s, pressure ~1e5 Pa)
+    # so the magnitude sanity check passes; the three variables stay distinct.
     wind_x = xr.DataArray(values, coords=coords, attrs={"units": "m/s"})
-    wind_y = xr.DataArray(values + 100.0, coords=coords, attrs={"units": "m/s"})
-    pressure = xr.DataArray(values + 1000.0, coords=coords, attrs={"units": "Pa"})
+    wind_y = xr.DataArray(values + 10.0, coords=coords, attrs={"units": "m/s"})
+    pressure = xr.DataArray(values + 101300.0, coords=coords,
+                            attrs={"units": "Pa"})
     ds = xr.Dataset({"u": wind_x, "v": wind_y, "pressure": pressure})
     # Met forcing needs an absolute time reference; a bare numeric axis is
     # rejected.  Give valid_time CF datetime units so it decodes to datetime64.
@@ -190,10 +193,10 @@ def create_nws13_storm_file(path, pressure_fields=None, u_fields=None,
     NWS13 variable and dimension names: dims ``(time, lat, lon)``, variables
     ``uwnd`` (m/s), ``vwnd`` (m/s), ``press`` (Pa).
 
-    Units must be the GeoClaw contract units (wind m/s, pressure Pa): the
-    inspector rejects non-contract units (e.g. mb/hPa) rather than converting,
-    since the Fortran NetCDF reader performs no unit conversion.  Callers with
-    millibar OWI data must convert to Pa before calling this function.
+    This helper writes the contract units directly (wind m/s, pressure Pa).  A
+    recognised non-contract unit (e.g. mb/hPa) is not an error in general --
+    the inspector records a scale_factor that Fortran applies on read -- but
+    the fixtures here use contract units for a clean baseline.
 
     The dimension order ``(time, lat, lon)`` = ``(nt, nlat, nlon)`` is
     correct for the Fortran column-major allocation ``pressure(nlon, nlat,

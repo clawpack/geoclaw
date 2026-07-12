@@ -98,6 +98,8 @@ def make_met_dataset(
     dim_order: tuple = ("time", "lat", "lon"),
     wind_units: str = "m/s",
     pressure_units: str = "Pa",
+    pressure_value: float = 101325.0,   # constant pressure fill (in its units)
+    wind_value: float = 5.0,            # constant wind fill (in its units)
     time_start: str = "2020-01-01",
     time_freq: str = "6h",
     extra_dim: Optional[tuple] = None,   # (dim_name, size) for ensemble
@@ -111,6 +113,10 @@ def make_met_dataset(
     extra_dim=('member', 3)  inserts a non-singleton ensemble dimension.
     omit_roles=['wind_v']    omits that variable (consistency check must fail).
     mismatch_dims=True       gives the last variable a different dim set.
+
+    pressure_value/wind_value set the constant fill in the variable's *own*
+    units, so a hPa file can carry a physically plausible ~1013 rather than
+    101325 (which would trip the magnitude sanity check once scaled).
     """
     if var_name_map is None:
         var_name_map = {"wind_u": "u10", "wind_v": "v10", "pressure": "msl"}
@@ -152,7 +158,7 @@ def make_met_dataset(
             shape = [s for d, s in zip(actual_dims, base_shape)
                      if d != time_name]
 
-        fill_val = 101325.0 if role == "pressure" else 5.0
+        fill_val = pressure_value if role == "pressure" else wind_value
         data = np.full(shape, fill_val, dtype=np.float32)
 
         if role in ("wind_u", "wind_v"):
@@ -245,11 +251,16 @@ FILL_VALUE_VARIANTS: list = [
     ),
 ]
 
-#: Pressure unit variants: (units written in file, expected source_units in metadata)
+#: Pressure unit variants: units written in file, expected source_units in
+#: metadata, and a physically plausible constant value in those units (so the
+#: magnitude sanity check sees ~1e5 Pa after scaling).
 PRESSURE_UNIT_VARIANTS: list = [
-    pytest.param({"pressure_units": "Pa",   "expected_source": "Pa"},   id="Pa"),
-    pytest.param({"pressure_units": "hPa",  "expected_source": "hPa"}, id="hPa"),
-    pytest.param({"pressure_units": "mbar", "expected_source": "mbar"}, id="mbar"),
+    pytest.param({"pressure_units": "Pa",   "expected_source": "Pa",
+                  "value": 101325.0}, id="Pa"),
+    pytest.param({"pressure_units": "hPa",  "expected_source": "hPa",
+                  "value": 1013.25}, id="hPa"),
+    pytest.param({"pressure_units": "mbar", "expected_source": "mbar",
+                  "value": 1013.25}, id="mbar"),
 ]
 
 #: Wind unit variants

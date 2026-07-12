@@ -233,10 +233,12 @@ def _make_isaac_netcdf(fmt: str, tmp_path: Path, test_path: Path,
     file to ``tmp_path``, and writes the corresponding ``.storm`` descriptor
     via ``Storm.write(file_format='data')``.
 
-    Both ERA5 and NWS13 variants write pressure in **Pa** (as required by the
-    Fortran NetCDF reader, which has no unit conversion).  The ERA5 variant
-    also stores wind in m/s; the NWS13 file uses the same values but with
-    NWS13 variable/dimension names (``uwnd``, ``vwnd``, ``press``).
+    Both ERA5 and NWS13 variants write pressure in **Pa** for a clean baseline.
+    (A non-contract unit such as hPa/mbar would not be an error -- the inspector
+    records a scale_factor that Fortran applies on read -- but this fixture uses
+    contract units directly.)  The ERA5 variant also stores wind in m/s; the
+    NWS13 file uses the same values but with NWS13 variable/dimension names
+    (``uwnd``, ``vwnd``, ``press``).
 
     Parameters
     ----------

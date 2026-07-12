@@ -322,7 +322,8 @@ def test_dtopo_netcdf_default_dtype_is_float32(tmp_path):
 def test_dtopo_netcdf_read_converts_units(tmp_path):
     r"""DTopography.read(dtopo_type=4) converts a recognized non-meter
     deformation unit (km) to meters in memory; the descriptor (Fortran) path
-    still rejects such a file."""
+    records the equivalent scale_factor so Fortran applies the same conversion
+    on read."""
     xr = pytest.importorskip("xarray")
     from clawpack.geoclaw.netcdf_utils import DTopoInspector
 

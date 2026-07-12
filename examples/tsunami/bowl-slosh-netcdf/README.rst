@@ -20,9 +20,11 @@ topofile `bowl.nc`, using the Python module `netCDF4`.
 This must be installed for this to work.
 See `<https://unidata.github.io/netcdf4-python/netCDF4/index.html>`_.
 
-The elevation variable in the netCDF file must carry a CF ``units`` attribute
-equal to meters (``units = "m"``); GeoClaw requires meters and does not convert
-units on read.  When the file is written via
+The elevation variable in the netCDF file must carry a CF ``units`` attribute.
+Meters (``units = "m"``) are the contract unit; a recognised non-meter unit
+(e.g. ``km``) is converted automatically on read via a scale factor (a warning
+is emitted), while a missing or unrecognised unit is rejected rather than
+silently misread.  When the file is written via
 ``topotools.Topography.write(..., topo_type=4)`` this attribute is set
 automatically, and the elevation is stored as ``float32`` by default (pass
 ``z_dtype="float64"`` for full double precision).  See :ref:`topo_netcdf`.

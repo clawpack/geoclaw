@@ -562,7 +562,7 @@ def test_topo_netcdf_default_dtype_is_float32(tmp_path):
     topo.x = np.linspace(-1.0, 1.0, 10)
     topo.y = np.linspace(-1.0, 1.0, 8)
     X, Y = np.meshgrid(topo.x, topo.y)
-    topo.Z = (np.sin(X) + np.cos(Y)) * 5000.0
+    topo.Z = (np.sin(X) + np.cos(Y)) * 4000.0
 
     path = tmp_path / "elevation.nc"
     topo.write(path, topo_type=4)

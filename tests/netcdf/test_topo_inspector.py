@@ -7,6 +7,7 @@ all coordinate variant combinations, and topo_entries() lon wrapping.
 """
 import warnings
 
+import numpy as np
 import pytest
 
 from clawpack.geoclaw.netcdf_utils import TopoInspector, TopoMetadata
@@ -101,6 +102,33 @@ def test_units_convertible_records_scale_factor(topo_file_factory):
         meta = insp.inspect_topo()
     assert meta.source_units == "cm"
     assert meta.scale_factor == pytest.approx(0.01)   # cm -> m
+
+
+# ============================================================
+# Magnitude sanity checks
+# ============================================================
+
+def test_elevation_implausible_raises(topo_file_factory):
+    """An elevation field far outside the plausible range (~[-11000, 9000] m)
+    is rejected: feet-vs-metres is ambiguous, so GeoClaw errors rather than
+    guessing a correction."""
+    ds = make_topo_dataset(units="m")
+    ds["z"][:] = 30000.0   # absurd elevation in meters
+    path = topo_file_factory(ds=ds)
+    with TopoInspector(path, var_name="z") as insp:
+        with pytest.raises(ValueError, match="[Ii]mplausible"):
+            insp.inspect_topo()
+
+
+def test_elevation_skip_sanity_check_bypasses(topo_file_factory):
+    """skip_sanity_check=True lets an implausible-magnitude file through (escape
+    hatch for exotic-but-valid data)."""
+    ds = make_topo_dataset(units="m")
+    ds["z"][:] = 30000.0
+    path = topo_file_factory(ds=ds)
+    with TopoInspector(path, var_name="z", skip_sanity_check=True) as insp:
+        meta = insp.inspect_topo()
+    assert isinstance(meta, TopoMetadata)
 
 
 def test_units_unrecognised_raises(topo_file_factory):

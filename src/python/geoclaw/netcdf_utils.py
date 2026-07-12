@@ -154,6 +154,94 @@ def _cf_time_units_to_seconds_factor(cf_unit: str) -> float:
     return float(units_convert(1.0, canonical, 's'))
 
 
+# ---------------------------------------------------------------------------
+# Magnitude sanity check
+# ---------------------------------------------------------------------------
+# After units are resolved to contract units (via scale_factor), the field can
+# still be physically wrong -- e.g. pressure mislabeled 'Pa' but really hPa,
+# elevation in feet, or an absurd wind speed.  These bounds catch that final
+# class of silent-wrong.  Only the unambiguous pressure ~1000x gap is
+# auto-corrected; everything else that is implausible hard-errors, because the
+# correction (feet vs metres, knots vs m/s) is ambiguous at plausible
+# magnitudes.  Tune as module constants; keep them conservative.
+
+# topo elevation, meters (Challenger Deep ~-10935, Everest ~8849)
+_ELEV_MIN_M, _ELEV_MAX_M = -11000.0, 9000.0
+# surface pressure, Pa (record low ~870 hPa = 87000 Pa; strong high ~1085 hPa)
+_PRESSURE_MIN_PA, _PRESSURE_MAX_PA = 8.0e4, 1.1e5
+# hPa/mbar -> Pa auto-correct factor (the only unambiguous magnitude fix)
+_PRESSURE_HPA_FACTOR = 100.0
+# |wind| above this (m/s) is physically absurd (~430 km/h)
+_WIND_MAX_ABS = 120.0
+
+
+def _check_magnitude(role: str, vmin: float, vmax: float,
+                     var_name: str = '', path: str = '') -> float:
+    """Sanity-check a resolved field's extrema; return an extra scale factor.
+
+    *vmin*/*vmax* are the field's minimum and maximum **after** the unit
+    ``scale_factor`` has been applied (NaNs must be pre-filtered).  Returns a
+    further multiplicative correction (1.0 when none is needed):
+
+    * ``topo`` -- raise if the elevation range is implausible (no auto-correct;
+      feet-vs-metres is ambiguous at moderate elevations).
+    * ``wind_u`` / ``wind_v`` -- raise if ``|wind|`` is absurd (never
+      auto-correct; knots-vs-m/s cannot be told apart by magnitude).
+    * ``pressure`` -- return 1.0 when already plausible; a field maxing at
+      ~10^3 is unmistakably hPa/mbar (~1000x gap), so warn and return 100.0;
+      still implausible after that -> raise.
+
+    Roles without a defined check (e.g. dtopo deformation) return 1.0.
+    """
+    where = (f" on variable '{var_name}'" if var_name else "") + \
+            (f" in '{path}'" if path else "")
+
+    if role == 'topo':
+        if vmax > _ELEV_MAX_M or vmin < _ELEV_MIN_M:
+            raise ValueError(
+                f"Elevation{where} has an implausible range "
+                f"[{vmin:g}, {vmax:g}] m; expected roughly "
+                f"[{_ELEV_MIN_M:g}, {_ELEV_MAX_M:g}] m.  Check the 'units' "
+                f"attribute (e.g. feet vs metres) -- GeoClaw will not guess."
+            )
+        return 1.0
+
+    if role in ('wind_u', 'wind_v'):
+        if max(abs(vmin), abs(vmax)) > _WIND_MAX_ABS:
+            raise ValueError(
+                f"Wind{where} has an implausible magnitude "
+                f"(range [{vmin:g}, {vmax:g}] m/s); |wind| exceeds "
+                f"{_WIND_MAX_ABS:g} m/s.  Check the 'units' attribute -- wind "
+                f"magnitude cannot disambiguate knots from m/s, so GeoClaw "
+                f"errors rather than guessing."
+            )
+        return 1.0
+
+    if role == 'pressure':
+        if _PRESSURE_MIN_PA <= vmin and vmax <= _PRESSURE_MAX_PA:
+            return 1.0
+        corrected_min = vmin * _PRESSURE_HPA_FACTOR
+        corrected_max = vmax * _PRESSURE_HPA_FACTOR
+        if _PRESSURE_MIN_PA <= corrected_min and corrected_max <= _PRESSURE_MAX_PA:
+            warnings.warn(
+                f"Pressure{where} has a range [{vmin:g}, {vmax:g}] that is "
+                f"~1000x below the expected [{_PRESSURE_MIN_PA:g}, "
+                f"{_PRESSURE_MAX_PA:g}] Pa; the data are unmistakably hPa/mbar "
+                f"mislabeled as Pa, so auto-correcting by "
+                f"x{_PRESSURE_HPA_FACTOR:g}.",
+                stacklevel=3,
+            )
+            return _PRESSURE_HPA_FACTOR
+        raise ValueError(
+            f"Pressure{where} has an implausible range "
+            f"[{vmin:g}, {vmax:g}] Pa; expected roughly "
+            f"[{_PRESSURE_MIN_PA:g}, {_PRESSURE_MAX_PA:g}] Pa and it is not a "
+            f"clean hPa/mbar mislabel.  Check the file's units and values."
+        )
+
+    return 1.0
+
+
 @contextlib.contextmanager
 def suppress_netcdf4_shape_warning():
     r"""Silence netCDF4-python's spurious NumPy 2.5 shape-assignment warning.
@@ -531,23 +619,19 @@ class NetCDFInspector:
     # Shared unit resolution (used by Topo and DTopo inspectors)
     # ------------------------------------------------------------------
 
-    def _check_units(self, contract: str,
-                     allow_conversion: bool = False) -> str:
+    def _check_units(self, contract: str) -> str:
         """
         Resolve ``self.var_name``'s units against *contract*.
 
-        Returns the source unit string; the caller converts the data when it
-        is a recognised non-contract unit.  Units are never silently assumed
-        or mixed:
+        Returns the source unit string; the caller (or Fortran, via the
+        descriptor ``scale_factor``) converts the data when it is a recognised
+        non-contract unit.  Units are never silently assumed or mixed:
 
         * missing ``units`` -> ValueError unless ``self.assume_units`` is set
           (the assumed unit is then treated as if it were declared);
         * unrecognised / dimensionally-incompatible unit -> ValueError;
-        * recognised non-contract unit -> returned for conversion when
-          *allow_conversion* is True (the in-memory read paths convert via
-          ``units.convert``); otherwise ValueError, because the Fortran
-          descriptor read path cannot yet apply a scale factor (Fortran-side
-          scaling is a later phase of the NetCDF unit strategy).
+        * recognised non-contract unit (e.g. ``km``) -> returned for conversion
+          (a warning is emitted); the caller resolves the scale factor.
         """
         var_name = self.var_name
         cf_unit = self.ds[var_name].attrs.get('units', '')
@@ -574,14 +658,6 @@ class NetCDFInspector:
                 f"Pre-convert the file to '{contract}'."
             )
 
-        if not allow_conversion:
-            raise ValueError(
-                f"Variable '{var_name}' in '{self.path}' has units '{cf_unit}'; "
-                f"contract requires '{contract}'.  Automatic unit conversion on "
-                f"the Fortran (descriptor) read path is not yet supported, so "
-                f"this file is rejected rather than silently misread.  Read it "
-                f"into memory (which converts) or pre-convert the file first."
-            )
         warnings.warn(
             f"Variable '{var_name}' in '{self.path}' has units '{cf_unit}'; "
             f"converting to '{contract}' on read.",
@@ -625,6 +701,10 @@ class TopoInspector(NetCDFInspector):
         ``units`` attribute.  When given (e.g. ``'m'``), that unit is assumed
         instead of raising.  This must be set deliberately by the caller;
         missing units are never silently assumed.
+    skip_sanity_check : bool, optional
+        Skip the post-unit-resolution magnitude sanity check (see
+        ``_check_magnitude``).  Escape hatch for exotic-but-valid files;
+        defaults to False.
     """
 
     def __init__(
@@ -633,10 +713,12 @@ class TopoInspector(NetCDFInspector):
         var_name: Optional[str] = None,
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
         assume_units: Optional[str] = None,
+        skip_sanity_check: bool = False,
     ) -> None:
         super().__init__(path, crop_bounds)
         self.var_name = var_name
         self.assume_units = assume_units
+        self.skip_sanity_check = skip_sanity_check
 
     # ------------------------------------------------------------------
     # Variable auto-detection
@@ -703,29 +785,67 @@ class TopoInspector(NetCDFInspector):
     # Unit verification
     # ------------------------------------------------------------------
 
-    def _check_topo_units(self, allow_conversion: bool = False) -> str:
+    def _check_topo_units(self) -> str:
         """
         Resolve the elevation variable's units against the meters contract.
 
-        Returns the source unit string; the caller converts the data to meters
-        when it is a recognised non-meter unit.  Units are never silently
-        assumed or mixed:
+        Returns the source unit string; the caller (or Fortran, via the
+        descriptor ``scale_factor``) converts the data to meters when it is a
+        recognised non-meter unit.  Units are never silently assumed or mixed:
 
         * missing ``units`` -> ValueError unless ``assume_units`` was set
           (the assumed unit is then treated as if it were declared);
         * unrecognised / dimensionally-incompatible unit -> ValueError;
         * recognised non-meter unit (e.g. ``km``) -> returned for conversion
-          when ``allow_conversion`` is True (the in-memory ``Topography.read``
-          path converts via ``units.convert``); otherwise ValueError, because
-          the Fortran descriptor read path cannot yet apply a scale factor
-          (Fortran-side scaling is a later phase of the NetCDF unit strategy).
+          (a warning is emitted).
         """
-        return self._check_units(GEOCLAW_NETCDF_UNITS['topo'],
-                                 allow_conversion=allow_conversion)
+        return self._check_units(GEOCLAW_NETCDF_UNITS['topo'])
 
     # ------------------------------------------------------------------
     # Fill value check within crop region
     # ------------------------------------------------------------------
+
+    def _crop_var(self, x_name: str, y_name: str, y_increasing: bool):
+        """Return the elevation variable restricted to ``self.crop_bounds``.
+
+        Returns the full variable when no crop bounds are set.  Shared by the
+        fill-value and magnitude scans so both look at the same region.
+        """
+        var = self.ds[self.var_name]
+        if self.crop_bounds is not None:
+            lon_min, lon_max, lat_min, lat_max = self.crop_bounds
+            # For a decreasing y axis the slice must be reversed.
+            lat_slice = (
+                slice(lat_min, lat_max)
+                if y_increasing
+                else slice(lat_max, lat_min)
+            )
+            var = var.sel({
+                x_name: slice(lon_min, lon_max),
+                y_name: lat_slice,
+            })
+        return var
+
+    def _check_topo_magnitude(
+        self,
+        x_name: str,
+        y_name: str,
+        y_increasing: bool,
+        scale_factor: float,
+    ) -> None:
+        """Raise if resolved elevation extrema are physically implausible.
+
+        Mirrors ``_check_fill_in_crop``: a single bounded Dask reduction over
+        the crop region.  Extrema are multiplied by *scale_factor* so the check
+        runs on meters (the value Fortran ultimately sees).
+        """
+        if self.skip_sanity_check:
+            return
+        var = self._crop_var(x_name, y_name, y_increasing)
+        vmin = float(var.min().compute()) * scale_factor
+        vmax = float(var.max().compute()) * scale_factor
+        _check_magnitude('topo', vmin, vmax,
+                         var_name=self.var_name, path=str(self.path))
 
     def _check_fill_in_crop(
         self,
@@ -740,20 +860,7 @@ class TopoInspector(NetCDFInspector):
         Raises ValueError if any fill values are present — silent NaN in
         bathymetry would silently corrupt simulation output.
         """
-        var = self.ds[self.var_name]
-
-        if self.crop_bounds is not None:
-            lon_min, lon_max, lat_min, lat_max = self.crop_bounds
-            # For a decreasing y axis the slice must be reversed.
-            lat_slice = (
-                slice(lat_min, lat_max)
-                if y_increasing
-                else slice(lat_max, lat_min)
-            )
-            var = var.sel({
-                x_name: slice(lon_min, lon_max),
-                y_name: lat_slice,
-            })
+        var = self._crop_var(x_name, y_name, y_increasing)
 
         # This .compute() is intentional: we must confirm no fill values exist.
         has_fill = bool(var.isnull().any().compute())
@@ -783,9 +890,11 @@ class TopoInspector(NetCDFInspector):
         # Descriptor/Fortran path converts recognized non-meter units: record
         # the source unit and a multiplicative scale_factor that Fortran
         # applies on read (missing/unrecognized units still raise).
-        source_units = self._check_topo_units(allow_conversion=True)
+        source_units = self._check_topo_units()
         scale_factor = _units_scale(source_units, GEOCLAW_NETCDF_UNITS['topo'])
         self._check_fill_in_crop(base.x_name, base.y_name, base.y_increasing)
+        self._check_topo_magnitude(base.x_name, base.y_name,
+                                   base.y_increasing, scale_factor)
 
         return TopoMetadata(
             **dataclasses.asdict(base),
@@ -905,12 +1014,11 @@ class DTopoInspector(NetCDFInspector):
         # attribute; otherwise missing units raise (units are never assumed).
         self.assume_units = assume_units
 
-    def _check_dtopo_units(self, allow_conversion: bool = False) -> str:
+    def _check_dtopo_units(self) -> str:
         """Resolve the deformation variable's units against the meters
         contract (see NetCDFInspector._check_units).  dtopo deformation is in
         meters, the same contract as topography."""
-        return self._check_units(GEOCLAW_NETCDF_UNITS['topo'],
-                                 allow_conversion=allow_conversion)
+        return self._check_units(GEOCLAW_NETCDF_UNITS['topo'])
 
     def _find_dtopo_var_name(self) -> str:
         """Find the deformation variable: common names, else unique 3-D var."""
@@ -979,21 +1087,18 @@ class DTopoInspector(NetCDFInspector):
             )
         return float(seconds[0]), dt, mt
 
-    def inspect_dtopo(self, allow_conversion: bool = True) -> DTopoMetadata:
+    def inspect_dtopo(self) -> DTopoMetadata:
         """Fully inspect the dtopo file and return a DTopoMetadata.
 
         Verifies deformation units (meters), records the source unit on
         ``self.source_units``, and stores a ``scale_factor`` in the metadata.
-        With *allow_conversion* True (the default) a recognised non-meter unit
-        yields a scale_factor (applied in memory by ``DTopography.read`` or by
-        Fortran via the descriptor); a missing or unrecognised unit still
-        raises (units are never assumed).  Pass False to hard-reject any
-        non-meter unit.
+        A recognised non-meter unit yields a scale_factor (applied in memory by
+        ``DTopography.read`` or by Fortran via the descriptor); a missing or
+        unrecognised unit still raises (units are never assumed).
         """
         if self.var_name is None:
             self.var_name = self._find_dtopo_var_name()
-        self.source_units = self._check_dtopo_units(
-            allow_conversion=allow_conversion)
+        self.source_units = self._check_dtopo_units()
         base = self.inspect(self.var_name)
 
         if base.time_name is None:
@@ -1074,6 +1179,10 @@ class MetInspector(NetCDFInspector):
         variable that has *no* ``units`` attribute: the format's documented
         unit is assumed and converted (e.g. mbar -> Pa).  Takes precedence over
         ``assume_units`` for the roles it covers.
+    skip_sanity_check : bool, optional
+        Skip the post-unit-resolution magnitude sanity check on pressure/wind
+        (see ``_check_magnitude``).  Escape hatch for exotic-but-valid files;
+        defaults to False.
     """
 
     # Role discovery, in priority order: CF standard_name, then common
@@ -1101,6 +1210,7 @@ class MetInspector(NetCDFInspector):
         fill_action: str = 'warn',
         assume_units: bool = False,
         format_units: Optional[dict[str, str]] = None,
+        skip_sanity_check: bool = False,
     ) -> None:
         super().__init__(path, crop_bounds)
         # {geoclaw_role: var_name_in_file}; missing roles auto-discovered
@@ -1114,6 +1224,9 @@ class MetInspector(NetCDFInspector):
         # {role: unit} documented by the storm format (e.g. NWS13/OWI pressure
         # is 'mbar'); used only when a variable has no 'units' attribute.
         self.format_units = format_units or {}
+        # Skip the post-unit-resolution magnitude sanity check (escape hatch
+        # for exotic-but-valid files); see _check_magnitude.
+        self.skip_sanity_check = skip_sanity_check
 
     # ------------------------------------------------------------------
     # Variable role discovery
@@ -1411,6 +1524,45 @@ class MetInspector(NetCDFInspector):
         return float(offset_s), float(time_scale)
 
     # ------------------------------------------------------------------
+    # Magnitude sanity check
+    # ------------------------------------------------------------------
+
+    def _check_met_magnitude(
+        self,
+        variable_infos: list[MetVariableInfo],
+        x_name: str,
+        y_name: str,
+    ) -> None:
+        """Sanity-check pressure/wind magnitudes; may adjust a scale_factor.
+
+        For each pressure/wind variable, compute the extrema of a single 2-D
+        slice (first index of every non-spatial dim -- bounds I/O to one field;
+        magnitudes are time-stable), scale them by the resolved ``scale_factor``
+        and run ``_check_magnitude``.  A returned pressure correction (hPa/mbar
+        mislabeled as Pa) is folded into that variable's ``scale_factor`` in
+        place.  Implausible elevation/wind/pressure raise there.
+        """
+        if self.skip_sanity_check:
+            return
+        for info in variable_infos:
+            if info.geoclaw_role not in ('pressure', 'wind_u', 'wind_v'):
+                continue
+            var = self.ds[info.var_name]
+            # Reduce to a single 2-D field: first index of every dim that is
+            # not a spatial coordinate (time and any ensemble dims).
+            isel = {d: 0 for d in var.dims if d not in (x_name, y_name)}
+            if isel:
+                var = var.isel(isel)
+            vmin = float(var.min().compute()) * info.scale_factor
+            vmax = float(var.max().compute()) * info.scale_factor
+            correction = _check_magnitude(
+                info.geoclaw_role, vmin, vmax,
+                var_name=info.var_name, path=str(self.path),
+            )
+            if correction != 1.0:
+                info.scale_factor *= correction
+
+    # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
@@ -1439,6 +1591,7 @@ class MetInspector(NetCDFInspector):
         )
         self._check_ensemble_dims(known_dims)
         variable_infos = self._check_met_units()
+        self._check_met_magnitude(variable_infos, base.x_name, base.y_name)
         time_offset, time_scale = self._compute_time_offset(base.time_name)
 
         return MetMetadata(

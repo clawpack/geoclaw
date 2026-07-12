@@ -136,7 +136,8 @@ def test_pressure_unit_variants(met_file_factory, unit_cfg):
     expected_source = unit_cfg["expected_source"]
     expected_scale = {"Pa": 1.0, "hPa": 100.0, "mbar": 100.0}[pressure_units]
 
-    path = met_file_factory(pressure_units=pressure_units)
+    path = met_file_factory(pressure_units=pressure_units,
+                            pressure_value=unit_cfg["value"])
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
         meta = insp.inspect_met()
     pressure_info = next(v for v in meta.variables
@@ -196,7 +197,9 @@ def test_format_units_fallback_for_missing_units(tmp_path):
     """When a forcing variable has no units attribute, format_units supplies
     the storm format's documented unit (e.g. NWS13/OWI pressure = mbar) and it
     is converted: pressure mbar -> Pa (scale 100), wind m/s (scale 1)."""
-    ds = make_met_dataset(wind_units="", pressure_units="")
+    # A plausible mbar value so the scaled pressure passes the magnitude check.
+    ds = make_met_dataset(wind_units="", pressure_units="",
+                          pressure_value=1013.25)
     path = tmp_path / "met_nounits_fmt.nc"
     ds.to_netcdf(path)
     with MetInspector(path, variable_map=_VAR_MAP,
@@ -280,6 +283,77 @@ def test_non_seconds_time_axis_scale(tmp_path):
     ds.to_netcdf(path, encoding={"time": {"units": "hours since 2020-01-01"}})
     with MetInspector(path, variable_map=_VAR_MAP) as insp:
         meta = insp.inspect_met()
+    assert meta.time_scale == pytest.approx(3600.0)
+
+
+# ============================================================
+# Magnitude sanity checks
+# ============================================================
+
+def test_pressure_hpa_mislabeled_as_pa_autocorrects(met_file_factory):
+    """Pressure values ~10^3 but labeled 'Pa' are unmistakably hPa/mbar; the
+    magnitude check warns and folds an extra x100 into the scale_factor."""
+    path = met_file_factory(pressure_units="Pa", pressure_value=1013.25)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with MetInspector(path, variable_map=_VAR_MAP) as insp:
+            meta = insp.inspect_met()
+    pressure_info = next(v for v in meta.variables
+                         if v.geoclaw_role == "pressure")
+    # units 'Pa' -> unit scale 1.0, then magnitude auto-correct -> 100.0
+    assert pressure_info.scale_factor == pytest.approx(100.0)
+    assert any("hPa/mbar" in str(w.message) for w in caught)
+
+
+def test_pressure_implausible_raises(met_file_factory):
+    """A pressure field that is implausible even after the hPa auto-correct
+    (e.g. a few Pa) is rejected."""
+    path = met_file_factory(pressure_units="Pa", pressure_value=5.0)
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        with pytest.raises(ValueError, match="[Ii]mplausible"):
+            insp.inspect_met()
+
+
+def test_wind_implausible_raises(met_file_factory):
+    """A wind field above the absurd threshold (|wind| > 120 m/s) is rejected;
+    wind is never auto-corrected (knots vs m/s is magnitude-ambiguous)."""
+    path = met_file_factory(wind_units="m/s", wind_value=200.0)
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        with pytest.raises(ValueError, match="[Ii]mplausible"):
+            insp.inspect_met()
+
+
+def test_skip_sanity_check_bypasses_magnitude(met_file_factory):
+    """skip_sanity_check=True bypasses the magnitude check entirely: an
+    otherwise-auto-corrected hPa-as-Pa field keeps its unit scale (1.0) with no
+    warning."""
+    path = met_file_factory(pressure_units="Pa", pressure_value=1013.25)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any warning would fail the test
+        with MetInspector(path, variable_map=_VAR_MAP,
+                          skip_sanity_check=True) as insp:
+            meta = insp.inspect_met()
+    pressure_info = next(v for v in meta.variables
+                         if v.geoclaw_role == "pressure")
+    assert pressure_info.scale_factor == pytest.approx(1.0)
+
+
+def test_non_contract_met_descriptor_regression(tmp_path):
+    """End-to-end descriptor regression: a genuinely non-contract met file
+    (pressure hPa + 'hours since' time axis, i.e. a raw ERA5 shape) resolves to
+    the correct scale_factor (100 -> Pa) and time_scale (3600 -> seconds) that
+    Fortran applies on read.  Proves the non-contract path matches the
+    contract-unit baseline without pre-conversion."""
+    ds = make_met_dataset(pressure_units="hPa", pressure_value=1013.25,
+                          wind_units="m/s")
+    ds["time"].encoding = {}
+    path = tmp_path / "met_era5_shape.nc"
+    ds.to_netcdf(path, encoding={"time": {"units": "hours since 2020-01-01"}})
+    with MetInspector(path, variable_map=_VAR_MAP) as insp:
+        meta = insp.inspect_met()
+    roles = {v.geoclaw_role: v for v in meta.variables}
+    assert roles["pressure"].scale_factor == pytest.approx(100.0)
+    assert roles["wind_u"].scale_factor == pytest.approx(1.0)
     assert meta.time_scale == pytest.approx(3600.0)
 
 

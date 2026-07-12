@@ -695,11 +695,11 @@ class DTopography(object):
                             inspector.time_reference = \
                                 raw_units[idx + len(" since "):].strip()
 
-            # allow_conversion=True: an in-memory read converts a recognized
-            # non-meter deformation unit (e.g. km) to meters; a missing or
-            # unrecognized unit still raises (units are never assumed for
-            # NetCDF dtopo -- ASCII dtopo types remain meters-implied).
-            meta = inspector.inspect_dtopo(allow_conversion=True)
+            # An in-memory read converts a recognized non-meter deformation
+            # unit (e.g. km) to meters; a missing or unrecognized unit still
+            # raises (units are never assumed for NetCDF dtopo -- ASCII dtopo
+            # types remain meters-implied).
+            meta = inspector.inspect_dtopo()
             lon = inspector.ds[meta.x_name].values.astype(numpy.float64)
             lat = inspector.ds[meta.y_name].values.astype(numpy.float64)
             dZ = numpy.asarray(inspector.ds[meta.var_name].values,
