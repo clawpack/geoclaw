@@ -185,6 +185,16 @@ class Storm(object):
                           "owi": ['OWI', "http://www.oceanweather.com"],
                           "data": ["GeoClaw Data", "http://www.clawpack.org/storms"]}
 
+    # Units documented by each gridded storm format, used as a fallback for a
+    # NetCDF met variable that carries no CF 'units' attribute.  OWI/NWS13
+    # store pressure in millibar and wind in m/s (see the OWI header labels
+    # "... Pressure Output in mb" / "... Wind Output ... in m/s").  Formats not
+    # listed (netcdf/ERA5, which carry their own units) get no fallback.
+    _met_format_units = {
+        "nws13": {"wind_u": "m/s", "wind_v": "m/s", "pressure": "mbar"},
+        "owi":   {"wind_u": "m/s", "wind_v": "m/s", "pressure": "mbar"},
+    }
+
 
     def __init__(self, path=None, file_format="ATCF", **kwargs):
         r"""Storm Initiatlization Routine
@@ -1426,10 +1436,15 @@ class Storm(object):
                     # to supply the non-standard names.  Coordinates are
                     # discovered via CF axis/standard_name conventions;
                     # dim_mapping is accepted for backwards compatibility but
-                    # not needed.
+                    # not needed.  format_units supplies the storm format's
+                    # documented units (e.g. NWS13/OWI pressure = mbar) for any
+                    # variable that carries no CF 'units' attribute.
+                    _fmt_units = self._met_format_units.get(
+                        str(self.file_format).lower())
                     with MetInspector(self.file_paths[0],
                                          variable_map=var_mapping,
-                                         time_reference=self.time_offset) as mi:
+                                         time_reference=self.time_offset,
+                                         format_units=_fmt_units) as mi:
                         meta = mi.inspect_met()
                 else:
                     meta = met_inspector.inspect_met()

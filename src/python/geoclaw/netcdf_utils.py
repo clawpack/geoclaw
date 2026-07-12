@@ -1068,6 +1068,12 @@ class MetInspector(NetCDFInspector):
         ``units`` attribute.  When True, each variable is assumed to already
         be in its contract unit instead of raising.  This must be set
         deliberately; missing units are never silently assumed.
+    format_units : dict, optional
+        ``{geoclaw_role: unit_string}`` giving the units documented by the
+        storm *format* (e.g. NWS13/OWI pressure is ``mbar``).  Used only for a
+        variable that has *no* ``units`` attribute: the format's documented
+        unit is assumed and converted (e.g. mbar -> Pa).  Takes precedence over
+        ``assume_units`` for the roles it covers.
     """
 
     # Role discovery, in priority order: CF standard_name, then common
@@ -1094,6 +1100,7 @@ class MetInspector(NetCDFInspector):
         time_reference: Optional[str] = None,
         fill_action: str = 'warn',
         assume_units: bool = False,
+        format_units: Optional[dict[str, str]] = None,
     ) -> None:
         super().__init__(path, crop_bounds)
         # {geoclaw_role: var_name_in_file}; missing roles auto-discovered
@@ -1104,6 +1111,9 @@ class MetInspector(NetCDFInspector):
             raise ValueError(f"fill_action must be 'abort' or 'warn', got '{fill_action}'")
         self.fill_action = fill_action
         self.assume_units = assume_units
+        # {role: unit} documented by the storm format (e.g. NWS13/OWI pressure
+        # is 'mbar'); used only when a variable has no 'units' attribute.
+        self.format_units = format_units or {}
 
     # ------------------------------------------------------------------
     # Variable role discovery
@@ -1269,7 +1279,12 @@ class MetInspector(NetCDFInspector):
 
             cf_unit = self.ds[var_name].attrs.get('units', '')
             if not cf_unit:
-                if self.assume_units:
+                if role in self.format_units:
+                    # Fall back to the unit documented by the storm format
+                    # (e.g. NWS13/OWI pressure = mbar) and fall through to the
+                    # match/convert logic below (mbar -> Pa scale, etc.).
+                    cf_unit = self.format_units[role]
+                elif self.assume_units:
                     # Deliberate caller override for a known-unitless file.
                     result.append(MetVariableInfo(
                         var_name=var_name,
@@ -1277,13 +1292,15 @@ class MetInspector(NetCDFInspector):
                         source_units=contract,
                     ))
                     continue
-                raise ValueError(
-                    f"Variable '{var_name}' (role '{role}') in '{self.path}' "
-                    f"has no 'units' attribute.  Units are required and never "
-                    f"assumed: add a CF 'units' attribute (e.g. '{contract}') "
-                    f"to the file, or pass assume_units=True if you are certain "
-                    f"the data are already in '{contract}'."
-                )
+                else:
+                    raise ValueError(
+                        f"Variable '{var_name}' (role '{role}') in "
+                        f"'{self.path}' has no 'units' attribute.  Units are "
+                        f"required and never assumed: add a CF 'units' "
+                        f"attribute (e.g. '{contract}') to the file, or pass "
+                        f"assume_units=True if you are certain the data are "
+                        f"already in '{contract}'."
+                    )
 
             if _unit_matches_contract(cf_unit, contract):
                 result.append(MetVariableInfo(

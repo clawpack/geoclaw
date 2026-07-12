@@ -192,6 +192,22 @@ def test_missing_units_raises(met_file_factory):
             insp.inspect_met()
 
 
+def test_format_units_fallback_for_missing_units(tmp_path):
+    """When a forcing variable has no units attribute, format_units supplies
+    the storm format's documented unit (e.g. NWS13/OWI pressure = mbar) and it
+    is converted: pressure mbar -> Pa (scale 100), wind m/s (scale 1)."""
+    ds = make_met_dataset(wind_units="", pressure_units="")
+    path = tmp_path / "met_nounits_fmt.nc"
+    ds.to_netcdf(path)
+    with MetInspector(path, variable_map=_VAR_MAP,
+                      format_units={"wind_u": "m/s", "wind_v": "m/s",
+                                    "pressure": "mbar"}) as insp:
+        meta = insp.inspect_met()
+    roles = {v.geoclaw_role: v for v in meta.variables}
+    assert roles["pressure"].scale_factor == pytest.approx(100.0)  # mbar -> Pa
+    assert roles["wind_u"].scale_factor == pytest.approx(1.0)
+
+
 def test_missing_units_assume_units_opt_in(met_file_factory):
     """The explicit assume_units escape hatch assumes each variable's contract
     unit for a unitless file, without raising or warning."""
