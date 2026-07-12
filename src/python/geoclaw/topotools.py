@@ -1174,7 +1174,7 @@ class Topography(object):
 
     def write(self, path, topo_type=None, no_data_value=None, fill_value=None,
                 header_style='geoclaw', Z_format="%15.7e", grid_registration=None,
-                z_dtype="float32"):
+                z_dtype="float32", compression=None):
         r"""Write out a topography file to path of type *topo_type*.
 
         Writes out a topography file of topo type specified with *topo_type* or
@@ -1215,6 +1215,12 @@ class Topography(object):
                 for full double precision.  Ignored for ASCII topo types.
                 The elevation is always written with a CF `units = "m"`
                 attribute (GeoClaw requires meters; see :ref:`topo_netcdf`).
+         - *compression* - NetCDF (`topo_type=4`) zlib compression for the
+                elevation variable.  `None`/`False` (default) writes
+                uncompressed; `True` uses zlib level 1 + byte shuffle; an int
+                selects the zlib complevel; a dict is passed through verbatim.
+                The compressed file stays randomly readable and needs no reader
+                change.  See `netcdf_utils.compression_encoding`.
 
         """
 
@@ -1349,7 +1355,8 @@ class Topography(object):
             # units, and a CF _FillValue rather than a custom no_data_value
             # attribute.  This is the writer counterpart to read(topo_type=4).
             import xarray as xr
-            from clawpack.geoclaw.netcdf_utils import CFNormalizer
+            from clawpack.geoclaw.netcdf_utils import (CFNormalizer,
+                                                       compression_encoding)
 
             elevation = xr.DataArray(
                 Z,
@@ -1390,8 +1397,11 @@ class Topography(object):
             # NaN _FillValue (nonsensical for a monotonic axis), so it's
             # explicitly cleared for those too.
             coord_names = [name for name in ds.coords if name != "elevation"]
-            encoding = {"elevation": {"_FillValue": no_data_value,
-                                       "dtype": z_dtype}}
+            elevation_encoding = {"_FillValue": no_data_value,
+                                  "dtype": z_dtype}
+            # Optional zlib compression; let netCDF auto-chunk the 2-D grid.
+            elevation_encoding.update(compression_encoding(compression))
+            encoding = {"elevation": elevation_encoding}
             encoding.update({name: {"_FillValue": None}
                              for name in coord_names})
             ds.to_netcdf(path, encoding=encoding)

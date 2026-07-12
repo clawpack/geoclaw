@@ -403,6 +403,34 @@ def test_dtopo_netcdf_dtype_override(tmp_path):
 
 @pytest.mark.python
 @pytest.mark.netcdf
+def test_dtopo_netcdf_compression(tmp_path):
+    r"""compression=True zlib-compresses dz (smaller file, transparent read)."""
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    # A larger, mostly-zero field so compression is clearly effective.
+    x, y = np.linspace(0.0, 1.0, 200), np.linspace(0.0, 1.0, 200)
+    X, Y = np.meshgrid(x, y)
+    dtopo = dtopotools.DTopography()
+    dtopo.x, dtopo.y, dtopo.X, dtopo.Y = x, y, X, Y
+    dtopo.times = [0.0, 1.0, 2.0]
+    bump = np.exp(-((X - 0.5)**2 + (Y - 0.5)**2) / 0.001)
+    dtopo.dZ = np.array([np.zeros(X.shape), 0.5 * bump, bump])
+
+    plain = tmp_path / "d_plain.nc"
+    comp = tmp_path / "d_comp.nc"
+    dtopo.write(plain, dtopo_type=4)
+    dtopo.write(comp, dtopo_type=4, compression=True)
+
+    assert comp.stat().st_size < plain.stat().st_size
+    with netCDF4.Dataset(comp) as nc:
+        assert nc.variables["dz"].filters()["zlib"] is True
+
+    back = dtopotools.DTopography(path=str(comp), dtopo_type=4)
+    assert np.allclose(back.dZ, dtopo.dZ)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
 def test_dtopo_netcdf_time_reference_roundtrip(tmp_path):
     r"""With time_reference set, dtopo_type=4 writes a CF datetime axis that a
     plain xr.open_dataset decodes to datetime64, and the file round-trips to

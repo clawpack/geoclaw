@@ -576,6 +576,32 @@ def test_topo_netcdf_default_dtype_is_float32(tmp_path):
     assert np.allclose(back.Z, topo.Z)
 
 
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_topo_netcdf_compression(tmp_path):
+    r"""compression=True zlib-compresses elevation (smaller file, reads back)."""
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.linspace(-1.0, 1.0, 300)
+    topo.y = np.linspace(-1.0, 1.0, 300)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    topo.Z = (np.sin(X * 3) + np.cos(Y * 3)) * 1000.0
+
+    plain = tmp_path / "t_plain.nc"
+    comp = tmp_path / "t_comp.nc"
+    topo.write(plain, topo_type=4)
+    topo.write(comp, topo_type=4, compression=True)
+
+    assert comp.stat().st_size < plain.stat().st_size
+    with netCDF4.Dataset(comp) as nc:
+        assert nc.variables["elevation"].filters()["zlib"] is True
+
+    back = topotools.Topography(path=str(comp))
+    back.read()
+    assert np.allclose(back.Z, topo.Z)
+
+
 def _make_unstructured_topo():
     """Construct a representative unstructured topography for interpolation tests."""
     # Create random test data

@@ -242,6 +242,59 @@ def _check_magnitude(role: str, vmin: float, vmax: float,
     return 1.0
 
 
+# ---------------------------------------------------------------------------
+# Compression encoding for NetCDF writers
+# ---------------------------------------------------------------------------
+
+def compression_encoding(compression, chunksizes=None) -> dict:
+    """Translate a ``compression`` argument into an xarray encoding fragment.
+
+    GeoClaw's NetCDF writers pass a user-facing ``compression`` option through
+    here to build the per-variable ``encoding`` dict for ``to_netcdf``.  netCDF
+    zlib compression is transparent to readers (the netCDF-C library, and hence
+    the Fortran reader, decompresses on read) and, being chunked, keeps the
+    file randomly accessible -- unlike an externally gzipped ``.nc``.
+
+    Parameters
+    ----------
+    compression : None | bool | int | dict
+        * ``None`` / ``False`` -> no compression (empty fragment; files stay
+          bit-identical to the uncompressed default).
+        * ``True`` -> the recommended default, zlib level 1 with the byte
+          ``shuffle`` filter (level 1 captures nearly all the size gain; higher
+          levels cost CPU for little more).
+        * ``int`` -> zlib at that ``complevel`` (1--9) with ``shuffle``.
+        * ``dict`` -> used verbatim (full control, e.g.
+          ``{'zlib': True, 'complevel': 4, 'shuffle': False}``).
+    chunksizes : tuple, optional
+        netCDF chunk shape, applied only when compression is enabled and the
+        caller supplies it (zlib requires chunking; a per-time-slice chunk also
+        matches how Fortran reads dtopo/met time slices).  A ``dict``
+        *compression* that already sets ``chunksizes`` is left untouched.
+
+    Returns
+    -------
+    dict
+        Encoding keys to merge into the variable's ``encoding`` entry.
+    """
+    if not compression:
+        return {}
+    if compression is True:
+        enc = {'zlib': True, 'complevel': 1, 'shuffle': True}
+    elif isinstance(compression, int):  # bool True handled above; False is falsy
+        enc = {'zlib': True, 'complevel': int(compression), 'shuffle': True}
+    elif isinstance(compression, dict):
+        enc = dict(compression)
+    else:
+        raise ValueError(
+            f"compression must be None, a bool, an int complevel, or a dict; "
+            f"got {compression!r}."
+        )
+    if chunksizes is not None and enc.get('zlib'):
+        enc.setdefault('chunksizes', tuple(chunksizes))
+    return enc
+
+
 @contextlib.contextmanager
 def suppress_netcdf4_shape_warning():
     r"""Silence netCDF4-python's spurious NumPy 2.5 shape-assignment warning.

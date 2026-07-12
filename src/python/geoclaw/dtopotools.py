@@ -484,7 +484,7 @@ class DTopography(object):
 
 
     def write(self, path=None, dtopo_type=None, dZ_format="%.3f",
-              dz_dtype="float32"):
+              dz_dtype="float32", compression=None):
         r"""Write out subfault resulting dtopo to file at *path*.
 
         :input:
@@ -496,6 +496,12 @@ class DTopography(object):
             NetCDF (dtopo_type=4) file. Default 'float32' (sub-millimeter for
             Earth deformations, half the size); pass 'float64' for full
             precision.
+         - *compression* - NetCDF (dtopo_type=4) zlib compression for the
+            deformation variable. ``None``/``False`` (default) writes
+            uncompressed; ``True`` uses zlib level 1 + byte shuffle (typically
+            shrinks a sparse deformation file several-fold and stays randomly
+            readable); an int selects the zlib complevel; a dict is passed
+            through verbatim. See ``netcdf_utils.compression_encoding``.
 
         """
 
@@ -520,7 +526,8 @@ class DTopography(object):
         if dtopo_type == 4:
             # CF-compliant NetCDF; binary output, handled outside the text
             # file dispatch below.
-            self._write_netcdf(path, x, y, dz_dtype=dz_dtype)
+            self._write_netcdf(path, x, y, dz_dtype=dz_dtype,
+                               compression=compression)
             return
 
         # Construct each interpolating function and evaluate at new grid
@@ -587,7 +594,7 @@ class DTopography(object):
                                  "supported, given %s." % dtopo_type)
 
 
-    def _write_netcdf(self, path, x, y, dz_dtype="float32"):
+    def _write_netcdf(self, path, x, y, dz_dtype="float32", compression=None):
         """Write a CF-compliant NetCDF dtopo file (dtopo_type=4).
 
         Layout: dz(time, lat, lon); lat ascending (S-to-N, the in-memory dZ
@@ -654,8 +661,15 @@ class DTopography(object):
         # carry missing-value semantics at all).  dz is stored as *dz_dtype*
         # (float32 by default): topo deformations are well under 10,000 m, so
         # float32 still gives sub-millimeter precision while halving file size.
+        # Optional zlib compression for dz.  A per-time-slice chunk shape
+        # matches how the Fortran reader pulls one time slice at a time and
+        # keeps compression effective.
+        from clawpack.geoclaw.netcdf_utils import compression_encoding
+        dz_encoding = {"_FillValue": None, "dtype": dz_dtype}
+        dz_encoding.update(compression_encoding(
+            compression, chunksizes=(1, len(y), len(x))))
         ds.to_netcdf(path, encoding={
-            "dz": {"_FillValue": None, "dtype": dz_dtype},
+            "dz": dz_encoding,
             "time": time_encoding,
             "lat": {"_FillValue": None},
             "lon": {"_FillValue": None},
