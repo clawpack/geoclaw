@@ -1358,10 +1358,18 @@ class Topography(object):
             from clawpack.geoclaw.netcdf_utils import (CFNormalizer,
                                                        compression_encoding)
 
+            # Coordinates are always stored as float64 (mirroring the dtopo
+            # writer).  float32 lon/lat quantizes to decimeters-to-meters near
+            # high magnitudes (e.g. ~1.7 m near 180 deg), which is a sizable
+            # fraction of a 1/9" cell (~3.4 m) and exceeds a full cell at 1/27"
+            # and finer -- adjacent points can collapse to the same value,
+            # breaking the uniform-grid assumption.  float64 keeps coordinate
+            # precision at the nanometer level regardless of resolution.
             elevation = xr.DataArray(
                 Z,
                 dims=("latitude", "longitude"),
-                coords={"latitude": self.y, "longitude": self.x},
+                coords={"latitude": numpy.asarray(self.y, dtype=numpy.float64),
+                        "longitude": numpy.asarray(self.x, dtype=numpy.float64)},
                 name="elevation",
                 attrs={
                     "standard_name": "height_above_reference_ellipsoid",
