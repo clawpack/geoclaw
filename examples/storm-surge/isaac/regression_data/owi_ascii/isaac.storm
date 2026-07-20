@@ -3,10 +3,11 @@
 1                    # File format
 2                    # Number of files
 1.0 1.0              # Scaling
-0                    # Window type
 1.0                  # Ramp width
-None                 # Window
-
+0. 0. 0. 0.          # Met crop extent [lon0 lon1 lat0 lat1]; all-zero = full file
+1.0                  # Storm time scale (>1 slower, <1 faster)
+0.0                  # Met x_shift (domain = file + shift)
+0.0                  # Met y_shift (domain = file + shift)
 # Format Data Information
 
 # File paths

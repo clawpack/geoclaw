@@ -154,6 +154,42 @@ class RefinementData(clawpack.clawutil.data.ClawData):
 
 
 
+def _write_preprocessing_block(f, t):
+    """Write the 7 preprocessing-attribute lines for one topo/dtopo file.
+
+    Shared by TopographyData.write() (topo.data) and DTopoData.write()
+    (dtopo.data); Fortran reads the same 7 lines in read_topo_settings and
+    read_dtopo_settings.  *t* is a Topography or DTopography object.
+
+    Float values use repr (shortest round-trip representation) so coordinates
+    reach Fortran at full precision; %g would truncate to 6 significant
+    digits.
+    """
+    # crop_extent: write all-zero sentinel or 4 space-separated floats
+    # All-zero is safe: a valid extent requires x1<x2 and y1<y2.
+    if t.crop_extent is None:
+        f.write("0. 0. 0. 0.   # crop_extent [x1 x2 y1 y2]\n")
+    else:
+        vals = ' '.join(repr(float(v)) for v in t.crop_extent)
+        f.write(f"{vals}   # crop_extent [x1 x2 y1 y2]\n")
+
+    f.write(f"{int(t.coarsen):d}   # coarsen\n")
+    # buffer is a count of grid points; Fortran reads an integer.
+    f.write(f"{int(t.buffer):d}   # buffer\n")
+
+    # align: write all-zero sentinel or 2 space-separated floats
+    if t.align is None:
+        f.write("0. 0.   # align [x y]\n")
+    else:
+        vals = ' '.join(repr(float(v)) for v in t.align)
+        f.write(f"{vals}   # align [x y]\n")
+
+    f.write(f"{float(t.x_shift)!r}   # x_shift\n")
+    f.write(f"{float(t.y_shift)!r}   # y_shift\n")
+    f.write(f"{float(t.z_shift)!r}   # z_shift\n")
+    f.write(f"{'T' if t.negate_z else 'F'}   # negate_z\n")
+
+
 class TopographyData(clawpack.clawutil.data.ClawData):
 
     def __init__(self):
@@ -181,33 +217,201 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         self.add_attribute('beach_slope',0.008)
 
 
-    def write(self,data_source='setrun.py', out_file='topo.data'):
+    def _normalize_topofiles(self):
+        """Return topofiles as a list of Topography objects.
+
+        Converts legacy list/tuple and dict entries with a DeprecationWarning.
+        Topography instances pass through unchanged.
+        """
+        from clawpack.geoclaw.topotools import Topography
+
+        result = []
+        for entry in self.topofiles:
+            if isinstance(entry, Topography):
+                result.append(entry)
+                continue
+
+            if isinstance(entry, (list, tuple)):
+                # Handle old 6-element format [topo_type,minlev,maxlev,t1,t2,path]
+                if len(entry) == 6:
+                    warnings.warn(
+                        "6-element topofile entries are deprecated since v5.8.0 "
+                        "(level/time info is ignored). Construct Topography "
+                        "objects directly instead.",
+                        DeprecationWarning, stacklevel=3,
+                    )
+                    entry = [entry[0], entry[-1]]
+
+                # [topo_type, path, TopoMetadata] — from topo_entries(); not deprecated
+                if len(entry) == 3:
+                    from clawpack.geoclaw.netcdf_utils import TopoMetadata
+                    if isinstance(entry[2], TopoMetadata):
+                        topo = Topography()
+                        topo.topo_type = int(entry[0])
+                        topo.path = str(entry[1])
+                        topo._netcdf_meta = entry[2]
+                        result.append(topo)
+                        continue
+
+                # [topo_type, path] — legacy deprecated format
+                if len(entry) >= 2:
+                    warnings.warn(
+                        "List/tuple topofile entries are deprecated. Construct "
+                        "Topography objects directly and append them to "
+                        "rundata.topo_data.topofiles instead.",
+                        DeprecationWarning, stacklevel=3,
+                    )
+                    topo = Topography()
+                    topo.topo_type = int(entry[0])
+                    topo.path = str(entry[1])
+                    result.append(topo)
+                    continue
+
+            if isinstance(entry, dict):
+                warnings.warn(
+                    "Dict topofile entries are deprecated. Construct Topography "
+                    "objects directly and set attributes on them instead. "
+                    "Note: dict key 'extent' maps to Topography.crop_extent.",
+                    DeprecationWarning, stacklevel=3,
+                )
+                topo = Topography()
+                topo.path = entry.get('topo_path', None)
+                raw_type = entry.get('topo_type', None)
+                if raw_type is not None:
+                    topo.topo_type = int(raw_type)
+                # 'extent' in the dict spec maps to 'crop_extent' on Topography
+                if 'extent' in entry:
+                    topo.crop_extent = entry['extent']
+                for attr in ('crop_extent', 'coarsen', 'buffer', 'align',
+                             'x_shift', 'y_shift', 'z_shift', 'negate_z'):
+                    if attr in entry:
+                        setattr(topo, attr, entry[attr])
+                result.append(topo)
+                continue
+
+            raise ValueError(
+                f"Unrecognized topofile entry type {type(entry).__name__!r}: "
+                f"{entry!r}.  Expected a Topography object, a [topo_type, path] "
+                f"list, or a dict."
+            )
+        return result
+
+    def _compute_priority_order(self, topos):
+        """Return *topos* sorted coarsest-first (finest = highest priority last).
+
+        Coarsest resolution (largest dx*dy) is placed at index 0 and written
+        first in topo.data; the finest file is written last.  Fortran assigns
+        rank 1 (highest priority) to the *last* file listed, so last-written =
+        finest = highest priority in overlap resolution.  This matches the
+        traditional GeoClaw convention of listing topography files from
+        coarsest to finest.
+
+        Stable sort: equal-area files preserve their relative input order, so
+        among equal-resolution files the last one listed wins.
+
+        When override_order=True the input list is returned unchanged.  The
+        caller is responsible for placing the highest-priority (finest) file
+        last.  Files are written in the order provided; the last file has the
+        highest priority in GeoClaw.
+
+        Header data is loaded via read_header() if coordinates are not yet
+        available; the Z array is never loaded here.
+        """
+        if self.override_order:
+            return list(topos)
+
+        def _cell_area(topo):
+            if topo.path is None:
+                return float('inf')
+            if topo._x is None:
+                try:
+                    topo.read_header()
+                except Exception:
+                    return float('inf')
+            try:
+                dx, dy = topo.delta
+                return float(dx) * float(dy)
+            except Exception:
+                return float('inf')
+
+        # Descending cell area => coarsest first, finest last.  reverse=True
+        # keeps the sort stable for equal-area files (they retain input order).
+        return sorted(topos, key=_cell_area, reverse=True)
+
+    def write(self, data_source='setrun.py', out_file='topo.data'):
 
         self.open_data_file(out_file, data_source)
         self.data_write(name='topo_missing',
                         description='replace no_data_value in topofile')
-        self.data_write(name='test_topography',description='(Type topography specification)')
+        self.data_write(name='test_topography',
+                        description='(Type topography specification)')
         if self.test_topography == 0:
-            ntopofiles = len(self.topofiles)
-            self.data_write(value=ntopofiles,alt_name='ntopofiles')
-            self.data_write(name="override_order", description="(Override order topo files are used)")
-            for tfile in self.topofiles:
+            topos = self._normalize_topofiles()
+            topos = self._compute_priority_order(topos)
 
-                if len(tfile) == 6:
-                    w = '\n  *** WARNING: topofile specs changed in v5.8.0 -- ' + \
-                          'Flag level info now ignored'
-                    warnings.warn(w, UserWarning)
-                    tfile = [tfile[0], tfile[-1]] # drop minlevel,maxlevel,t1,t2
-                elif len(tfile) == 2:
-                    pass  # now expect only topo_type, filename
-                else:
-                    raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
+            # Warn if the topo files carry mismatched vertical datums: GeoClaw
+            # applies no vertical-datum transformation, so mixing references is
+            # a likely error.  Only datums that are actually available (set by
+            # the user or read from NetCDF) are compared; None is ignored.
+            datums = sorted({str(topo.datum) for topo in topos
+                             if getattr(topo, 'datum', None) is not None})
+            if len(datums) > 1:
+                warnings.warn(
+                    "Topography files have mismatched vertical datums (%s). "
+                    "GeoClaw does not transform between datums; verify the "
+                    "files share a common vertical reference."
+                    % ", ".join(datums),
+                    UserWarning, stacklevel=2,
+                )
 
-                # if path is relative in setrun, assume it's relative to the
-                # same directory that out_file comes from
-                fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
-                self._out_file.write("\n'%s' \n " % fname)
-                self._out_file.write("%3i   # topo_type\n" % tfile[0])
+            self.data_write(value=len(topos), alt_name='ntopofiles')
+            for topo in topos:
+                # Resolve path relative to out_file's directory, same as before
+                fname = os.path.abspath(
+                    os.path.join(os.path.dirname(out_file), topo.path))
+
+                f = self._out_file
+                f.write(f"\n'{fname}'   # topo_path\n")
+                f.write(f"{topo.topo_type:3d}   # topo_type\n")
+                _write_preprocessing_block(f, topo)
+
+                # For NetCDF (type 4): write the CF descriptor block that
+                # Fortran's read_netcdf_descriptor parses (key=value lines
+                # terminated by a blank line).  Uses inspect() rather than
+                # inspect_topo() to avoid an expensive full-file fill scan.
+                if abs(topo.topo_type) == 4:
+                    import dataclasses
+                    from clawpack.geoclaw import netcdf_utils as _ncutils
+                    if getattr(topo, '_netcdf_meta', None) is not None:
+                        # Pre-computed metadata from topo_entries() — already has
+                        # correct lon_wrap_offset and file-coordinate crop_bounds.
+                        _meta = topo._netcdf_meta
+                    else:
+                        _crop = (tuple(topo.crop_extent)
+                                 if topo.crop_extent is not None else None)
+                        with _ncutils.TopoInspector(
+                            fname, crop_bounds=_crop
+                        ) as _insp:
+                            if _insp.var_name is None:
+                                _insp.var_name = _insp._find_topo_var_name()
+                            _file_meta = _insp.inspect(_insp.var_name)
+                            # A recognized non-meter unit yields a scale_factor
+                            # Fortran applies on read (missing/unrecognized
+                            # units still raise).
+                            _src_units = _insp._check_topo_units()
+                            _scale = _ncutils._units_scale(
+                                _src_units,
+                                _ncutils.GEOCLAW_NETCDF_UNITS['topo'])
+                            _meta = _ncutils.TopoMetadata(
+                                **dataclasses.asdict(_file_meta),
+                                var_name=_insp.var_name,
+                                source_units=_src_units,
+                                scale_factor=_scale,
+                                fill_action='abort',
+                                lon_wrap_offset=0.0,
+                            )
+                    _ncutils.DescriptorWriter.write_topo_descriptor(f, _meta)
+
         elif self.test_topography == 1:
             self.data_write(name='topo_location',description='(Bathymetry jump location)')
             self.data_write(name='topo_left',description='(Depth to left of bathy_location)')
@@ -390,72 +594,163 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dtopofiles',[])
         self.add_attribute('dt_max_dtopo', 1.e99)
 
+    def _normalize_dtopofiles(self):
+        """Return dtopofiles as a list of DTopography objects.
+
+        Converts legacy list/tuple entries with a warning.  DTopography
+        instances pass through unchanged.
+        """
+        from clawpack.geoclaw.dtopotools import DTopography
+
+        result = []
+        for entry in self.dtopofiles:
+            if isinstance(entry, DTopography):
+                result.append(entry)
+                continue
+
+            if isinstance(entry, (list, tuple)):
+                if len(entry) == 4:
+                    w = '\n  *** WARNING: dtopofile specs changed in ' + \
+                        'v5.8.0 -- Flag level info now ignored'
+                    warnings.warn(w, UserWarning)
+                    entry = [entry[0], entry[-1]]  # drop minlevel,maxlevel
+                if len(entry) == 2:
+                    d = DTopography()
+                    d.dtopo_type = int(entry[0])
+                    d.path = str(entry[1])
+                    result.append(d)
+                    continue
+                raise ValueError('Unexpected len(tfile) = %i' % len(entry))
+
+            raise ValueError(
+                f"Unrecognized dtopofile entry type {type(entry).__name__!r}: "
+                f"{entry!r}.  Expected a DTopography object or a "
+                f"[dtopo_type, path] list."
+            )
+        return result
+
     def write(self, data_source='setrun.py', out_file='dtopo.data'):
 
         # Moving topography settings
         self.open_data_file(out_file, data_source)
-        mdtopofiles = len(self.dtopofiles)
-        self.data_write(value=mdtopofiles,alt_name='mdtopofiles')
+        dtopos = self._normalize_dtopofiles()
+        self.data_write(value=len(dtopos), alt_name='mdtopofiles')
         self.data_write()
-        for tfile in self.dtopofiles:
-
-            if len(tfile) == 4:
-                w = '\n  *** WARNING: dtopofile specs changed in v5.8.0 -- ' + \
-                      'Flag level info now ignored'
-                warnings.warn(w, UserWarning)
-                tfile = [tfile[0], tfile[-1]]  # drop minlevel,maxlevel
-            elif len(tfile) == 2:
-                pass   # now expect only dtopo_type, filename
-            else:
-                raise ValueError('Unexpected len(tfile) = %i' % len(tfile))
+        for d in dtopos:
+            # Unsupported preprocessing attributes fail loudly at write time
+            # (mirrors DTopography.read() and the Fortran guard in
+            # read_dtopo_settings): only z_shift and negate_z are implemented
+            # for dtopography.
+            unsupported = [name for name, is_set in (
+                ("crop_extent", d.crop_extent is not None),
+                ("coarsen", d.coarsen != 1),
+                ("buffer", d.buffer != 0.0),
+                ("align", d.align is not None),
+            ) if is_set]
+            if unsupported:
+                raise NotImplementedError(
+                    "Preprocessing attributes %s are not implemented for "
+                    "dtopography (file %s). Only x_shift, y_shift, z_shift and "
+                    "negate_z are supported." % (", ".join(unsupported), d.path))
 
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
-            fname = os.path.abspath(os.path.join(os.path.dirname(out_file),tfile[-1]))
-            self._out_file.write("\n'%s' \n" % fname)
-            self._out_file.write("%3i   # dtopo_type\n" % tfile[0])
+            fname = os.path.abspath(
+                os.path.join(os.path.dirname(out_file), d.path))
+            self._out_file.write("\n'%s'   # dtopo_path\n" % fname)
+            self._out_file.write("%3i   # dtopo_type\n" % d.dtopo_type)
+            _write_preprocessing_block(self._out_file, d)
+
+            # For NetCDF (type 4): write the descriptor block that Fortran's
+            # read_dtopo_netcdf_descriptor parses (key=value lines terminated
+            # by a blank line), carrying the time axis as (t0, dt) in
+            # simulation seconds.
+            if abs(d.dtopo_type) == 4:
+                from clawpack.geoclaw import netcdf_utils as _ncutils
+                from clawpack.geoclaw.topotools import extract_datum
+                with _ncutils.DTopoInspector(fname) as _insp:
+                    # A recognized non-meter deformation unit yields a
+                    # scale_factor Fortran applies on read.
+                    _meta = _insp.inspect_dtopo()
+                    # Record an optional vertical datum (informational) for the
+                    # consistency check below, if not already set on the object.
+                    if d.datum is None:
+                        d.datum = extract_datum(
+                            *[_insp.ds[v].attrs for v in _insp.ds.data_vars],
+                            _insp.ds.attrs)
+                _ncutils.DescriptorWriter.write_dtopo_descriptor(
+                    self._out_file, _meta)
+
+        # Warn if the dtopo files carry mismatched vertical datums: GeoClaw
+        # applies no vertical-datum transformation, so mixing references is a
+        # likely error.  Only datums that are actually available are compared.
+        datums = sorted({str(d.datum) for d in dtopos
+                         if getattr(d, 'datum', None) is not None})
+        if len(datums) > 1:
+            warnings.warn(
+                "dtopo files have mismatched vertical datums (%s). GeoClaw "
+                "does not transform between datums; verify the files share a "
+                "common vertical reference." % ", ".join(datums),
+                UserWarning, stacklevel=2,
+            )
+
         self.data_write()
         self.data_write(value=self.dt_max_dtopo,alt_name='dt_max_dtopo')
         self.close_data_file()
 
 
     def read(self, path="dtopo.data", force=False):
-        r"""Read a dtopography data file."""
+        r"""Read a dtopography data file written by write().
 
-        print(self.dtopofiles)
+        Populates *dtopofiles* with DTopography objects carrying the path,
+        dtopo_type, and preprocessing attributes of each 10-line file block.
+        """
+        from clawpack.geoclaw.dtopotools import DTopography
+
+        def _data(line):
+            # Strip trailing comments and whitespace
+            return line.split('#')[0].strip()
 
         with open(os.path.abspath(path), 'r') as data_file:
+            lines = data_file.readlines()
 
-            file_name = None
-
-            # Forward to first parameter
-            for line in data_file:
-
-                # Regular parameter setting
-                if "=:" in line:
-                    value, tail = line.split("=:")
-                    varname = tail.split()[0]
-
-                    if varname == "mdtopofiles":
-                        num_dtopo_files = int(value)
-                    elif varname == "dt_max_dtopo":
-                        self.dt_max_dtopo = float(value)
-
-                # Assume this is the second line of a record, complete and add
-                # to dtopofiles list
-                elif file_name is not None:
-                    base_values = [int(value) for value in line.split()]
-                    base_values.append(file_name)
-                    self.dtopofiles.append(base_values)
-                    file_name = None
-
-                # Non-empty line, assume start of dtopo_file record
-                elif line[0] == "'":
-                    file_name = line.strip()[1:-1]
+        num_dtopo_files = None
+        self.dtopofiles = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if "=:" in line:
+                value, tail = line.split("=:")
+                varname = tail.split()[0]
+                if varname == "mdtopofiles":
+                    num_dtopo_files = int(value)
+                elif varname == "dt_max_dtopo":
+                    self.dt_max_dtopo = float(value)
+                i += 1
+            elif _data(line).startswith("'"):
+                # 10-line file block: path, dtopo_type, crop_extent, coarsen,
+                # buffer, align, x_shift, y_shift, z_shift, negate_z
+                d = DTopography()
+                d.path = _data(line).strip("'")
+                d.dtopo_type = int(_data(lines[i + 1]).split()[0])
+                crop = [float(v) for v in _data(lines[i + 2]).split()]
+                d.crop_extent = None if all(v == 0. for v in crop) else crop
+                d.coarsen = int(_data(lines[i + 3]))
+                d.buffer = float(_data(lines[i + 4]))
+                align = [float(v) for v in _data(lines[i + 5]).split()]
+                d.align = None if all(v == 0. for v in align) else align
+                d.x_shift = float(_data(lines[i + 6]))
+                d.y_shift = float(_data(lines[i + 7]))
+                d.z_shift = float(_data(lines[i + 8]))
+                d.negate_z = _data(lines[i + 9]).upper().startswith("T")
+                self.dtopofiles.append(d)
+                i += 10
+            else:
+                i += 1
 
         # Check to make sure we have all the dtopofiles
         if len(self.dtopofiles) != num_dtopo_files:
-            raise IOError("The number of dtopo files specified does not equal ",
+            raise IOError("The number of dtopo files specified does not equal "
                           "the number found.")
 
 
@@ -567,6 +862,15 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute("pressure_index", 6)
         self.add_attribute("display_landfall_time", False)
 
+        # Model-storm time scaling and temporal onset/cutoff ramp.
+        # storm_time_scale: >1 slower, <1 faster (model storms; data storms
+        #   carry their own scale in the .storm descriptor).
+        # t_ramp_on / t_ramp_off: seconds over which the wind/pressure forcing
+        #   ramps on after t0 and off before tfinal (0 = no ramp).
+        self.add_attribute("storm_time_scale", 1.0)
+        self.add_attribute("t_ramp_on", 0.0)
+        self.add_attribute("t_ramp_off", 0.0)
+
         # AMR parameters
         self.add_attribute('wind_refine', [20.0,40.0,60.0])
         self.add_attribute('R_refine', [60.0e3, 40e3, 20e3])
@@ -597,6 +901,9 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             self.wind_index = int(data_file.readline().split("=:")[0]) - 1
             self.pressure_index = int(data_file.readline().split("=:")[0]) - 1
             self.display_landfall_time = bool(data_file.readline().split("=:")[0])
+            self.storm_time_scale = float(data_file.readline().split("=:")[0])
+            self.t_ramp_on = float(data_file.readline().split("=:")[0])
+            self.t_ramp_off = float(data_file.readline().split("=:")[0])
             data_file.readline()
             data_file.readline() # TODO: Extra empty line, should fix
 
@@ -645,6 +952,12 @@ class SurgeData(clawpack.clawutil.data.ClawData):
                         description="(Index into aux array - fortran indexing)")
         self.data_write("display_landfall_time",
                         description='(Display time relative to landfall)')
+        self.data_write("storm_time_scale",
+                        description='(Model storm time scale: >1 slower, <1 faster)')
+        self.data_write("t_ramp_on",
+                        description='(Temporal onset ramp width in seconds)')
+        self.data_write("t_ramp_off",
+                        description='(Temporal cutoff ramp width in seconds)')
         self.data_write()
 
         # AMR storm refinement criteria

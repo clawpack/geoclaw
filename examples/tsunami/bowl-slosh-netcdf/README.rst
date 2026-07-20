@@ -16,11 +16,20 @@ To create the topo file before running the code::
     make topo
 
 This uses the `clawpack.geoclaw.topotools` capabilities to create the netCDF
-topofile `bowl.nc`, using the Python module `netCDF4`. 
+topofile `bowl.nc`, using the Python module `netCDF4`.
 This must be installed for this to work.
 See `<https://unidata.github.io/netcdf4-python/netCDF4/index.html>`_.
 
-Running the Fortran code also requires netCDF properly installed in 
+The elevation variable in the netCDF file must carry a CF ``units`` attribute.
+Meters (``units = "m"``) are the contract unit; a recognised non-meter unit
+(e.g. ``km``) is converted automatically on read via a scale factor (a warning
+is emitted), while a missing or unrecognised unit is rejected rather than
+silently misread.  When the file is written via
+``topotools.Topography.write(..., topo_type=4)`` this attribute is set
+automatically, and the elevation is stored as ``float32`` by default (pass
+``z_dtype="float64"`` for full double precision).  See :ref:`topo_netcdf`.
+
+Running the Fortran code also requires netCDF properly installed in
 order to read in the `bowl.nc` file.  The `Makefile` refers to an
 environment variable `NETCDF4_DIR` that must be set appropriately.
 See `<https://www.unidata.ucar.edu/software/netcdf/docs-fortran/>`_.
@@ -29,4 +38,6 @@ See `<https://www.unidata.ucar.edu/software/netcdf/docs-fortran/>`_.
 Version
 -------
 
+- Updated since v5.14.0 (netCDF elevation ``units`` now required; ``z_dtype``
+  write option added)
 - Updated for v5.8.0

@@ -50,6 +50,17 @@ module storm_module
     type(model_storm_type), save :: model_storm
     type(data_storm_type), save :: data_storm
 
+    ! Storm time scaling and temporal onset/cutoff ramp.
+    ! storm_time_scale stretches (>1, slower) or compresses (<1, faster) the
+    !   model-storm timeline about landfall (data storms scale internally in
+    !   data_storm_module).
+    ! t_ramp_on / t_ramp_off (seconds) smoothly turn the wind/pressure forcing
+    !   on after t0 and off before tfinal using a raised-cosine taper.  Zero
+    !   (default) disables the corresponding taper.  Applies to both storm
+    !   types in set_storm_fields.
+    real(kind=8) :: storm_time_scale = 1.d0
+    real(kind=8) :: t_ramp_on = 0.d0, t_ramp_off = 0.d0
+
     ! Wind drag limit
     real(kind=8) :: WIND_DRAG_LIMIT = 3.5d-3
 
@@ -173,6 +184,9 @@ contains
             read(unit, '(i2)') wind_index
             read(unit, '(i2)') pressure_index
             read(unit, *) display_landfall_time
+            read(unit, *) storm_time_scale
+            read(unit, *) t_ramp_on
+            read(unit, *) t_ramp_off
             read(unit, *)
 
             ! AMR parameters
@@ -197,6 +211,9 @@ contains
 
             write(log_unit, *) "Storm specification = ", storm_specification_type
             write(log_unit, *) "  file = ", storm_file_path
+            write(log_unit, *) "storm_time_scale = ", storm_time_scale
+            write(log_unit, *) "t_ramp_on = ", t_ramp_on
+            write(log_unit, *) "t_ramp_off = ", t_ramp_off
 
             ! Use parameterized storm model
             if (0 < storm_specification_type .and. storm_specification_type <= 9) then
@@ -439,6 +456,8 @@ contains
     subroutine set_storm_fields(maux, mbc, mx, my, xlower, ylower, dx, dy,&
                                 t, aux)
 
+        use geoclaw_module, only: Pa => ambient_pressure
+
         implicit none
 
         ! Input arguments
@@ -446,18 +465,68 @@ contains
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
         real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
 
+        real(kind=8) :: t_model, ramp_t
+
         if (storm_specification_type > 0) then
+            ! Model storms: scale the lookup time about landfall.  Dividing by
+            ! storm_time_scale matches the data-storm convention (>1 = slower):
+            ! the storm reaches a given track state at a later sim time.
+            t_model = landfall + (t - landfall) / storm_time_scale
             call set_model_fields(maux,mbc,mx,my, &
-                                  xlower,ylower,dx,dy,t,aux, wind_index, &
+                                  xlower,ylower,dx,dy,t_model,aux, wind_index, &
                                   pressure_index, model_storm)
         end if
         if (storm_specification_type < 0) then
+            ! Data storms apply storm_time_scale internally (data_storm_module).
             call set_data_fields(maux,mbc,mx,my, &
                                  xlower,ylower,dx,dy,t,aux, wind_index, &
                                  pressure_index, data_storm)
         end if
 
+        ! Temporal onset/cutoff ramp: scale the wind and pressure forcing
+        ! toward ambient over the patch.  No-op when ramp_t == 1.
+        ramp_t = temporal_ramp(t)
+        if (ramp_t < 1.d0) then
+            aux(wind_index:wind_index+1, :, :) =                               &
+                aux(wind_index:wind_index+1, :, :) * ramp_t
+            aux(pressure_index, :, :) =                                        &
+                Pa + (aux(pressure_index, :, :) - Pa) * ramp_t
+        end if
+
     end subroutine set_storm_fields
+
+
+    ! ========================================================================
+    !  temporal_ramp(t) - raised-cosine onset/cutoff multiplier in [0, 1]
+    !
+    !  Ramps from 0 at t0 up to 1 at t0 + t_ramp_on (onset), and from 1 down
+    !  to 0 over [tfinal - t_ramp_off, tfinal] (cutoff).  A zero width
+    !  disables that side (multiplier 1).  Same raised-cosine shape as the
+    !  spatial met edge ramp in data_storm_module.
+    ! ========================================================================
+    real(kind=8) function temporal_ramp(t) result(ramp_t)
+
+        use geoclaw_module, only: pi
+        use amr_module, only: t0, tfinal
+
+        implicit none
+
+        real(kind=8), intent(in) :: t
+        real(kind=8) :: onset, cutoff
+
+        onset = 1.d0
+        if (t_ramp_on > 0.d0 .and. t < t0 + t_ramp_on) then
+            onset = 0.5d0 * (1.d0 - cos(pi * max(0.d0, t - t0) / t_ramp_on))
+        end if
+
+        cutoff = 1.d0
+        if (t_ramp_off > 0.d0 .and. t > tfinal - t_ramp_off) then
+            cutoff = 0.5d0 * (1.d0 - cos(pi * max(0.d0, tfinal - t) / t_ramp_off))
+        end if
+
+        ramp_t = onset * cutoff
+
+    end function temporal_ramp
 
 
     subroutine output_storm_location(t)

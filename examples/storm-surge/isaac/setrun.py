@@ -328,6 +328,9 @@ def setrun(claw_pkg='geoclaw', download_dir=None, storm_dir=None):
     rundata.gaugedata.gauges.append([2, -89.95826667, 29.26460167,
                                      rundata.clawdata.t0,
                                      rundata.clawdata.tfinal])
+    
+    # Record the wind and pressure fields at the gauges
+    rundata.gaugedata.aux_out_fields = [4, 5, 6]
 
     # ------------------------------------------------------------------
     # GeoClaw specific parameters:
@@ -475,6 +478,49 @@ def setgeo(rundata, download_dir=None, storm_dir=None):
     # ----------------------
 
 
+def write_storm_file(rundata):
+    """Write the storm file configured in rundata.surge_data.
+
+    Separated from setgeo so that importing/calling setrun() does not write
+    files as a side effect (important for test runners that call setrun() and
+    then substitute their own storm file).
+    """
+    data = rundata.surge_data
+
+    isaac = Storm()
+    atcf_path = (Path(__file__).parent / "bal092012.dat").resolve()
+    isaac.read(path=atcf_path, file_format="ATCF")
+    # Calculate landfall time - Need to specify as the file above does not
+    # include this info (~2345 UTC - 6:45 p.m. CDT - on August 28)
+    isaac.time_offset = np.datetime64("2012-08-29T00:00")
+
+    if data.storm_specification_type == 'holland80':
+        isaac.write(data.storm_file, file_format='geoclaw')
+
+    elif data.storm_specification_type == "data":
+        # ASCII
+        isaac.file_format = 'NWS12'
+        isaac.file_paths = [
+            (Path(__file__).parent / "isaac.PRE").resolve(),
+            (Path(__file__).parent / "isaac.WIN").resolve(),
+        ]
+
+        # NetCDF
+        # isaac.file_format = "NWS13"
+        # isaac.file_paths.append((Path() / "isaac.nc").resolve())
+        # # For NetCDF we need to set this to the epoch or things do not work yet
+        # isaac.time_offset = np.datetime64("1970-01-01")
+
+        # Stretch (>1) or compress (<1) the storm time axis relative to the
+        # first time step.  1.0 = no change; 2.0 = storm moves twice as slow.
+        isaac.storm_time_scale = 1.0
+
+        isaac.write(data.storm_file, file_format='data')
+
+    else:
+        raise ValueError("Invalid storm specification type.")
+
+
 if __name__ == '__main__':
     # Set up run-time parameters and write all data files.
     import sys
@@ -483,4 +529,5 @@ if __name__ == '__main__':
     else:
         rundata = setrun()
 
+    write_storm_file(rundata)
     rundata.write()

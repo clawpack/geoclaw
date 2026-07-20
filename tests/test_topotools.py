@@ -29,11 +29,12 @@ def topo_bowl_hill(x, y):
 
 
 @pytest.mark.python
-@pytest.mark.parametrize("topo_type", [1, 2, 3])
+@pytest.mark.parametrize("topo_type", [2, 3])
 def test_read_write_topo_bowl(tmp_path, topo_type):
     """
     Test writing and reading topo files with a small number of points.
     Note that ordering should go from the NW corner.
+    topo_type=1 removed: deprecated in Prompt 3; covered by Group 7 tests.
     """
 
     topo = topotools.Topography(topo_func=topo_bowl)
@@ -87,6 +88,44 @@ def test_read_write_topo_bowl(tmp_path, topo_type):
 
 
 @pytest.mark.python
+@pytest.mark.parametrize("topo_type, ext", [(2, "tt2"), (3, "tt3"), (4, "nc")])
+def test_no_data_value_nan_roundtrip(tmp_path, topo_type, ext):
+    """Missing data is NaN in memory and round-trips through the numeric
+    on-file sentinel.
+
+    A missing cell is written as the numeric ``no_data_value`` (ASCII header /
+    NetCDF ``_FillValue``) and read back as NaN; no numeric sentinel should
+    leak into the in-memory array.
+    """
+    if topo_type == 4:
+        pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.linspace(-2.0, 2.0, 5)
+    topo.y = np.linspace(1.0, 3.0, 3)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    Z = (X + Y).astype(float)
+    Z[1, 2] = np.nan       # one missing cell
+    topo.Z = Z
+
+    path = tmp_path / f"missing.{ext}"
+    topo.write(path, topo_type=topo_type, Z_format="%22.15e")
+
+    if topo_type in (2, 3):
+        assert str(int(topo.no_data_value)) in path.read_text(), \
+            "Numeric no_data_value sentinel not written to ASCII file."
+
+    topo_in = topotools.Topography(path)
+    topo_in.read()
+
+    assert np.isnan(topo_in.Z[1, 2]), "Missing cell did not round-trip to NaN."
+    assert not np.any(topo_in.Z == topo_in.no_data_value), \
+        "Numeric sentinel leaked into the in-memory array."
+    assert np.allclose(topo_in.Z[~np.isnan(topo_in.Z)], Z[~np.isnan(Z)]), \
+        "Non-missing values changed across the round-trip."
+
+
+@pytest.mark.python
 def test_crop_topo_bowl():
     """
     Test cropping a topo file.
@@ -127,9 +166,11 @@ def test_crop_topo_bowl():
 
 
 @pytest.mark.python
-@pytest.mark.parametrize("topo_type", [1, 2, 3])
+@pytest.mark.parametrize("topo_type", [2, 3])
 def test_read_write_topo_bowl_hill(tmp_path, topo_type):
-    """Test writing and reading topo files for the bowl-hill example."""
+    """Test writing and reading topo files for the bowl-hill example.
+    topo_type=1 removed: deprecated in Prompt 3; covered by Group 7 tests.
+    """
 
     topo = topotools.Topography(topo_func=topo_bowl_hill)
     topo.x = np.linspace(-1.5, 2.5, 101)
@@ -170,6 +211,66 @@ def test_netcdf(tmp_path):
         pytest.skip("Skipping test since NetCDF support not found.")
     except RuntimeError:
         pytest.skip("NetCDF topography test skipped due to runtime failure.")
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_netcdf_read_converts_units(tmp_path):
+    r"""Topography.read(topo_type=4) converts a recognized non-meter elevation
+    unit (km) to meters in memory; the Fortran descriptor path records an
+    equivalent scale_factor (applied by Fortran on read)."""
+    xr = pytest.importorskip("xarray")
+    from clawpack.geoclaw.netcdf_utils import TopoInspector
+
+    x = np.linspace(-1.0, 1.0, 5)
+    y = np.linspace(-2.0, 2.0, 4)
+    Z_m = np.outer(np.linspace(-1000.0, 1000.0, 4), np.ones(5))
+
+    # File declares km; on-disk values are the meter values / 1000.
+    ds = xr.Dataset(
+        {"elevation": (("latitude", "longitude"), Z_m / 1000.0,
+                       {"units": "km", "standard_name": "height"})},
+        coords={"latitude": y, "longitude": x},
+    )
+    path = tmp_path / "topo_km.nc"
+    ds.to_netcdf(path)
+
+    # In-memory read converts km -> m.
+    topo = topotools.Topography(path=str(path), topo_type=4)
+    topo.read()
+    assert np.allclose(topo.Z, Z_m), "km elevation was not converted to meters"
+
+    # Descriptor (Fortran) path now also converts: it records a scale_factor
+    # (km -> m) that Fortran applies on read.
+    with TopoInspector(str(path), var_name="elevation") as insp:
+        meta = insp.inspect_topo()
+    assert meta.scale_factor == pytest.approx(1000.0)   # km value * 1000 = m
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_netcdf_z_dtype_override(tmp_path):
+    r"""z_dtype defaults to float32 on disk; 'float64' overrides it."""
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography(topo_func=topo_bowl)
+    topo.x = np.linspace(-1.0, 1.0, 8)
+    topo.y = np.linspace(-1.0, 1.0, 6)
+    _ = topo.Z   # realize Z
+
+    default_path = tmp_path / "default.nc"
+    topo.write(default_path, topo_type=4)
+    with netCDF4.Dataset(default_path) as nc:
+        assert nc.variables["elevation"].dtype == np.dtype("float32")
+
+    f64_path = tmp_path / "f64.nc"
+    topo.write(f64_path, topo_type=4, z_dtype="float64")
+    with netCDF4.Dataset(f64_path) as nc:
+        assert nc.variables["elevation"].dtype == np.dtype("float64")
+
+    back = topotools.Topography(path=f64_path)
+    back.read()
+    assert np.allclose(back.Z, topo.Z)
 
 
 # Remote/network integration test: keep opt-in and out of the default suite.
@@ -280,6 +381,227 @@ def _import_pyplot():
     return plt
 
 
+@pytest.mark.python
+@pytest.mark.parametrize("method", ["value", "nearest", "linear", "fill"])
+def test_replace_values_methods(method):
+    """replace_values fills the given cells by each method.
+
+    On a planar field Z[i,j] = i + 10*j, replacing an interior cell with
+    'linear' or 'fill' recovers the exact planar value; 'value' sets the
+    constant; 'nearest' copies an adjacent cell.
+    """
+    if method in ("nearest", "linear"):
+        pytest.importorskip("scipy")
+    ny, nx = 5, 5
+    i = np.arange(ny).reshape(ny, 1)
+    j = np.arange(nx).reshape(1, nx)
+    Z0 = (i + 10.0 * j) * np.ones((ny, nx))
+
+    topo = topotools.Topography()
+    topo.x = np.arange(nx, dtype=float)
+    topo.y = np.arange(ny, dtype=float)
+    topo.Z = Z0.copy()
+
+    topo.replace_values([(2, 2)], value=-7.0, method=method)
+
+    if method == "value":
+        assert topo.Z[2, 2] == -7.0
+    elif method in ("linear", "fill"):
+        # Planar field: interpolation / symmetric average recovers true value.
+        assert np.isclose(topo.Z[2, 2], 22.0)
+    else:  # nearest -> one of the four edge neighbors
+        assert topo.Z[2, 2] in {Z0[1, 2], Z0[3, 2], Z0[2, 1], Z0[2, 3]}
+
+    # All other cells are untouched.
+    mask = np.ones((ny, nx), dtype=bool)
+    mask[2, 2] = False
+    assert np.array_equal(topo.Z[mask], Z0[mask])
+
+
+@pytest.mark.python
+def test_replace_values_empty_is_noop():
+    """An empty index set leaves Z unchanged (no error)."""
+    topo = topotools.Topography()
+    topo.x = np.arange(4, dtype=float)
+    topo.y = np.arange(4, dtype=float)
+    Z0 = np.arange(16, dtype=float).reshape(4, 4)
+    topo.Z = Z0.copy()
+    topo.replace_values(np.empty((0, 2), dtype=int), method="nearest")
+    assert np.array_equal(topo.Z, Z0)
+
+
+@pytest.mark.python
+def test_replace_no_data_values_fills_nan():
+    """replace_no_data_values locates NaN cells and fills via replace_values."""
+    pytest.importorskip("scipy")
+    ny, nx = 5, 5
+    i = np.arange(ny).reshape(ny, 1)
+    j = np.arange(nx).reshape(1, nx)
+    Z0 = (i + 10.0 * j) * np.ones((ny, nx))
+
+    topo = topotools.Topography()
+    topo.x = np.arange(nx, dtype=float)
+    topo.y = np.arange(ny, dtype=float)
+    Z = Z0.copy()
+    Z[2, 2] = np.nan          # missing cell (NaN in memory)
+    topo.Z = Z
+
+    topo.replace_no_data_values(method="linear")
+    assert not np.any(np.isnan(topo.Z))
+    assert np.isclose(topo.Z[2, 2], 22.0)
+
+
+@pytest.mark.python
+def test_replace_no_data_values_noop_when_none():
+    """With no missing cells, replace_no_data_values leaves Z unchanged."""
+    topo = topotools.Topography()
+    topo.x = np.arange(4, dtype=float)
+    topo.y = np.arange(4, dtype=float)
+    Z0 = np.arange(16, dtype=float).reshape(4, 4)
+    topo.Z = Z0.copy()
+    topo.replace_no_data_values(method="nearest")
+    assert np.array_equal(topo.Z, Z0)
+
+
+@pytest.mark.python
+def test_in_poly_square():
+    """in_poly returns a grid-shaped mask True for points inside the polygon."""
+    pytest.importorskip("matplotlib")
+    topo = topotools.Topography()
+    topo.x = np.arange(5.0)          # 0,1,2,3,4
+    topo.y = np.arange(5.0)
+    topo.Z = np.zeros((5, 5))
+
+    # Vertices at half-integers so no grid point lies on the boundary.
+    poly = [(0.5, 0.5), (3.5, 0.5), (3.5, 3.5), (0.5, 3.5)]
+    mask = topo.in_poly(poly)
+
+    assert mask.shape == topo.X.shape
+    expected = np.zeros((5, 5), dtype=bool)
+    expected[1:4, 1:4] = True        # points with 1<=x,y<=3 are inside
+    assert np.array_equal(mask, expected)
+
+
+@pytest.mark.python
+def test_in_poly_triangle_concave_region():
+    """in_poly handles a non-rectangular (triangular) polygon."""
+    pytest.importorskip("matplotlib")
+    topo = topotools.Topography()
+    topo.x = np.arange(5.0)
+    topo.y = np.arange(5.0)
+    topo.Z = np.zeros((5, 5))
+
+    # Lower-left triangle; (1,1) clearly inside, (3,3) clearly outside.
+    poly = [(0.0, 0.0), (4.0, 0.0), (0.0, 4.0)]
+    mask = topo.in_poly(poly)
+
+    assert mask[1, 1]        # X[1,1]=1, Y[1,1]=1 -> inside
+    assert not mask[3, 3]    # X[3,3]=3, Y[3,3]=3 -> x+y=6 > 4, outside
+
+
+@pytest.mark.python
+def test_in_poly_unstructured():
+    """For unstructured data in_poly returns a 1-D mask over the points."""
+    pytest.importorskip("matplotlib")
+    topo = topotools.Topography(unstructured=True)
+    topo.x = np.array([0.0, 2.0, 5.0])
+    topo.y = np.array([0.0, 2.0, 5.0])
+    topo.z = np.zeros(3)
+
+    poly = [(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)]
+    mask = topo.in_poly(poly)
+
+    assert mask.shape == (3,)
+    assert list(mask) == [False, True, False]   # only (2,2) is inside
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_datum_netcdf_roundtrip(tmp_path):
+    """The optional vertical datum defaults to None and round-trips via NetCDF."""
+    pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.arange(4.0)
+    topo.y = np.arange(3.0)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    topo.Z = (X + Y).astype(float)
+    assert topo.datum is None                 # default
+
+    topo.datum = "NAVD88"
+    path = tmp_path / "with_datum.nc"
+    topo.write(path, topo_type=4)
+    back = topotools.Topography(path=str(path))
+    back.read()
+    assert back.datum == "NAVD88"
+
+    # A file written without a datum reads back as None.
+    plain = topotools.Topography()
+    plain.x = np.arange(4.0)
+    plain.y = np.arange(3.0)
+    Xp, Yp = np.meshgrid(plain.x, plain.y)
+    plain.Z = (Xp + Yp).astype(float)
+    p2 = tmp_path / "plain.nc"
+    plain.write(p2, topo_type=4)
+    back2 = topotools.Topography(path=str(p2))
+    back2.read()
+    assert back2.datum is None
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_topo_netcdf_default_dtype_is_float32(tmp_path):
+    r"""elevation is stored as float32 on disk by default to halve file size.
+
+    Topography values are well under 10,000 m, so float32 still gives
+    sub-millimeter precision; the in-memory array read back stays float64.
+    """
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.linspace(-1.0, 1.0, 10)
+    topo.y = np.linspace(-1.0, 1.0, 8)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    topo.Z = (np.sin(X) + np.cos(Y)) * 4000.0
+
+    path = tmp_path / "elevation.nc"
+    topo.write(path, topo_type=4)
+
+    with netCDF4.Dataset(path) as nc:
+        assert nc.variables["elevation"].dtype == np.dtype("float32")
+
+    back = topotools.Topography(path=str(path))
+    back.read()
+    assert back.Z.dtype == np.float64
+    assert np.allclose(back.Z, topo.Z)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_topo_netcdf_compression(tmp_path):
+    r"""compression=True zlib-compresses elevation (smaller file, reads back)."""
+    netCDF4 = pytest.importorskip("netCDF4")
+
+    topo = topotools.Topography()
+    topo.x = np.linspace(-1.0, 1.0, 300)
+    topo.y = np.linspace(-1.0, 1.0, 300)
+    X, Y = np.meshgrid(topo.x, topo.y)
+    topo.Z = (np.sin(X * 3) + np.cos(Y * 3)) * 1000.0
+
+    plain = tmp_path / "t_plain.nc"
+    comp = tmp_path / "t_comp.nc"
+    topo.write(plain, topo_type=4)
+    topo.write(comp, topo_type=4, compression=True)
+
+    assert comp.stat().st_size < plain.stat().st_size
+    with netCDF4.Dataset(comp) as nc:
+        assert nc.variables["elevation"].filters()["zlib"] is True
+
+    back = topotools.Topography(path=str(comp))
+    back.read()
+    assert np.allclose(back.Z, topo.Z)
+
+
 def _make_unstructured_topo():
     """Construct a representative unstructured topography for interpolation tests."""
     # Create random test data
@@ -350,7 +672,7 @@ def plot_unstructured_topo_baseline(output_dir):
     axes.set_title("True Field")
 
     axes = fig.add_subplot(1, 3, 2)
-    topo.plot(axes=axes, region_extent=[0, 1, 0, 1])
+    topo.plot(axes=axes)
     axes.set_title("Unstructured Field")
 
     axes = fig.add_subplot(1, 3, 3)
