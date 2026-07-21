@@ -1042,3 +1042,179 @@ def test_backward_compat_mixed_formats(tmp_path, tt2_path):
     assert raw.count("topo_path") == 3
     # The dict's crop_extent [0,5,0,5] appears (not all-zero sentinel)
     assert "0 5" in raw or "0. 5." in raw or "0.0 5.0" in raw
+
+
+# ===========================================================================
+# Group 8 — crop_extent / stride pushdown to the NetCDF read (type 4)
+#
+# A large global NetCDF must not be fully materialized when only a subset is
+# requested.  read() pushes both `stride` and a `crop_extent`-derived index
+# window down to xarray's lazy indexing so the backend reads only that
+# hyperslab.  The window is a *superset* of what the post-read crop() selects,
+# so the visible result must be byte-identical to reading the whole file and
+# cropping in memory.  These tests pin that equivalence (the correctness
+# contract) and guard that a bounded window is actually used (the perf/memory
+# contract).  End-to-end memory/time on a real 7 GB global DEM was confirmed
+# manually (a strided read that previously OOM'd now returns in ~0.1 s).
+# ===========================================================================
+
+@pytest.mark.netcdf
+def test_crop_pushdown_matches_full_read(nc_topo_path):
+    """crop_extent applied during read == full read then crop() in memory."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+    crop = [2.0, 7.0, 3.0, 8.0]
+
+    ref = Topography()
+    ref.read(path, topo_type=4)
+    ref = ref.crop(filter_region=crop)
+
+    t = Topography()
+    t.crop_extent = crop
+    t.read(path, topo_type=4)
+
+    np.testing.assert_array_equal(t.x, ref.x)
+    np.testing.assert_array_equal(t.y, ref.y)
+    np.testing.assert_array_equal(t.Z, ref.Z)
+
+
+@pytest.mark.netcdf
+def test_crop_pushdown_with_buffer_matches_full_read(nc_topo_path):
+    """buffer is preserved: the pushed-down window is a superset of crop()'s."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+    crop = [3.0, 7.0, 3.0, 7.0]
+
+    ref = Topography()
+    ref.read(path, topo_type=4)
+    ref = ref.crop(filter_region=crop, buffer=1)
+
+    t = Topography()
+    t.crop_extent = crop
+    t.buffer = 1
+    t.read(path, topo_type=4)
+
+    np.testing.assert_array_equal(t.x, ref.x)
+    np.testing.assert_array_equal(t.y, ref.y)
+    np.testing.assert_array_equal(t.Z, ref.Z)
+
+
+@pytest.mark.netcdf
+def test_crop_pushdown_with_coarsen_align_matches_full_read(nc_topo_path):
+    """coarsen + align survive the pushdown unchanged."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+    crop = [2.0, 7.0, 3.0, 8.0]
+
+    ref = Topography()
+    ref.read(path, topo_type=4)
+    ref = ref.crop(filter_region=crop, coarsen=2, align=(0.0, 0.0))
+
+    t = Topography()
+    t.crop_extent = crop
+    t.coarsen = 2
+    t.align = (0.0, 0.0)
+    t.read(path, topo_type=4)
+
+    np.testing.assert_array_equal(t.x, ref.x)
+    np.testing.assert_array_equal(t.y, ref.y)
+    np.testing.assert_array_equal(t.Z, ref.Z)
+
+
+@pytest.mark.netcdf
+@pytest.mark.parametrize("buffer", [0, 1])
+def test_crop_pushdown_with_stride_matches_full_read(nc_topo_path, buffer):
+    """stride + crop_extent: the strided sub-window stays phase-aligned with
+    striding the full array (the low index is snapped to a multiple of stride),
+    so the result matches full-strided-then-cropped.  buffer=1 forces an odd
+    raw low index, exercising the snap."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+    crop = [3.0, 8.0, 3.0, 8.0]
+
+    ref = Topography()
+    ref.read(path, topo_type=4, stride=[2, 2])
+    ref = ref.crop(filter_region=crop, buffer=buffer)
+
+    t = Topography()
+    t.crop_extent = crop
+    t.buffer = buffer
+    t.read(path, topo_type=4, stride=[2, 2])
+
+    np.testing.assert_array_equal(t.x, ref.x)
+    np.testing.assert_array_equal(t.y, ref.y)
+    np.testing.assert_array_equal(t.Z, ref.Z)
+
+
+@pytest.mark.netcdf
+@pytest.mark.parametrize("s2n", [True, False], ids=["S→N", "N→S"])
+def test_crop_pushdown_respects_storage_order(tmp_path, s2n):
+    """crop_extent pushdown matches full-read-then-crop for either lat storage
+    order, and always returns coordinates normalised S→N (y increasing).
+    (The bundled fixture flips only the coordinate on N→S, not the data, so the
+    invariant is pushdown-vs-full on the *same* file, not S→N-vs-N→S.)"""
+    pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    crop = [2.0, 7.0, 3.0, 8.0]
+
+    path = _make_nc_topo(tmp_path / "ordered.nc", "lon", "lat",
+                         lat_south_to_north=s2n)
+
+    ref = Topography()
+    ref.read(str(path), topo_type=4)
+    ref = ref.crop(filter_region=crop)
+
+    t = Topography()
+    t.crop_extent = crop
+    t.read(str(path), topo_type=4)
+
+    np.testing.assert_array_equal(t.x, ref.x)
+    np.testing.assert_array_equal(t.y, ref.y)
+    np.testing.assert_array_equal(t.Z, ref.Z)
+    # Coordinates are always normalised to S→N regardless of file order.
+    assert np.all(np.diff(t.y) > 0)
+
+
+@pytest.mark.netcdf
+def test_crop_no_overlap_keeps_full_grid(nc_topo_path):
+    """A crop_extent that misses the file leaves the array uncropped, matching
+    crop()'s own fall-back (does not crash or return an empty grid)."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+
+    ref = Topography()
+    ref.read(path, topo_type=4)
+
+    t = Topography()
+    t.crop_extent = [100.0, 200.0, 100.0, 200.0]
+    t.read(path, topo_type=4)
+
+    np.testing.assert_array_equal(t.Z, ref.Z)
+
+
+@pytest.mark.netcdf
+def test_crop_pushdown_reads_bounded_window(nc_topo_path, monkeypatch):
+    """Regression tripwire: a crop_extent read must compute (and therefore read)
+    a strict sub-window on each axis, not the whole axis.  If someone reverts to
+    materializing the full variable and cropping afterward, this fails."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+
+    calls = []
+    orig = topotools._netcdf_window_indices
+
+    def _spy(coords, lo, hi, margin, n, stride=1):
+        result = orig(coords, lo, hi, margin, n, stride)
+        calls.append((result, n))
+        return result
+
+    monkeypatch.setattr(topotools, "_netcdf_window_indices", _spy)
+
+    t = Topography()
+    t.crop_extent = [3.0, 6.0, 3.0, 6.0]
+    t.read(path, topo_type=4)
+
+    assert calls, "crop_extent read did not use the window pushdown"
+    for (i0, i1), n in calls:
+        assert 0 <= i0 < i1 <= n
+        assert (i1 - i0) < n, "window spans the whole axis (no pushdown)"
