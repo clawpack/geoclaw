@@ -231,5 +231,55 @@ def test_netcdf_forcing_aux(tmp_path):
     _check_aux(_run_case(tmp_path, "data"), "data")
 
 
+@pytest.mark.regression
+@pytest.mark.storm
+@pytest.mark.netcdf
+def test_gridded_no_center_amr(tmp_path):
+    """Phase F1: gridded (no-center) forcing with AMR on must run without
+    assuming a storm center, refine on wind (R_refine is inert without a
+    center), and write no fort.track.
+
+    This is the behavioral guard for the center-assumption fix: pre-F1 this run
+    emitted a bogus fort.track full of ``rinfinity`` rows; post-F1 it emits
+    none, and refinement is driven purely by ``wind_refine``.
+    """
+    pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    make_vars = _netcdf_build_vars()
+    if make_vars is None:
+        pytest.skip("NetCDF (nf-config/nc-config) unavailable; gridded end-to-"
+                    "end is covered by the isaac suite.")
+
+    topo_path = tmp_path / "flat.tt3"
+    _flat_topo(topo_path)
+    nc_path = tmp_path / "met.nc"
+    storm_path = tmp_path / "met.storm"
+    _netcdf_forcing(nc_path, storm_path)
+
+    runner = gtest.GeoClawTestRunner(tmp_path, test_path=testdir)
+    # amr_levels_max=2 with a low wind threshold so the vortex triggers
+    # refinement; R_refine is set but must stay inert (no storm center).
+    runner.set_data(forcing="data", topo_path=str(topo_path),
+                    storm_path=str(storm_path), amr_levels_max=2,
+                    wind_refine=[8.0], R_refine=[100.0e3])
+    runner.write_data()
+    runner.build_executable(make_vars=make_vars)
+    runner.run_code()
+
+    # (a) The run completed (a centerless data-storm center lookup would STOP
+    #     the program) and produced the final output frame.
+    sol = solution.Solution(OUTPUT_FRAMES[-1], path=runner.temp_path,
+                            read_aux=True)
+
+    # (b) Refinement occurred and is wind-driven: R_refine is inert without a
+    #     center, so more than the single base grid means wind_refine fired.
+    assert len(sol.states) > 1, (
+        "expected wind-driven AMR refinement (>1 grid) for gridded forcing")
+
+    # (c) The center-assumption fix: gridded forcing writes no fort.track.
+    assert not (Path(runner.temp_path) / "fort.track").exists(), (
+        "gridded (no-center) forcing must not emit a fort.track")
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))

@@ -14,6 +14,7 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
     use storm_module, only: wind_forcing, pressure_forcing, wind_drag
     use storm_module, only: wind_index, pressure_index
     use storm_module, only: storm_direction, storm_location
+    use storm_module, only: storm_location_available
 
     use friction_module, only: variable_friction, friction_index
 
@@ -177,19 +178,28 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     ! wind -----------------------------------------------------------
     if (wind_forcing) then
-        ! Need storm location and direction for sector based wind drag
-        sloc = storm_location(t)
-        theta = storm_direction(t)
+        ! Sector-based wind drag needs the storm center/direction, which only
+        ! parameterized storms provide.  Gridded/data forcing has no center;
+        ! use phi = 0 (Garratt drag ignores the angle; Powell falls back to a
+        ! fixed sector).
+        if (storm_location_available) then
+            sloc = storm_location(t)
+            theta = storm_direction(t)
+        endif
         do j=1,my
             yc = ylower + (j - 0.5d0) * dy
             do i=1,mx
                 xc = xlower + (i - 0.5d0) * dx
                 if (q(1,i,j) > dry_tolerance) then
-                    psi = atan2(yc - sloc(2), xc - sloc(1))
-                    if (theta > psi) then
-                        phi = (2.d0 * pi - theta + psi) * RAD2DEG
+                    if (storm_location_available) then
+                        psi = atan2(yc - sloc(2), xc - sloc(1))
+                        if (theta > psi) then
+                            phi = (2.d0 * pi - theta + psi) * RAD2DEG
+                        else
+                            phi = (psi - theta) * RAD2DEG
+                        endif
                     else
-                        phi = (psi - theta) * RAD2DEG 
+                        phi = 0.d0
                     endif
                     wind_speed = sqrt(aux(wind_index,i,j)**2        &
                                     + aux(wind_index+1,i,j)**2)
