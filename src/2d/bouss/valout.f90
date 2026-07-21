@@ -15,7 +15,7 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     use amr_module, only: timeTick, tick_clock_start, t0, timeTickCPU
 
     use storm_module, only: storm_specification_type, output_storm_location
-    use storm_module, only: output_storm_location
+    use storm_module, only: storm_location_available
     use storm_module, only: landfall, display_landfall_time
 
 #ifdef HDF5
@@ -91,8 +91,9 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     out_aux = ((output_aux_num > 0) .and.               &
               ((.not. output_aux_onlyonce) .or. (abs(time - t0) < 1d-90)))
                 
-    ! Output storm track if needed
-    if (storm_specification_type /= 0) then
+    ! Output storm track if needed (parameterized storms only; gridded/data
+    ! forcing has no center to write).
+    if (storm_location_available) then
         call output_storm_location(time)
     end if
 

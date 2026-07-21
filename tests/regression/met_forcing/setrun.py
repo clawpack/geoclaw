@@ -17,7 +17,8 @@ from clawpack.clawutil import data
 
 
 def setrun(claw_pkg="geoclaw", forcing="holland80", topo_path=None,
-           storm_path=None):
+           storm_path=None, amr_levels_max=1, wind_refine=False,
+           R_refine=False):
 
     assert claw_pkg.lower() == "geoclaw", "Expected claw_pkg = 'geoclaw'"
 
@@ -76,16 +77,17 @@ def setrun(claw_pkg="geoclaw", forcing="holland80", topo_path=None,
     clawdata.bc_lower[1] = "extrap"
     clawdata.bc_upper[1] = "extrap"
 
-    # --- AMR OFF (single fixed grid) ---
+    # --- AMR (single fixed grid by default; F1 test drives amr_levels_max=2) ---
     amrdata = rundata.amrdata
-    amrdata.amr_levels_max = 1
+    amrdata.amr_levels_max = amr_levels_max
     amrdata.refinement_ratios_x = [2]
     amrdata.refinement_ratios_y = [2]
     amrdata.refinement_ratios_t = [2]
     amrdata.aux_type = ["center", "capacity", "yleft",
                         "center", "center", "center", "center"]
     amrdata.flag_richardson = False
-    amrdata.flag2refine = False
+    # Use flag2refine2 (wind/R_refine criteria) when refining.
+    amrdata.flag2refine = (amr_levels_max > 1)
     amrdata.verbosity_regrid = 0
 
     # --- GeoClaw geometry / topo ---
@@ -109,8 +111,8 @@ def setrun(claw_pkg="geoclaw", forcing="holland80", topo_path=None,
     surge_data.wind_index = 4          # 0-based -> Fortran 5 (wind_u), 6 (wind_v)
     surge_data.pressure_index = 6      # 0-based -> Fortran 7 (pressure)
     surge_data.display_landfall_time = False
-    surge_data.wind_refine = False
-    surge_data.R_refine = False
+    surge_data.wind_refine = wind_refine
+    surge_data.R_refine = R_refine
     if forcing == "data":
         surge_data.storm_specification_type = "data"
     else:

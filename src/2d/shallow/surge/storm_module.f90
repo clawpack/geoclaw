@@ -46,6 +46,12 @@ module storm_module
 
     ! Storm object
     integer :: storm_specification_type
+
+    ! Whether the active forcing provides a storm center/track.  Only
+    ! parameterized storms (storm_specification_type > 0) have an analytic
+    ! eye; gridded/data forcing does not.  Center-consuming code (AMR
+    ! R_refine, sector-based wind drag, fort.track output) is guarded on this.
+    logical :: storm_location_available = .false.
     real(kind=8) :: landfall = 0.d0
     type(model_storm_type), save :: model_storm
     type(data_storm_type), save :: data_storm
@@ -199,6 +205,10 @@ contains
             ! Storm Setup
             read(unit, "(i2)") storm_specification_type
             read(unit, *) storm_file_path
+
+            ! Only parameterized (model) storms provide a storm center/track;
+            ! gridded/data forcing (storm_specification_type < 0) has none.
+            storm_location_available = (storm_specification_type > 0)
 
             close(unit)
 

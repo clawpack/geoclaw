@@ -29,6 +29,7 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
 
     use storm_module, only: storm_specification_type, wind_refine, R_refine
     use storm_module, only: storm_location, wind_forcing, wind_index, wind_refine
+    use storm_module, only: storm_location_available
 
     use regions_module, only: num_regions, regions
     use refinement_module, only: wave_tolerance, speed_tolerance
@@ -96,9 +97,10 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
             endif
 
             ! ************* Storm Based Refinement ****************
-            ! Check to see if we are some specified distance from the eye of
-            ! the storm and refine if we are
-            if (storm_specification_type /= 0) then
+            ! Distance-to-center (R_refine) refinement requires a storm center,
+            ! which only parameterized storms provide.  Gridded/data forcing
+            ! has no center and refines on wind speed alone
+            if (storm_location_available) then
                 R_eye = storm_location(t)
                 do m=1,min(size(R_refine), mxnest)
                     if (coordinate_system == 2) then
@@ -106,23 +108,23 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
                     else
                         ds = sqrt((x_c - R_eye(1))**2 + (y_c - R_eye(2))**2)
                     end if
-                    
+
                     if (ds < R_refine(m) .and. level <= m) then
                         amrflags(i,j) = DOFLAG
                         cycle x_loop
                     endif
                 enddo
-                
-                ! Refine based on wind speed
-                if (wind_forcing) then
-                    wind_speed = sqrt(aux(wind_index,i,j)**2 + aux(wind_index+1,i,j)**2)
-                    do m=1,min(size(wind_refine), mxnest)
-                        if ((wind_speed > wind_refine(m)) .and. (level <= m)) then
-                            amrflags(i,j) = DOFLAG
-                            cycle x_loop
-                        endif
-                    enddo
-                endif
+            endif
+
+            ! Refine based on wind speed (works with or without a storm center)
+            if (wind_forcing) then
+                wind_speed = sqrt(aux(wind_index,i,j)**2 + aux(wind_index+1,i,j)**2)
+                do m=1,min(size(wind_refine), mxnest)
+                    if ((wind_speed > wind_refine(m)) .and. (level <= m)) then
+                        amrflags(i,j) = DOFLAG
+                        cycle x_loop
+                    endif
+                enddo
             endif
 
             ! ********* criteria applied only to wet cells:
