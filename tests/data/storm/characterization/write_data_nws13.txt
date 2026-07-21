@@ -1,0 +1,27 @@
+# Data Derived Storm
+2012-08-29T00:00:00  # Time Offset
+2                    # File format
+1                    # Number of files
+1.0 1.0              # Scaling
+3                    # Ramp width
+-100.0 -60.0 10.0 40.0 # Met crop extent [lon0 lon1 lat0 lat1]; all-zero = full file
+1.0                  # Storm time scale (>1 slower, <1 faster)
+1.25                 # Met x_shift (domain = file + shift)
+-0.5                 # Met y_shift (domain = file + shift)
+# Format Data Information
+&file_info
+  x_name         = lon
+  y_name         = lat
+  time_name      = time
+  dim_order      = time,y,x
+  lon_wrap       = 180
+  y_increasing   = True
+  fill_value     = nan
+  fill_action    = warn
+  time_offset    = -1346198400.0
+  time_scale     = 1.0
+/
+&variable_info  var_name=uwnd  geoclaw_role=wind_u  scale_factor=1.0  /
+&variable_info  var_name=vwnd  geoclaw_role=wind_v  scale_factor=1.0  /
+&variable_info  var_name=press  geoclaw_role=pressure  scale_factor=1.0  /
+# File paths

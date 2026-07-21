@@ -1,0 +1,111 @@
+{
+  "ID": "5209",
+  "basin": null,
+  "central_pressure": [
+    100600.0,
+    100300.0,
+    100200.0,
+    100500.0,
+    100300.0,
+    100200.0
+  ],
+  "classification": [
+    "2",
+    "2",
+    "2",
+    "2",
+    "2",
+    "2"
+  ],
+  "crop_extent": null,
+  "event": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "eye_location": [
+    [
+      131.5,
+      13.0
+    ],
+    [
+      130.7,
+      13.7
+    ],
+    [
+      130.0,
+      14.5
+    ],
+    [
+      129.7,
+      16.3
+    ],
+    [
+      129.6,
+      17.6
+    ],
+    [
+      129.2,
+      17.9
+    ]
+  ],
+  "file_format": "jma",
+  "file_paths": [
+    "jma.txt"
+  ],
+  "max_wind_radius": [
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0
+  ],
+  "max_wind_speed": [
+    15.4333332,
+    19.54888872,
+    15.4333332,
+    18.0055554,
+    19.54888872,
+    15.4333332
+  ],
+  "met_fill_action": null,
+  "met_fill_value": null,
+  "met_lon_wrap": null,
+  "met_time_name": null,
+  "met_time_offset": null,
+  "met_variable_map": {},
+  "met_x_name": null,
+  "met_y_increasing": null,
+  "met_y_name": null,
+  "name": "IKE",
+  "ramp_width": 1.0,
+  "scaling": [
+    1.0,
+    1.0
+  ],
+  "storm_radius": [
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0
+  ],
+  "storm_time_scale": 1.0,
+  "t": [
+    "2008-08-30T06:00:00",
+    "2008-08-30T18:00:00",
+    "2008-08-31T00:00:00",
+    "2008-08-30T12:00:00",
+    "2008-08-30T18:00:00",
+    "2008-08-31T00:00:00"
+  ],
+  "time_offset": null,
+  "wind_speeds": null,
+  "x_shift": 0.0,
+  "y_shift": 0.0
+}

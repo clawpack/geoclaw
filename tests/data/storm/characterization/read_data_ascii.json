@@ -1,0 +1,45 @@
+{
+  "ID": null,
+  "basin": null,
+  "central_pressure": null,
+  "classification": null,
+  "crop_extent": [
+    -100.0,
+    -60.0,
+    10.0,
+    40.0
+  ],
+  "event": null,
+  "eye_location": null,
+  "file_format": 1,
+  "file_paths": [
+    "storm_1.PRE",
+    "storm_1.WIN",
+    "storm_2.PRE",
+    "storm_2.WIN"
+  ],
+  "max_wind_radius": null,
+  "max_wind_speed": null,
+  "met_fill_action": null,
+  "met_fill_value": null,
+  "met_lon_wrap": null,
+  "met_time_name": null,
+  "met_time_offset": null,
+  "met_variable_map": {},
+  "met_x_name": null,
+  "met_y_increasing": null,
+  "met_y_name": null,
+  "name": null,
+  "ramp_width": 3.0,
+  "scaling": [
+    1.0,
+    1.0
+  ],
+  "storm_radius": null,
+  "storm_time_scale": 1.0,
+  "t": null,
+  "time_offset": "2012-08-29T00:00:00",
+  "wind_speeds": null,
+  "x_shift": 1.25,
+  "y_shift": -0.5
+}
