@@ -34,9 +34,13 @@ python_sources = {
   ],
   'surge': [
     '__init__.py',
+    'gridded.py',
+    'parametric.py',
     'plot.py',
     'quality.py',
     'storm.py',
+    'tools.py',
+    'track.py',
   ],
 }
 
