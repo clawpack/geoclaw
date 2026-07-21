@@ -1,0 +1,46 @@
+{
+  "ID": null,
+  "basin": null,
+  "central_pressure": null,
+  "classification": null,
+  "crop_extent": [
+    -100.0,
+    -60.0,
+    10.0,
+    40.0
+  ],
+  "event": null,
+  "eye_location": null,
+  "file_format": 2,
+  "file_paths": [
+    "nws13.nc"
+  ],
+  "max_wind_radius": null,
+  "max_wind_speed": null,
+  "met_fill_action": "warn",
+  "met_fill_value": NaN,
+  "met_lon_wrap": 180,
+  "met_time_name": "time",
+  "met_time_offset": -1346198400.0,
+  "met_variable_map": {
+    "pressure": "press",
+    "wind_u": "uwnd",
+    "wind_v": "vwnd"
+  },
+  "met_x_name": "lon",
+  "met_y_increasing": true,
+  "met_y_name": "lat",
+  "name": null,
+  "ramp_width": 3.0,
+  "scaling": [
+    1.0,
+    1.0
+  ],
+  "storm_radius": null,
+  "storm_time_scale": 1.0,
+  "t": null,
+  "time_offset": "2012-08-29T00:00:00",
+  "wind_speeds": null,
+  "x_shift": 1.25,
+  "y_shift": -0.5
+}
