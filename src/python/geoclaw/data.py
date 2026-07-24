@@ -829,24 +829,102 @@ class QinitData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
+# =============================================================================
+#  Meteorological forcing selection registry
+#
+#  Single source of truth mapping the met-forcing *family* + *subtype* to the
+#  legacy signed-integer ``storm_specification_type`` encoding still carried on
+#  the ``surge.data`` wire.  See met_forcing_refactor.md Sections 7 and 9.
+#
+#  family:  "parametric" - analytic model with a storm center/track;
+#           "gridded"    - file-backed wind/pressure fields (no center);
+#           "none"       - forcing off.
+#
+#  Each parametric subtype maps to that model's historical integer code; the
+#  single gridded subtype maps to -1 and "none" to 0.  The gridded ASCII/NetCDF
+#  distinction is NOT on this wire - it lives as ``file_format`` in the .storm
+#  descriptor (see surge/gridded.py and data_storm_module.f90).
+
+# canonical subtype -> (family, legacy integer code)
+forcing_subtype_registry = {"holland80":        ("parametric",  1),
+                            "holland2008":      ("parametric",  8),
+                            "holland2010":      ("parametric",  2),
+                            "cle":              ("parametric",  3),
+                            "slosh":            ("parametric",  4),
+                            "rankine":          ("parametric",  5),
+                            "modified_rankine": ("parametric",  6),
+                            "demaria":          ("parametric",  7),
+                            "willoughby":       ("parametric",  9),
+                            "gridded":          ("gridded",    -1),
+                            "none":             ("none",        0),
+                           }
+
+# Historical / alternate spellings -> canonical subtype.  Lookups are
+# case-folded, so only spellings that differ by more than case need listing
+# here.  These keep existing setrun.py scripts working unchanged.
+forcing_subtype_aliases = {"holland08":        "holland2008",
+                           "holland10":        "holland2010",
+                           "modified-rankine": "modified_rankine",
+                           "data":             "gridded",
+                          }
+
+# Subtypes recognized by the API but not yet implemented in the Fortran forcing
+# code.  Currently empty: all nine parametric models and the gridded path have
+# working Fortran implementations.  (The previous ``storm_spec_not_implemented``
+# check compared an int against the string 'CLE' and so never fired; CLE is in
+# fact implemented in model_storm_module.f90, so nothing is blocked here.)
+forcing_not_implemented = set()
+
+# Reverse map: legacy integer code -> canonical subtype (each code is unique).
+_forcing_code_to_subtype = {code: subtype for subtype, (family, code)
+                            in forcing_subtype_registry.items()}
+
+
+def resolve_forcing_subtype(value):
+    r"""Resolve a user-supplied forcing spec to ``(family, subtype, code)``.
+
+    ``value`` may be a canonical subtype string, a historical alias, a legacy
+    integer code, or ``None`` (forcing off).  Returns the canonical family
+    string, canonical subtype string, and legacy integer code.
+    """
+    if value is None:
+        subtype = "none"
+    elif isinstance(value, str):
+        subtype = value.lower()
+        subtype = forcing_subtype_aliases.get(subtype, subtype)
+        if subtype not in forcing_subtype_registry:
+            raise ValueError(f"Unknown forcing subtype '{value}'.")
+    elif isinstance(value, (int, np.integer)):
+        if int(value) not in _forcing_code_to_subtype:
+            raise ValueError(f"Unknown forcing specification code '{value}'.")
+        subtype = _forcing_code_to_subtype[int(value)]
+    else:
+        raise TypeError(f"Unknown forcing specification '{value}'.")
+
+    if subtype in forcing_not_implemented:
+        raise NotImplementedError(f"Forcing subtype '{subtype}' is not yet "
+                                  "implemented.")
+
+    family, code = forcing_subtype_registry[subtype]
+    return family, subtype, code
+
+
 # Storm data
 class SurgeData(clawpack.clawutil.data.ClawData):
     r"""Data object describing storm surge related parameters"""
 
-    # Provide some mapping between model names and integers
-    storm_spec_dict_mapping = {"data": -1,
-                               None: 0,
-                               'holland80': 1,
-                               'holland08': 8,
-                               'holland10': 2,
-                               'cle': 3,
-                               'slosh': 4,
-                               'rankine': 5,
-                               'modified-rankine': 6,
-                               'DeMaria': 7,
-                               'willoughby': 9,
+    # Legacy name/alias -> integer mapping, derived from the canonical
+    # forcing_subtype_registry above.  Retained (with the historical spellings)
+    # as a backwards-compatibility view; new code should prefer
+    # storm_family/storm_subtype and resolve_forcing_subtype().
+    storm_spec_dict_mapping = {None: 0,
+                               **{sub: code for sub, (fam, code)
+                                  in forcing_subtype_registry.items()},
+                               **{alias: forcing_subtype_registry[canon][1]
+                                  for alias, canon
+                                  in forcing_subtype_aliases.items()},
                               }
-    storm_spec_not_implemented = ['CLE']
+    storm_spec_not_implemented = forcing_not_implemented
 
     def __init__(self):
         super(SurgeData, self).__init__()
@@ -875,9 +953,18 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.add_attribute('wind_refine', [20.0,40.0,60.0])
         self.add_attribute('R_refine', [60.0e3, 40e3, 20e3])
 
-        # Storm parameters
+        # Storm / met-forcing selection.
+        #
+        # Preferred API: storm_family ("parametric" | "gridded" | "none") plus
+        # storm_subtype (a model name for parametric, "gridded" for gridded).
+        # These default to None; when unset, write() falls back to the legacy
+        # storm_specification_type (string or integer), which is retained as a
+        # plain stored attribute for backwards compatibility.  See the
+        # forcing_subtype_registry above and met_forcing_refactor.md Section 7.
+        self.add_attribute('storm_family', None)
+        self.add_attribute('storm_subtype', None)
         self.add_attribute('storm_type', None)  # Backwards compatibility
-        self.add_attribute('storm_specification_type', 0) # Type of parameterized storm
+        self.add_attribute('storm_specification_type', 0) # Legacy selection
         self.add_attribute("storm_file", None) # File containing data
 
     def read(self, path: Path=Path("surge.data"), force: bool=False):
@@ -912,10 +999,14 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             self.R_refine = self._parse_value(data_file.readline().split("=:")[0])
             # data_file.readline()
 
-            # Storm specification
-            self.storm_specification_type = int(data_file.readline().split("=:")[0])
+            # Storm / met-forcing selection (family + subtype tokens).
+            self.storm_family = data_file.readline().split("=:")[0].strip()[1:-1]
+            self.storm_subtype = data_file.readline().split("=:")[0].strip()[1:-1]
+            # Populate the legacy integer selector for backwards compatibility.
+            _, _, self.storm_specification_type = \
+                resolve_forcing_subtype(self.storm_subtype)
             line = data_file.readline().split("=:")[0]
-            if line[0] == "'":
+            if line.strip()[0] == "'":
                 self.storm_file = line.strip()[1:-1]
             else:
                 raise IOError("Error reading storm file name.")
@@ -977,28 +1068,34 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             self.R_refine = [self.R_refine]
         self.data_write('R_refine', description='(Wind speed refinement criteria)')
 
-        # Storm specification
-        # Handle deprecated member value
-        if self.storm_type is not None:
-            self.storm_specification_type = self.storm_type
-        # Turn value into integer descriptor
-        if isinstance(self.storm_specification_type, int):
-            spec_type = self.storm_specification_type
-        elif isinstance(self.storm_specification_type, str):
-            if self.storm_specification_type.lower() in self.storm_spec_dict_mapping.keys():
-                spec_type = self.storm_spec_dict_mapping[self.storm_specification_type.lower()]
-            else:
-                raise TypeError(f"Unknown storm specification type" +
-                                f" '{self.storm_specification_type}' provided.")
+        # Storm / met-forcing selection.
+        #
+        # Resolve to a canonical (family, subtype) pair.  The preferred inputs
+        # are storm_family/storm_subtype; when unset we fall back to the legacy
+        # storm_specification_type (or the deprecated storm_type alias), which
+        # may be a name, an alias, or an integer code.
+        if self.storm_family is not None or self.storm_subtype is not None:
+            # storm_subtype is authoritative; family is validated for
+            # consistency if the caller also supplied it.
+            if self.storm_subtype is None:
+                raise ValueError("storm_family set without storm_subtype.")
+            family, subtype, _ = resolve_forcing_subtype(self.storm_subtype)
+            if (self.storm_family is not None
+                    and self.storm_family.lower() != family):
+                raise ValueError(
+                    f"storm_family '{self.storm_family}' is inconsistent with "
+                    f"storm_subtype '{self.storm_subtype}' (family {family}).")
         else:
-            raise TypeError(f"Unknown storm specification type" +
-                            f" '{self.storm_specification_type}' provided.")
-        # Check to see if spec type is in supported formats
-        if spec_type in self.storm_spec_not_implemented:
-            raise NotImplementedError(f"'{spec_type}' has not been implemented.")
-        # Write out values
-        self.data_write(name="storm_specification_type", value=spec_type,
-                        description="(Storm specification)")
+            legacy = self.storm_type if self.storm_type is not None \
+                else self.storm_specification_type
+            family, subtype, _ = resolve_forcing_subtype(legacy)
+
+        # Write the explicit family/subtype tokens (quoted single words, read
+        # list-directed by the Fortran side; see storm_module.f90).
+        self.data_write(name="storm_family", value=family,
+                        description="(Forcing family: parametric | gridded | none)")
+        self.data_write(name="storm_subtype", value=subtype,
+                        description="(Forcing subtype / parametric model)")
         self.data_write(name="storm_file", description='(Path to storm data)')
 
         self.close_data_file()
