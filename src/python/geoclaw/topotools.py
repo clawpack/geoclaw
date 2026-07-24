@@ -91,6 +91,45 @@ def determine_topo_type(path, default=None):
     return topo_type
 
 
+def _netcdf_window_indices(coords, lo, hi, margin, n, stride=1):
+    r"""Half-open index window ``[i0, i1)`` into 1-D monotonic *coords*.
+
+    Used by :meth:`Topography.read` to push a ``crop_extent`` down to the
+    NetCDF read so only the needed hyperslab is loaded from disk (rather than
+    materializing a whole global variable and cropping afterward).
+
+    :Input:
+     - *coords* (ndarray) - 1-D coordinate array, monotonic ascending **or**
+       descending (as stored in the file).
+     - *lo*, *hi* (float) - requested inclusive coordinate bounds.
+     - *margin* (int) - extra points to keep on each side so that a subsequent
+       :meth:`Topography.crop` still has every point it needs (its own buffer
+       plus the ``coarsen`` alignment search).
+     - *n* (int) - length of *coords*.
+     - *stride* (int) - read stride; the low index is snapped **down** to a
+       multiple of *stride* so the strided sub-window shares the same phase as
+       striding the full array, keeping the sampled grid identical.
+
+    Returns ``(0, n)`` (the full range) when the interval does not overlap
+    *coords*, mirroring ``crop()``'s fall-back of leaving the array uncropped
+    when the filter region misses the topography.
+    """
+    # A monotonic array clipped to [lo, hi] yields a contiguous True block for
+    # either sort order, so first/last True index bound the window.
+    mask = (coords >= lo) & (coords <= hi)
+    idx = numpy.nonzero(mask)[0]
+    if idx.size == 0:
+        return 0, n
+    i0 = max(0, int(idx[0]) - margin)
+    i1 = min(n, int(idx[-1]) + margin + 1)
+    # Snap the low index down to a multiple of stride so coords[i0:i1:stride]
+    # is a phase-aligned subset of coords[::stride].
+    i0 -= i0 % stride
+    if i1 <= i0:
+        return 0, n
+    return i0, i1
+
+
 def create_topo_func(loc,verbose=False):
     """
     Given a 1-dimensional topography profile specfied by a set of (x,z)
@@ -853,13 +892,12 @@ class Topography(object):
                     # attributes (informational only; no transformation).
                     self.datum = extract_datum(ds[_var_name].attrs, ds.attrs)
 
-                    # Load coordinate 1-D arrays
-                    _lon_vals = numpy.asarray(
-                        ds[_x_name].values[::stride[0]], dtype=float
-                    )
-                    _lat_vals = numpy.asarray(
-                        ds[_y_name].values[::stride[1]], dtype=float
-                    )
+                    # Load the 1-D coordinate arrays in full: these are
+                    # O(nx)+O(ny) (a few MB even for a global grid), unlike the
+                    # O(nx*ny) elevation variable.  Kept in file order for now;
+                    # any N→S flip is applied below after windowing.
+                    _lon_full = numpy.asarray(ds[_x_name].values, dtype=float)
+                    _lat_full = numpy.asarray(ds[_y_name].values, dtype=float)
 
                     # Load variable, squeezing singleton non-spatial dims
                     _da = ds[_var_name]
@@ -876,11 +914,41 @@ class Topography(object):
                                 )
 
                     # Transpose to (lat, lon) = (y, x) order expected by
-                    # Topography, then apply stride
+                    # Topography.
                     _da = _da.transpose(_y_name, _x_name)
-                    _z_vals = numpy.asarray(
-                        _da.values[::stride[1], ::stride[0]], dtype=float
-                    )
+
+                    # Push both `stride` and `crop_extent` down to xarray's lazy
+                    # indexing so the NetCDF backend reads ONLY the requested
+                    # hyperslab.  Otherwise `_da.values` materializes the whole
+                    # variable (a global DEM is many GB, and CF fill decoding
+                    # promotes it to float), which is prohibitively slow and can
+                    # exhaust memory even when the caller asked for a small
+                    # subset.  The crop window is computed on the cheap 1-D
+                    # coordinate arrays and expanded by a margin so the post-read
+                    # crop() below still reproduces its exact bounds/buffer/
+                    # align/coarsen result on the in-memory sub-window.
+                    _nx = _lon_full.size
+                    _ny = _lat_full.size
+                    if self.crop_extent is not None:
+                        _x1, _x2, _y1, _y2 = self.crop_extent
+                        _margin = (int(self.buffer) + 1) * max(int(self.coarsen), 1)
+                        _i0, _i1 = _netcdf_window_indices(
+                            _lon_full, _x1, _x2, _margin, _nx, stride[0]
+                        )
+                        _j0, _j1 = _netcdf_window_indices(
+                            _lat_full, _y1, _y2, _margin, _ny, stride[1]
+                        )
+                    else:
+                        _i0, _i1 = 0, _nx
+                        _j0, _j1 = 0, _ny
+
+                    _da = _da.isel({
+                        _y_name: slice(_j0, _j1, stride[1]),
+                        _x_name: slice(_i0, _i1, stride[0]),
+                    })
+                    _z_vals = numpy.asarray(_da.values, dtype=float)
+                    _lon_vals = _lon_full[_i0:_i1:stride[0]]
+                    _lat_vals = _lat_full[_j0:_j1:stride[1]]
 
                     # Flip to S→N (y increasing) if file stores N→S
                     if not _meta.y_increasing:
