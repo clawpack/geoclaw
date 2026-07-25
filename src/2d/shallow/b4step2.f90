@@ -27,7 +27,7 @@ subroutine b4step2(mbc, mx, my, meqn, q, xlower, ylower, dx, dy, t, dt,        &
     use amr_module, only: xperdom,yperdom,spheredom,NEEDS_TO_BE_SET
     use amr_module, only: outunit
 
-    use storm_module, only: set_storm_fields
+    use met_forcing_module, only: set_storm_fields
 
     implicit none
 

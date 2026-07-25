@@ -9,10 +9,10 @@
 !                     http://www.opensource.org/licenses/
 ! ==============================================================================
 
-module storm_module
+module met_forcing_module
 
-    use model_storm_module, only: model_storm_type, rotation
-    use data_storm_module, only: data_storm_type
+    use parametric_met_forcing_module, only: parametric_met_forcing_type, rotation
+    use gridded_met_forcing_module, only: gridded_met_forcing_type
 
     implicit none
 
@@ -53,13 +53,13 @@ module storm_module
     ! R_refine, sector-based wind drag, fort.track output) is guarded on this.
     logical :: storm_location_available = .false.
     real(kind=8) :: landfall = 0.d0
-    type(model_storm_type), save :: model_storm
-    type(data_storm_type), save :: data_storm
+    type(parametric_met_forcing_type), save :: model_storm
+    type(gridded_met_forcing_type), save :: data_storm
 
     ! Storm time scaling and temporal onset/cutoff ramp.
     ! storm_time_scale stretches (>1, slower) or compresses (<1, faster) the
     !   model-storm timeline about landfall (data storms scale internally in
-    !   data_storm_module).
+    !   gridded_met_forcing_module).
     ! t_ramp_on / t_ramp_off (seconds) smoothly turn the wind/pressure forcing
     !   on after t0 and off before tfinal using a raised-cosine taper.  Zero
     !   (default) disables the corresponding taper.  Applies to both storm
@@ -76,12 +76,12 @@ module storm_module
                                       dx, dy, t, aux, wind_index,              &
                                       pressure_index, storm)
 
-            use model_storm_module, only: model_storm_type
+            use parametric_met_forcing_module, only: parametric_met_forcing_type
 
             implicit none
             integer, intent(in) :: maux,mbc,mx,my
             real(kind=8), intent(in) :: xlower,ylower,dx,dy,t
-            type(model_storm_type), intent(inout) :: storm
+            type(parametric_met_forcing_type), intent(inout) :: storm
             integer, intent(in) :: wind_index, pressure_index
             real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
         end subroutine set_model_fields_def
@@ -92,12 +92,12 @@ module storm_module
                                       dx, dy, t, aux, wind_index,           &
                                       pressure_index, storm)
 
-            use data_storm_module, only: data_storm_type
+            use gridded_met_forcing_module, only: gridded_met_forcing_type
 
             implicit none
             integer, intent(in) :: maux, mbc, mx, my
             real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-            type(data_storm_type), intent(inout) :: storm
+            type(gridded_met_forcing_type), intent(inout) :: storm
             integer, intent(in) :: wind_index, pressure_index
             real(kind=8), intent(inout) :: aux(maux,1-mbc:mx+mbc,1-mbc:my+mbc)
         end subroutine set_data_fields_def
@@ -121,19 +121,19 @@ contains
     ! ========================================================================
     subroutine set_storm(data_file)
 
-        use model_storm_module, only: set_model_storm => set_storm
-        use model_storm_module, only: set_holland_1980_fields
-        use model_storm_module, only: set_holland_2008_fields
-        use model_storm_module, only: set_holland_2010_fields
-        use model_storm_module, only: set_CLE_fields
-        use model_storm_module, only: set_SLOSH_fields
-        use model_storm_module, only: set_rankine_fields
-        use model_storm_module, only: set_modified_rankine_fields
-        use model_storm_module, only: set_deMaria_fields
-        use model_storm_module, only: set_willoughby_fields
+        use parametric_met_forcing_module, only: set_model_storm => set_storm
+        use parametric_met_forcing_module, only: set_holland_1980_fields
+        use parametric_met_forcing_module, only: set_holland_2008_fields
+        use parametric_met_forcing_module, only: set_holland_2010_fields
+        use parametric_met_forcing_module, only: set_CLE_fields
+        use parametric_met_forcing_module, only: set_SLOSH_fields
+        use parametric_met_forcing_module, only: set_rankine_fields
+        use parametric_met_forcing_module, only: set_modified_rankine_fields
+        use parametric_met_forcing_module, only: set_deMaria_fields
+        use parametric_met_forcing_module, only: set_willoughby_fields
 
-        use data_storm_module, only: set_data_storm => set_storm
-        use data_storm_module, only: set_ascii_fields, set_netcdf_fields
+        use gridded_met_forcing_module, only: set_data_storm => set_storm
+        use gridded_met_forcing_module, only: set_ascii_fields, set_netcdf_fields
 
         use utility_module, only: get_value_count
 
@@ -467,8 +467,8 @@ contains
 
         use amr_module, only: rinfinity
 
-        use model_storm_module, only: model_location => storm_location
-        use data_storm_module, only: data_location => storm_location
+        use parametric_met_forcing_module, only: model_location => storm_location
+        use gridded_met_forcing_module, only: data_location => storm_location
 
         implicit none
 
@@ -494,8 +494,8 @@ contains
     real(kind=8) function storm_direction(t) result(theta)
 
         use amr_module, only: rinfinity
-        use model_storm_module, only: model_direction => storm_direction
-        use data_storm_module, only: data_direction => storm_direction
+        use parametric_met_forcing_module, only: model_direction => storm_direction
+        use gridded_met_forcing_module, only: data_direction => storm_direction
 
         implicit none
 
@@ -538,7 +538,7 @@ contains
                                   pressure_index, model_storm)
         end if
         if (storm_specification_type < 0) then
-            ! Data storms apply storm_time_scale internally (data_storm_module).
+            ! Data storms apply storm_time_scale internally (gridded_met_forcing_module).
             call set_data_fields(maux,mbc,mx,my, &
                                  xlower,ylower,dx,dy,t,aux, wind_index, &
                                  pressure_index, data_storm)
@@ -563,7 +563,7 @@ contains
     !  Ramps from 0 at t0 up to 1 at t0 + t_ramp_on (onset), and from 1 down
     !  to 0 over [tfinal - t_ramp_off, tfinal] (cutoff).  A zero width
     !  disables that side (multiplier 1).  Same raised-cosine shape as the
-    !  spatial met edge ramp in data_storm_module.
+    !  spatial met edge ramp in gridded_met_forcing_module.
     ! ========================================================================
     real(kind=8) function temporal_ramp(t) result(ramp_t)
 
@@ -627,4 +627,4 @@ contains
         rotation = .false.
     end function S_rotation
     
-end module storm_module
+end module met_forcing_module

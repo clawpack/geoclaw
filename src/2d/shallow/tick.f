@@ -12,7 +12,7 @@ c
       use gauges_module, only: setbestsrc, num_gauges
       use gauges_module, only: print_gauges_and_reset_nextLoc
 
-      use storm_module, only: landfall, display_landfall_time
+      use met_forcing_module, only: landfall, display_landfall_time
       use fgmax_module, only: FG_num_fgrids, FG_fgrids, fgrid
       use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids,
      &                         fgout_write,fgout_grid, FGOUT_ttol

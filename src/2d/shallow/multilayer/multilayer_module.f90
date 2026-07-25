@@ -52,7 +52,7 @@ contains
 
         use geoclaw_module, only: GEO_PARM_UNIT, rho
         use geoclaw_module, only: geo_dry_tolerance => dry_tolerance
-        use storm_module, only: storm_specification_type
+        use met_forcing_module, only: storm_specification_type
 
         implicit none
         character(len=*), optional, intent(in) :: data_file

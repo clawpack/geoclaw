@@ -843,7 +843,7 @@ class QinitData(clawpack.clawutil.data.ClawData):
 #  Each parametric subtype maps to that model's historical integer code; the
 #  single gridded subtype maps to -1 and "none" to 0.  The gridded ASCII/NetCDF
 #  distinction is NOT on this wire - it lives as ``file_format`` in the .storm
-#  descriptor (see surge/gridded.py and data_storm_module.f90).
+#  descriptor (see surge/gridded.py and gridded_met_forcing_module.f90).
 
 # canonical subtype -> (family, legacy integer code)
 forcing_subtype_registry = {"holland80":        ("parametric",  1),
@@ -872,7 +872,7 @@ forcing_subtype_aliases = {"holland08":        "holland2008",
 # code.  Currently empty: all nine parametric models and the gridded path have
 # working Fortran implementations.  (The previous ``storm_spec_not_implemented``
 # check compared an int against the string 'CLE' and so never fired; CLE is in
-# fact implemented in model_storm_module.f90, so nothing is blocked here.)
+# fact implemented in parametric_met_forcing_module.f90, so nothing is blocked here.)
 forcing_not_implemented = set()
 
 # Reverse map: legacy integer code -> canonical subtype (each code is unique).
@@ -1091,7 +1091,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             family, subtype, _ = resolve_forcing_subtype(legacy)
 
         # Write the explicit family/subtype tokens (quoted single words, read
-        # list-directed by the Fortran side; see storm_module.f90).
+        # list-directed by the Fortran side; see met_forcing_module.f90).
         self.data_write(name="storm_family", value=family,
                         description="(Forcing family: parametric | gridded | none)")
         self.data_write(name="storm_subtype", value=subtype,

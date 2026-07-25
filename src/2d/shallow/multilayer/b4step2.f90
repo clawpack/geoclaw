@@ -24,7 +24,7 @@ subroutine b4step2(mbc, mx, my, meqn, q, xlower, ylower, dx, dy, t, dt,        &
     use topo_module, only: aux_finalized
     use topo_module, only: xlowdtopo,xhidtopo,ylowdtopo,yhidtopo
 
-    use storm_module, only: set_storm_fields
+    use met_forcing_module, only: set_storm_fields
 
     use multilayer_module, only: num_layers, KAPPA_UNIT, dry_tolerance
     use multilayer_module, only: check_richardson, richardson_tolerance

@@ -32,8 +32,8 @@ subroutine setaux(mbc,mx,my,xlow,ylow,dx,dy,maux,aux)
     use geoclaw_module, only: coordinate_system, earth_radius, deg2rad
     use geoclaw_module, only: sea_level, ambient_pressure
 
-    use storm_module, only: wind_forcing, pressure_forcing
-    use storm_module, only: wind_index, pressure_index, set_storm_fields
+    use met_forcing_module, only: wind_forcing, pressure_forcing
+    use met_forcing_module, only: wind_index, pressure_index, set_storm_fields
 
     use friction_module, only: variable_friction, friction_index
     use friction_module, only: set_friction_field
