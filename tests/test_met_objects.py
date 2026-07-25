@@ -220,5 +220,110 @@ def test_write_data_netcdf_matches_golden(tmp_path):
     assert new_head == golden
 
 
+# ---------------------------------------------------------------------------
+# Regression coverage for previously-latent surge helper bugs (wrap-up fixes)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_storm_str_datetime64():
+    """Storm.__str__ renders a datetime64 track axis without error.
+
+    Regression: the datetime64 branch used a typo (``np.datetiem64``) and
+    ``.isoformat()``, which np.datetime64 does not provide.
+    """
+    s = storm.Storm()
+    s.name = "TESTSTORM"
+    s.t = np.array(["2020-08-01T00:00", "2020-08-01T06:00"],
+                   dtype="datetime64[s]")
+    s.file_paths = ["a.storm"]
+    text = str(s)
+    assert "TESTSTORM" in text
+    assert "2020-08-01T00:00:00" in text
+    assert "2020-08-01T06:00:00" in text
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_construct_fields_resolves_radius():
+    """construct_fields resolves its radius argument (no NameError) and reaches
+    the not-yet-implemented model stub.
+
+    Regression: the call passed an undefined name ``x`` instead of ``r``.
+    """
+    s = storm.Storm()
+    with pytest.raises(NotImplementedError):
+        storm.construct_fields(s, 1.0e3, 0.0, model="holland_1980")
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_make_multi_structure_splits_by_storm(tmp_path):
+    """make_multi_structure splits a multi-storm ATCF into per-storm Storms.
+
+    Regression: the helper referenced ``os`` without importing it, and grouped
+    by timestamp rather than storm identity (colliding on os.mkdir).
+    """
+    pytest.importorskip("pandas")
+    from clawpack.geoclaw.surge.tools import make_multi_structure
+
+    # Build a 2-storm fixture from real ATCF records: relabel the cyclone
+    # number (field 1) so the two synthetic storms are distinguishable.
+    with open(_storm_input_path("atcf")) as data_file:
+        records = [line for line in data_file
+                   if len(line.split(",")) > 8][:4]
+    assert records, "expected ATCF records in the test fixture"
+    basin = records[0].split(",")[0].strip()
+
+    def relabel(line, cyclone):
+        fields = line.split(",")
+        fields[1] = " %s" % cyclone
+        return ",".join(fields)
+
+    fixture = tmp_path / "multi.atcf"
+    fixture.write_text("".join([relabel(r, "09") for r in records]
+                               + [relabel(r, "11") for r in records]))
+
+    storms = make_multi_structure(str(fixture),
+                                  output_dir=str(tmp_path / "clipped"))
+    assert list(storms.keys()) == [basin + "09", basin + "11"]
+    for split in storms.values():
+        assert isinstance(split, storm.Storm)
+        assert len(split.t) == len(records)
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_surgedata_lives_in_geoclaw_data():
+    """SurgeData/FrictionData live in clawpack.geoclaw.data, not surge.data.
+
+    Regression: isaac/setplot_kml.py imported the nonexistent
+    ``clawpack.geoclaw.surge.data`` module.
+    """
+    import clawpack.geoclaw.data as geodata
+    assert hasattr(geodata, "SurgeData")
+    assert hasattr(geodata, "FrictionData")
+    with pytest.raises(ImportError):
+        import clawpack.geoclaw.surge.data  # noqa: F401
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_isaac_setplot_kml_imports():
+    """isaac/setplot_kml.py imports cleanly after the surge.data import fix."""
+    pytest.importorskip("matplotlib")
+    pytest.importorskip("clawpack.visclaw")
+    import importlib.util
+
+    kml_path = (Path(__file__).parents[1] / "examples" / "storm-surge"
+                / "isaac" / "setplot_kml.py")
+    if not kml_path.exists():
+        pytest.skip("isaac/setplot_kml.py not present")
+    spec = importlib.util.spec_from_file_location("isaac_setplot_kml", kml_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert hasattr(module, "setplot")
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))

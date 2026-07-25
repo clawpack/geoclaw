@@ -233,9 +233,9 @@ class Storm(object):
         output = f"Name: {self.name}\n"
         if self.t is None and self.time_offset is not None:
             output += f"Time offset: {self.time_offset}\n"
-        elif isinstance(self.t[0], np.datetiem64):
-            output += f"Dates: {self.t[0].isoformat()}"
-            output += f" - {self.t[-1].isoformat()}\n"
+        elif isinstance(self.t[0], np.datetime64):
+            output += f"Dates: {np.datetime_as_string(self.t[0])}"
+            output += f" - {np.datetime_as_string(self.t[-1])}\n"
         else:
             output += f"Dates: {self.t[0]} - {self.t[-1]}\n"
         output += "File paths:"
@@ -450,7 +450,7 @@ def construct_fields(storm, r, t, model="holland_1980"):
     if model.lower() not in _supported_models.keys():
         raise ValueError("Model %s not available." % model)
 
-    return getattr(sys.modules[__name__], model.lower())(storm, x, t)
+    return getattr(sys.modules[__name__], model.lower())(storm, r, t)
 
 
 # Specific implementations
