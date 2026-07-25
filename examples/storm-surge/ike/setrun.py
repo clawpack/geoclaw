@@ -413,8 +413,14 @@ def setgeo(rundata, download_dir=None):
     data.wind_refine = [20.0, 40.0, 60.0]
     data.R_refine = [60.0e3, 40e3, 20e3]
 
-    # Storm parameters - Parameterized storm (Holland 1980)
-    data.storm_specification_type = 'holland80'  # (type 1)
+    # Storm parameters - Parameterized storm (Holland 1980).
+    #
+    # Preferred (explicit) selection via family + subtype:
+    #     data.storm_family = "parametric"
+    #     data.storm_subtype = "holland80"
+    # The legacy storm_specification_type below is equivalent and still
+    # supported (see the surge_data reference in the GeoClaw docs).
+    data.storm_specification_type = 'holland80'  # (parametric / holland80)
     data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
                                          'ike.storm'))
 

@@ -911,7 +911,51 @@ def resolve_forcing_subtype(value):
 
 # Storm data
 class SurgeData(clawpack.clawutil.data.ClawData):
-    r"""Data object describing storm surge related parameters"""
+    r"""Meteorological (storm) forcing parameters written to ``surge.data``.
+
+    Set as ``rundata.surge_data`` in a ``setrun.py`` and written to
+    ``surge.data``, which the Fortran ``met_forcing_module`` reads to activate
+    and configure wind/pressure forcing.  See :ref:`setrun_surge` for the
+    per-attribute reference.
+
+    :Forcing selection:
+     The forcing family and subtype are the preferred, explicit way to select a
+     model:
+
+     - ``storm_family`` -- ``"parametric"`` (an analytic model with a storm
+       center/track), ``"gridded"`` (file-backed wind/pressure fields, e.g.
+       OWI/ASCII or NetCDF), or ``"none"`` (forcing off).
+     - ``storm_subtype`` -- for a parametric family, a model name such as
+       ``"holland80"``, ``"holland2010"``, ``"cle"``, ``"slosh"``,
+       ``"rankine"``, ``"modified_rankine"``, ``"demaria"``, or
+       ``"willoughby"``; for a gridded family, ``"gridded"``.
+
+     The legacy ``storm_specification_type`` (a model-name string or the signed
+     integer code, e.g. ``"holland80"``/``1`` or ``"data"``/``-1``) remains
+     fully supported: when ``storm_family``/``storm_subtype`` are unset it is
+     resolved through :data:`forcing_subtype_registry`.  All three map to the
+     same forcing on the ``surge.data`` wire.
+
+    :Key attributes:
+     - ``wind_forcing`` / ``pressure_forcing`` (bool) -- enable the wind and
+       pressure source terms.
+     - ``drag_law`` (int) -- wind-drag law (0 none, 1 Garratt, 2 Powell).
+     - ``wind_index`` / ``pressure_index`` (int) -- 0-based ``aux`` component
+       indices for the forcing fields (Fortran indexing is +1).
+     - ``storm_time_scale`` (float) -- multiplicative scale on the storm time
+       axis (>1 slower, <1 faster).
+     - ``t_ramp_on`` / ``t_ramp_off`` (float) -- seconds over which the forcing
+       ramps on after ``t0`` and off before ``tfinal`` (0 disables).
+     - ``rotation_override`` (int/str) -- override the hemisphere-based storm
+       rotation sense.
+     - ``wind_refine`` / ``R_refine`` (list/bool) -- AMR refinement thresholds
+       on wind speed and (parametric only) distance to the storm center.
+     - ``storm_file`` (str) -- path to the storm track file or gridded
+       descriptor.
+
+    See :ref:`storm_module` for the Python storm/track object model and
+    :ref:`surgedata` for storm data sources.
+    """
 
     # Legacy name/alias -> integer mapping, derived from the canonical
     # forcing_subtype_registry above.  Retained (with the historical spellings)

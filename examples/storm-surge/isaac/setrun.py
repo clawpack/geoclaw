@@ -420,7 +420,14 @@ def setgeo(rundata, download_dir=None, storm_dir=None):
     data.wind_refine = pd.DataFrame([[20.0], [40.0], [60.0]])
     data.R_refine = xr.DataArray([60.0e3, 40e3, 20e3])
 
-    # Storm parameters - Parameterized storm (Holland 1980)
+    # Storm parameters - Parameterized storm (Holland 1980).
+    #
+    # Preferred (explicit) selection via family + subtype:
+    #     data.storm_family = "parametric"
+    #     data.storm_subtype = "holland80"
+    # For gridded (OWI/NetCDF) forcing use family "gridded".  The legacy
+    # storm_specification_type below is equivalent and still supported; this
+    # example keeps it because the branches further down compare against it.
     data.storm_specification_type = 'holland80'
     # data.storm_specification_type = 'data'
     data.storm_file = (storm_dir / 'isaac.storm').resolve()
