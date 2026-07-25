@@ -146,6 +146,7 @@ contains
         integer, parameter :: unit = 13
         integer :: i, drag_law, rotation_override
         character(len=512) :: storm_file_path, line, wind_file_path, pressure_file_path
+        character(len=64) :: storm_family, storm_subtype
         ! integer :: num_storm_files
         ! character(len=200), allocatable, dimension(:) :: storm_files_array
         ! character(len=12) :: landfall_time
@@ -202,13 +203,19 @@ contains
             allocate(R_refine(get_value_count(line)))
             read(unit, *)
 
-            ! Storm Setup
-            read(unit, "(i2)") storm_specification_type
+            ! Met-forcing selection: explicit family + subtype tokens (written
+            ! by SurgeData.write in src/python/geoclaw/data.py).  The subtype
+            ! token is translated back to the legacy integer
+            ! storm_specification_type so the dispatch below - and the
+            ! module-level selector consumed by other files - is unchanged.
+            read(unit, *) storm_family
+            read(unit, *) storm_subtype
             read(unit, *) storm_file_path
+            storm_specification_type = forcing_spec_type(storm_subtype)
 
-            ! Only parameterized (model) storms provide a storm center/track;
-            ! gridded/data forcing (storm_specification_type < 0) has none.
-            storm_location_available = (storm_specification_type > 0)
+            ! Only parameterized (model) forcing provides a storm center/track;
+            ! gridded forcing does not.
+            storm_location_available = (trim(storm_family) == "parametric")
 
             close(unit)
 
@@ -265,6 +272,50 @@ contains
         end if
 
     end subroutine set_storm
+
+    ! ========================================================================
+    !  integer function forcing_spec_type(subtype)
+    !
+    !  Translate a canonical met-forcing subtype token (as written by the
+    !  Python SurgeData writer) into the legacy storm_specification_type
+    !  integer used by the dispatch in set_storm.  Kept in lockstep with
+    !  forcing_subtype_registry in src/python/geoclaw/data.py.
+    ! ========================================================================
+    integer function forcing_spec_type(subtype) result(spec_type)
+
+        implicit none
+        character(len=*), intent(in) :: subtype
+
+        select case (trim(subtype))
+            case ("none")
+                spec_type = 0
+            case ("holland80")
+                spec_type = 1
+            case ("holland2010")
+                spec_type = 2
+            case ("cle")
+                spec_type = 3
+            case ("slosh")
+                spec_type = 4
+            case ("rankine")
+                spec_type = 5
+            case ("modified_rankine")
+                spec_type = 6
+            case ("demaria")
+                spec_type = 7
+            case ("holland2008")
+                spec_type = 8
+            case ("willoughby")
+                spec_type = 9
+            case ("gridded")
+                spec_type = -1
+            case default
+                print *, "*** ERROR *** Unknown met-forcing subtype '",     &
+                         trim(subtype), "'."
+                stop
+        end select
+
+    end function forcing_spec_type
 
     ! ========================================================================
     !   real(kind=8) function *_wind_drag(wind_speed)

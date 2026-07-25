@@ -312,9 +312,57 @@ def test_surge_data_roundtrip(tmp_path):
     expected_spec = clawpack.geoclaw.data.SurgeData.storm_spec_dict_mapping["data"]
     assert read_surge_data.storm_specification_type == expected_spec
     assert read_surge_data.storm_file == surge_data.storm_file
+    # Legacy "data" resolves to the gridded family on the new wire.
+    assert read_surge_data.storm_family == "gridded"
+    assert read_surge_data.storm_subtype == "gridded"
 
     text = _read_text(data_file)
     assert "synthetic.storm" in text
+
+
+@pytest.mark.python
+def test_surge_forcing_family_subtype(tmp_path):
+    r"""family/subtype API, legacy aliases, and the fixed lookup bugs."""
+    data = clawpack.geoclaw.data
+
+    # Registry / alias resolution, including the previously-broken 'DeMaria'
+    # case-mismatch and the hyphen/underscore + holland08/10 spellings.
+    assert data.resolve_forcing_subtype("holland80") == ("parametric", "holland80", 1)
+    assert data.resolve_forcing_subtype("DeMaria") == ("parametric", "demaria", 7)
+    assert data.resolve_forcing_subtype("modified-rankine") == \
+        ("parametric", "modified_rankine", 6)
+    assert data.resolve_forcing_subtype("holland08") == ("parametric", "holland2008", 8)
+    assert data.resolve_forcing_subtype("data") == ("gridded", "gridded", -1)
+    assert data.resolve_forcing_subtype(None) == ("none", "none", 0)
+    assert data.resolve_forcing_subtype(-1) == ("gridded", "gridded", -1)
+
+    # New family/subtype API round-trips and populates the legacy selector.
+    surge_data = data.SurgeData()
+    surge_data.storm_family = "parametric"
+    surge_data.storm_subtype = "holland2010"
+    surge_data.storm_file = "b.storm"
+    out = tmp_path / "surge.data"
+    surge_data.write(out_file=out)
+
+    read_back = data.SurgeData()
+    read_back.read(out)
+    assert read_back.storm_family == "parametric"
+    assert read_back.storm_subtype == "holland2010"
+    assert read_back.storm_specification_type == 2
+    assert read_back.storm_file == "b.storm"
+
+    # Explicit tokens are on the wire; the raw integer selector is not.
+    text = _read_text(out)
+    assert "storm_family" in text and "storm_subtype" in text
+    assert "'parametric'" in text and "'holland2010'" in text
+
+    # An inconsistent family/subtype pair is rejected at write time.
+    bad = data.SurgeData()
+    bad.storm_family = "gridded"
+    bad.storm_subtype = "holland80"
+    bad.storm_file = "x"
+    with pytest.raises(ValueError, match="inconsistent"):
+        bad.write(out_file=tmp_path / "bad.data")
 
 
 if __name__ == "__main__":
