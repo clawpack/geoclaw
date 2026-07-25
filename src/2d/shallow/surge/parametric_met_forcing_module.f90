@@ -1,5 +1,5 @@
 ! ==============================================================================
-! model_storm_module
+! parametric_met_forcing_module
 !
 ! Module contains routines for constructing a wind and pressure field based on
 ! the a parameterized model of the wind and pressure fields.
@@ -10,7 +10,7 @@
 !  license
 !                     http://www.opensource.org/licenses/
 ! ==============================================================================
-module model_storm_module
+module parametric_met_forcing_module
 
     implicit none
     save
@@ -19,7 +19,7 @@ module model_storm_module
     logical, private :: DEBUG = .false.
 
     ! Model storm type definition
-    type model_storm_type
+    type parametric_met_forcing_type
         ! Fore/hindcast size and current position
         integer :: num_casts
 
@@ -49,7 +49,7 @@ module model_storm_module
         ! Approximate pressure change of storm, approximated using first order differences
         real(kind=8), allocatable :: central_pressure_change(:)
 
-    end type model_storm_type
+    end type parametric_met_forcing_type
 
     ! How to deterimine which way a storm should be made to spin
     ! The default defers simply to assuming y is a latitude
@@ -94,7 +94,7 @@ contains
 
         ! Subroutine I/O
         character(len=*), optional :: storm_data_path
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
 
         ! Local storage
@@ -222,7 +222,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(model_storm_type), intent(in out) :: storm
+        type(parametric_met_forcing_type), intent(in out) :: storm
 
         ! Output
         real(kind=8) :: location(2)
@@ -245,7 +245,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(model_storm_type), intent(in) :: storm
+        type(parametric_met_forcing_type), intent(in) :: storm
 
         ! Locals
         real(kind=8) :: junk(7), velocity(2)
@@ -281,7 +281,7 @@ contains
     ! ==========================================================================
     !  storm_index(t,storm)
     !    Finds the index of the next storm data point
-    !    This duplicates data_storm_module:storm_index
+    !    This duplicates gridded_met_forcing_module:storm_index
     ! ==========================================================================
     integer pure function storm_index(t, storm) result(index)
 
@@ -289,7 +289,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(model_storm_type), intent(in) :: storm
+        type(parametric_met_forcing_type), intent(in) :: storm
 
         ! Locals
         real(kind=8) :: t0,t1
@@ -353,7 +353,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t                 ! Current time
-        type(model_storm_type), intent(in) :: storm   ! Storm
+        type(parametric_met_forcing_type), intent(in) :: storm   ! Storm
 
         ! Output
         real(kind=8), intent(out) :: location(2), velocity(2)
@@ -619,7 +619,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -691,7 +691,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -768,7 +768,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -856,7 +856,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(in out) :: storm
+        type(parametric_met_forcing_type), intent(in out) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -1221,7 +1221,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -1300,7 +1300,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -1376,7 +1376,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -1466,7 +1466,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -1538,7 +1538,7 @@ contains
 
         ! Storm description, need in out here since we may update the storm
         ! if at next time point
-        type(model_storm_type), intent(inout) :: storm
+        type(parametric_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and presure field
         integer, intent(in) :: wind_index, pressure_index
@@ -1608,4 +1608,4 @@ contains
         enddo
 
     end subroutine set_willoughby_fields
-end module model_storm_module
+end module parametric_met_forcing_module

@@ -14,9 +14,9 @@ subroutine valout(level_begin, level_end, time, num_eqn, num_aux)
     use amr_module, only: timeValout, timeValoutCPU, tvoll, tvollCPU, rvoll
     use amr_module, only: timeTick, tick_clock_start, t0, timeTickCPU
 
-    use storm_module, only: storm_specification_type, output_storm_location
-    use storm_module, only: storm_location_available
-    use storm_module, only: landfall, display_landfall_time
+    use met_forcing_module, only: storm_specification_type, output_storm_location
+    use met_forcing_module, only: storm_location_available
+    use met_forcing_module, only: landfall, display_landfall_time
 
 #ifdef HDF5
     use hdf5

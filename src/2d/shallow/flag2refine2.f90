@@ -27,9 +27,9 @@ subroutine flag2refine2(mx,my,mbc,mbuff,meqn,maux,xlower,ylower,dx,dy,t,level, &
     use geoclaw_module, only: spherical_distance, coordinate_system
 
 
-    use storm_module, only: storm_specification_type, wind_refine, R_refine
-    use storm_module, only: storm_location, wind_forcing, wind_index, wind_refine
-    use storm_module, only: storm_location_available
+    use met_forcing_module, only: storm_specification_type, wind_refine, R_refine
+    use met_forcing_module, only: storm_location, wind_forcing, wind_index, wind_refine
+    use met_forcing_module, only: storm_location_available
 
     use regions_module, only: num_regions, regions
     use refinement_module, only: wave_tolerance, speed_tolerance

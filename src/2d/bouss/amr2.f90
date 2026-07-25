@@ -107,7 +107,7 @@ program amr2
     use topo_module, only: read_topo_settings, read_dtopo_settings
     use qinit_module, only: set_qinit
     use refinement_module, only: set_refinement
-    use storm_module, only: set_storm
+    use met_forcing_module, only: set_storm
     use friction_module, only: setup_variable_friction
     use gauges_module, only: set_gauges, num_gauges
     use regions_module, only: set_regions

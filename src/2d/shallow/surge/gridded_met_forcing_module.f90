@@ -1,5 +1,5 @@
 ! ==============================================================================
-! data_storm_module
+! gridded_met_forcing_module
 !
 ! Module contains routines for constructing a wind and pressure field based on a
 ! provided set of data files.
@@ -10,7 +10,7 @@
 !  license
 !                     http://www.opensource.org/licenses/
 ! ==============================================================================
-module data_storm_module
+module gridded_met_forcing_module
 
     implicit none
     save
@@ -19,7 +19,7 @@ module data_storm_module
     logical, private :: DEBUG = .false.
 
     ! Model storm type definition
-    type data_storm_type
+    type gridded_met_forcing_type
 
         ! Total number of wind/pressure fields
         ! integer :: num_casts
@@ -41,7 +41,7 @@ module data_storm_module
         ! Paths to data
         character(len=512), allocatable :: paths(:)
 
-    end type data_storm_type
+    end type gridded_met_forcing_type
 
     integer, private :: last_storm_index
 
@@ -91,7 +91,7 @@ contains
 
         ! Subroutine I/O
         character(len=*), optional :: storm_data_path
-        type(data_storm_type), intent(inout) :: storm
+        type(gridded_met_forcing_type), intent(inout) :: storm
         integer, intent(in) :: storm_spec_type, log_unit
 
         ! General data
@@ -668,7 +668,7 @@ contains
         implicit none
 
         ! Input arguments
-        type(data_storm_type) :: storm
+        type(gridded_met_forcing_type) :: storm
         character(len=*), intent(in) :: wind_file, pressure_file
         integer, intent(in) :: mx_full, my_full, mt, i0, j0, mx, my
         integer, intent(in) :: seconds_from_offset
@@ -725,7 +725,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(data_storm_type), intent(in) :: storm
+        type(gridded_met_forcing_type), intent(in) :: storm
 
         ! Locals
         real(kind=8) :: t0,t1
@@ -782,7 +782,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(data_storm_type), intent(inout) :: storm
+        type(gridded_met_forcing_type), intent(inout) :: storm
 
         ! Output
         real(kind=8) :: location(2)
@@ -800,7 +800,7 @@ contains
 
         ! Input
         real(kind=8), intent(in) :: t
-        type(data_storm_type), intent(in) :: storm
+        type(gridded_met_forcing_type), intent(in) :: storm
 
         stop "Storm direction for data storms is not supported."
 
@@ -822,7 +822,7 @@ contains
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
 
         ! Storm descrption
-        type(data_storm_type), intent(inout) :: storm
+        type(gridded_met_forcing_type), intent(inout) :: storm
 
         ! Array storing wind and pressure field
         integer, intent(in) :: wind_index, pressure_index
@@ -908,7 +908,7 @@ contains
         implicit none
         integer, intent(in) :: maux, mbc, mx, my
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-        type(data_storm_type), intent(inout) :: storm
+        type(gridded_met_forcing_type), intent(inout) :: storm
         integer, intent(in) :: wind_index, pressure_index
         real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
 
@@ -926,7 +926,7 @@ contains
         implicit none
         integer, intent(in) :: maux, mbc, mx, my
         real(kind=8), intent(in) :: xlower, ylower, dx, dy, t
-        type(data_storm_type), intent(inout) :: storm
+        type(gridded_met_forcing_type), intent(inout) :: storm
         integer, intent(in) :: wind_index, pressure_index
         real(kind=8), intent(inout) :: aux(maux, 1-mbc:mx+mbc, 1-mbc:my+mbc)
 
@@ -942,7 +942,7 @@ contains
 
         implicit none
         ! Subroutine IO
-        type(data_storm_type), intent(in) :: storm
+        type(gridded_met_forcing_type), intent(in) :: storm
         real(kind=8), intent(in) :: t
         real(kind=8), intent(inout) :: wind_u(size(storm%longitude),        &
                                               size(storm%latitude))
@@ -1001,7 +1001,7 @@ contains
         implicit none
 
         ! Subroutine I/O
-        type(data_storm_type), intent(in) :: storm
+        type(gridded_met_forcing_type), intent(in) :: storm
         real(kind=8), intent(in) :: x, y, interp_array(size(storm%longitude),  &
                                                        size(storm%latitude))
 
@@ -1066,7 +1066,7 @@ contains
     pure subroutine find_nearest(storm, x, y, lon, lat,  xidx, yidx)
         implicit none
         ! Subroutine I/O
-        type(data_storm_type), intent(in) :: storm
+        type(gridded_met_forcing_type), intent(in) :: storm
         real(kind=8), intent(in) :: x, y
         real(kind=8), intent(out) :: lon, lat
         integer, intent(out) :: xidx, yidx
@@ -1077,4 +1077,4 @@ contains
         lat = storm%latitude(yidx)
     end subroutine find_nearest
 
-end module data_storm_module
+end module gridded_met_forcing_module

@@ -11,10 +11,10 @@ subroutine src2(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux,t,dt)
 
     use geoclaw_module, only: speed_limit  ! used if no friction
       
-    use storm_module, only: wind_forcing, pressure_forcing, wind_drag
-    use storm_module, only: wind_index, pressure_index
-    use storm_module, only: storm_direction, storm_location
-    use storm_module, only: storm_location_available
+    use met_forcing_module, only: wind_forcing, pressure_forcing, wind_drag
+    use met_forcing_module, only: wind_index, pressure_index
+    use met_forcing_module, only: storm_direction, storm_location
+    use met_forcing_module, only: storm_location_available
 
     use friction_module, only: variable_friction, friction_index
 

@@ -422,7 +422,7 @@ contains
         use geoclaw_module, only: dry_tolerance
         use geoclaw_module, only: coordinate_system, earth_radius, deg2rad
         use geoclaw_module, only: ambient_pressure
-        use storm_module, only: pressure_index
+        use met_forcing_module, only: pressure_index
 
         implicit none
 

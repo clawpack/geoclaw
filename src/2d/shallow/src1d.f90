@@ -11,9 +11,9 @@ subroutine src1d(meqn,mbc,mx1d,q1d,maux,aux1d,t,dt)
     use geoclaw_module, only: omega, coordinate_system, manning_coefficient
     use geoclaw_module, only: manning_break, num_manning, dry_tolerance, rho_air
     
-    use storm_module, only: wind_forcing, pressure_forcing, wind_drag
-    use storm_module, only: wind_index, pressure_index
-    use storm_module, only: storm_direction, storm_location
+    use met_forcing_module, only: wind_forcing, pressure_forcing, wind_drag
+    use met_forcing_module, only: wind_index, pressure_index
+    use met_forcing_module, only: storm_direction, storm_location
 
     use friction_module, only: variable_friction, friction_index
 
