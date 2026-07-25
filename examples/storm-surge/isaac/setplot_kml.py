@@ -26,7 +26,7 @@ import clawpack.amrclaw.data as amrclaw
 import clawpack.geoclaw.data as geodata
 
 import clawpack.geoclaw.surge.plot as surgeplot
-import clawpack.geoclaw.surge.data as surgedata
+import clawpack.geoclaw.data as surgedata
 
 try:
     from setplotfg import setplotfg
