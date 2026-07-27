@@ -1047,19 +1047,19 @@ def fill_rad_w_other_source(t, storm_targ, storm_fill, var, interp_kwargs={}):
     *storm_radius_fill* when calling *write_geoclaw*.
 
     :Input:
-    - *t* (np.datetime64) the time corresponding to
-        a missing value of *max_wind_radius* or *storm_radius*
-    - *storm_targ* (:py:class:`clawpack.geoclaw.storm.Storm`) storm
-        that has missing values you want to fill
-    - *storm_fill* (:py:class:`clawpack.geoclaw.storm.Storm`) storm
-        that has non-missing values you want to use to fill *storm_targ*
-    - *var* (str) Either 'max_wind_radius' or 'storm_radius'
-    - *interp_kwargs* (dict) Additional keywords passed to scipy's
-        interpolator.
+     - *t* (np.datetime64) the time corresponding to
+       a missing value of *max_wind_radius* or *storm_radius*
+     - *storm_targ* (:py:class:`clawpack.geoclaw.storm.Storm`) storm
+       that has missing values you want to fill
+     - *storm_fill* (:py:class:`clawpack.geoclaw.storm.Storm`) storm
+       that has non-missing values you want to use to fill *storm_targ*
+     - *var* (str) Either 'max_wind_radius' or 'storm_radius'
+     - *interp_kwargs* (dict) Additional keywords passed to scipy's
+       interpolator.
 
     :Returns:
-    - (float) value to use to fill this time point in *storm_targ*. -1
-        if still missing after using *storm_fill* to fill.
+     - (float) value to use to fill this time point in *storm_targ*. -1
+       if still missing after using *storm_fill* to fill.
 
     :Examples:
 
