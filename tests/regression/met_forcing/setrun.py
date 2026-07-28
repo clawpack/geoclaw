@@ -113,7 +113,9 @@ def setrun(claw_pkg="geoclaw", forcing="holland80", topo_path=None,
     surge_data.display_landfall_time = False
     surge_data.wind_refine = wind_refine
     surge_data.R_refine = R_refine
-    if forcing == "data":
+    if forcing in ("data", "owi"):
+        # Both gridded formats (NetCDF and OWI/ASCII) use the gridded family;
+        # the concrete file format lives in the .storm descriptor, not here.
         surge_data.storm_specification_type = "data"
     else:
         surge_data.storm_specification_type = forcing   # e.g. "holland80"

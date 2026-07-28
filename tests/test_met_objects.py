@@ -325,5 +325,119 @@ def test_isaac_setplot_kml_imports():
     assert hasattr(module, "setplot")
 
 
+# ---------------------------------------------------------------------------
+# OWI (Oceanweather WIN/PRE) field I/O
+# ---------------------------------------------------------------------------
+
+def _make_owi_data(nt=3, ny=4, nx=5):
+    """Build a small deterministic OWIData object."""
+    from clawpack.geoclaw.surge.data_storms import OWIData
+
+    lon = -99.0 + np.arange(nx) * 0.25
+    lat = 8.0 + np.arange(ny) * 0.25
+    t = (np.datetime64("2012-08-20T12:00:00")
+         + (np.arange(nt) * 3600).astype("timedelta64[s]"))
+    ramp = np.arange(nt * ny * nx, dtype=float).reshape(nt, ny, nx)
+    return OWIData(time=t, longitude=lon, latitude=lat,
+                   wind_u=ramp, wind_v=-ramp, pressure=101300.0 - ramp)
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_owi_roundtrip(tmp_path):
+    """write_owi -> read_owi reproduces every field exactly."""
+    from clawpack.geoclaw.surge import data_storms
+
+    d = _make_owi_data()
+    pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
+    data_storms.write_owi(d, pre, win)
+    r = data_storms.read_owi(pre, win)
+
+    assert np.array_equal(d.time, r.time)
+    np.testing.assert_allclose(d.longitude, r.longitude)
+    np.testing.assert_allclose(d.latitude, r.latitude)
+    np.testing.assert_allclose(d.wind_u, r.wind_u)
+    np.testing.assert_allclose(d.wind_v, r.wind_v)
+    # Pressure survives the Pa<->mbar conversion to the f10.4 precision.
+    np.testing.assert_allclose(d.pressure, r.pressure, atol=1e-2)
+    # The cheap start-time peek agrees with the first record.
+    assert data_storms.read_owi_start_time(pre) == d.time[0]
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_owi_written_format_is_80_col(tmp_path):
+    """Written OWI lines match the fixed 80-column contract the Fortran reads."""
+    from clawpack.geoclaw.surge import data_storms
+
+    pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
+    data_storms.write_owi(_make_owi_data(), pre, win)
+    lines = win.read_text().splitlines()
+    assert len(lines[0]) == 80                       # file header
+    assert lines[0].startswith("Oceanweather WIN/PRE Format")
+    assert len(lines[1]) == 80                       # grid-spec header
+    assert lines[1].startswith("iLat=") and "iLong=" in lines[1]
+    assert "DT=" in lines[1]
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_owi_read_real_isaac():
+    """The reader parses the committed real isaac.WIN/PRE sample."""
+    from clawpack.geoclaw.surge import data_storms
+
+    isaac = (Path(__file__).parents[1] / "examples" / "storm-surge" / "isaac")
+    if not (isaac / "isaac.PRE").exists():
+        pytest.skip("isaac OWI sample not present")
+
+    d = data_storms.read_owi(isaac / "isaac.PRE", isaac / "isaac.WIN")
+    assert d.shape == (96, 116)                       # (ny, nx)
+    assert d.wind_u.shape == (d.num_times, 96, 116)
+    np.testing.assert_allclose(d.longitude[0], -99.0)
+    np.testing.assert_allclose(d.latitude[0], 8.0)
+    # Ambient far-field pressure: 1013 mbar -> 101300 Pa.
+    np.testing.assert_allclose(d.pressure[0].max(), 101300.0)
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_gridded_from_owi_descriptor(tmp_path):
+    """from_owi builds a format-1 descriptor pointing at the WIN/PRE pair."""
+    from clawpack.geoclaw.surge import data_storms
+
+    pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
+    data_storms.write_owi(_make_owi_data(), pre, win)
+
+    forcing = GriddedMetForcing.from_owi(pre, win)
+    assert forcing.file_format == "owi"
+    assert forcing.file_paths == [pre, win]           # [PRE, WIN] order
+    assert forcing.time_offset == np.datetime64("2012-08-20T12:00:00")
+
+    # A format-1 (ascii/owi) descriptor round-trips through read_data.
+    descriptor = tmp_path / "met.storm"
+    forcing.write_data(descriptor)
+    back = GriddedMetForcing.read_data(descriptor)
+    assert back.file_format == 1
+    assert [p.name for p in back.file_paths] == ["x.PRE", "x.WIN"]
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_gridded_to_owi(tmp_path):
+    """to_owi writes the pair and points the forcing at it."""
+    from clawpack.geoclaw.surge import data_storms
+
+    d = _make_owi_data()
+    pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
+    forcing = GriddedMetForcing().to_owi(d, pre, win)
+
+    assert pre.exists() and win.exists()
+    assert forcing.file_format == "owi"
+    assert forcing.file_paths == [pre, win]
+    # The files it wrote read back to the same fields.
+    r = data_storms.read_owi(pre, win)
+    np.testing.assert_allclose(d.wind_u, r.wind_u)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
