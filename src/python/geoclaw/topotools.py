@@ -515,7 +515,7 @@ class Topography(object):
         #                       @property (below), in DOMAIN coordinates.
         #   * ``crop_extent`` — the *requested* crop region, in DOMAIN
         #                       coordinates.  Mirrors Fortran ``tp_crop_extent``
-        #                       and the storm module's ``met_crop_extent``.
+        #                       and the gridded met module's ``crop_extent``.
         #   * ``crop_bounds`` — the same region in FILE coordinates, carried
         #                       only in the NetCDF (type-4) descriptor
         #                       (``netcdf_utils.FileMetadata.crop_bounds`` ->
