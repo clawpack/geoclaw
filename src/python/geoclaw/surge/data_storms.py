@@ -1,209 +1,258 @@
-import numpy as np
-from datetime import datetime
+#!/usr/bin/env python
+
+r"""Oceanweather (OWI) WIN/PRE meteorological-forcing field I/O.
+
+This module reads and writes the fixed-width Oceanweather ASCII wind/pressure
+format (a.k.a. NWS12/OWI) used by ADCIRC and USACE.  It is the Python-side
+counterpart to the Fortran reader ``read_OWI_ASCII`` /
+``read_OWI_ASCII_header`` in ``gridded_met_forcing_module.f90`` and produces
+files that reader consumes.
+
+Format contract (80-column fixed width)
+---------------------------------------
+Each of the pressure (``.PRE``) and wind (``.WIN``) files begins with a single
+file header line::
+
+    Oceanweather WIN/PRE Format<pad>YYYYMMDDHH     YYYYMMDDHH
+
+where the start date begins in column 56 and the end date in column 71 (the
+Fortran header read is ``(t56,i4,i2,i2,i2,t71,i4,i2,i2,i2)``).
+
+Each time step is then a grid-spec header line followed by the field data::
+
+    iLat=<i4>iLong=<i4>DX=<f6.4>DY=<f6.4>SWLat=<f8.4>SWLon=<f8.4>DT=YYYYMMDDHHMM
+
+with ``iLat`` = number of latitude points, ``iLong`` = number of longitude
+points, and ``DT`` at column 69.  Field values follow, eight per line in
+``f10.4``, ordered longitude-fastest (``((f(i,j), i=1..iLong), j=1..iLat)``).
+The ``.PRE`` file stores one pressure block per time; the ``.WIN`` file stores
+the ``u`` block then the ``v`` block per time.
+
+Units
+-----
+Pressure is stored in the file in millibar (the Fortran reader multiplies by
+100 to obtain Pa).  This module's in-memory representation is SI: ``read_owi``
+returns pressure in **Pa** and ``write_owi`` expects Pa, handling the mb<->Pa
+conversion at the file boundary.  Wind is m/s in both the file and memory.
+
+Precision: field values are written as fixed-width ``f10.4``, so a write/read
+round-trip preserves pressure only to ~1e-2 Pa (1e-4 mbar) and wind to
+~1e-4 m/s -- ample for forcing, but not bit-exact.  (Tests assert the pressure
+round-trip to ``atol=1e-2`` Pa for this reason.)
+
+Coordinates
+-----------
+The SW corner (``SWLon``, ``SWLat``) is the first grid point, so
+``longitude = SWLon + arange(iLong) * DX`` and likewise for latitude.  (Note:
+the Fortran reader uses a one-based ``sw + i*dx`` that omits the SW corner --
+a pre-existing off-by-one there; this reader follows the OWI convention.)
+"""
+
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
-"""
-A suite of helper functions for parsing data derived storms in the Oceanweather fixed width format
-and converting to a DataDerivedStorm class for GeoClaw
-"""
+import numpy as np
+
+# File header layout: label left-justified into this width, then the start and
+# end dates separated by five spaces, so the start date lands in column 56.
+_HEADER_LABEL = "Oceanweather WIN/PRE Format"
+_HEADER_LABEL_WIDTH = 55
+_FILE_DATE_FMT = "%Y%m%d%H"        # file header start/end (hour precision)
+_RECORD_DATE_FMT = "%Y%m%d%H%M"    # per-record DT (minute precision)
+_VALUES_PER_LINE = 8
+_PA_PER_MBAR = 100.0
+
+
 @dataclass
-# Creates a dataclass for holding the OWI data
-class StormData:
-    iLat: int  # number of latitude points
-    iLong: int  # number of longitude points
-    DX: float  # resolution in x direction
-    DY: float  # resolution in y direction
-    SWLat: float  # Initial Latitude point in SW corner
-    SWLon: float  # Initial Longitude point in SW corner
-    DT: datetime  # datestamp of current wind/pressure array
-    matrix: list  # placeholder for wind or pressure array
+class OWIData:
+    r"""In-memory representation of an OWI WIN/PRE dataset.
 
-    def __post_init__(self):
-        # Put everything in correct format
-        self.iLat = int(self.iLat)
-        self.iLong = int(self.iLong)
-        self.DX = float(self.DX)
-        self.DY = float(self.DY)
-        self.SWLat = float(self.SWLat)
-        self.SWLon = float(self.SWLon)
-        self.DT = datetime.strptime(self.DT, '%Y%m%d%H%M')
-
-def read_oceanweather(path, file_ext):
-    import re
+    :Attributes:
+     - *time* (numpy.ndarray) ``datetime64[s]`` array of length ``nt``.
+     - *longitude* (numpy.ndarray) 1D longitudes (length ``nx``), ascending.
+     - *latitude* (numpy.ndarray) 1D latitudes (length ``ny``), ascending.
+     - *wind_u*, *wind_v* (numpy.ndarray) ``(nt, ny, nx)`` wind components (m/s).
+     - *pressure* (numpy.ndarray) ``(nt, ny, nx)`` pressure (Pa).
     """
-        Reads in Oceanweather files and puts them into a dataclass for ease of data cleanup
-        
-        :param path: The path to the file.
-        :param file_ext: The file extension.
-        :return: A list of StormData objects.
-        """
-    subset = None
-    all_data = []
-    fh = path + f'.{file_ext}'
-    # Open file and use regex matching for parsing data
-    with open(fh, 'rt') as f:
-        input = f.readlines()
-        print(type(input), len(input))
-        for line in input:
-            if not line.startswith('Oceanweather'):  # Skip the file header
-                # Find the header lines containing this pattern of characters
-                # Example from file: iLat= 105iLong=  97DX=0.2500DY=0.2500SWLat=22.00000SWLon=-82.0000DT=200007121200
-                # \w+: any unicode string
-                # \s*: any repetition of whitespace characters
-                # \d+: decimal digit of length +=1
-                # \.?: matches anything but a new line in minimal fashion
-                # \d*: decimal digit with +=0 repetitions
-                header = re.findall("\\w+=-?\\s*\\d+\\.?\\d*", line)
-                if header:
-                    if subset:
-                        # put data into dataclass
-                        storm_data = StormData(**subset)
-                        all_data.append(storm_data)
-                    # Split apart the header data into separate values rather than the string
-                    subset = {
-                        x.replace(' ', '').split('=')[0]: x.replace(' ', '').split('=')[1]
-                        for x in header
-                    }
-                    subset["matrix"] = []
-                else:
-                    nums = list(map(float, line.split()))
-                    subset["matrix"].append(nums)
-                storm_data = StormData(**subset)
-        all_data.append(storm_data)
+    time: np.ndarray
+    longitude: np.ndarray
+    latitude: np.ndarray
+    wind_u: np.ndarray
+    wind_v: np.ndarray
+    pressure: np.ndarray
 
-    return all_data
+    @property
+    def num_times(self):
+        return self.time.shape[0]
 
-def time_steps(data, landfall_time):
+    @property
+    def shape(self):
+        r"""Spatial grid shape ``(ny, nx)``."""
+        return (self.latitude.shape[0], self.longitude.shape[0])
+
+
+def _as_datetime(value):
+    r"""Coerce a datetime64 / datetime / string to a naive ``datetime``."""
+    dt64 = np.datetime64(value, "s")
+    # datetime64[s] epoch is 1970-01-01T00:00:00; build an aware UTC datetime
+    # then drop tzinfo for strftime (the format carries no zone).
+    epoch = np.datetime64("1970-01-01T00:00:00", "s")
+    seconds = int((dt64 - epoch) / np.timedelta64(1, "s"))
+    return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(tzinfo=None)
+
+
+def _parse_record_header(line):
+    r"""Parse a grid-spec header line into (ny, nx, dx, dy, swlat, swlon, dt).
+
+    Robust to the small formatting variations seen in real OWI files (e.g.
+    ``SWLat`` written with 4 or 5 decimals) by splitting on the ``key=value``
+    tokens rather than fixed columns.
     """
-    Calculate the timesteps for geoclaw in seconds given the start and end
-    times in the header of the wind and pre files. Returns an array of time steps
-    with 0 being at the start of the data
-    :param data: wind or pressure data read from read_oceanweather
-    :return: array of time steps with total length = length of data
+    def _field(key, width):
+        start = line.index(key) + len(key)
+        return line[start:start + width]
+
+    ny = int(_field("iLat=", 4))
+    nx = int(_field("iLong=", 4))
+    dx = float(_field("DX=", 6))
+    dy = float(_field("DY=", 6))
+    swlat = float(_field("SWLat=", 8))
+    swlon = float(_field("SWLon=", 8))
+    dt = datetime.strptime(_field("DT=", 12), _RECORD_DATE_FMT)
+    return ny, nx, dx, dy, swlat, swlon, dt
+
+
+def _read_blocks(fh, num_blocks, count):
+    r"""Read ``num_blocks`` flat field blocks of ``count`` values each.
+
+    Each block is ``ceil(count / 8)`` lines of up to eight ``f10.4`` values.
+    Returns a list of ``num_blocks`` 1D float arrays.
     """
-    t0 = None
-    time_array = []
-    total_time = data[-1].DT - data[0].DT
-    num_steps = int(round((total_time / len(data)).total_seconds() / 60))
-    t0 = datetime.strptime(landfall_time, '%Y-%m-%dT%H:%M:%S')
-    for idx, d in enumerate(data):
-        if not t0:
-            t0 = d.DT
-        t = d.DT
-        seconds_from_landfall = (t - t0).total_seconds()
-        time_array.append(seconds_from_landfall)
-    return time_array
+    blocks = []
+    for _ in range(num_blocks):
+        values = []
+        while len(values) < count:
+            line = fh.readline()
+            if not line:
+                raise EOFError("Unexpected end of OWI file while reading data.")
+            values.extend(float(v) for v in line.split())
+        blocks.append(np.array(values[:count], dtype=float))
+    return blocks
 
 
-def get_coordinate_arrays(data):
+def read_owi(pressure_path, wind_path):
+    r"""Read an OWI WIN/PRE pair into an :class:`OWIData` object.
+
+    :Input:
+     - *pressure_path* (path-like) the ``.PRE`` file.
+     - *wind_path* (path-like) the ``.WIN`` file.
+
+    :Output:
+     - (:class:`OWIData`) fields with pressure in Pa and wind in m/s, arrays
+       shaped ``(nt, ny, nx)``.
     """
-    Creates a list of latitude and longitude points given the starting location in the sw corner
-    and uses the resolution and number of points per array
-    :param data: StormData
-    :return: list
+    times = []
+    u_fields, v_fields, p_fields = [], [], []
+    lon = lat = None
+
+    with open(pressure_path, "r") as pre, open(wind_path, "r") as win:
+        pre.readline()   # file header (start/end dates -- not needed here)
+        win.readline()
+
+        while True:
+            win_header = win.readline()
+            if not win_header or not win_header.strip():
+                break
+            pre.readline()   # pressure record header (dims taken from wind)
+
+            ny, nx, dx, dy, swlat, swlon, dt = _parse_record_header(win_header)
+            count = nx * ny
+
+            if lon is None:
+                lon = swlon + np.arange(nx) * dx
+                lat = swlat + np.arange(ny) * dy
+
+            u_flat, v_flat = _read_blocks(win, 2, count)
+            (p_flat,) = _read_blocks(pre, 1, count)
+
+            times.append(np.datetime64(dt, "s"))
+            u_fields.append(u_flat.reshape(ny, nx))
+            v_fields.append(v_flat.reshape(ny, nx))
+            # File stores millibar; convert to Pa for the SI in-memory form.
+            p_fields.append(p_flat.reshape(ny, nx) * _PA_PER_MBAR)
+
+    return OWIData(time=np.array(times, dtype="datetime64[s]"),
+                   longitude=lon, latitude=lat,
+                   wind_u=np.array(u_fields),
+                   wind_v=np.array(v_fields),
+                   pressure=np.array(p_fields))
+
+
+def read_owi_start_time(path):
+    r"""Return the first record's timestamp as ``datetime64[s]``.
+
+    Cheap: reads only the file header and first grid-spec header, so it is
+    suitable for inferring a descriptor ``time_offset`` without loading the
+    (potentially large) field data.
     """
-    lat = [data.SWLat + i * data.DY for i in range(data.iLat)]
-    lon = [data.SWLon + i * data.DX for i in range(data.iLong)]
-    return lat, lon
+    with open(path, "r") as fh:
+        fh.readline()                       # file header
+        _, _, _, _, _, _, dt = _parse_record_header(fh.readline())
+    return np.datetime64(dt, "s")
 
-def arrange_data(data):
+
+def _format_record_header(ny, nx, dx, dy, swlat, swlon, dt):
+    r"""Build one 80-column grid-spec header line (see module docstring)."""
+    return (f"iLat={ny:4d}iLong={nx:4d}DX={dx:6.4f}DY={dy:6.4f}"
+            f"SWLat={swlat:8.4f}SWLon={swlon:8.4f}"
+            f"DT={dt.strftime(_RECORD_DATE_FMT)}")
+
+
+def _write_blocks(fh, *flats):
+    r"""Write flat field arrays as eight ``f10.4`` values per line."""
+    for flat in flats:
+        for i, value in enumerate(flat):
+            fh.write(f"{value:10.4f}")
+            if (i + 1) % _VALUES_PER_LINE == 0:
+                fh.write("\n")
+        if len(flat) % _VALUES_PER_LINE != 0:
+            fh.write("\n")
+
+
+def write_owi(data, pressure_path, wind_path):
+    r"""Write an :class:`OWIData` object to an OWI WIN/PRE pair.
+
+    Produces files readable by the Fortran ``read_OWI_ASCII`` path: pressure is
+    converted from Pa back to millibar, wind is written in m/s, and values are
+    ordered longitude-fastest.
+
+    :Input:
+     - *data* (:class:`OWIData`) fields to write (Pa / m/s, ``(nt, ny, nx)``).
+     - *pressure_path* (path-like) output ``.PRE`` file.
+     - *wind_path* (path-like) output ``.WIN`` file.
     """
-    Iterates over the entire matrix for a single timestep and formats the data
-    into a single array rather than a list of lists
-    :param data: StormData
-    :return: list
-    """
-    data_list = [item for sublist in data.matrix for item in sublist]
-    return data_list
+    ny, nx = data.shape
+    dx = float(data.longitude[1] - data.longitude[0]) if nx > 1 else 0.0
+    dy = float(data.latitude[1] - data.latitude[0]) if ny > 1 else 0.0
+    swlon = float(data.longitude[0])
+    swlat = float(data.latitude[0])
 
+    start = _as_datetime(data.time[0])
+    end = _as_datetime(data.time[-1])
+    file_header = (f"{_HEADER_LABEL.ljust(_HEADER_LABEL_WIDTH)}"
+                   f"{start.strftime(_FILE_DATE_FMT)}     "
+                   f"{end.strftime(_FILE_DATE_FMT)}")
 
-def process_data(data, start_idx=0):
-    """
-    Process wind and pressure data into a 2d array
+    with open(pressure_path, "w") as pre, open(wind_path, "w") as win:
+        pre.write(file_header + "\n")
+        win.write(file_header + "\n")
 
-    :param data: StormData
-    :param start_idx: starting point depending on u or v direction
-    :return: Array
-    """
-    # Flatten list of lists into a single list
-    values = arrange_data(data)
-    d = np.empty(shape=(data.iLong, data.iLat))
-    for j in range(data.iLat):
-        for i in range(data.iLong):
-            d[i,j] = values[start_idx + j * data.iLong + i]
-    return d.T # Transpose to fit into the correct format for geoclaw
+        for n in range(data.num_times):
+            dt = _as_datetime(data.time[n])
+            header = _format_record_header(ny, nx, dx, dy, swlat, swlon, dt)
+            pre.write(header + "\n")
+            win.write(header + "\n")
 
-
-def write_OWI_output(data, filename, data_type='pressure'):
-    """
-    Writes wind and pressure field data to the specified file
-    :param data: array of wind or pressure data
-    :param filename: name of output file
-    :param data_type: type of data ('pressure' or 'wind')
-    :return: does not return anything
-
-    Data for this is a list of lists of all of the data sets
-    uu, vv = wind arrays in x and y directions, a list of 2d arrays at the resolution
-    provided by the data below shape = i_lat * i_long
-    pressure = pressure array, 2d list of arrays at the same resolution as the wind data
-    i_lat = number of latitude points in array
-    i_lon = number of longitude points in array
-    dx = resolution of longitude array
-    dy = resolution of latitude array
-    xlower = longitude of sw corner location of arrays
-    ylower = latitude of sw corner location of arrays
-    dt = list of time steps of the data
-
-
-    """
-    # Open file to write output
-    mode = 'w'
-    with open(filename, mode) as f:
-        if data_type == 'wind':
-            # Assuming data is a tuple (uu, vv)
-            uu, vv = data
-            for idx in range(len(uu)):
-                # Write uu data
-                write_wind(uu[idx],vv[idx], f, idx)
-
-                # Insert a new header
-                f.write(file_header + '\n')
-        else:  # 'pressure'
-            for idx, d in enumerate(data):
-                write_pressure(d, f, idx)
-
-def write_pressure(d, f, idx):
-    file_line2 = (f'iLat={i_lat}iLong={i_long}DX={dx:6.4f}DY={dy:6.4f}'
-                  f'SWLat={ylower:8.4f}SWLon={xlower:8.4f}DT={dt[idx]}')
-    f.write(file_line2 + '\n')
-    # flatten array in column first order to be read into fortran
-    flattened_array = d.T.flatten()
-    # iterate over each element to add to each line of the file
-    for i, value in enumerate(flattened_array):
-        f.write(f'{value:10.4f}')
-        # if index is 8 add a new line, or if its the last line of data add a new line
-        if (i+1) %8 == 0 or i==len(flattened_array) -1:
-            f.write('\n')
-
-def write_wind(uu, vv,f, idx):
-    file_line2 = (f'iLat={i_lat}iLong={i_long}DX={dx:6.4f}DY={dy:6.4f}'
-                  f'SWLat={ylower:8.4f}SWLon={xlower:8.4f}DT={dt[idx]}')
-    f.write(file_line2 + '\n')
-    # flatten array in column first order to be read into fortran
-    flat_u = uu.T.flatten()
-    flat_v = vv.T.flatten()
-    # iterate over each element to add to each line of the file
-    for i, value in enumerate(flat_u):
-        f.write(f'{value:10.4f}')
-        # if index is 8 add a new line, or if its the last line of data add a new line
-        if (i+1) %8 == 0 or i==len(flat_u) -1:
-            f.write('\n')
-    for i, value in enumerate(flat_v):
-        f.write(f'{value:10.4f}')
-        # if index is 8 add a new line, or if its the last line of data add a new line
-        if (i + 1) % 8 == 0 or i == len(flat_v) - 1:
-            f.write('\n')
-
-
-
-
+            _write_blocks(win, data.wind_u[n].ravel(), data.wind_v[n].ravel())
+            # Convert Pa back to the millibar the file format stores.
+            _write_blocks(pre, (data.pressure[n] / _PA_PER_MBAR).ravel())

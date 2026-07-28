@@ -93,6 +93,50 @@ class GriddedMetForcing(object):
         self.meta.file_format = value
 
     # =========================================================================
+    # OWI (Oceanweather WIN/PRE) convenience helpers
+    #
+    # These are thin wrappers over ``surge.data_storms``: OWI field arrays live
+    # in :class:`~clawpack.geoclaw.surge.data_storms.OWIData`, and the forcing
+    # stays descriptor-centric (consistent with the NetCDF path, where fields
+    # are never loaded into Python).  ``from_owi`` builds a descriptor pointing
+    # at an existing WIN/PRE pair; ``to_owi`` writes a pair from field arrays
+    # and points the descriptor at it.
+    @classmethod
+    def from_owi(cls, pressure_path, wind_path, time_offset=None, meta=None):
+        r"""Build a descriptor-ready forcing for an existing OWI WIN/PRE pair.
+
+        :Input:
+         - *pressure_path* (path-like) the ``.PRE`` file.
+         - *wind_path* (path-like) the ``.WIN`` file.
+         - *time_offset* (datetime64, optional) forcing time reference; if
+           omitted it is read from the first record of ``pressure_path``.
+        """
+        from clawpack.geoclaw.surge import data_storms
+
+        self = cls(meta=meta)
+        self.file_format = "owi"
+        self.file_paths = [Path(pressure_path), Path(wind_path)]
+        if time_offset is None:
+            time_offset = data_storms.read_owi_start_time(pressure_path)
+        self.time_offset = time_offset
+        return self
+
+    def to_owi(self, data, pressure_path, wind_path):
+        r"""Write ``data`` to an OWI WIN/PRE pair and point this forcing at it.
+
+        :Input:
+         - *data* (:class:`~clawpack.geoclaw.surge.data_storms.OWIData`) fields.
+         - *pressure_path*, *wind_path* (path-like) output files ([PRE, WIN]).
+        """
+        from clawpack.geoclaw.surge import data_storms
+
+        data_storms.write_owi(data, pressure_path, wind_path)
+        self.file_format = "owi"
+        self.file_paths = [Path(pressure_path), Path(wind_path)]
+        self.time_offset = np.datetime64(data.time[0], "s")
+        return self
+
+    # =========================================================================
     # Read Routines
     @classmethod
     def read_data(cls, path: Path, verbose: bool=False):

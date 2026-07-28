@@ -134,6 +134,41 @@ def _netcdf_forcing(nc_path, descriptor_path):
     s.write(descriptor_path, file_format="data")
 
 
+def _owi_forcing(pre_path, win_path, descriptor_path):
+    """Build a small OWI WIN/PRE pair (Gaussian vortex) + format-1 descriptor.
+
+    Mirrors the netCDF vortex so the OWI (ASCII, format-1) branch of the Fortran
+    ``read_OWI_ASCII`` reader is exercised end-to-end.  Needs no NetCDF build.
+    """
+    from clawpack.geoclaw.surge.data_storms import OWIData
+    from clawpack.geoclaw.surge.gridded import GriddedMetForcing
+
+    # Grid spans slightly beyond the [-5,5]x[15,25] domain so it fully covers
+    # it (the Fortran OWI reader applies a one-cell coordinate shift; see the
+    # note in the test below).
+    lon = np.linspace(-6.0, 6.0, 25)
+    lat = np.linspace(14.0, 26.0, 25)
+    hours = np.array([0.0, 3.0, 6.0, 9.0])
+    time = TIME_OFFSET + (hours * 3600.0).astype("timedelta64[s]")
+
+    LON, LAT = np.meshgrid(lon, lat, indexing="xy")   # (ny, nx)
+    u = np.empty((len(hours), len(lat), len(lon)))
+    v = np.empty_like(u)
+    p = np.empty_like(u)
+    for k in range(len(hours)):
+        cx = 0.0 + (1.0 / 3.0) * (hours[k] / 3.0)
+        cy = 20.0 + (0.5 / 3.0) * (hours[k] / 3.0)
+        env = np.exp(-((LON - cx) ** 2 + (LAT - cy) ** 2) / 4.0)
+        u[k] = -20.0 * (LAT - cy) * env
+        v[k] = 20.0 * (LON - cx) * env
+        p[k] = 101300.0 - 6000.0 * env
+
+    data = OWIData(time=time, longitude=lon, latitude=lat,
+                   wind_u=u, wind_v=v, pressure=p)
+    forcing = GriddedMetForcing().to_owi(data, pre_path, win_path)
+    forcing.write_data(descriptor_path)
+
+
 def _collect_aux(temp_path):
     """Stack (wind_u, wind_v, pressure) over the fixed grid at each frame.
 
@@ -201,6 +236,10 @@ def _run_case(tmp_path, forcing):
         nc_path = tmp_path / "met.nc"
         storm_path = tmp_path / "met.storm"
         _netcdf_forcing(nc_path, storm_path)
+    elif forcing == "owi":
+        # OWI/ASCII (format 1) needs no NetCDF build.
+        storm_path = tmp_path / "met.storm"
+        _owi_forcing(tmp_path / "met.PRE", tmp_path / "met.WIN", storm_path)
     else:
         storm_path = tmp_path / "test.storm"
         _holland_storm(storm_path)
@@ -229,6 +268,32 @@ def test_netcdf_forcing_aux(tmp_path):
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
     _check_aux(_run_case(tmp_path, "data"), "data")
+
+
+@pytest.mark.regression
+@pytest.mark.storm
+def test_owi_forcing_aux(tmp_path):
+    """Gridded OWI/ASCII (format 1) forcing aux fields.
+
+    Exercises the Fortran ``read_OWI_ASCII`` path end-to-end from a Python-
+    written WIN/PRE pair (``surge.data_storms.write_owi``) -- the format-1
+    branch that had no automated coverage before.  Needs no NetCDF build.
+    """
+    aux = _run_case(tmp_path, "owi")
+
+    # Physical sanity independent of the golden: the vortex was actually read
+    # and applied, not silently dropped to all-ambient.  Rows are grouped
+    # (wind_u, wind_v, pressure) per output frame.
+    pressure = aux[[2, 5, 8]]
+    wind_u = aux[[0, 3, 6]]
+    assert np.isclose(pressure.max(), 101300.0, atol=1.0), \
+        "far-field pressure should be ambient (~101300 Pa)"
+    assert pressure.min() < 101000.0, \
+        "central pressure should dip below ambient (vortex present)"
+    assert np.abs(wind_u).max() > 1.0, "wind field should be non-trivial"
+
+    # Characterization golden (regenerate with GEOCLAW_REGEN=1).
+    _check_aux(aux, "owi")
 
 
 @pytest.mark.regression
