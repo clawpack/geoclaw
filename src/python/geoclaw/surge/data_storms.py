@@ -35,6 +35,11 @@ Pressure is stored in the file in millibar (the Fortran reader multiplies by
 returns pressure in **Pa** and ``write_owi`` expects Pa, handling the mb<->Pa
 conversion at the file boundary.  Wind is m/s in both the file and memory.
 
+Precision: field values are written as fixed-width ``f10.4``, so a write/read
+round-trip preserves pressure only to ~1e-2 Pa (1e-4 mbar) and wind to
+~1e-4 m/s -- ample for forcing, but not bit-exact.  (Tests assert the pressure
+round-trip to ``atol=1e-2`` Pa for this reason.)
+
 Coordinates
 -----------
 The SW corner (``SWLon``, ``SWLat``) is the first grid point, so

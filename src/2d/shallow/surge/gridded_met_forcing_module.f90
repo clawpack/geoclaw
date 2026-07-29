@@ -49,20 +49,20 @@ module gridded_met_forcing_module
     real(kind=8) :: wind_scaling, pressure_scaling
     real(kind=8) :: storm_time_scale
 
-    ! Spatial crop + edge ramping.  met_crop_extent = [lon0, lon1, lat0, lat1]
+    ! Spatial crop + edge ramping.  crop_extent = [lon0, lon1, lat0, lat1]
     ! restricts the forcing to a sub-region read directly from the file
     ! (NetCDF: strided read; OWI/ASCII: read full then subset).  ramp_width
     ! tapers wind and pressure to ambient over this many degrees just inside
     ! the crop edges, avoiding a discontinuity where the data ends.  When no
     ! crop is set the full file is used and no taper is applied.
-    logical :: has_met_crop
-    real(kind=8) :: met_crop_extent(4), ramp_width
+    logical :: has_crop
+    real(kind=8) :: crop_extent(4), ramp_width
 
     ! Registration shift (domain = file + shift) applied to the forcing grid
     ! coordinates before cropping/placement.  Parallels topo/dtopo x_shift,
     ! y_shift; lets a projected or mis-registered met grid be placed onto the
     ! domain.  Zero = no shift.
-    real(kind=8) :: met_x_shift, met_y_shift
+    real(kind=8) :: x_shift, y_shift
 
     ! Time tracking tolerance allowance - allows for the beginning of the storm
     ! track to be close to but not equal the start time of the simulation
@@ -137,19 +137,19 @@ contains
             read(data_unit, "(i2)") num_data_files
             read(data_unit, *) wind_scaling, pressure_scaling
             read(data_unit, *) ramp_width
-            ! met_crop_extent = lon0 lon1 lat0 lat1; all-zero = full file.
-            read(data_unit, *) met_crop_extent
-            has_met_crop = any(met_crop_extent /= 0.0d0)
+            ! crop_extent = lon0 lon1 lat0 lat1; all-zero = full file.
+            read(data_unit, *) crop_extent
+            has_crop = any(crop_extent /= 0.0d0)
 
             write(log_unit, "('time_offset = ',a)") storm%time_offset
             write(log_unit, "('format = ',i2)") file_format
             write(log_unit, "('num files = ',i2)") num_data_files
             write(log_unit, "('scaling = ',2d16.8)") wind_scaling, pressure_scaling
             write(log_unit, "('ramp_width = ',d16.8)") ramp_width
-            if (has_met_crop) then
-                write(log_unit, "('met_crop_extent = ',4d16.8)") met_crop_extent
+            if (has_crop) then
+                write(log_unit, "('crop_extent = ',4d16.8)") crop_extent
             else
-                write(log_unit, *) "met_crop_extent = (full file)"
+                write(log_unit, *) "crop_extent = (full file)"
             end if
 
             ! storm_time_scale stretches (>1) or compresses (<1) the time axis
@@ -158,10 +158,10 @@ contains
             write(log_unit, "('storm_time_scale = ',d16.8)") storm_time_scale
 
             ! Registration shift of the forcing grid (domain = file + shift).
-            read(data_unit, *) met_x_shift
-            read(data_unit, *) met_y_shift
-            write(log_unit, "('met_x_shift = ',d16.8)") met_x_shift
-            write(log_unit, "('met_y_shift = ',d16.8)") met_y_shift
+            read(data_unit, *) x_shift
+            read(data_unit, *) y_shift
+            write(log_unit, "('x_shift = ',d16.8)") x_shift
+            write(log_unit, "('y_shift = ',d16.8)") y_shift
 
             if (DEBUG) then
                 print "('time_offset = ',a)", storm%time_offset
@@ -343,9 +343,9 @@ contains
                         lat_full(i) = sw_lat + (i - 1) * dy
                     end do
                     ! Registration shift (domain = file + shift) before crop.
-                    if (met_x_shift /= 0.0d0) lon_full = lon_full + met_x_shift
-                    if (met_y_shift /= 0.0d0) lat_full = lat_full + met_y_shift
-                    call met_crop_indices(lon_full, mx_full, lat_full,       &
+                    if (x_shift /= 0.0d0) lon_full = lon_full + x_shift
+                    if (y_shift /= 0.0d0) lat_full = lat_full + y_shift
+                    call crop_indices(lon_full, mx_full, lat_full,       &
                                           my_full, i0, i1, j0, j1)
                     mx = i1 - i0 + 1
                     my = j1 - j0 + 1
@@ -405,7 +405,7 @@ contains
                     call check_netcdf_error(nf90_get_var(nc_fid, var_ID, lat_full))
 
                     ! Normalize [0,360] longitude to [-180,180] before cropping
-                    ! so met_crop_extent (domain coords) compares correctly.
+                    ! so crop_extent (domain coords) compares correctly.
                     if (lon_wrap == 360) then
                         where (lon_full > 180.0d0)
                             lon_full = lon_full - 360.0d0
@@ -414,10 +414,10 @@ contains
 
                     ! Registration shift (domain = file + shift), after the
                     ! geographic wrap normalization, before cropping.
-                    if (met_x_shift /= 0.0d0) lon_full = lon_full + met_x_shift
-                    if (met_y_shift /= 0.0d0) lat_full = lat_full + met_y_shift
+                    if (x_shift /= 0.0d0) lon_full = lon_full + x_shift
+                    if (y_shift /= 0.0d0) lat_full = lat_full + y_shift
 
-                    call met_crop_indices(lon_full, mx_full, lat_full, my_full, &
+                    call crop_indices(lon_full, mx_full, lat_full, my_full, &
                                           i0, i1, j0, j1)
                     mx = i1 - i0 + 1
                     my = j1 - j0 + 1
@@ -552,13 +552,13 @@ contains
     end subroutine set_storm
 
 
-    ! === met_crop_indices =====================================================
+    ! === crop_indices =====================================================
     ! Given full-file longitude/latitude arrays, return the 1-based inclusive
-    ! index range [i0:i1] x [j0:j1] of points inside met_crop_extent.  When no
+    ! index range [i0:i1] x [j0:j1] of points inside crop_extent.  When no
     ! crop is set the full range is returned.  Assumes monotonic coordinates
     ! (the points within the bounds form a contiguous block).  Aborts if the
     ! crop does not overlap the file.
-    subroutine met_crop_indices(lon, nlon, lat, nlat, i0, i1, j0, j1)
+    subroutine crop_indices(lon, nlon, lat, nlat, i0, i1, j0, j1)
 
         implicit none
 
@@ -568,15 +568,15 @@ contains
 
         integer :: k
 
-        if (.not. has_met_crop) then
+        if (.not. has_crop) then
             i0 = 1; i1 = nlon; j0 = 1; j1 = nlat
             return
         end if
 
         i0 = nlon + 1; i1 = 0
         do k = 1, nlon
-            if (lon(k) >= met_crop_extent(1) .and. &
-                lon(k) <= met_crop_extent(2)) then
+            if (lon(k) >= crop_extent(1) .and. &
+                lon(k) <= crop_extent(2)) then
                 if (k < i0) i0 = k
                 if (k > i1) i1 = k
             end if
@@ -584,20 +584,20 @@ contains
 
         j0 = nlat + 1; j1 = 0
         do k = 1, nlat
-            if (lat(k) >= met_crop_extent(3) .and. &
-                lat(k) <= met_crop_extent(4)) then
+            if (lat(k) >= crop_extent(3) .and. &
+                lat(k) <= crop_extent(4)) then
                 if (k < j0) j0 = k
                 if (k > j1) j1 = k
             end if
         end do
 
         if (i0 > i1 .or. j0 > j1) then
-            print *, "ERROR: met_crop_extent does not overlap the met file."
-            print *, "  met_crop_extent = ", met_crop_extent
+            print *, "ERROR: crop_extent does not overlap the met file."
+            print *, "  crop_extent = ", crop_extent
             stop 1
         end if
 
-    end subroutine met_crop_indices
+    end subroutine crop_indices
 
 
     ! === read_OWI_ASCII_header ================================================
@@ -852,7 +852,7 @@ contains
         ext = [storm%longitude(1), storm%latitude(1),                          &
                storm%longitude(size(storm%longitude)),                         &
                storm%latitude(size(storm%latitude))]
-        ramp_eff = merge(ramp_width, 0.0d0, has_met_crop)
+        ramp_eff = merge(ramp_width, 0.0d0, has_crop)
 
         ! Skip the patch entirely if it does not overlap the data extent.
         xhi = xlower + (mx + mbc - 0.5d0) * dx
