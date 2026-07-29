@@ -331,13 +331,16 @@ contains
                     end if
 
                     ! Full-file coordinates (OWI grids are S-to-N / W-to-E
-                    ! from the SW corner), then crop to met_crop_extent.
+                    ! from the SW corner), then crop to met_crop_extent.  The
+                    ! SW corner (sw_lon, sw_lat) is the first grid node, so
+                    ! point i is at sw + (i-1)*d -- using sw + i*d shifted the
+                    ! whole grid one cell NE relative to the NetCDF path.
                     allocate(lon_full(mx_full), lat_full(my_full))
                     do i = 1, mx_full
-                        lon_full(i) = sw_lon + i * dx
+                        lon_full(i) = sw_lon + (i - 1) * dx
                     end do
                     do i = 1, my_full
-                        lat_full(i) = sw_lat + i * dy
+                        lat_full(i) = sw_lat + (i - 1) * dy
                     end do
                     ! Registration shift (domain = file + shift) before crop.
                     if (met_x_shift /= 0.0d0) lon_full = lon_full + met_x_shift

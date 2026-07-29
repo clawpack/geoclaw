@@ -296,6 +296,119 @@ def test_owi_forcing_aux(tmp_path):
     _check_aux(aux, "owi")
 
 
+def _matched_vortex():
+    """Shared analytic vortex on a single grid, for OWI/NetCDF equivalence."""
+    lon = np.linspace(-5.0, 5.0, 21)
+    lat = np.linspace(15.0, 25.0, 21)
+    hours = np.array([0.0, 3.0, 6.0, 9.0])
+    time = TIME_OFFSET + (hours * 3600.0).astype("timedelta64[s]")
+    LON, LAT = np.meshgrid(lon, lat, indexing="xy")     # (ny, nx)
+    u = np.empty((len(hours), len(lat), len(lon)))
+    v = np.empty_like(u)
+    p = np.empty_like(u)
+    for k in range(len(hours)):
+        cx = 0.0 + (1.0 / 3.0) * (hours[k] / 3.0)
+        cy = 20.0 + (0.5 / 3.0) * (hours[k] / 3.0)
+        env = np.exp(-((LON - cx) ** 2 + (LAT - cy) ** 2) / 4.0)
+        u[k] = -20.0 * (LAT - cy) * env
+        v[k] = 20.0 * (LON - cx) * env
+        p[k] = 101300.0 - 6000.0 * env
+    return lon, lat, time, u, v, p
+
+
+def _write_matched_netcdf(nc_path, storm_path, lon, lat, time, u, v, p):
+    """Write a CF NetCDF forcing + descriptor from explicit field arrays."""
+    xr = pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    ds = xr.Dataset(
+        {
+            "u10": (("valid_time", "latitude", "longitude"), u,
+                    {"units": "m/s", "standard_name": "eastward_wind"}),
+            "v10": (("valid_time", "latitude", "longitude"), v,
+                    {"units": "m/s", "standard_name": "northward_wind"}),
+            "msl": (("valid_time", "latitude", "longitude"), p,
+                    {"units": "Pa",
+                     "standard_name": "air_pressure_at_mean_sea_level"}),
+        },
+        coords={
+            "longitude": ("longitude", lon,
+                          {"units": "degrees_east", "axis": "X"}),
+            "latitude": ("latitude", lat,
+                         {"units": "degrees_north", "axis": "Y"}),
+            "valid_time": ("valid_time", time, {"axis": "T"}),
+        },
+    )
+    ds.to_netcdf(nc_path)
+    s = storm.Storm()
+    s.time_offset = TIME_OFFSET
+    s.file_format = "netcdf"
+    s.file_paths = [nc_path]
+    s.write(storm_path, file_format="data")
+
+
+def _build_run_gridded(sub, storm_path, make_vars):
+    """Build + run a gridded (family "data") case, return the aux stack."""
+    sub.mkdir(parents=True, exist_ok=True)
+    topo_path = sub / "flat.tt3"
+    _flat_topo(topo_path)
+    runner = gtest.GeoClawTestRunner(sub, test_path=testdir)
+    runner.set_data(forcing="data", topo_path=str(topo_path),
+                    storm_path=str(storm_path))
+    runner.write_data()
+    runner.build_executable(make_vars=make_vars)
+    runner.run_code()
+    return _collect_aux(runner.temp_path)
+
+
+@pytest.mark.regression
+@pytest.mark.storm
+@pytest.mark.netcdf
+def test_owi_netcdf_equivalence(tmp_path):
+    """The OWI and NetCDF gridded paths must agree for identical fields.
+
+    The same vortex, on the same lon/lat grid, is written as an OWI WIN/PRE
+    pair and as a CF NetCDF file, then run through GeoClaw.  The forcing aux
+    fields must match to the OWI ``f10.4`` quantization -- a direct check that
+    the two readers place the grid at the same coordinates.  (This is the
+    regression that fails when the OWI reader is off by one cell.)
+    """
+    pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    make_vars = _netcdf_build_vars()
+    if make_vars is None:
+        pytest.skip("NetCDF (nf-config/nc-config) unavailable.")
+
+    from clawpack.geoclaw.surge.data_storms import OWIData
+    from clawpack.geoclaw.surge.gridded import GriddedMetForcing
+
+    lon, lat, time, u, v, p = _matched_vortex()
+
+    owi_dir, nc_dir = tmp_path / "owi", tmp_path / "nc"
+    owi_dir.mkdir(); nc_dir.mkdir()
+
+    owi_storm = owi_dir / "met.storm"
+    GriddedMetForcing().to_owi(
+        OWIData(time=time, longitude=lon, latitude=lat,
+                wind_u=u, wind_v=v, pressure=p),
+        owi_dir / "met.PRE", owi_dir / "met.WIN").write_data(owi_storm)
+
+    nc_storm = nc_dir / "met.storm"
+    _write_matched_netcdf(nc_dir / "met.nc", nc_storm, lon, lat, time, u, v, p)
+
+    aux_owi = _build_run_gridded(owi_dir / "run", owi_storm, None)
+    aux_nc = _build_run_gridded(nc_dir / "run", nc_storm, make_vars)
+
+    # Compare per component: pressure ~1e5 Pa (f10.4 mbar -> ~1e-2 Pa quantum),
+    # wind ~1e1 m/s (~1e-4 quantum).  A one-cell (0.5 deg) grid offset moves
+    # these by O(100 Pa) / O(1 m/s) near the vortex, far above these tols.
+    pressure_rows = [2, 5, 8]
+    wind_rows = [0, 1, 3, 4, 6, 7]
+    np.testing.assert_allclose(aux_owi[pressure_rows], aux_nc[pressure_rows],
+                               atol=1.0)
+    np.testing.assert_allclose(aux_owi[wind_rows], aux_nc[wind_rows],
+                               atol=1e-2)
+
+
 @pytest.mark.regression
 @pytest.mark.storm
 @pytest.mark.netcdf
