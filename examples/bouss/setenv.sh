@@ -34,11 +34,14 @@ export BOUSS_MPI_PROCS=6
 # the mpiexec command to use to run the executable:
 export CLAW_MPIEXEC=mpiexec
 # set CLAW_MPIEXEC to mpiexec only if this command is defined in your shell,
-# e.g. to use some version of MPI was installed outside of PETSc.
+#     (e.g. to use some version of MPI that was installed outside of PETSc)
 # Or set to the full path to this command, e.g. for the PETSc version:
 #export CLAW_MPIEXEC=$PETSC_DIR/$PETSC_ARCH/bin/mpiexec  # requires PETSC_ARCH
 
 # the proper Fortran compiler to use for MPI code:
-# e.g. mpif90 if that is defined in your shell, or gfortran *might* work.
-# This will over-rule any FC environment variable.
+# e.g. mpif90, if that is defined in your shell:
 export CLAW_MPIFC=mpif90
+# Or the PETSc version if that is what you are using for CLAW_MPIEXEC:
+#export CLAW_MPIEXEC=$PETSC_DIR/$PETSC_ARCH/bin/mpif90  # requires PETSC_ARCH
+# Or gfortran *might* work.
+# This will over-rule any FC environment variable already set in your shell.
