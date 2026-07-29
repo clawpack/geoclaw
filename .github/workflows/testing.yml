@@ -52,7 +52,6 @@ jobs:
       uses: actions/setup-python@v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
 
     - name: Install python dependencies
       run: |
@@ -115,7 +114,6 @@ jobs:
       uses: actions/setup-python@v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
 
     - name: Set up compilers
       uses: fortran-lang/setup-fortran@v1.9.0
