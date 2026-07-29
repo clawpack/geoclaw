@@ -146,10 +146,9 @@ def _read_owi_all_timesteps(pre_path: Path, win_path: Path):
     v_wind : ndarray, shape (nt, nlat, nlon)
         Northward wind speed in m/s.
     lon : ndarray, shape (nlon,)
-        Longitude grid in degrees.  First value = SWLon + DX (matching the
-        1-based grid indexing used by the Fortran OWI reader).
+        Longitude grid in degrees.  First value = SWLon (the SW-corner node).
     lat : ndarray, shape (nlat,)
-        Latitude grid in degrees.  First value = SWLat + DY.
+        Latitude grid in degrees.  First value = SWLat.
     times : list of datetime
         Datetime objects for each time step (parsed from DT= field).
     """
@@ -184,11 +183,10 @@ def _read_owi_all_timesteps(pre_path: Path, win_path: Path):
     nlat, nlon, dx, dy, swlat, swlon, _ = _parse_snapshot_header(header)
     n_per_step = nlat * nlon
 
-    # The Fortran OWI reader computes coordinates as 1-based:
-    #   longitude(j) = swlon + j * dx,  j = 1..mx
-    # so the first grid point is swlon+dx, not swlon.
-    lon = swlon + np.arange(1, nlon + 1) * dx
-    lat = swlat + np.arange(1, nlat + 1) * dy
+    # OWI SWLon/SWLat is the first grid node (the SW corner), so point i is at
+    # sw + (i-1)*d.  (Matches the corrected Fortran OWI reader.)
+    lon = swlon + np.arange(nlon) * dx
+    lat = swlat + np.arange(nlat) * dy
 
     pre_timesteps = []
     times = []
