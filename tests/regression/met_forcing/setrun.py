@@ -104,22 +104,22 @@ def setrun(claw_pkg="geoclaw", forcing="holland80", topo_path=None,
     rundata.topo_data.topofiles.append([3, topo_path])
 
     # --- Storm / met forcing ---
-    surge_data = rundata.surge_data
-    surge_data.wind_forcing = True
-    surge_data.drag_law = 1
-    surge_data.pressure_forcing = True
-    surge_data.wind_index = 4          # 0-based -> Fortran 5 (wind_u), 6 (wind_v)
-    surge_data.pressure_index = 6      # 0-based -> Fortran 7 (pressure)
-    surge_data.display_landfall_time = False
-    surge_data.wind_refine = wind_refine
-    surge_data.R_refine = R_refine
+    met_data = rundata.met_data
+    met_data.wind_forcing = True
+    met_data.drag_law = 1
+    met_data.pressure_forcing = True
+    met_data.wind_index = 4          # 0-based -> Fortran 5 (wind_u), 6 (wind_v)
+    met_data.pressure_index = 6      # 0-based -> Fortran 7 (pressure)
+    met_data.display_landfall_time = False
+    met_data.wind_refine = wind_refine
+    met_data.R_refine = R_refine
     if forcing in ("data", "owi"):
         # Both gridded formats (NetCDF and OWI/ASCII) use the gridded family;
         # the concrete file format lives in the .storm descriptor, not here.
-        surge_data.storm_specification_type = "data"
+        met_data.storm_specification_type = "data"
     else:
-        surge_data.storm_specification_type = forcing   # e.g. "holland80"
-    surge_data.storm_file = storm_path
+        met_data.storm_specification_type = forcing   # e.g. "holland80"
+    met_data.storm_file = storm_path
 
     return rundata
 

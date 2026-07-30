@@ -307,7 +307,7 @@ def test_owi_forcing_aux(tmp_path, plain_xgeoclaw):
     """Gridded OWI/ASCII (format 1) forcing aux fields.
 
     Exercises the Fortran ``read_OWI_ASCII`` path end-to-end from a Python-
-    written WIN/PRE pair (``surge.data_storms.write_owi``) -- the format-1
+    written WIN/PRE pair (``met.data_storms.write_owi``) -- the format-1
     branch that had no automated coverage before.  Needs no NetCDF build.
     """
     aux = _run_case(tmp_path, "owi", plain_xgeoclaw)

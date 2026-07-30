@@ -400,7 +400,7 @@ def setgeo(rundata, download_dir=None):
     # ================
     #  Set Surge Data
     # ================
-    data = rundata.surge_data
+    data = rundata.met_data
 
     # Source term controls
     data.wind_forcing = True
@@ -419,7 +419,7 @@ def setgeo(rundata, download_dir=None):
     #     data.storm_family = "parametric"
     #     data.storm_subtype = "holland80"
     # The legacy storm_specification_type below is equivalent and still
-    # supported (see the surge_data reference in the GeoClaw docs).
+    # supported (see the met_data reference in the GeoClaw docs).
     data.storm_specification_type = 'holland80'  # (parametric / holland80)
     data.storm_file = os.path.expandvars(os.path.join(os.getcwd(),
                                          'ike.storm'))

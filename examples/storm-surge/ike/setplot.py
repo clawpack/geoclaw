@@ -15,7 +15,7 @@ import clawpack.amrclaw.data as amrclaw
 import clawpack.geoclaw.data as geodata
 
 
-import clawpack.geoclaw.met.plot as surgeplot
+import clawpack.geoclaw.met.plot as met_plot
 
 try:
     from setplotfg import setplotfg
@@ -39,17 +39,17 @@ def setplot(plotdata=None):
     clawdata.read(os.path.join(plotdata.outdir, 'claw.data'))
     physics = geodata.GeoClawData()
     physics.read(os.path.join(plotdata.outdir, 'geoclaw.data'))
-    surge_data = geodata.SurgeData()
-    surge_data.read(os.path.join(plotdata.outdir, 'surge.data'))
+    met_data = geodata.SurgeData()
+    met_data.read(os.path.join(plotdata.outdir, 'surge.data'))
     friction_data = geodata.FrictionData()
     friction_data.read(os.path.join(plotdata.outdir, 'friction.data'))
 
     # Load storm track
-    track = surgeplot.track_data(os.path.join(plotdata.outdir, 'fort.track'))
+    track = met_plot.track_data(os.path.join(plotdata.outdir, 'fort.track'))
 
     # Set afteraxes function
     def surge_afteraxes(cd):
-        surgeplot.surge_afteraxes(cd, track, plot_direction=False,
+        met_plot.surge_afteraxes(cd, track, plot_direction=False,
                                              kwargs={"markersize": 4})
 
     # Color limits
@@ -83,8 +83,8 @@ def setplot(plotdata=None):
         plotaxes.ylimits = region_dict["ylimits"]
         plotaxes.afteraxes = surge_afteraxes
 
-        surgeplot.add_surface_elevation(plotaxes, bounds=surface_limits)
-        surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
+        met_plot.add_surface_elevation(plotaxes, bounds=surface_limits)
+        met_plot.add_land(plotaxes, bounds=[0.0, 20.0])
         plotaxes.plotitem_dict['surface'].amr_patchedges_show = [0] * 10
         plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
 
@@ -97,8 +97,8 @@ def setplot(plotdata=None):
         plotaxes.ylimits = region_dict["ylimits"]
         plotaxes.afteraxes = surge_afteraxes
 
-        surgeplot.add_speed(plotaxes, bounds=speed_limits)
-        surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
+        met_plot.add_speed(plotaxes, bounds=speed_limits)
+        met_plot.add_land(plotaxes, bounds=[0.0, 20.0])
         plotaxes.plotitem_dict['speed'].amr_patchedges_show = [0] * 10
         plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
     #
@@ -114,7 +114,7 @@ def setplot(plotdata=None):
     plotaxes.afteraxes = friction_after_axes
     plotaxes.scaled = True
 
-    surgeplot.add_friction(plotaxes, bounds=friction_bounds, shrink=0.9)
+    met_plot.add_friction(plotaxes, bounds=friction_bounds, shrink=0.9)
     plotaxes.plotitem_dict['friction'].amr_patchedges_show = [0] * 10
     plotaxes.plotitem_dict['friction'].colorbar_label = "$n$"
 
@@ -123,7 +123,7 @@ def setplot(plotdata=None):
     #
     # Pressure field
     plotfigure = plotdata.new_plotfigure(name='Pressure')
-    plotfigure.show = surge_data.pressure_forcing and True
+    plotfigure.show = met_data.pressure_forcing and True
 
     plotaxes = plotfigure.new_plotaxes()
     plotaxes.xlimits = regions['Gulf']['xlimits']
@@ -131,12 +131,12 @@ def setplot(plotdata=None):
     plotaxes.title = "Pressure Field"
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
-    surgeplot.add_pressure(plotaxes, bounds=pressure_limits)
-    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
+    met_plot.add_pressure(plotaxes, bounds=pressure_limits)
+    met_plot.add_land(plotaxes, bounds=[0.0, 20.0])
 
     # Wind field
     plotfigure = plotdata.new_plotfigure(name='Wind Speed')
-    plotfigure.show = surge_data.wind_forcing and True
+    plotfigure.show = met_data.wind_forcing and True
 
     plotaxes = plotfigure.new_plotaxes()
     plotaxes.xlimits = regions['Gulf']['xlimits']
@@ -144,8 +144,8 @@ def setplot(plotdata=None):
     plotaxes.title = "Wind Field"
     plotaxes.afteraxes = surge_afteraxes
     plotaxes.scaled = True
-    surgeplot.add_wind(plotaxes, bounds=wind_limits)
-    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
+    met_plot.add_wind(plotaxes, bounds=wind_limits)
+    met_plot.add_land(plotaxes, bounds=[0.0, 20.0])
 
     # ========================================================================
     #  Figures for gauges
@@ -165,10 +165,10 @@ def setplot(plotdata=None):
     plotaxes.time_label = "Days relative to landfall"
     
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = surgeplot.gauge_surface
+    plotitem.plot_var = met_plot.gauge_surface
     # Plot red area if gauge is dry
     plotitem = plotaxes.new_plotitem(plot_type='1d_plot')
-    plotitem.plot_var = surgeplot.gauge_dry_regions
+    plotitem.plot_var = met_plot.gauge_dry_regions
     plotitem.kwargs = {"color":'lightcoral', "linewidth":5}
     
     #  Gauge Location Plot
@@ -188,8 +188,8 @@ def setplot(plotdata=None):
     plotaxes.xlimits = [-95.5, -94]
     plotaxes.ylimits = [29.0, 30.0]
     plotaxes.afteraxes = gauge_location_afteraxes
-    surgeplot.add_surface_elevation(plotaxes, bounds=surface_limits)
-    surgeplot.add_land(plotaxes, bounds=[0.0, 20.0])
+    met_plot.add_surface_elevation(plotaxes, bounds=surface_limits)
+    met_plot.add_land(plotaxes, bounds=[0.0, 20.0])
     plotaxes.plotitem_dict['surface'].amr_patchedges_show = [0] * 10
     plotaxes.plotitem_dict['land'].amr_patchedges_show = [0] * 10
 
