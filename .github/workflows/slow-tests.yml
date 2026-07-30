@@ -187,18 +187,32 @@ jobs:
           - os: macos-latest
             python-version: '3.12'
             markers: "python"
+            toolchain: {compiler: gcc, version: 15}
           - os: macos-latest
             python-version: '3.13'
             markers: "python"
+            toolchain: {compiler: gcc, version: 15}
           - os: ubuntu-latest
             python-version: '3.12'
             markers: "python and remote"
+            toolchain: {compiler: gcc, version: 14}
 
     steps:
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
+
+    # Installing the clawpack meta-package below compiles Fortran extension
+    # modules (pyclaw/classic), so a Fortran compiler is required even though the
+    # tests themselves are pure Python.  ubuntu-latest ships gfortran, but macOS
+    # runners do not, so set one up explicitly.
+    - name: Set up compilers
+      uses: fortran-lang/setup-fortran@v1.9.0
+      id: setup-fortran
+      with:
+        compiler: ${{ matrix.toolchain.compiler }}
+        version: ${{ matrix.toolchain.version }}
 
     - name: Install python dependencies
       run: |
