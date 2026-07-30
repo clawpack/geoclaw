@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 import clawpack.clawutil as clawutil
-from clawpack.geoclaw.surge.storm import Storm
+from clawpack.geoclaw.met.storm import Storm
 
 # Time Conversions
 def days2seconds(days):

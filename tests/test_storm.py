@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import pytest
 
-import clawpack.geoclaw.surge.storm as storm
+import clawpack.geoclaw.met.storm as storm
 import clawpack.geoclaw.util as util
 
 # Local test directory and bundled storm test data

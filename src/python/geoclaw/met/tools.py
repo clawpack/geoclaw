@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+
+r"""Workflow tools for meteorological-forcing / storm data.
+
+This module hosts higher-level workflow helpers that operate on storm files but
+are not part of the core object model.  Currently it provides
+``make_multi_structure`` for splitting a multi-track ATCF file into individual
+``Storm`` objects.  ``storm.py`` keeps an import shim so the historical import
+path continues to work.
+"""
+
+import os
+from collections import OrderedDict
+
+
+def make_multi_structure(path, output_dir="Clipped_ATCFs"):
+    r"""Split a multi-storm ATCF file into individual :class:`Storm` objects.
+
+    Some ATCF files bundle several storms in one file, distinguished by their
+    basin and cyclone number (the first two comma-separated fields of each
+    b-deck record, e.g. ``AL`` and ``09``).  This groups the records by that
+    identity, writes each storm's records to its own file under *output_dir*,
+    and reads them back as :class:`Storm` objects.
+
+    :Input:
+     - *path* (path-like) - the multi-storm ATCF file to split.
+     - *output_dir* (path-like) - directory the per-storm ATCF files are
+       written into (created if it does not exist).
+
+    :Output:
+     - (OrderedDict) mapping each storm id (basin + cyclone number, e.g.
+       ``"AL09"``) to a :class:`Storm` read from that storm's records, in the
+       order the storms first appear in the file.
+    """
+    from clawpack.geoclaw.met.storm import Storm
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Group records by storm identity (basin + cyclone number).  read_atcf
+    # splits on commas and strips, so we match that here.
+    storm_records = OrderedDict()
+    with open(path, 'r') as data_file:
+        for line in data_file:
+            fields = line.split(",")
+            if len(fields) < 2:
+                continue
+            storm_id = fields[0].strip() + fields[1].strip()
+            storm_records.setdefault(storm_id, []).append(line)
+
+    # Write each storm's records to its own file and read it back as a Storm.
+    storms = OrderedDict()
+    for storm_id, records in storm_records.items():
+        storm_path = os.path.join(output_dir, "%s.storm" % storm_id)
+        with open(storm_path, 'w') as out_file:
+            out_file.writelines(records)
+        storms[storm_id] = Storm(path=storm_path, file_format="ATCF")
+
+    return storms

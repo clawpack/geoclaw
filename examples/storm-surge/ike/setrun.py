@@ -17,7 +17,7 @@ import gzip
 
 import numpy as np
 
-from clawpack.geoclaw.surge.storm import Storm
+from clawpack.geoclaw.met.storm import Storm
 import clawpack.clawutil as clawutil
 
 
