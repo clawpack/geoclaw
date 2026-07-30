@@ -42,16 +42,28 @@ jobs:
         include:
           - os: ubuntu-latest
             python-version: '3.12'
+            toolchain: {compiler: gcc, version: 14}
           - os: ubuntu-latest
             python-version: '3.13'
+            toolchain: {compiler: gcc, version: 14}
 
     steps:
-    # Pure-Python unit tests (-m "python") do not compile any Fortran, so no
-    # compiler or netcdf-fortran is set up here.  macOS coverage runs nightly.
+    # The tests themselves are pure Python (-m "python"), but installing the
+    # clawpack meta-package below compiles Fortran extension modules
+    # (pyclaw/classic), so a Fortran compiler is required.  Set one up explicitly
+    # rather than relying on the runner image shipping gfortran.  netcdf-fortran
+    # is not needed here (no GeoClaw build), so it is omitted.
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: Set up compilers
+      uses: fortran-lang/setup-fortran@v1.9.0
+      id: setup-fortran
+      with:
+        compiler: ${{ matrix.toolchain.compiler }}
+        version: ${{ matrix.toolchain.version }}
 
     - name: Install python dependencies
       run: |
