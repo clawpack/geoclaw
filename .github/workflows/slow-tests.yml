@@ -55,14 +55,14 @@ jobs:
         pip install meson-python ninja pytest numpy pandas xarray scipy netCDF4
 
     - name: Checkout Clawpack
-      uses: actions/checkout@v6.0.2
+      uses: actions/checkout@v7.0.1
       with:
         repository: clawpack/clawpack
         ref: master
         submodules: true
 
     - name: Checkout GeoClaw branch
-      uses: actions/checkout@v6.0.2
+      uses: actions/checkout@v7.0.1
       with:
         path: geoclaw
 
@@ -141,14 +141,14 @@ jobs:
         pip install meson-python ninja pytest numpy pandas xarray scipy netCDF4
 
     - name: Checkout Clawpack
-      uses: actions/checkout@v6.0.2
+      uses: actions/checkout@v7.0.1
       with:
         repository: clawpack/clawpack
         ref: master
         submodules: true
 
     - name: Checkout GeoClaw branch
-      uses: actions/checkout@v6.0.2
+      uses: actions/checkout@v7.0.1
       with:
         path: geoclaw
 
@@ -220,14 +220,14 @@ jobs:
         pip install meson-python ninja pytest numpy pandas xarray scipy netCDF4
 
     - name: Checkout Clawpack
-      uses: actions/checkout@v6.0.2
+      uses: actions/checkout@v7.0.1
       with:
         repository: clawpack/clawpack
         ref: master
         submodules: true
 
     - name: Checkout GeoClaw branch
-      uses: actions/checkout@v6.0.2
+      uses: actions/checkout@v7.0.1
       with:
         path: geoclaw
 
