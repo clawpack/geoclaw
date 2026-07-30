@@ -3,13 +3,29 @@ name: Test GeoClaw
 on:
   push:
     branches: [ "master" ]
+    paths-ignore:
+      - '**.md'
+      - '**.rst'
+      - 'docs/**'
+      - '.gitignore'
   pull_request:
     branches: [ "master" ]
+    paths-ignore:
+      - '**.md'
+      - '**.rst'
+      - 'docs/**'
+      - '.gitignore'
 
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# Cancel superseded runs on the same ref (e.g. new pushes to a PR) so we do not
+# stack full matrix runs and burn Actions minutes on stale commits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CLAW: ${{ github.workspace }}
@@ -17,8 +33,9 @@ env:
 jobs:
   python-tests:
     name: >
-      python - ${{ matrix.os }} - ${{ matrix.toolchain.compiler }} - py ${{ matrix.python-version }}
+      python - ${{ matrix.os }} - py ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -29,23 +46,13 @@ jobs:
           - os: ubuntu-latest
             python-version: '3.13'
             toolchain: {compiler: gcc, version: 14}
-          - os: macos-latest
-            python-version: '3.12'
-            toolchain: {compiler: gcc, version: 15}
-          - os: macos-latest
-            python-version: '3.13'
-            toolchain: {compiler: gcc, version: 15}
 
     steps:
-    - name: Install system dependencies
-      run: |
-        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-          sudo apt-get update
-          sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
-        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          brew update
-          brew install netcdf-fortran
-        fi
+    # The tests themselves are pure Python (-m "python"), but installing the
+    # clawpack meta-package below compiles Fortran extension modules
+    # (pyclaw/classic), so a Fortran compiler is required.  Set one up explicitly
+    # rather than relying on the runner image shipping gfortran.  netcdf-fortran
+    # is not needed here (no GeoClaw build), so it is omitted.
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6.2.0
       with:
@@ -61,13 +68,13 @@ jobs:
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 meson-python ninja pytest numpy pandas xarray 
-        pip install scipy netCDF4
-        
+        pip install meson-python ninja pytest numpy pandas xarray scipy netCDF4
+
     - name: Checkout Clawpack
       uses: actions/checkout@v6.0.2
       with:
         repository: clawpack/clawpack
+        ref: master
         submodules: true
 
     - name: Checkout GeoClaw branch
@@ -79,27 +86,17 @@ jobs:
       run: |
         pip install --no-build-isolation --editable .
 
-    # Temporarily disable linting
-    # - name: Lint with flake8
-    #   if: ${{ matrix.build == 'debug' }}
-    #   run: |
-    #     cd ${CLAW}/geoclaw
-    #     # stop the build if there are Python syntax errors or undefined names
-    #     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude dev
-    #     # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-    #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
     - name: Run Python Unit Tests
       run: |
         cd ${CLAW}/geoclaw
         pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s -o addopts="" \
-          -m "python"
+          -m "python and not remote"
 
     - name: Upload test results
       if: failure()
       uses: actions/upload-artifact@v7
       with:
-        name: test_results_python_${{ matrix.os }}_${{ matrix.toolchain.compiler }}_py${{ matrix.python-version }}
+        name: test_results_python_${{ matrix.os }}_py${{ matrix.python-version }}
         path: ${{ env.CLAW }}/geoclaw/pytest_tmp
         if-no-files-found: ignore
 
@@ -107,32 +104,24 @@ jobs:
     name: >
       regression - ${{ matrix.os }} - ${{ matrix.toolchain.compiler }} ${{ matrix.build }} - py ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Linux only on the per-PR path; macOS regression runs nightly
+        # (slow-tests.yml) where its 10x minute multiplier is paid once a day.
+        os: [ubuntu-latest]
         build: [debug, opt]
         python-version: ['3.12']
         toolchain:
           - {compiler: gcc, version: 14}
-          - {compiler: gcc, version: 15}
-        exclude:
-          - os: ubuntu-latest
-            toolchain: {compiler: gcc, version: 15}
-          - os: macos-latest
-            toolchain: {compiler: gcc, version: 14}
 
     steps:
     - name: Install system dependencies
-      if: ${{ matrix.toolchain.compiler != 'intel' && matrix.toolchain.compiler != 'intel-classic' }}
       run: |
-        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-          sudo apt-get update
-          sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
-        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          brew update
-          brew install netcdf-fortran
-        fi
+        sudo apt-get update
+        sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6.2.0
       with:
@@ -148,13 +137,13 @@ jobs:
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 meson-python ninja pytest numpy pandas xarray
-        pip install scipy netCDF4
+        pip install meson-python ninja pytest numpy pandas xarray scipy netCDF4
 
     - name: Checkout Clawpack
       uses: actions/checkout@v6.0.2
       with:
         repository: clawpack/clawpack
+        ref: master
         submodules: true
 
     - name: Checkout GeoClaw branch
@@ -168,12 +157,14 @@ jobs:
 
     - name: Run Regression Tests
       run: |
-        cd ${CLAW}/geoclaw  
+        cd ${CLAW}/geoclaw
         source .github/scripts/set_test_env.sh regression "${{ matrix.toolchain.compiler }}" "${{ matrix.build }}"
         echo "FFLAGS: $FFLAGS"
         echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
+        # 'not remote' keeps live network fetches off the per-PR path; the
+        # remote-marked regressions (chile2010, ike, isaac, ...) run nightly.
         pytest --basetemp=${CLAW}/geoclaw/pytest_tmp -vv -s -o addopts="" \
-          -m "regression and not slow and not adjoint"
+          -m "regression and not slow and not adjoint and not remote"
 
     - name: Upload test results
       if: failure()

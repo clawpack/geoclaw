@@ -1,5 +1,6 @@
 """Pytest regression test for the GeoClaw bowl-slosh NetCDF example."""
 
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,27 @@ import pytest
 
 import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
+
+
+@pytest.fixture(scope="module")
+def bowl_netcdf_xgeoclaw(tmp_path_factory):
+    """Build ``xgeoclaw`` once for the whole module.
+
+    Every variant reads the same parabolic-bowl bathymetry through the identical
+    executable -- the NetCDF coordinate layout is a runtime data choice, not a
+    compile-time one -- and this example's ``Makefile`` adds ``-DNETCDF``
+    unconditionally, so a single ``make new`` serves all variants instead of
+    recompiling ~140 Fortran sources once per parametrization.
+    """
+    build_dir = tmp_path_factory.mktemp("bowl_netcdf_build")
+    builder = test.GeoClawTestRunner(build_dir, test_path=Path(__file__).parent)
+    builder.build_executable()
+    return build_dir / builder.executable_name
+
+
+def _install_executable(runner, prebuilt: Path) -> None:
+    """Place the shared prebuilt executable where ``run_code`` expects it."""
+    shutil.copy(prebuilt, runner.temp_path / runner.executable_name)
 
 def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") -> None:
     """
@@ -159,7 +181,8 @@ def _make_bowl_netcdf_topography(output_dir: Path, variant: str = "standard") ->
 @pytest.mark.netcdf
 @pytest.mark.parametrize("variant", ["standard", "dim_order", "cf_compliant",
                                      "cropped", "coarsened", "km"])
-def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str) -> None:
+def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str,
+                           bowl_netcdf_xgeoclaw: Path) -> None:
     """
     Parametrized regression test exercising non-standard NetCDF coordinate layouts.
 
@@ -209,7 +232,7 @@ def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str) -> None:
 
     runner.write_data()
 
-    runner.build_executable()
+    _install_executable(runner, bowl_netcdf_xgeoclaw)
     runner.run_code()
 
     runner.check_gauge(gauge_id=1, indices=(2, 3), rtol=1.0e-4, atol=1.0e-4, save=save)
