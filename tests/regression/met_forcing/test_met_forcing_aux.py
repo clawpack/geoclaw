@@ -197,6 +197,42 @@ def _check_aux(actual, forcing):
     np.testing.assert_allclose(actual, expected, rtol=RTOL, atol=ATOL)
 
 
+@pytest.fixture(scope="module")
+def plain_xgeoclaw(tmp_path_factory):
+    """Build the non-NetCDF ``xgeoclaw`` once for the whole module.
+
+    Serves every parametric/OWI-ASCII case (holland80, owi): the forcing kind is
+    a runtime data choice, so a single ``make new`` replaces the per-test
+    rebuilds that recompiled ~140 Fortran sources each time.
+    """
+    build_dir = tmp_path_factory.mktemp("met_plain_build")
+    builder = gtest.GeoClawTestRunner(build_dir, test_path=testdir)
+    builder.build_executable()
+    return build_dir / builder.executable_name
+
+
+@pytest.fixture(scope="module")
+def netcdf_xgeoclaw(tmp_path_factory):
+    """Build the NetCDF-enabled ``xgeoclaw`` once, or skip if NetCDF is absent.
+
+    Serves the gridded-netCDF cases (data, gridded_no_center_amr, and the
+    NetCDF half of the OWI/NetCDF equivalence test).
+    """
+    make_vars = _netcdf_build_vars()
+    if make_vars is None:
+        pytest.skip("NetCDF (nf-config/nc-config) unavailable; the gridded "
+                    "end-to-end path is covered by the isaac suite.")
+    build_dir = tmp_path_factory.mktemp("met_netcdf_build")
+    builder = gtest.GeoClawTestRunner(build_dir, test_path=testdir)
+    builder.build_executable(make_vars=make_vars)
+    return build_dir / builder.executable_name
+
+
+def _install_executable(runner, prebuilt: Path) -> None:
+    """Place a shared prebuilt executable where ``run_code`` expects it."""
+    shutil.copy(prebuilt, runner.temp_path / runner.executable_name)
+
+
 def _netcdf_build_vars():
     """Return make_vars enabling a NetCDF build, or None if unavailable.
 
@@ -222,17 +258,12 @@ def _netcdf_build_vars():
     return {"USE_NETCDF": "1", "NETCDF_FFLAGS": fflags, "NETCDF_LFLAGS": flibs}
 
 
-def _run_case(tmp_path, forcing):
-    """Generate inputs, build, run, and return the collected aux arrays."""
+def _run_case(tmp_path, forcing, prebuilt):
+    """Generate inputs, install the shared build, run, return the aux arrays."""
     topo_path = tmp_path / "flat.tt3"
     _flat_topo(topo_path)
 
-    make_vars = None
     if forcing == "data":
-        make_vars = _netcdf_build_vars()
-        if make_vars is None:
-            pytest.skip("NetCDF (nf-config/nc-config) unavailable; the gridded "
-                        "end-to-end path is covered by the isaac suite.")
         nc_path = tmp_path / "met.nc"
         storm_path = tmp_path / "met.storm"
         _netcdf_forcing(nc_path, storm_path)
@@ -248,38 +279,38 @@ def _run_case(tmp_path, forcing):
     runner.set_data(forcing=forcing, topo_path=str(topo_path),
                     storm_path=str(storm_path))
     runner.write_data()
-    runner.build_executable(make_vars=make_vars)
+    _install_executable(runner, prebuilt)
     runner.run_code()
     return _collect_aux(runner.temp_path)
 
 
 @pytest.mark.regression
 @pytest.mark.storm
-def test_holland80_forcing_aux(tmp_path):
+def test_holland80_forcing_aux(tmp_path, plain_xgeoclaw):
     """Parametric Holland-1980 forcing aux fields are reproduced identically."""
-    _check_aux(_run_case(tmp_path, "holland80"), "holland80")
+    _check_aux(_run_case(tmp_path, "holland80", plain_xgeoclaw), "holland80")
 
 
 @pytest.mark.regression
 @pytest.mark.storm
 @pytest.mark.netcdf
-def test_netcdf_forcing_aux(tmp_path):
+def test_netcdf_forcing_aux(tmp_path, netcdf_xgeoclaw):
     """Gridded netCDF forcing aux fields are reproduced identically."""
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
-    _check_aux(_run_case(tmp_path, "data"), "data")
+    _check_aux(_run_case(tmp_path, "data", netcdf_xgeoclaw), "data")
 
 
 @pytest.mark.regression
 @pytest.mark.storm
-def test_owi_forcing_aux(tmp_path):
+def test_owi_forcing_aux(tmp_path, plain_xgeoclaw):
     """Gridded OWI/ASCII (format 1) forcing aux fields.
 
     Exercises the Fortran ``read_OWI_ASCII`` path end-to-end from a Python-
     written WIN/PRE pair (``surge.data_storms.write_owi``) -- the format-1
     branch that had no automated coverage before.  Needs no NetCDF build.
     """
-    aux = _run_case(tmp_path, "owi")
+    aux = _run_case(tmp_path, "owi", plain_xgeoclaw)
 
     # Physical sanity independent of the golden: the vortex was actually read
     # and applied, not silently dropped to all-ambient.  Rows are grouped
@@ -346,8 +377,8 @@ def _write_matched_netcdf(nc_path, storm_path, lon, lat, time, u, v, p):
     s.write(storm_path, file_format="data")
 
 
-def _build_run_gridded(sub, storm_path, make_vars):
-    """Build + run a gridded (family "data") case, return the aux stack."""
+def _build_run_gridded(sub, storm_path, prebuilt):
+    """Install a shared build + run a gridded (family "data") case."""
     sub.mkdir(parents=True, exist_ok=True)
     topo_path = sub / "flat.tt3"
     _flat_topo(topo_path)
@@ -355,7 +386,7 @@ def _build_run_gridded(sub, storm_path, make_vars):
     runner.set_data(forcing="data", topo_path=str(topo_path),
                     storm_path=str(storm_path))
     runner.write_data()
-    runner.build_executable(make_vars=make_vars)
+    _install_executable(runner, prebuilt)
     runner.run_code()
     return _collect_aux(runner.temp_path)
 
@@ -363,7 +394,7 @@ def _build_run_gridded(sub, storm_path, make_vars):
 @pytest.mark.regression
 @pytest.mark.storm
 @pytest.mark.netcdf
-def test_owi_netcdf_equivalence(tmp_path):
+def test_owi_netcdf_equivalence(tmp_path, plain_xgeoclaw, netcdf_xgeoclaw):
     """The OWI and NetCDF gridded paths must agree for identical fields.
 
     The same vortex, on the same lon/lat grid, is written as an OWI WIN/PRE
@@ -374,9 +405,6 @@ def test_owi_netcdf_equivalence(tmp_path):
     """
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
-    make_vars = _netcdf_build_vars()
-    if make_vars is None:
-        pytest.skip("NetCDF (nf-config/nc-config) unavailable.")
 
     from clawpack.geoclaw.surge.data_storms import OWIData
     from clawpack.geoclaw.surge.gridded import GriddedMetForcing
@@ -395,8 +423,8 @@ def test_owi_netcdf_equivalence(tmp_path):
     nc_storm = nc_dir / "met.storm"
     _write_matched_netcdf(nc_dir / "met.nc", nc_storm, lon, lat, time, u, v, p)
 
-    aux_owi = _build_run_gridded(owi_dir / "run", owi_storm, None)
-    aux_nc = _build_run_gridded(nc_dir / "run", nc_storm, make_vars)
+    aux_owi = _build_run_gridded(owi_dir / "run", owi_storm, plain_xgeoclaw)
+    aux_nc = _build_run_gridded(nc_dir / "run", nc_storm, netcdf_xgeoclaw)
 
     # Compare per component: pressure ~1e5 Pa (f10.4 mbar -> ~1e-2 Pa quantum),
     # wind ~1e1 m/s (~1e-4 quantum).  A one-cell (0.5 deg) grid offset moves
@@ -412,7 +440,7 @@ def test_owi_netcdf_equivalence(tmp_path):
 @pytest.mark.regression
 @pytest.mark.storm
 @pytest.mark.netcdf
-def test_gridded_no_center_amr(tmp_path):
+def test_gridded_no_center_amr(tmp_path, netcdf_xgeoclaw):
     """Phase F1: gridded (no-center) forcing with AMR on must run without
     assuming a storm center, refine on wind (R_refine is inert without a
     center), and write no fort.track.
@@ -423,10 +451,6 @@ def test_gridded_no_center_amr(tmp_path):
     """
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
-    make_vars = _netcdf_build_vars()
-    if make_vars is None:
-        pytest.skip("NetCDF (nf-config/nc-config) unavailable; gridded end-to-"
-                    "end is covered by the isaac suite.")
 
     topo_path = tmp_path / "flat.tt3"
     _flat_topo(topo_path)
@@ -441,7 +465,7 @@ def test_gridded_no_center_amr(tmp_path):
                     storm_path=str(storm_path), amr_levels_max=2,
                     wind_refine=[8.0], R_refine=[100.0e3])
     runner.write_data()
-    runner.build_executable(make_vars=make_vars)
+    _install_executable(runner, netcdf_xgeoclaw)
     runner.run_code()
 
     # (a) The run completed (a centerless data-storm center lookup would STOP

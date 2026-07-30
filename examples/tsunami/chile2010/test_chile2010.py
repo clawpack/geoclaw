@@ -6,6 +6,7 @@ Also tests some variants on lat-lon topography reading, including several
 NetCDF topography file formats with non-standard coordinate conventions.
 """
 
+import shutil
 import warnings
 from pathlib import Path
 
@@ -15,6 +16,35 @@ import clawpack.geoclaw.test as test
 import clawpack.geoclaw.topotools as topotools
 import clawpack.geoclaw.dtopotools as dtopotools
 import clawpack.clawutil.util as clawutil
+
+
+@pytest.fixture(scope="module")
+def plain_xgeoclaw(tmp_path_factory):
+    """Build the non-NetCDF ``xgeoclaw`` once for the whole module (the
+    ``standard`` ASCII-topo variant).  A single ``make new`` replaces the
+    per-parametrization rebuilds of ~140 Fortran sources."""
+    build_dir = tmp_path_factory.mktemp("chile_plain_build")
+    builder = test.GeoClawTestRunner(build_dir, test_path=Path(__file__).parent)
+    builder.build_executable()
+    return build_dir / builder.executable_name
+
+
+@pytest.fixture(scope="module")
+def netcdf_xgeoclaw(tmp_path_factory):
+    """Build the NetCDF-enabled ``xgeoclaw`` once for the whole module, shared by
+    every NetCDF topo/dtopo variant.  Uses the same ``FFLAGS``/``LFLAGS`` the
+    per-test build used, so the binary is identical to the pre-refactor one."""
+    build_dir = tmp_path_factory.mktemp("chile_netcdf_build")
+    builder = test.GeoClawTestRunner(build_dir, test_path=Path(__file__).parent)
+    builder.build_executable(FFLAGS="-DNETCDF $(NETCDF_FFLAGS)",
+                             LFLAGS="$(NETCDF_LFLAGS)")
+    return build_dir / builder.executable_name
+
+
+def _install_executable(runner, prebuilt: Path) -> None:
+    """Place a shared prebuilt executable where ``run_code`` expects it."""
+    shutil.copy(prebuilt, runner.temp_path / runner.executable_name)
+
 
 def _get_topography(runner, variant=0):
     """Get topography and read"""
@@ -180,7 +210,7 @@ CASES = [pytest.param("standard", id="standard"),
 @pytest.mark.remote
 @pytest.mark.tsunami
 @pytest.mark.parametrize("variant", CASES)
-def test_chile2010(tmp_path: Path, save: bool, variant: dict):
+def test_chile2010(tmp_path: Path, save: bool, variant: dict, request):
     """Chile 2010 tsunami regression test for GeoClaw.
 
     Parametrized over topography file format.  Because every variant encodes
@@ -231,14 +261,15 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
 
     runner.write_data()
 
-    # Build and run test
+    # Install the shared build and run.  Fixtures are pulled lazily so the
+    # standard variant only triggers the plain build and the NetCDF variants
+    # only the NetCDF build (one build each, module-scoped).
     if variant != "standard":
         print(f"Testing variant '{variant}' with topography file: {nc_path.name}")
-        runner.build_executable(FFLAGS="-DNETCDF $(NETCDF_FFLAGS)", 
-                                LFLAGS="$(NETCDF_LFLAGS)")
+        _install_executable(runner, request.getfixturevalue("netcdf_xgeoclaw"))
     else:
         print(f"Testing standard variant with topography file: {topo.path}")
-        runner.build_executable()
+        _install_executable(runner, request.getfixturevalue("plain_xgeoclaw"))
     runner.run_code()
 
     # lon_360 coordinates undergo +360 then -360 shifts that are not a
@@ -252,7 +283,8 @@ def test_chile2010(tmp_path: Path, save: bool, variant: dict):
 @pytest.mark.tsunami
 @pytest.mark.netcdf
 @pytest.mark.parametrize("dz_units", ["meters", "km"])
-def test_chile2010_dtopo_netcdf(tmp_path: Path, save: bool, dz_units: str):
+def test_chile2010_dtopo_netcdf(tmp_path: Path, save: bool, dz_units: str,
+                                netcdf_xgeoclaw: Path):
     """Chile 2010 regression test exercising the dtopo NetCDF (type=4) path.
 
     Regression coverage for a bug where a NetCDF dtopo file's time
@@ -307,8 +339,7 @@ def test_chile2010_dtopo_netcdf(tmp_path: Path, save: bool, dz_units: str):
     runner.write_data()
 
     print(f"Testing dtopo netCDF variant with dtopo file: {dtopo_nc_path.name}")
-    runner.build_executable(FFLAGS="-DNETCDF $(NETCDF_FFLAGS)",
-                            LFLAGS="$(NETCDF_LFLAGS)")
+    _install_executable(runner, netcdf_xgeoclaw)
     runner.run_code()
 
     runner.check_gauge(save=save, gauge_id=32412)
