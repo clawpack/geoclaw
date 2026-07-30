@@ -25,8 +25,8 @@ import clawpack.clawutil.data as clawutil
 import clawpack.amrclaw.data as amrclaw
 import clawpack.geoclaw.data as geodata
 
-import clawpack.geoclaw.surge.plot as surgeplot
-import clawpack.geoclaw.data as surgedata
+import clawpack.geoclaw.met.plot as met_plot
+import clawpack.geoclaw.data as geodata
 
 try:
     from setplotfg import setplotfg
@@ -52,7 +52,7 @@ gauge_landfall.append(datetime.datetime(2008,9,13 - 1,7)
 gauge_landfall.append(days2seconds(4.25))
 
 def setplot(plotdata):
-    r"""Setplot function for surge plotting"""
+    r"""Setplot function for meteorological (met) forcing plotting"""
 
 
     plotdata.clearfigures()  # clear any old figures,axes,items data
@@ -68,14 +68,14 @@ def setplot(plotdata):
     physics = geodata.GeoClawData()
     physics.read(os.path.join(plotdata.outdir,'geoclaw.data'))
 
-    surge_data = surgedata.SurgeData()
-    surge_data.read(os.path.join(plotdata.outdir,'surge.data'))
+    met_data = geodata.SurgeData()
+    met_data.read(os.path.join(plotdata.outdir,'surge.data'))
 
-    friction_data = surgedata.FrictionData()
+    friction_data = geodata.FrictionData()
     friction_data.read(os.path.join(plotdata.outdir,'friction.data'))
 
     # Load storm track
-    track = surgeplot.track_data(os.path.join(plotdata.outdir,'fort.track'))
+    track = met_plot.track_data(os.path.join(plotdata.outdir,'fort.track'))
 
     # Calculate landfall time, off by a day, maybe leap year issue?
     landfall_dt = datetime.datetime(2008,9,13,7) - datetime.datetime(2008,1,1,0)
@@ -317,7 +317,7 @@ def setplot(plotdata):
 
             plt.hold(False)
 
-        surgeplot.gauge_afteraxes(cd)
+        met_plot.gauge_afteraxes(cd)
 
 
     # Set up for axes in this figure:

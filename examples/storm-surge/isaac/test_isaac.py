@@ -12,7 +12,7 @@ import pytest
 import numpy as np
 
 import clawpack.geoclaw.test as test
-from clawpack.geoclaw.surge.storm import Storm
+from clawpack.geoclaw.met.storm import Storm
 
 # ---------------------------------------------------------------------------
 # Import shared NetCDF file generators from tests/test_storm.py.

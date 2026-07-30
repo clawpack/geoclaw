@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 import clawpack.clawutil as clawutil
-from clawpack.geoclaw.surge.storm import Storm
+from clawpack.geoclaw.met.storm import Storm
 
 # Time Conversions
 def days2seconds(days):
@@ -405,7 +405,7 @@ def setgeo(rundata, download_dir=None, storm_dir=None):
     # ================
     #  Set Surge Data
     # ================
-    data = rundata.surge_data
+    data = rundata.met_data
 
     # Source term controls - These are currently not respected
     data.wind_forcing = True
@@ -486,13 +486,13 @@ def setgeo(rundata, download_dir=None, storm_dir=None):
 
 
 def write_storm_file(rundata):
-    """Write the storm file configured in rundata.surge_data.
+    """Write the storm file configured in rundata.met_data.
 
     Separated from setgeo so that importing/calling setrun() does not write
     files as a side effect (important for test runners that call setrun() and
     then substitute their own storm file).
     """
-    data = rundata.surge_data
+    data = rundata.met_data
 
     isaac = Storm()
     atcf_path = (Path(__file__).parent / "bal092012.dat").resolve()

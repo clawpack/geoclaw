@@ -32,7 +32,19 @@ python_sources = {
     '__init__.py',
     'plot.py',
   ],
+  'met': [
+    '__init__.py',
+    'data_storms.py',
+    'gridded.py',
+    'parametric.py',
+    'plot.py',
+    'quality.py',
+    'storm.py',
+    'tools.py',
+    'track.py',
+  ],
   'surge': [
+    # Deprecated alias for the 'met' package (thin re-export shims).
     '__init__.py',
     'data_storms.py',
     'gridded.py',

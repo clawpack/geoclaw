@@ -33,7 +33,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import clawpack.geoclaw.surge.storm as storm
+import clawpack.geoclaw.met.storm as storm
 
 # ``tests/`` has no package __init__; make the sibling helpers importable the
 # same way ``examples/storm-surge/isaac/test_isaac.py`` does.

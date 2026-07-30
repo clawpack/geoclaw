@@ -35,7 +35,7 @@ import pytest
 
 import clawpack.geoclaw.test as gtest
 import clawpack.geoclaw.topotools as topotools
-import clawpack.geoclaw.surge.storm as storm
+import clawpack.geoclaw.met.storm as storm
 from clawpack.pyclaw import solution
 
 testdir = Path(__file__).parent
@@ -140,8 +140,8 @@ def _owi_forcing(pre_path, win_path, descriptor_path):
     Mirrors the netCDF vortex so the OWI (ASCII, format-1) branch of the Fortran
     ``read_OWI_ASCII`` reader is exercised end-to-end.  Needs no NetCDF build.
     """
-    from clawpack.geoclaw.surge.data_storms import OWIData
-    from clawpack.geoclaw.surge.gridded import GriddedMetForcing
+    from clawpack.geoclaw.met.data_storms import OWIData
+    from clawpack.geoclaw.met.gridded import GriddedMetForcing
 
     # Grid spans slightly beyond the [-5,5]x[15,25] domain so it fully covers
     # it (the Fortran OWI reader applies a one-cell coordinate shift; see the
@@ -307,7 +307,7 @@ def test_owi_forcing_aux(tmp_path, plain_xgeoclaw):
     """Gridded OWI/ASCII (format 1) forcing aux fields.
 
     Exercises the Fortran ``read_OWI_ASCII`` path end-to-end from a Python-
-    written WIN/PRE pair (``surge.data_storms.write_owi``) -- the format-1
+    written WIN/PRE pair (``met.data_storms.write_owi``) -- the format-1
     branch that had no automated coverage before.  Needs no NetCDF build.
     """
     aux = _run_case(tmp_path, "owi", plain_xgeoclaw)
@@ -406,8 +406,8 @@ def test_owi_netcdf_equivalence(tmp_path, plain_xgeoclaw, netcdf_xgeoclaw):
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
 
-    from clawpack.geoclaw.surge.data_storms import OWIData
-    from clawpack.geoclaw.surge.gridded import GriddedMetForcing
+    from clawpack.geoclaw.met.data_storms import OWIData
+    from clawpack.geoclaw.met.gridded import GriddedMetForcing
 
     lon, lat, time, u, v, p = _matched_vortex()
 

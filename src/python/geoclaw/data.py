@@ -1145,6 +1145,12 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.close_data_file()
 
 
+#: Canonical alias for :class:`SurgeData` under the meteorological-forcing name.
+#: ``clawpack.geoclaw.met`` re-exports this as ``MetData``.  The on-disk file is
+#: still written as ``surge.data`` (unchanged wire contract with the Fortran).
+MetData = SurgeData
+
+
 class FrictionData(clawpack.clawutil.data.ClawData):
     r"""Data class representing complex variable friction"""
 

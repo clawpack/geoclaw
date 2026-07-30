@@ -22,10 +22,10 @@ import sys
 import numpy as np
 import pytest
 
-import clawpack.geoclaw.surge.storm as storm
-from clawpack.geoclaw.surge.track import Track, StormTrack
-from clawpack.geoclaw.surge.parametric import ParametricMetForcing
-from clawpack.geoclaw.surge.gridded import GriddedMetForcing
+import clawpack.geoclaw.met.storm as storm
+from clawpack.geoclaw.met.track import Track, StormTrack
+from clawpack.geoclaw.met.parametric import ParametricMetForcing
+from clawpack.geoclaw.met.gridded import GriddedMetForcing
 
 # ``tests/`` has no package __init__; make the sibling helpers importable.
 sys.path.insert(0, str(Path(__file__).parent))
@@ -265,7 +265,7 @@ def test_make_multi_structure_splits_by_storm(tmp_path):
     by timestamp rather than storm identity (colliding on os.mkdir).
     """
     pytest.importorskip("pandas")
-    from clawpack.geoclaw.surge.tools import make_multi_structure
+    from clawpack.geoclaw.met.tools import make_multi_structure
 
     # Build a 2-storm fixture from real ATCF records: relabel the cyclone
     # number (field 1) so the two synthetic storms are distinguishable.
@@ -326,12 +326,64 @@ def test_isaac_setplot_kml_imports():
 
 
 # ---------------------------------------------------------------------------
+# met / surge package aliasing (Decision 1 -> B)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_met_package_reexports_model():
+    """``clawpack.geoclaw.met`` re-exports the storm/met object model."""
+    import clawpack.geoclaw.met as met
+    for name in ("Storm", "Track", "StormTrack", "ParametricMetForcing",
+                 "GriddedMetForcing", "OWIData", "SurgeData", "MetData",
+                 "construct_fields", "available_formats", "available_models"):
+        assert hasattr(met, name), f"clawpack.geoclaw.met is missing {name}"
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_metdata_is_surgedata_alias():
+    """``clawpack.geoclaw.data`` exposes ``MetData`` as an alias of ``SurgeData``."""
+    import clawpack.geoclaw.data as geodata
+    assert geodata.MetData is geodata.SurgeData
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_surge_import_emits_deprecation_warning():
+    """Importing the deprecated ``surge`` package warns and points at ``met``."""
+    import importlib
+    import warnings
+    import clawpack.geoclaw.surge as surge
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        importlib.reload(surge)   # re-run the package body to observe the warning
+    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(dep) >= 1, "surge import did not emit a DeprecationWarning"
+    assert "clawpack.geoclaw.met" in str(dep[0].message)
+
+
+@pytest.mark.python
+@pytest.mark.storm
+def test_surge_shim_delegates_to_met():
+    """``surge.*`` names resolve to the identical objects in ``met.*``."""
+    import clawpack.geoclaw.met.storm as met_storm
+    import clawpack.geoclaw.met.track as met_track
+    import clawpack.geoclaw.surge.storm as surge_storm
+    import clawpack.geoclaw.surge.track as surge_track
+    assert surge_storm.Storm is met_storm.Storm
+    assert surge_track.StormTrack is met_track.StormTrack
+    # Private names delegate too (gridded.py imports _Meta from track).
+    assert surge_track._Meta is met_track._Meta
+
+
+# ---------------------------------------------------------------------------
 # OWI (Oceanweather WIN/PRE) field I/O
 # ---------------------------------------------------------------------------
 
 def _make_owi_data(nt=3, ny=4, nx=5):
     """Build a small deterministic OWIData object."""
-    from clawpack.geoclaw.surge.data_storms import OWIData
+    from clawpack.geoclaw.met.data_storms import OWIData
 
     lon = -99.0 + np.arange(nx) * 0.25
     lat = 8.0 + np.arange(ny) * 0.25
@@ -346,7 +398,7 @@ def _make_owi_data(nt=3, ny=4, nx=5):
 @pytest.mark.storm
 def test_owi_roundtrip(tmp_path):
     """write_owi -> read_owi reproduces every field exactly."""
-    from clawpack.geoclaw.surge import data_storms
+    from clawpack.geoclaw.met import data_storms
 
     d = _make_owi_data()
     pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
@@ -368,7 +420,7 @@ def test_owi_roundtrip(tmp_path):
 @pytest.mark.storm
 def test_owi_written_format_is_80_col(tmp_path):
     """Written OWI lines match the fixed 80-column contract the Fortran reads."""
-    from clawpack.geoclaw.surge import data_storms
+    from clawpack.geoclaw.met import data_storms
 
     pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
     data_storms.write_owi(_make_owi_data(), pre, win)
@@ -384,7 +436,7 @@ def test_owi_written_format_is_80_col(tmp_path):
 @pytest.mark.storm
 def test_owi_read_real_isaac():
     """The reader parses the committed real isaac.WIN/PRE sample."""
-    from clawpack.geoclaw.surge import data_storms
+    from clawpack.geoclaw.met import data_storms
 
     isaac = (Path(__file__).parents[1] / "examples" / "storm-surge" / "isaac")
     if not (isaac / "isaac.PRE").exists():
@@ -403,7 +455,7 @@ def test_owi_read_real_isaac():
 @pytest.mark.storm
 def test_gridded_from_owi_descriptor(tmp_path):
     """from_owi builds a format-1 descriptor pointing at the WIN/PRE pair."""
-    from clawpack.geoclaw.surge import data_storms
+    from clawpack.geoclaw.met import data_storms
 
     pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
     data_storms.write_owi(_make_owi_data(), pre, win)
@@ -425,7 +477,7 @@ def test_gridded_from_owi_descriptor(tmp_path):
 @pytest.mark.storm
 def test_gridded_to_owi(tmp_path):
     """to_owi writes the pair and points the forcing at it."""
-    from clawpack.geoclaw.surge import data_storms
+    from clawpack.geoclaw.met import data_storms
 
     d = _make_owi_data()
     pre, win = tmp_path / "x.PRE", tmp_path / "x.WIN"
