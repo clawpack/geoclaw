@@ -1,15 +1,17 @@
 # Include flags for LAPACK linking
+# Match on a substring of FC so versioned/pathed compiler names also work
+# (e.g. setup-fortran >= 1.9.2 exports FC=gfortran-14 rather than gfortran).
 UNAME = $(shell uname)
 ifeq ($(UNAME), Darwin)
   LFLAGS += -framework Accelerate
 else ifeq ($(UNAME), Linux)
-  ifeq ($(FC), ifort)
+  ifneq (,$(findstring ifort,$(FC)))
     FFLAGS += -I$(MKLROOT)/include
     LFLAGS += -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a \
               $(MKLROOT)/lib/intel64/libmkl_core.a \
               $(MKLROOT)/lib/intel64/libmkl_sequential.a \
               -Wl,--end-group -lpthread -lm
-  else ifeq ($(FC), gfortran)
+  else ifneq (,$(findstring gfortran,$(FC)))
     LFLAGS += -llapack
   endif
 endif
