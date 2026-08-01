@@ -43,7 +43,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.9.0
+      uses: fortran-lang/setup-fortran@v1.9.2
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -129,7 +129,7 @@ jobs:
         python-version: '3.12'
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.9.0
+      uses: fortran-lang/setup-fortran@v1.9.2
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -208,7 +208,7 @@ jobs:
     # tests themselves are pure Python.  ubuntu-latest ships gfortran, but macOS
     # runners do not, so set one up explicitly.
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.9.0
+      uses: fortran-lang/setup-fortran@v1.9.2
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
