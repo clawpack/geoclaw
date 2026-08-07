@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import sys
 from pathlib import Path
 from urllib.error import URLError
@@ -9,6 +10,7 @@ import pytest
 
 import clawpack.clawutil.data
 import clawpack.geoclaw.topotools as topotools
+import clawpack.geoclaw.etopotools as etopotools
 
 # Local test directory and bundled test data
 testdir = Path(__file__).parent
@@ -317,14 +319,13 @@ def test_get_remote_file_remote(tmp_path):
 
 # --- ETOPO1 integration tests and helpers ---
 
-def _read_etopo1_topography(coarsen=10, return_xarray=False):
-    """Read a small ETOPO1 subset for integration testing."""
+def _read_etopo1_topography(coarsen=10):
+    """Read a small ETOPO1 subset via the modern fetch_remote_topo path."""
     try:
-        return topotools.read_netcdf(
+        return topotools.fetch_remote_topo(
             "etopo1",
-            extent=etopo1_extent,
+            filter_region=etopo1_extent,
             coarsen=coarsen,
-            return_xarray=return_xarray,
             verbose=True,
         )
     except (OSError, RuntimeError):
@@ -335,7 +336,7 @@ def _read_etopo1_topography(coarsen=10, return_xarray=False):
 @pytest.mark.netcdf
 @pytest.mark.remote
 def test_etopo1_topography():
-    """Integration test for reading a remote ETOPO1 subset via topotools."""
+    """Cross-reader equivalence: fetch_remote_topo vs the archived ASCII DEM."""
     pytest.importorskip("netCDF4")
 
     topo1 = _read_etopo1_topography(coarsen=1)
@@ -355,21 +356,155 @@ def test_etopo1_topography():
 @pytest.mark.python
 @pytest.mark.netcdf
 @pytest.mark.remote
-def test_etopo1_xarray():
-    """Integration test for the xarray-returning ETOPO1 reader path."""
+def test_etopo1_read_netcdf_shim():
+    """The deprecated read_netcdf shim still agrees with archived data and
+    matches the fetch_remote_topo result, while emitting a DeprecationWarning."""
     pytest.importorskip("xarray")
 
-    topo10, topo10_xarray = _read_etopo1_topography(coarsen=10, return_xarray=True)
+    try:
+        with pytest.warns(DeprecationWarning):
+            topo10, topo10_xarray = topotools.read_netcdf(
+                "etopo1",
+                extent=etopo1_extent,
+                coarsen=10,
+                return_xarray=True,
+                verbose=True,
+            )
+    except (OSError, RuntimeError):
+        pytest.skip("Reading ETOPO1 failed; check whether the remote server is available.")
 
     testdata_path = data_dir / "etopo1_10min.asc"
     topo10input = topotools.Topography()
     topo10input.read(testdata_path, topo_type=3)
 
+    # Shim result agrees with the archived golden ...
     assert topo10.Z.shape == topo10input.Z.shape
     assert topo10_xarray["z"].shape == topo10input.Z.shape
     assert np.allclose(topo10_xarray["z"], topo10input.Z), (
-        "topo10_xarray['z'] does not agree with archived data"
+        "read_netcdf shim does not agree with archived data"
     )
+    # ... and with the modern helper it now delegates to.
+    topo10_helper = _read_etopo1_topography(coarsen=10)
+    assert np.allclose(topo10.Z, topo10_helper.Z), (
+        "read_netcdf shim disagrees with fetch_remote_topo"
+    )
+
+
+def _fake_fetch_topo():
+    """A small synthetic Topography for offline shim/contract tests."""
+    x = np.array([0.0, 1.0, 2.0])
+    y = np.array([0.0, 1.0])
+    Z = np.arange(6, dtype=float).reshape(2, 3)
+    topo = topotools.Topography()
+    topo.set_xyZ(x, y, Z)
+    return topo
+
+
+@pytest.mark.python
+def test_read_netcdf_deprecated_shim(monkeypatch):
+    """read_netcdf warns and maps its legacy args onto fetch_remote_topo."""
+    calls = {}
+
+    def fake_fetch(name_or_url, filter_region=None, coarsen=1, buffer=0,
+                   align=None, nc_params={}, verbose=False):
+        calls["name_or_url"] = name_or_url
+        calls["filter_region"] = filter_region
+        calls["coarsen"] = coarsen
+        calls["nc_params"] = dict(nc_params)
+        return _fake_fetch_topo()
+
+    monkeypatch.setattr(topotools, "fetch_remote_topo", fake_fetch)
+
+    # extent='all' maps to filter_region=None and a DeprecationWarning is emitted.
+    with pytest.warns(DeprecationWarning):
+        topo = topotools.read_netcdf("etopo1", extent="all")
+    assert isinstance(topo, topotools.Topography)
+    assert calls["name_or_url"] == "etopo1"
+    assert calls["filter_region"] is None
+    assert calls["nc_params"] == {}
+
+    # An explicit extent passes through; zvar maps to nc_params['z_var'].
+    with pytest.warns(DeprecationWarning):
+        topotools.read_netcdf("etopo1", extent=[-1, 1, -1, 1], zvar="Band1")
+    assert calls["filter_region"] == [-1, 1, -1, 1]
+    assert calls["nc_params"] == {"z_var": "Band1"}
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_read_netcdf_return_xarray_contract(monkeypatch):
+    """return_xarray still yields a (topo, ds) tuple with matching shapes."""
+    pytest.importorskip("xarray")
+
+    monkeypatch.setattr(topotools, "fetch_remote_topo",
+                        lambda *a, **k: _fake_fetch_topo())
+
+    with pytest.warns(DeprecationWarning):
+        topo, ds = topotools.read_netcdf("etopo1", return_xarray=True)
+    assert isinstance(topo, topotools.Topography)
+    assert ds["z"].shape == topo.Z.shape
+    assert np.allclose(ds["z"], topo.Z)
+
+
+@pytest.mark.python
+def test_etopo1_download_returns_topography(monkeypatch, tmp_path):
+    """etopo1_download returns a Topography without needing the network."""
+    # A minimal NGDC-style AAIGrid payload (keyword-first header, no nodata
+    # line -- etopo1_download inserts one), as the WCS proxy would return.
+    aaigrid = "\n".join([
+        "ncols        3",
+        "nrows        2",
+        "xllcorner    -125.0",
+        "yllcorner    48.0",
+        "cellsize     0.5",
+        "-1 -2 -3",
+        "-4 -5 -6",
+        "",
+    ])
+
+    def fake_get_remote_file(url, output_dir=".", file_name=None,
+                             verbose=True, force=False):
+        with open(os.path.join(output_dir, file_name), "w") as f:
+            f.write(aaigrid)
+
+    monkeypatch.setattr(clawpack.clawutil.data, "get_remote_file",
+                        fake_get_remote_file)
+
+    topo = etopotools.etopo1_download((-125, -124), (48, 49),
+                                      output_dir=str(tmp_path), verbose=False)
+    assert isinstance(topo, topotools.Topography)
+    assert topo.Z.shape == (2, 3)
+    assert np.all(np.isfinite(topo.extent))
+
+
+@pytest.mark.python
+def test_etopo1_download_return_topo_deprecated(monkeypatch, tmp_path):
+    """The legacy return_topo keyword is accepted but warns and is ignored."""
+    aaigrid = "\n".join([
+        "ncols        3",
+        "nrows        2",
+        "xllcorner    -125.0",
+        "yllcorner    48.0",
+        "cellsize     0.5",
+        "-1 -2 -3",
+        "-4 -5 -6",
+        "",
+    ])
+
+    def fake_get_remote_file(url, output_dir=".", file_name=None,
+                             verbose=True, force=False):
+        with open(os.path.join(output_dir, file_name), "w") as f:
+            f.write(aaigrid)
+
+    monkeypatch.setattr(clawpack.clawutil.data, "get_remote_file",
+                        fake_get_remote_file)
+
+    with pytest.warns(DeprecationWarning):
+        topo = etopotools.etopo1_download((-125, -124), (48, 49),
+                                          output_dir=str(tmp_path),
+                                          verbose=False, return_topo=False)
+    # return_topo=False is ignored: a Topography is still returned.
+    assert isinstance(topo, topotools.Topography)
 
 
 def _import_pyplot():

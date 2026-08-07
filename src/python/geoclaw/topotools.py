@@ -2182,210 +2182,139 @@ remote_topo_urls['strait_of_juan_de_fuca'] = \
 
 
 
-def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
-                return_xarray=False, buffer=0, align=None, verbose=False):
+def fetch_remote_topo(name_or_url, filter_region=None, coarsen=1, buffer=0,
+                      align=None, nc_params={}, verbose=False):
+    r"""Resolve a remote (or local) netCDF DEM into a `Topography`.
 
-    """
+    This is the modern one-call "remote DEM -> Topography" path.  It resolves a
+    nickname or URL and reads it through the `topo_type=4` reader
+    (`Topography.read`, backed by `netcdf_utils.TopoInspector`), so it inherits
+    that path's unit handling (elevation must be in meters, or supply
+    `assume_units` via `nc_params`), datum handling, fill->NaN conversion, CF
+    coordinate/variable detection, and lazy hyperslab windowing.
+
     :Input:
 
-     - *path* (str) - Path to the file to read, or url to remote file,
-       or a key into the topotools.remote_topo_urls dictionary.
-     - *zvar* (str) - variable to read as Z=elevation.
-       if None, will try 'Band1', 'z', 'elevation'.
-     - *extent* - [x1,x2,y1,y2] for desired subset, or 'all' for entire file
-     - *coarsen* (int) - factor to coarsen by, 1 by default.
-     - *return_topo* (bool) - if True, return a topotools.Topography object.
-       default is True
-     - *return_xarray* (bool) - if True, return an xarray.Dataset object.
-       default is False
-     - *buffer* (int): when possible, have at least this many points
-                        outside the filter_region on each side
-     - *align* (tuple): (xalign,yalign) = desired alignment if coarsening
-                        See the doc string for Topography.crop()
+     - *name_or_url* (str) - a key into `topotools.remote_topo_urls`, or a URL
+       (OPeNDAP/THREDDS `dodsC` URLs are read by xarray's netCDF4 backend), or a
+       path to a local netCDF file.
+     - *filter_region* ([x1, x2, y1, y2] or None) - requested crop in domain
+       coordinates; `None` reads the whole file.  Only the requested hyperslab
+       is read from a remote file.
+     - *coarsen* (int) - factor to coarsen by (1 = no coarsening).
+     - *buffer* (int) - when possible, keep at least this many points outside
+       `filter_region` on each side.
+     - *align* ((xalign, yalign) or None) - desired alignment when coarsening;
+       see `Topography.crop`.
+     - *nc_params* (dict) - options forwarded to the `topo_type=4` reader, e.g.
+       `z_var` (elevation variable name) or `assume_units` (unit to assume when
+       the file has no `units` attribute).  See `Topography.read`.
+     - *verbose* (bool) - if True, print the resolved source.
 
     :Output:
-     - topo and/or xarray_ds depending on what was requested.
-       (either a single object or a tuple of two objects.)
 
-    If `return_xarray == True` then `xarray` is used to read the data,
-    otherwise `netCDF4` is used directly.
+     - a `topotools.Topography` object.
+
+    Remote-read failures propagate as `OSError`/`RuntimeError` so callers (and
+    tests marked `@pytest.mark.remote`) can skip when a server is unavailable.
 
     Sample usage:
 
         from clawpack.geoclaw import topotools
-        extent = [-126,-122,46,49]
-        path = 'etopo1'
-        topo = topotools.read_netcdf(path, extent=extent, coarsen=2, \
-                                     buffer=1, align=(-126,46), verbose=True)
-
-        # results in topo.x = array([-126.03333333, -126., ...])
-
-        # to plot:
-        topo.plot()
-
-        # to save topofile for input to GeoClaw:
-        topo.write('etopo_sample_2min.tt3', topo_type=3, Z_format='%.0f')
-
-    This should give a 2-minute resolution DEM of the Western Washington coast.
-    Note that etopo1 Z values are integers (vertical resolution is 1 meter)
-    and using `Z_format='%.0f'` will save as integers to minimize file size.
-
-    Note that the newer etopo 2022 30 arcsecond DEM can be sampled using
-    path = 'etopo22_30sec', but this topo is aligned differently with e.g.
-    x = -126. falling half way between points. Also note that Z values in the
-    newer dataset are no longer integers.
+        topo = topotools.fetch_remote_topo('etopo22_30sec',
+                                           filter_region=[-126, -122, 46, 49],
+                                           coarsen=2, buffer=1, verbose=True)
+        topo.write('etopo_sample.tt3', topo_type=3)
     """
 
-    from numpy import array
-    import netCDF4
-    if return_xarray:
-        import xarray
-
-    # check if path is a key in the remote_topo_urls dictionary:
-    if path in remote_topo_urls.keys():
-        path = remote_topo_urls[path]
+    # Resolve a nickname; otherwise treat as a URL or local path.
+    if name_or_url in remote_topo_urls:
+        url = remote_topo_urls[name_or_url]
+    else:
+        url = name_or_url
 
     if verbose:
-        print("Will read netCDF data from \n    %s" % path)
+        print("Will read netCDF data from \n    %s" % url)
+
+    # Set the preprocessing attributes *before* reading: Topography.__init__
+    # reads immediately when constructed with a path, which would default these
+    # away, so construct empty and read explicitly.
+    topo = Topography()
+    topo.crop_extent = filter_region
+    topo.coarsen = coarsen
+    topo.buffer = buffer
+    topo.align = align
+
+    try:
+        topo.read(path=url, topo_type=4, nc_params=nc_params)
+    except (OSError, RuntimeError):
+        # Remote/OPeNDAP servers are flaky; let callers/tests decide to skip.
+        raise
+    except Exception as e:
+        raise RuntimeError(
+            "Failed to read remote topo from %s: %s" % (url, e)) from e
+
+    return topo
+
+
+def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
+                return_xarray=False, buffer=0, align=None, verbose=False):
+
+    r"""Deprecated: read a netCDF DEM into a Topography and/or xarray.Dataset.
+
+    .. deprecated::
+        Use :func:`fetch_remote_topo` (or ``Topography.read(topo_type=4)``)
+        instead.  This is now a thin wrapper over :func:`fetch_remote_topo`; the
+        standalone ``netCDF4``-based reader it used to contain has been removed
+        in favor of the modern ``topo_type=4`` read path (unit checking, datum,
+        fill->NaN, CF coordinate/variable detection, lazy hyperslab windowing).
+
+    The legacy signature is preserved:
+
+     - *path* (str) - nickname (key of ``remote_topo_urls``), URL, or local file.
+     - *zvar* (str) - elevation variable name; mapped to ``nc_params['z_var']``.
+     - *extent* - ``[x1,x2,y1,y2]`` requested crop, or ``'all'`` for whole file.
+     - *coarsen* (int) - coarsening factor (1 = none).
+     - *return_topo* (bool) - if True, include a ``Topography`` in the result.
+     - *return_xarray* (bool) - if True, include an ``xarray.Dataset``.
+     - *buffer* (int) - points to keep outside the crop on each side.
+     - *align* (tuple) - alignment when coarsening; see ``Topography.crop``.
+
+    :Output:
+     - a ``Topography``, an ``xarray.Dataset``, or a ``(topo, ds)`` tuple,
+       depending on ``return_topo`` / ``return_xarray`` (unchanged contract).
+    """
+
+    import warnings
+    warnings.warn(
+        "topotools.read_netcdf is deprecated; use "
+        "topotools.fetch_remote_topo (or Topography.read(topo_type=4)) instead.",
+        DeprecationWarning, stacklevel=2)
 
     assert (type(coarsen) is int) and (coarsen >= 1), \
         '*** coarsen must be a positive integer'
 
-    if return_xarray:
-        f = xarray.open_dataset(path)
-    else:
-        f = netCDF4.Dataset(path, 'r')
+    # Map the legacy arguments onto the modern helper.
+    filter_region = None if (isinstance(extent, str) and extent == 'all') \
+        else extent
+    nc_params = {}
+    if zvar is not None:
+        nc_params['z_var'] = zvar
 
-    if 'lon' in f.variables:
-        x = f.variables['lon']
-    elif 'x' in f.variables:
-        x = f.variables['x']
-    else:
-        print('*** f.variables = ',f.variables)
-        raise ValueError("*** Unrecognized x, lon in netCDF file")
+    topo = fetch_remote_topo(path, filter_region=filter_region, coarsen=coarsen,
+                             buffer=buffer, align=align, nc_params=nc_params,
+                             verbose=verbose)
 
-    if 'lat' in f.variables:
-        y = f.variables['lat']
-    elif 'y' in f.variables:
-        y = f.variables['y']
-    else:
-        print('*** f.variables = ',f.variables)
-        raise ValueError("*** Unrecognized y, lat in netCDF file")
-
-    # for selecting subset based on extent, convert to arrays if netCDF4 used:
-    #if not return_xarray:
-
-    x = array(x)
-    y = array(y)
-
-    if zvar is None:
-        if 'Band1' in f.variables:
-            zvar = 'Band1'
-        elif 'z' in f.variables:
-            zvar = 'z'
-        elif 'elevation' in f.variables:
-            zvar = 'elevation'
-        else:
-            print('*** f.variables = ',f.variables)
-            raise ValueError("*** Unrecognized zvar in netCDF file")
-
-
-    if extent == 'all':
-        ilower = 0
-        iupper = len(x) - 1
-        jlower = 0
-        jupper = len(y) - 1
-    else:
-        x1,x2,y1,y2 = extent
-        # find indices of x,y arrays for points lying within extent:
-        iindex = numpy.where(numpy.logical_and(x >= x1, x <= x2))[0]
-        jindex = numpy.where(numpy.logical_and(y >= y1, y <= y2))[0]
-        ilower = iindex[0]
-        iupper = iindex[-1]
-        jlower = jindex[0]
-        jupper = jindex[-1]
-
-    dx_new = coarsen * (x[1] - x[0])
-    dy_new = coarsen * (y[1] - y[0])
-
-    # shift indices if needed for alignment:
-    if (coarsen > 1) and (align is not None):
-        xs = numpy.array([x[ilower + i] for i in range(coarsen)])
-        offsets = (xs - align[0]) / dx_new
-        offsets_frac = offsets - numpy.round(offsets)
-        ioffset = numpy.argmin(abs(offsets_frac))
-        ilower = ilower + ioffset
-        iupper = iupper - numpy.remainder(iupper-ilower, coarsen)
-        print(f'+++ shifted ilower by ioffset={ioffset} to {ilower}')
-
-        ys = numpy.array([y[jlower + j] for j in range(coarsen)])
-        offsets = (ys - align[1]) / dy_new
-        offsets_frac = offsets - numpy.round(offsets)
-        joffset = numpy.argmin(abs(offsets_frac))
-        jlower = jlower + joffset
-        jupper = jupper - numpy.remainder(jupper-jlower, coarsen)
-        print(f'+++ shifted jlower by joffset={joffset} to {jlower}')
-
-    # buffer, checking limits of arrays:
-    i1 = numpy.maximum(0, ilower - buffer*coarsen)
-    j1 = numpy.maximum(0, jlower - buffer*coarsen)
-    i2 = numpy.minimum(len(x)-1, iupper + buffer*coarsen) + 1
-    j2 = numpy.minimum(len(y)-1, jupper + buffer*coarsen) + 1
-
-    xs = x[i1:i2:coarsen]
-    ys = y[j1:j2:coarsen]
-    Zs = f.variables[zvar][j1:j2:coarsen, i1:i2:coarsen]
-
-    Zs = array(Zs)
-
-    if 0:
-        # debugging checks:
-        xlower,xupper,ylower,yupper = extent
-        dx_new = xs[1] - xs[0]
-        dy_new = ys[1] - ys[0]
-        xlower_outside = (xlower - xs[0]) / dx_new
-        ylower_outside = (ylower - ys[0]) / dy_new
-        xupper_outside = (xs[-1] - xupper) / dx_new
-        yupper_outside = (ys[-1] - yupper) / dy_new
-
-        print(f'+++ fractions of cells outside should be between' \
-              + f' {buffer-1} and {buffer} since buffer={buffer}:')
-        # note: the statement above is not true if filter_region extends
-        # to or beyond the edges of the original topo self.extent
-        print(f'+++ xlower_outside={xlower_outside},' \
-              + f' xupper_outside={xupper_outside}')
-        print(f'+++ ylower_outside={ylower_outside},' \
-              + f' yupper_outside={yupper_outside}')
-
-        if align is not None:
-            xalign = (xs[0] - align[0])/dx_new
-            yalign = (ys[0] - align[1])/dy_new
-            print(f'+++ x alignment: {xalign} should be integer')
-            print(f'+++ y alignment: {yalign} should be integer')
-
-    if verbose:
-        print('Returning a DEM with shape = %s' \
-                % str(Zs.shape))
-        print('x ranges from %.5f to %.5f with dx = %.8f' \
-                % (xs[0], xs[-1], (xs[1]-xs[0])))
-        print('y ranges from %.5f to %.5f with dy = %.8f' \
-                % (ys[0], ys[-1], (ys[1]-ys[0])))
-        if align is not None:
-            xalign = (xs[0] - align[0])/dx_new
-            yalign = (ys[0] - align[1])/dy_new
-            print(f'aligned in x as requested if {xalign} is an integer')
-            print(f'aligned in y as requested if {yalign} is an integer')
     output = None
-
     if return_topo:
-        topo = Topography()
-        topo.set_xyZ(xs,ys,Zs)
         output = topo
 
     if return_xarray:
-        # Create a new xarray.Dataset with this subsampled, coarsened data:
-        dims = (len(xs),len(ys))
-        xarray_ds = xarray.Dataset({'z':(dims,Zs)}, coords={'lon':xs, 'lat':ys})
+        import xarray
+        # Rebuild an xarray.Dataset from the resulting Topography so the legacy
+        # return contract is unchanged.  Z has shape (len(y), len(x)).
+        xarray_ds = xarray.Dataset({'z': (('lat', 'lon'), topo.Z)},
+                                   coords={'lon': topo.x, 'lat': topo.y})
         if output is None:
             output = xarray_ds
         else:
