@@ -176,6 +176,40 @@ def _reject_remote_path(path, kind, fetch_hint):
             f"that:\n{fetch_hint}")
 
 
+def _warn_unsupported_1d_preprocessing(t):
+    """Warn if a 1D topo file requests preprocessing that 1D cannot honor.
+
+    The 1D Fortran reader takes only a path, so the preprocessing attributes
+    are not written to topo.data for a 1D run.  Setting one is far more likely
+    to be a mistake than an intent to have it ignored, so say so rather than
+    dropping it silently.  Preprocess with the ``topotools`` routines and write
+    the result out instead.
+    """
+    requested = []
+    if getattr(t, 'crop_extent', None) is not None:
+        requested.append('crop_extent')
+    if int(getattr(t, 'coarsen', 1) or 1) != 1:
+        requested.append('coarsen')
+    if int(getattr(t, 'buffer', 0) or 0) != 0:
+        requested.append('buffer')
+    if getattr(t, 'align', None) is not None:
+        requested.append('align')
+    for name in ('x_shift', 'y_shift', 'z_shift'):
+        if float(getattr(t, name, 0.0) or 0.0) != 0.0:
+            requested.append(name)
+    if getattr(t, 'negate_z', False):
+        requested.append('negate_z')
+
+    if requested:
+        warnings.warn(
+            "Topography preprocessing (%s) is not supported for 1D runs and "
+            "will be ignored: the 1D Fortran reader takes only a file path. "
+            "Apply it in Python with clawpack.geoclaw.topotools and write the "
+            "preprocessed file out instead." % ", ".join(requested),
+            UserWarning, stacklevel=4,
+        )
+
+
 def _write_preprocessing_block(f, t):
     """Write the 8 preprocessing-attribute lines for one topo/dtopo file.
 
@@ -217,9 +251,17 @@ def _write_preprocessing_block(f, t):
 
 class TopographyData(clawpack.clawutil.data.ClawData):
 
-    def __init__(self):
+    def __init__(self, num_dim=2):
 
         super(TopographyData,self).__init__()
+
+        # Spatial dimension of the run.  The 1D and 2D codes share this class
+        # but not the Fortran reader: src/1d_classic still expects the older
+        # topo.data layout (an override_order line, then just a path), while
+        # src/2d/shallow reads the per-file preprocessing block.  write()
+        # branches on this.  Defaults to 2 so a TopographyData built directly,
+        # or by a clawutil that does not yet pass num_dim, is unchanged.
+        self.add_attribute('num_dim', num_dim)
 
         # Topography data
         self.add_attribute('topo_missing', 99999.0)
@@ -552,10 +594,30 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             records = self._resolve_topo_records(topos, out_file)
 
             self.data_write(value=len(records), alt_name='ntopofiles')
+
+            # The 1D Fortran reader (src/1d_classic/shallow/topo_module.f90)
+            # was never updated for the per-file preprocessing block: it reads
+            # topo_missing, test_topography, ntopofiles, override_order and
+            # then a bare path, and none of the preprocessing attributes are
+            # implemented for 1D anyway.  Emit the layout it expects rather
+            # than a block it would misparse -- without this it reads the path
+            # where it wants the override_order logical and dies with
+            # "Bad logical value while reading item 1".
+            if self.num_dim == 1:
+                self.data_write(name='override_order',
+                                description='(Override order topo files are used)')
+
             f = self._out_file
             for fname, topo_type, topo, meta in records:
                 f.write(f"\n'{fname}'   # topo_path\n")
                 f.write(f"{topo_type:3d}   # topo_type\n")
+
+                if self.num_dim == 1:
+                    # No preprocessing block and no NetCDF descriptor: 1D reads
+                    # neither.  Warn rather than silently dropping a request.
+                    _warn_unsupported_1d_preprocessing(topo)
+                    continue
+
                 # The originating Topography is reused for every entry it
                 # expanded into, so buffer/coarsen/align/shifts reach Fortran
                 # for each one.  (crop_extent is written as the user gave it;
@@ -741,9 +803,13 @@ class FGmaxData(clawpack.clawutil.data.ClawData):
 
 class DTopoData(clawpack.clawutil.data.ClawData):
 
-    def __init__(self):
+    def __init__(self, num_dim=2):
 
         super(DTopoData,self).__init__()
+
+        # See TopographyData.__init__: the 1D Fortran reader expects the older
+        # dtopo.data layout, so write() branches on this.
+        self.add_attribute('num_dim', num_dim)
 
         # Moving topograhpy
         self.add_attribute('dtopofiles',[])
@@ -819,6 +885,21 @@ class DTopoData(clawpack.clawutil.data.ClawData):
             # same directory that out_file comes from
             fname = os.path.abspath(
                 os.path.join(os.path.dirname(out_file), d.path))
+
+            if self.num_dim == 1:
+                # 1D reads the path and type with a single list-directed
+                # statement, `read(iunit,*) dtopofname, dtopotype`, which spans
+                # records -- so the type may sit on the next line, but a
+                # trailing comment on the *path* line is consumed as item 2 and
+                # fails with "Bad integer for item 2 in list input".  Leave the
+                # path line bare, and omit the preprocessing block so the
+                # dt_max_dtopo read below lands on the right value rather than
+                # silently picking up a crop_extent field.
+                self._out_file.write("\n'%s' \n" % fname)
+                self._out_file.write("%3i   # dtopo_type\n" % d.dtopo_type)
+                _warn_unsupported_1d_preprocessing(d)
+                continue
+
             self._out_file.write("\n'%s'   # dtopo_path\n" % fname)
             self._out_file.write("%3i   # dtopo_type\n" % d.dtopo_type)
             _write_preprocessing_block(self._out_file, d)
