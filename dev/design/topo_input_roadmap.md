@@ -137,13 +137,28 @@ preprocessing belongs in Python for 1D.
 
 Note the coverage situation, which is why the #726 breakage went unnoticed for
 a full release cycle. #745 adds unit tests pinning the 1D *file layouts*
-(`tests/test_data.py`, marked `python`, so CI runs them), but **nothing builds
-or runs a `1d_classic` example anywhere in CI** — `testing.yml` selects
-`-m "python and not remote"` and `slow-tests.yml` selects `-m "slow"`, and no
-test in either set touches 1D. The layout tests would have caught #726; a
-Fortran-side change to the 1D reader would still slip through. An end-to-end 1D
-case (they are cheap — the whole suite of six runs in seconds) should be added
-alongside whatever is decided here.
+(`tests/test_data.py`, marked `python`), but **nothing builds or runs a
+`1d_classic` example anywhere in CI**.
+
+CI selects entirely by marker, across five jobs:
+
+| Workflow | Job | Selection |
+|---|---|---|
+| `testing.yml` | `python-tests` | `python and not remote` |
+| `testing.yml` | `regression-tests` | `regression and not slow and not adjoint and not remote` |
+| `slow-tests.yml` | `slow-tests` | `slow` |
+| `slow-tests.yml` | `regression-tests` (matrix) | `regression and not slow and not adjoint`, one leg adding `remote` |
+| `slow-tests.yml` | `python-tests` (matrix) | `python`, one leg `python and remote` |
+
+No test in any of them touches 1D — `git grep -l 1d_classic -- tests/ .github/`
+is empty. So the layout tests would have caught #726, but a change to
+`src/1d_classic/shallow/topo_module.f90` still would not be: nothing compiles or
+runs the 1D code. An end-to-end 1D case should be added alongside whatever is
+decided here; they are cheap, the whole suite of six runs in seconds.
+
+The `regression` marker is the one to use for that — it is a first-class CI
+selector (it is what runs #742's `topo0save` case and the `topo_crop`
+end-to-end suite), not a local-only convention.
 
 ### 2.4 Build-flag hygiene
 
