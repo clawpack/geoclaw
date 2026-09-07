@@ -4,11 +4,14 @@
 rework, what has landed, what was superseded and why, and what is deliberately
 deferred.*
 
-**Provenance.** Written 2026-09-07 from the branch and PR state at that date.
-Every claim below was checked against the repositories rather than from notes;
-where a claim is *not* verified it says so. Companion to
-`met_forcing_roadmap.md`, which covers the meteorological side of the same
-input-handling effort.
+**Provenance.** Written 2026-09-07 from the branch and PR state at that date,
+and amended later the same day after test-merging the open PRs in order: §1
+(the stack forks at #741; #745 rebased onto it), §2.3 (layout guards, and the
+`make .output` trap), §4 (#745's verification re-anchored to its post-rebase
+commits) and §5 (new — why the sequence broke). Every claim below was checked
+against the repositories rather than from notes; where a claim is *not* verified
+it says so. Companion to `met_forcing_roadmap.md`, which covers the
+meteorological side of the same input-handling effort.
 
 ---
 
@@ -23,17 +26,35 @@ input-handling effort.
 
 ### Open, in intended merge order
 
-The topo stack is **strictly linear** — each branch contains the one before it,
-so it must merge in this order:
+The topo stack is linear through #741 and then **forks**: both #745 and #749
+sit directly on #741 and neither contains the other. So #739 and #741 must
+merge first, in order; after that #745 and #749 may merge in either order.
 
 | Order | PR | Branch | Contents |
 |---|---|---|---|
 | 1 | clawpack/geoclaw#739 | `topo-crop-silent-failures` | 13 silent-failure fixes; remote + cross-seam paths reachable from `setrun` |
 | 2 | clawpack/geoclaw#741 | `units-policy-conformance` | `UNITS_POLICY` registry, `dev/design/units_policy.md`, 4 conformance fixes |
-| 3 | *(not yet opened)* | `topo-input-parity` | `coordinate_tools`, `gridded_input`, dtopo crop/coarsen parity, `coordinate_system` wrap gate |
+| 3a | clawpack/geoclaw#745 | `fix-1d-topo-data-format` | 1D `topo.data` / `dtopo.data` layouts (2 commits on #741) |
+| 3b | clawpack/geoclaw#749 | `topo-input-parity` | `coordinate_tools`, `gridded_input`, dtopo crop/coarsen parity, `coordinate_system` wrap gate (7 commits on #741) |
 
-`topo-input-parity` is 12 commits and carries #739 and #741 with it. Run
-`pytest tests/ -m "not remote"` on it before opening.
+`topo-input-parity` is 12 commits from `master` and carries #739 and #741 with
+it. Run `pytest tests/ -m "not remote"` on it before merging.
+
+**#745 was rebased onto #741** (2026-09-07). It was originally cut from `master`
+and conflicted with #739's `TopographyData.write()` refactor; resolving that at
+merge time silently defeated the PR (see §5). Rebasing puts the resolution under
+#745's own CI instead. Two consequences:
+
+- Until #741 lands, #745's GitHub diff shows **20 files, +2864/−128** — it
+  includes all of #739 and #741, because a cross-fork PR cannot be retargeted at
+  a branch that exists only in the fork. Review the last two commits only
+  (`d18e1733..db0d1ad2`). The diff collapses to its own 2 commits automatically
+  once `master` contains #741.
+- #745 and #749 merge cleanly against each other, **and correctly**: verified
+  that the 1D `override_order` write still lands between `ntopofiles` and the
+  record loop in the combined tree, which is the ordering the 1D Fortran reader
+  requires. A clean textual merge is not sufficient evidence here — that is
+  exactly the failure mode §5 records.
 
 Independent of the stack, all off `master`:
 
@@ -42,7 +63,6 @@ Independent of the stack, all off `master`:
 | clawpack/geoclaw#742 | `fix-topo0save-dtopo-index` | `topo0save` slot indexing (a released v5.14.0 regression) |
 | clawpack/geoclaw#743 | `fix-multilayer-openmp-link` | `$(FFLAGS)` dropped from the multilayer link line |
 | clawpack/geoclaw#744 | `fix-isaac-setplot-storm-format` | isaac `setplot` hard-coded the storm file format |
-| clawpack/geoclaw#745 | `fix-1d-topo-data-format` | 1D `topo.data` / `dtopo.data` layouts |
 | clawpack/clawutil#208 | `fix-1d-topo-data-format` | passes `num_dim` to `TopographyData` / `DTopoData` |
 
 **Merge geoclaw#745 before clawutil#208.** #745 defaults to `num_dim=2` and is
@@ -135,6 +155,17 @@ The question is which attributes are meaningful in 1D. `crop_extent` and
 `src/1d_classic/shallow/topo_module.f90` the block format or agreeing that
 preprocessing belongs in Python for 1D.
 
+Whatever is decided, the layout itself is now pinned **by field name**:
+`test_topo_data_1d_uses_legacy_layout` and
+`test_topo_data_1d_override_order_written_once_for_multiple_files` assert the
+ordered list of `topo.data` field labels, so a future `write()` refactor that
+drops or moves `override_order` fails naming the field rather than reporting a
+line-count mismatch. The two-file case exists because with a single topo file a
+per-file `override_order` write is indistinguishable from the correct one. This
+seam has broken once already (§5) and sits between two independently evolving
+concerns — #739's record resolution and the 1D layout branch — so it is worth
+the redundancy.
+
 Note the coverage situation, which is why the #726 breakage went unnoticed for
 a full release cycle. #745 adds unit tests pinning the 1D *file layouts*
 (`tests/test_data.py`, marked `python`), but **nothing builds or runs a
@@ -159,6 +190,23 @@ decided here; they are cheap, the whole suite of six runs in seconds.
 The `regression` marker is the one to use for that — it is a first-class CI
 selector (it is what runs #742's `topo0save` case and the `topo_crop`
 end-to-end suite), not a local-only convention.
+
+**Prerequisite for that test: `make .output` is not enough.** All six
+`examples/1d_classic` cases generate their own input files from Python, via
+`.PHONY` `topo` (and, for `okada_dtopo`, `dtopo`) targets that **nothing
+depends on** — only `make all` invokes them, and `all` also runs `.plots` and
+`.htmls`. So a harness that calls `make .output` gets a missing or empty
+`celledges.data` / `dtopo_okada.dtt1` and the Fortran aborts in the *file*
+reader, not the settings reader — a confusingly similar-looking failure to the
+one #745 fixes. Observed while verifying #745: a `0`-byte `dtopo_okada.dtt1`
+produced `Fortran runtime error: End of file` at
+`src/1d_classic/shallow/topo_module.f90:253`, well past the `dtopo.data` read
+that was actually under test.
+
+Either wire the generated inputs into `.output`'s prerequisites (the better
+fix — it makes the examples work the way every other GeoClaw example does), or
+have the test call `make topo dtopo` first. Prefer the former; the current
+arrangement is a trap for any automated runner, not just CI.
 
 ### 2.4 Build-flag hygiene
 
@@ -220,7 +268,10 @@ file. Its second symptom, the coverage warning, is §2.1 above.
 Claims in §1 were checked as follows, at 2026-09-07:
 
 - Merge of #726: `git log main | grep a3ee4b27`.
-- Linearity of the stack: `git merge-base --is-ancestor` between each pair.
+- Shape of the stack: `git merge-base --is-ancestor` between each pair. Linear
+  through #741; #745 and #749 are siblings on it (neither is an ancestor of the
+  other), and their pairwise merge was simulated with `git merge-tree` and the
+  resulting `data.py` inspected, not just checked for conflicts.
 - #727 / `topo-input-unify` supersession: commit-by-commit subject comparison
   against `topo-input-parity`, plus a name-by-name check that every test #727
   added has a named equivalent downstream.
@@ -230,8 +281,60 @@ Claims in §1 were checked as follows, at 2026-09-07:
   examples build under `FFLAGS=-fopenmp` and `plane_wave` runs under
   `OMP_NUM_THREADS=2`.
 - #744: both forcing families driven through the example's own `setrun`.
-- #745 / clawutil#208: all six `examples/1d_classic` cases build and run; the
-  pre-fix failure reproduces the reported error exactly.
+- #745 / clawutil#208, **at the original commit `31c31937`**: all six
+  `examples/1d_classic` cases build and run; the pre-fix failure reproduces the
+  reported error exactly.
+- #745 **after the rebase onto #741** (`d18e1733`, `db0d1ad2`) — the code under
+  the note above changed, so it was re-checked rather than carried over:
+  `tests/` at `-m python` is 426 passed / 5 skipped / 3 xfailed; the two layout
+  guards fail with `'topo_path' != 'override_order'` when the fix is reverted;
+  `examples/1d_classic/okada_dtopo` runs to completion (60 frames, `t = 3600`)
+  through both 1D Fortran readers, with `num_dim = 1` arriving via the real
+  `ClawRunData` path rather than a hand-built object. Only that one example was
+  re-run, not all six.
 
 **Not verified:** that `topo-input-parity` passes CI on a machine other than the
 author's, and the remote-fetch tests throughout (marked `remote`, skipped).
+Also not re-run after #745's rebase: the other five `examples/1d_classic` cases,
+and any Fortran regression suite (`-m regression`) on the combined tree.
+
+---
+
+## 5. Correction on record: the #745 merge resolution
+
+Recorded because the failure mode is not specific to these PRs and cost a
+debugging cycle.
+
+All six open PRs reported `MERGEABLE` on GitHub while the sequence did not
+merge. GitHub tests each PR against `master` only, so **mergeability is not
+transitive**: #745 was cut from `master` and conflicts only appear once #739 has
+landed. Nothing in the PR UI shows this.
+
+The conflict is in `TopographyData.write()`. #739 moved the write loop behind
+`_resolve_topo_records()` (a cross-seam type-4 crop expands into two entries, so
+`ntopofiles` is not known until every file is resolved); #745 adds `num_dim`
+branching to that same loop. A hand-resolution taken at merge time kept #745's
+per-file early `continue` but **dropped its `override_order` write**. Since
+`src/1d_classic/shallow/topo_module.f90:read_topo_settings` reads
+`topo_missing / test_topography / ntopofiles / override_topo_order / topofname`
+positionally, Fortran then reads the quoted path into a `logical` — reproducing
+the exact bug #745 exists to fix, and failing #745's own
+`test_topo_data_1d_uses_legacy_layout` with `assert 5 == 6`.
+
+Two lessons, both cheap:
+
+- **Resolve stacked conflicts in the PR, not in the merge.** A resolution made
+  in an integration merge is exercised by no CI run anywhere. Rebasing #745 onto
+  #741 put it under #745's own CI, which is what would have caught this.
+- **A clean `git merge-tree` is not evidence of a correct merge.** Verify the
+  merged artifact, not just the absence of conflict markers — for positional
+  file formats especially, where a dropped line is silent until Fortran runtime.
+
+Also confirmed while investigating, so it is not re-derived: #739/#741 and #742
+touch `src/2d/shallow/topo_module.f90` in disjoint routines (the NetCDF
+descriptor-crop branch around line 1481 versus the `topo0save`
+dtopo-intersection loop around line 439), and #741 adds nothing to that file
+beyond #739. The
+`topo_type` loop variable versus `topo.topo_type` in the record loop is *not* a
+behavioural difference — `_resolve_topo_records` back-assigns `topo.topo_type`
+after inferring it — though the loop variable is the correct thing to write.
