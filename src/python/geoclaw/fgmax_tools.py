@@ -392,6 +392,10 @@ class FGmaxGrid(object):
 
             self.indexing = indexing  # make available to user
 
+        else:
+            # arrays are 1D, so 'F' or 'C' doesn't matter, but still used below
+            reshape_order = 'C'
+
 
 
         if fgno is not None:
