@@ -387,6 +387,26 @@ def _payload(path):
             if line.strip() and not line.lstrip().startswith("#")]
 
 
+def _field_names(path):
+    """Ordered field labels of a .data payload, one per line.
+
+    ``data_write`` emits ``<value>  =: <name>  # <description>``, while the
+    path/type lines are written by hand as ``<value>   # <name>``.  Taking the
+    ``=:`` label when present and the first comment token otherwise gives the
+    file's layout as a list of names -- so a layout assertion can say *which*
+    line is missing or misplaced rather than only that the count is wrong.
+    """
+    names = []
+    for line in _payload(path):
+        if "=:" in line:
+            names.append(line.split("=:", 1)[1].split()[0])
+        elif "#" in line:
+            names.append(line.split("#", 1)[1].split()[0])
+        else:
+            names.append(line.strip())
+    return names
+
+
 @pytest.mark.python
 def test_topo_data_1d_uses_legacy_layout(tmp_path):
     r"""1D topo.data carries override_order and no preprocessing block."""
@@ -401,18 +421,51 @@ def test_topo_data_1d_uses_legacy_layout(tmp_path):
     out = tmp_path / "topo.data"
     topo_data.write(out_file=out)
 
+    # Assert the layout by name, in order.  read_topo_settings reads these
+    # positionally, so a dropped or reordered line is a startup abort -- and
+    # naming them makes the failure say which one went missing.
+    assert _field_names(out) == ["topo_missing", "test_topography",
+                                 "ntopofiles", "override_order",
+                                 "topo_path", "topo_type"]
+
     lines = _payload(out)
-    # topo_missing, test_topography, ntopofiles, override_order, path, type
-    assert len(lines) == 6, lines
-    assert "override_order" in lines[3]
     # Unlike dtopo below, the topo path line may keep its trailing comment:
     # read_topo_settings reads the path as a *single* list-directed item, so
     # the read is satisfied before reaching the comment.
     assert lines[4].startswith("'") and "celledges.data'" in lines[4]
-    assert "topo_type" in lines[5]
     text = Path(out).read_text()
     for attr in ("crop_extent", "coarsen", "buffer", "align", "negate_z"):
         assert attr not in text
+
+
+@pytest.mark.python
+def test_topo_data_1d_override_order_written_once_for_multiple_files(tmp_path):
+    r"""override_order precedes the file entries and appears exactly once.
+
+    read_topo_settings reads the logical *once*, before any path, so it must
+    not migrate into the per-file loop.  With a single topo file a per-file
+    write would be indistinguishable from the correct one; two files pin it.
+    """
+    import clawpack.geoclaw.topotools as topotools
+
+    topos = []
+    for name in ("coarse.tt3", "fine.tt3"):
+        topo = topotools.Topography()
+        topo.path = name
+        topo.topo_type = 3
+        topos.append(topo)
+
+    topo_data = clawpack.geoclaw.data.TopographyData(num_dim=1)
+    topo_data.topofiles = topos
+    out = tmp_path / "topo.data"
+    topo_data.write(out_file=out)
+
+    assert _field_names(out) == ["topo_missing", "test_topography",
+                                 "ntopofiles", "override_order",
+                                 "topo_path", "topo_type",
+                                 "topo_path", "topo_type"]
+    # ntopofiles must still count the files, not the records.
+    assert _payload(out)[2].split()[0] == "2"
 
 
 @pytest.mark.python
