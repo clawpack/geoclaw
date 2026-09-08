@@ -1,24 +1,71 @@
 
 """
 
-Tools to download etopo topography/bathymetry data from NCEI (formerly NGDC).
-See http://www.ngdc.noaa.gov/mgg/global/global.html
+Tools to download ETOPO topography/bathymetry data from NCEI (formerly NGDC).
+See https://www.ncei.noaa.gov/products/etopo-global-relief-model
 
-Note the new etopo1_download_nc is better to use than etopo1_download.
+Two entry points are provided:
+
+- :func:`fetch_etopo` -- the recommended path.  Reads an ETOPO netCDF DEM
+  (ETOPO 2022 by default) into a :class:`~clawpack.geoclaw.topotools.Topography`
+  via :func:`clawpack.geoclaw.topotools.fetch_remote_topo`.  This is the
+  consistently-available, near-best-available-data source.
+
+- :func:`etopo1_download` -- legacy.  Downloads a topo_type 3 (ASCII) file from
+  the old NGDC WCS-proxy endpoint.  That endpoint is legacy and often flaky;
+  prefer :func:`fetch_etopo` (or
+  :func:`clawpack.geoclaw.topotools.fetch_remote_topo`) instead.
 """
 
 
-from __future__ import absolute_import
-from __future__ import print_function
+def fetch_etopo(name='etopo22_30sec', crop_extent=None, coarsen=1, buffer=0,
+                align=None, nc_params={}, verbose=False):
+    r"""Fetch an ETOPO netCDF DEM as a `Topography`.
 
-def etopo1_download(xlimits, ylimits, dx=0.0166666666667, dy=None, \
-        output_dir='.', file_name=None, force=False, verbose=True, \
-        return_topo=False):
+    Thin convenience wrapper over
+    :func:`clawpack.geoclaw.topotools.fetch_remote_topo` for the ETOPO netCDF
+    nicknames in ``topotools.remote_topo_urls`` (e.g. the default
+    ``'etopo22_30sec'`` = ETOPO 2022 30 arcsecond, or ``'etopo1'``).
+
+    :Input:
+
+     - *name* (str) - nickname (key of ``topotools.remote_topo_urls``) or a URL
+       to an ETOPO netCDF file.  Default ``'etopo22_30sec'``.
+     - *crop_extent* ([x1, x2, y1, y2] or None) - requested crop in domain
+       coordinates; ``None`` reads the whole file.
+     - *coarsen* (int) - coarsening factor (1 = none).
+     - *buffer* (int) - points to keep outside the crop on each side.
+     - *align* (tuple) - alignment when coarsening; see ``Topography.crop``.
+     - *nc_params* (dict) - options forwarded to the ``topo_type=4`` reader
+       (e.g. ``z_var``, ``assume_units``); see ``Topography.read``.
+     - *verbose* (bool) - if True, print the resolved source.
+
+    :Output:
+
+     - a :class:`~clawpack.geoclaw.topotools.Topography` object.
+    """
+
+    from clawpack.geoclaw import topotools
+
+    return topotools.fetch_remote_topo(name, crop_extent=crop_extent,
+                                       coarsen=coarsen, buffer=buffer,
+                                       align=align, nc_params=nc_params,
+                                       verbose=verbose)
+
+
+def etopo1_download(xlimits, ylimits, dx=0.0166666666667, dy=None,
+        output_dir='.', file_name=None, force=False, verbose=True,
+        return_topo=None):
 
     """
-    Create a url to download etopo1 topography from NCEI and
-    save as a topo_type 3 file.  Uses the database described at
-        http://www.ngdc.noaa.gov/mgg/global/global.html
+    Download etopo1 topography from NCEI and save as a topo_type 3 file, then
+    return it as a `Topography` object.
+
+    .. note::
+        This uses the old NGDC WCS-proxy endpoint, which is legacy and often
+        flaky.  For a consistently-available, modern netCDF source prefer
+        :func:`fetch_etopo` or
+        :func:`clawpack.geoclaw.topotools.fetch_remote_topo`.
 
     :Inputs:
 
@@ -38,8 +85,14 @@ def etopo1_download(xlimits, ylimits, dx=0.0166666666667, dy=None, \
     - *file_name*: name of file, default is constructed from xlimits,ylimits
     - *force*: if True, download even if the file already exists.
     - *verbose*: if True, print info from clawpack.clawutil.data.get_remote_file
+    - *return_topo*: deprecated and ignored; a `Topography` is always returned.
 
-    Note: New NGDC format gives cell-registered values, so shift the 
+    :Output:
+
+    - a :class:`~clawpack.geoclaw.topotools.Topography` object read from the
+      downloaded topo_type 3 file.
+
+    Note: New NGDC format gives cell-registered values, so shift the
     values `xllcorner` and `yllcorner` to the specified corner.
 
     **To do:** Check whether it is possible to specify grid-registered
@@ -49,10 +102,17 @@ def etopo1_download(xlimits, ylimits, dx=0.0166666666667, dy=None, \
     so add this in too.
     """
 
-    from clawpack.geoclaw import util, topotools
+    from clawpack.geoclaw import topotools
     from clawpack.clawutil.data import get_remote_file
     import os
+    import warnings
     from numpy import round
+
+    if return_topo is not None:
+        warnings.warn(
+            "etopo1_download's return_topo argument is deprecated and ignored; "
+            "a Topography object is now always returned.",
+            DeprecationWarning, stacklevel=2)
 
     format = '&format=aaigrid'   # topo_type 3
 
@@ -103,7 +163,8 @@ def etopo1_download(xlimits, ylimits, dx=0.0166666666667, dy=None, \
 
         x1 = x1 - longitude_shift   # shift back before writing header
 
-        lines = open(file_path).readlines()
+        with open(file_path) as f:
+            lines = f.readlines()
         if lines[2].split()[0] != 'xllcorner':
             print("*** Error downloading, check the file!")
         else:
@@ -114,13 +175,10 @@ def etopo1_download(xlimits, ylimits, dx=0.0166666666667, dy=None, \
             if 'nodata_value' not in lines[5]:
                 lines = lines[:5] + ['nodata_value    -99999\n'] + lines[5:]
                 print("Added nodata_value line")
-            f = open(file_path,'w')
-            f.writelines(lines)
-            f.close()
+            with open(file_path, 'w') as f:
+                f.writelines(lines)
         print("Created file: ",file_path)
 
-    if return_topo:
-        topo = topotools.Topography()
-        topo.read(file_path, topo_type=3)
-        return topo
-
+    topo = topotools.Topography()
+    topo.read(file_path, topo_type=3)
+    return topo

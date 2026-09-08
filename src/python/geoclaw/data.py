@@ -155,10 +155,13 @@ class RefinementData(clawpack.clawutil.data.ClawData):
 
 
 def _write_preprocessing_block(f, t):
-    """Write the 7 preprocessing-attribute lines for one topo/dtopo file.
+    """Write the 8 preprocessing-attribute lines for one topo/dtopo file.
+
+    The lines are, in order: crop_extent, coarsen, buffer, align, x_shift,
+    y_shift, z_shift, negate_z.
 
     Shared by TopographyData.write() (topo.data) and DTopoData.write()
-    (dtopo.data); Fortran reads the same 7 lines in read_topo_settings and
+    (dtopo.data); Fortran reads the same 8 lines in read_topo_settings and
     read_dtopo_settings.  *t* is a Topography or DTopography object.
 
     Float values use repr (shortest round-trip representation) so coordinates
@@ -279,7 +282,11 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 raw_type = entry.get('topo_type', None)
                 if raw_type is not None:
                     topo.topo_type = int(raw_type)
-                # 'extent' in the dict spec maps to 'crop_extent' on Topography
+                # The legacy dict key 'extent' is an alias for 'crop_extent'
+                # (the requested crop; see Topography "Region terminology").
+                # Note: if a spec supplies BOTH 'extent' and 'crop_extent', the
+                # 'crop_extent' key wins -- it is applied by the loop below,
+                # which runs after this alias assignment.
                 if 'extent' in entry:
                     topo.crop_extent = entry['extent']
                 for attr in ('crop_extent', 'coarsen', 'buffer', 'align',
@@ -644,7 +651,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
             unsupported = [name for name, is_set in (
                 ("crop_extent", d.crop_extent is not None),
                 ("coarsen", d.coarsen != 1),
-                ("buffer", d.buffer != 0.0),
+                ("buffer", d.buffer != 0),
                 ("align", d.align is not None),
             ) if is_set]
             if unsupported:
@@ -736,7 +743,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                 crop = [float(v) for v in _data(lines[i + 2]).split()]
                 d.crop_extent = None if all(v == 0. for v in crop) else crop
                 d.coarsen = int(_data(lines[i + 3]))
-                d.buffer = float(_data(lines[i + 4]))
+                d.buffer = int(_data(lines[i + 4]))  # grid-point count
                 align = [float(v) for v in _data(lines[i + 5]).split()]
                 d.align = None if all(v == 0. for v in align) else align
                 d.x_shift = float(_data(lines[i + 6]))

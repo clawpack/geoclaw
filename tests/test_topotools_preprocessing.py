@@ -430,16 +430,19 @@ def test_preprocessing_double_negate_is_identity(tt2_path):
 
 
 # ===========================================================================
-# Group 5 — stride × coarsen interaction (NetCDF type 4)
+# Group 5 — coarsen for NetCDF type 4 and the deprecated `stride` alias
 # ===========================================================================
 
 @pytest.mark.netcdf
-def test_preprocessing_stride_only(nc_topo_path, tmp_path):
+def test_preprocessing_stride_deprecated_maps_to_coarsen(nc_topo_path, tmp_path):
+    """`stride` is deprecated: it warns and maps onto the scalar `coarsen`, so
+    the result is identical to reading with `coarsen=2`."""
     pytest.importorskip("xarray")
     path, lon_name, lat_name = nc_topo_path
 
     t = Topography()
-    t.read(path, topo_type=4, stride=[2, 2])
+    with pytest.warns(DeprecationWarning):
+        t.read(path, topo_type=4, stride=[2, 2])
 
     assert t.Z.shape == (5, 5)
     # Values must match stride-2 subsampling of the analytic Z
@@ -466,24 +469,39 @@ def test_preprocessing_coarsen_only_netcdf(nc_topo_path, tmp_path):
 
 
 @pytest.mark.netcdf
-def test_preprocessing_stride_and_coarsen_compound(nc_topo_path, tmp_path):
-    """stride=[2,2] then coarsen=2: effective subsampling is stride-4.
-
-    The shape is floor(10/4) → check against actual output shape.
-    """
+def test_preprocessing_coarsen_param_matches_attribute(nc_topo_path):
+    """Passing coarsen= to read() is equivalent to setting the attribute."""
     pytest.importorskip("xarray")
-    path, lon_name, lat_name = nc_topo_path
+    path, _, _ = nc_topo_path
 
+    t_attr = Topography()
+    t_attr.coarsen = 2
+    t_attr.read(path, topo_type=4)
+
+    t_arg = Topography()
+    t_arg.read(path, topo_type=4, coarsen=2)
+
+    np.testing.assert_array_equal(t_arg.Z, t_attr.Z)
+    assert t_arg.coarsen == 2
+
+
+@pytest.mark.netcdf
+def test_preprocessing_stride_conflicts_raise(nc_topo_path):
+    """Per-axis stride is unsupported; conflicting stride+coarsen is an error."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+
+    # Unequal per-axis stride cannot be expressed by scalar coarsen.
     t = Topography()
-    t.coarsen = 2
-    t.read(path, topo_type=4, stride=[2, 2])
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(ValueError):
+            t.read(path, topo_type=4, stride=[2, 3])
 
-    # After stride=[2,2], array is 5×5. After coarsen=2, it's 3×3 (floor(5/2)+1).
-    # The exact shape depends on how crop() slices; just check stride-4 values.
-    Z_orig = _analytic_Z()
-    for i in range(t.Z.shape[0]):
-        for j in range(t.Z.shape[1]):
-            np.testing.assert_allclose(t.Z[i, j], Z_orig[4 * i, 4 * j], rtol=1e-6)
+    # stride and a conflicting coarsen at once.
+    t2 = Topography()
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(ValueError):
+            t2.read(path, topo_type=4, coarsen=3, stride=[2, 2])
 
 
 # ===========================================================================
@@ -1067,7 +1085,7 @@ def test_crop_pushdown_matches_full_read(nc_topo_path):
 
     ref = Topography()
     ref.read(path, topo_type=4)
-    ref = ref.crop(filter_region=crop)
+    ref = ref.crop(crop_extent=crop)
 
     t = Topography()
     t.crop_extent = crop
@@ -1087,7 +1105,7 @@ def test_crop_pushdown_with_buffer_matches_full_read(nc_topo_path):
 
     ref = Topography()
     ref.read(path, topo_type=4)
-    ref = ref.crop(filter_region=crop, buffer=1)
+    ref = ref.crop(crop_extent=crop, buffer=1)
 
     t = Topography()
     t.crop_extent = crop
@@ -1108,7 +1126,7 @@ def test_crop_pushdown_with_coarsen_align_matches_full_read(nc_topo_path):
 
     ref = Topography()
     ref.read(path, topo_type=4)
-    ref = ref.crop(filter_region=crop, coarsen=2, align=(0.0, 0.0))
+    ref = ref.crop(crop_extent=crop, coarsen=2, align=(0.0, 0.0))
 
     t = Topography()
     t.crop_extent = crop
@@ -1123,23 +1141,20 @@ def test_crop_pushdown_with_coarsen_align_matches_full_read(nc_topo_path):
 
 @pytest.mark.netcdf
 @pytest.mark.parametrize("buffer", [0, 1])
-def test_crop_pushdown_with_stride_matches_full_read(nc_topo_path, buffer):
-    """stride + crop_extent: the strided sub-window stays phase-aligned with
-    striding the full array (the low index is snapped to a multiple of stride),
-    so the result matches full-strided-then-cropped.  buffer=1 forces an odd
-    raw low index, exercising the snap."""
+def test_crop_pushdown_with_coarsen_buffer_matches_full_read(nc_topo_path, buffer):
+    """coarsen + crop_extent + buffer survive the pushdown: the read hyperslab
+    equals a full read then crop(coarsen, buffer).  buffer=1 exercises the
+    buffer expansion of the read window."""
     pytest.importorskip("xarray")
     path, _, _ = nc_topo_path
     crop = [3.0, 8.0, 3.0, 8.0]
 
     ref = Topography()
-    ref.read(path, topo_type=4, stride=[2, 2])
-    ref = ref.crop(filter_region=crop, buffer=buffer)
+    ref.read(path, topo_type=4)
+    ref = ref.crop(crop_extent=crop, coarsen=2, buffer=buffer)
 
     t = Topography()
-    t.crop_extent = crop
-    t.buffer = buffer
-    t.read(path, topo_type=4, stride=[2, 2])
+    t.read(path, topo_type=4, crop_extent=crop, coarsen=2, buffer=buffer)
 
     np.testing.assert_array_equal(t.x, ref.x)
     np.testing.assert_array_equal(t.y, ref.y)
@@ -1162,7 +1177,7 @@ def test_crop_pushdown_respects_storage_order(tmp_path, s2n):
 
     ref = Topography()
     ref.read(str(path), topo_type=4)
-    ref = ref.crop(filter_region=crop)
+    ref = ref.crop(crop_extent=crop)
 
     t = Topography()
     t.crop_extent = crop
@@ -1201,20 +1216,89 @@ def test_crop_pushdown_reads_bounded_window(nc_topo_path, monkeypatch):
     path, _, _ = nc_topo_path
 
     calls = []
-    orig = topotools._netcdf_window_indices
+    orig = topotools._crop_indices
 
-    def _spy(coords, lo, hi, margin, n, stride=1):
-        result = orig(coords, lo, hi, margin, n, stride)
-        calls.append((result, n))
+    def _spy(x, y, crop_extent, coarsen, buffer, align):
+        result = orig(x, y, crop_extent, coarsen, buffer, align)
+        calls.append((result, len(x), len(y)))
         return result
 
-    monkeypatch.setattr(topotools, "_netcdf_window_indices", _spy)
+    monkeypatch.setattr(topotools, "_crop_indices", _spy)
 
     t = Topography()
     t.crop_extent = [3.0, 6.0, 3.0, 6.0]
     t.read(path, topo_type=4)
 
     assert calls, "crop_extent read did not use the window pushdown"
-    for (i0, i1), n in calls:
-        assert 0 <= i0 < i1 <= n
-        assert (i1 - i0) < n, "window spans the whole axis (no pushdown)"
+    for result, nx, ny in calls:
+        assert result is not None, "crop_extent overlaps the file but got None"
+        il, iu, jl, ju = result
+        assert 0 <= il < iu <= nx
+        assert 0 <= jl < ju <= ny
+        assert (iu - il) < nx, "x window spans the whole axis (no pushdown)"
+        assert (ju - jl) < ny, "y window spans the whole axis (no pushdown)"
+
+
+# ===========================================================================
+# Group 12 — ASCII/NetCDF read equivalence for coarsen+align (rjl report)
+#
+# The bug: reading the same DEM as NetCDF (type 4) vs ASCII (type 3) with the
+# same coarsening produced grids misaligned by fractions of a coarse cell,
+# because `stride` coarsened+aligned NetCDF only and used a different alignment
+# convention than crop().  These tests pin the unified behavior: read() takes
+# `coarsen`/`align` and both file types produce identical, lattice-aligned grids.
+# ===========================================================================
+
+@pytest.mark.netcdf
+@pytest.mark.parametrize("align", [None, (0.0, 0.0)])
+def test_ascii_netcdf_coarsen_align_identical(nc_topo_path, tmp_path, align):
+    """Same data read as NetCDF and as ASCII, with the same coarsen+align, must
+    yield identical grids (the core of rjl's report)."""
+    pytest.importorskip("xarray")
+    path, _, _ = nc_topo_path
+    crop = [1.0, 8.0, 1.0, 8.0]
+    coarsen = 2
+
+    tn = Topography()
+    tn.read(path, topo_type=4, crop_extent=crop, coarsen=coarsen, align=align)
+
+    # Round-trip the same data through ASCII (type 3) and read it back the same way.
+    full = Topography()
+    full.read(path, topo_type=4)
+    asc = tmp_path / "roundtrip.asc"
+    full.write(str(asc), topo_type=3, Z_format="%.10f")
+
+    ta = Topography()
+    ta.read(str(asc), topo_type=3, crop_extent=crop, coarsen=coarsen, align=align)
+
+    np.testing.assert_allclose(ta.x, tn.x)
+    np.testing.assert_allclose(ta.y, tn.y)
+    np.testing.assert_allclose(ta.Z, tn.Z)
+
+
+def test_coarsen_align_lattice_invariant(tmp_path):
+    """With a fixed align, shifting crop_extent by whole native cells keeps the
+    coarsened grid on the align lattice -- (x0-align)/dx_new stays integer --
+    rather than drifting by 1/coarsen of a coarse cell (the reported symptom)."""
+    n = 30
+    x = np.arange(n, dtype=float)
+    y = np.arange(n, dtype=float)
+    X, Y = np.meshgrid(x, y)
+    Z = X + 10.0 * Y
+    t = Topography()
+    t.set_xyZ(X, Y, Z)
+    asc = tmp_path / "invariant.asc"
+    t.write(str(asc), topo_type=3, Z_format="%.6f")
+
+    coarsen = 3
+    align = (0.0, 0.0)
+    for k in range(coarsen):
+        crop = [6.0 + k, 20.0 + k, 6.0 + k, 20.0 + k]
+        tk = Topography()
+        tk.read(str(asc), topo_type=3, crop_extent=crop,
+                coarsen=coarsen, align=align)
+        # dx_new = dx*coarsen = 1*3; alignment => (x0-align)/dx_new integer
+        xphase = (tk.x[0] - align[0]) / coarsen
+        yphase = (tk.y[0] - align[1]) / coarsen
+        assert abs(xphase - round(xphase)) < 1e-9, (k, tk.x[0])
+        assert abs(yphase - round(yphase)) < 1e-9, (k, tk.y[0])

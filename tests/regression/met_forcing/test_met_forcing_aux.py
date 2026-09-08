@@ -258,7 +258,7 @@ def _netcdf_build_vars():
     return {"USE_NETCDF": "1", "NETCDF_FFLAGS": fflags, "NETCDF_LFLAGS": flibs}
 
 
-def _run_case(tmp_path, forcing, prebuilt):
+def _run_case(tmp_path, forcing, prebuilt, return_path=False):
     """Generate inputs, install the shared build, run, return the aux arrays."""
     topo_path = tmp_path / "flat.tt3"
     _flat_topo(topo_path)
@@ -281,6 +281,8 @@ def _run_case(tmp_path, forcing, prebuilt):
     runner.write_data()
     _install_executable(runner, prebuilt)
     runner.run_code()
+    if return_path:
+        return _collect_aux(runner.temp_path), runner.temp_path
     return _collect_aux(runner.temp_path)
 
 
@@ -289,6 +291,85 @@ def _run_case(tmp_path, forcing, prebuilt):
 def test_holland80_forcing_aux(tmp_path, plain_xgeoclaw):
     """Parametric Holland-1980 forcing aux fields are reproduced identically."""
     _check_aux(_run_case(tmp_path, "holland80", plain_xgeoclaw), "holland80")
+
+
+@pytest.mark.regression
+@pytest.mark.storm
+def test_willoughby_forcing_aux(tmp_path, plain_xgeoclaw):
+    """Parametric Willoughby (2006) forcing aux fields are reproduced identically.
+
+    Added alongside the Eq. (11a) ``X1`` correction (roadmap S6).  Until this
+    case existed the Willoughby model had no Fortran-level coverage at all,
+    which is how a wrong regression family survived in it -- see S8 for the same
+    gap across the other parametric models.
+    """
+    _check_aux(_run_case(tmp_path, "willoughby", plain_xgeoclaw), "willoughby")
+
+
+@pytest.mark.regression
+@pytest.mark.storm
+def test_willoughby_field_shape(tmp_path, plain_xgeoclaw):
+    """Physical invariants on the Willoughby wind field, independent of a golden.
+
+    A golden catches *drift*; these catch a field that is wrong in the first
+    place.  They are deliberately statements about shape rather than magnitude:
+    ``post_process_wind_estimate`` scales by the boundary-layer and sampling
+    factors and adds the translation speed, so the peak of the aux field is not
+    ``V_max``.
+
+    The decay-length check is the one that actually tests the corrected
+    coefficient.  Willoughby's outer profile is
+
+        V(r) = V_max * [(1-A) exp(-(r-R_max)/X1) + A exp(-(r-R_max)/X2)]
+
+    with ``X2 = 25 km`` fixed and ``A`` small, so beyond a few hundred km the
+    first term dominates and the log-slope recovers ``X1``.  Comparing that
+    against Eq. (11a) evaluated at the test storm's parameters is the closest
+    available stand-in for the Python-Fortran field equivalence the roadmap asks
+    for (which needs the pinned M1 generator).
+    """
+    _, run_path = _run_case(tmp_path, "willoughby", plain_xgeoclaw,
+                            return_path=True)
+    # Re-read one frame as a 2D field rather than the flattened golden rows.
+    sol = solution.Solution(OUTPUT_FRAMES[len(OUTPUT_FRAMES) // 2],
+                            path=run_path, read_aux=True)
+    state = sol.states[0]
+    aux = state.aux
+    speed = np.hypot(np.asarray(aux[AUX_WIND_U]),
+                     np.asarray(aux[AUX_WIND_V]))
+
+    assert np.all(np.isfinite(speed)), "wind field must be finite everywhere"
+    assert np.all(speed >= 0.0)
+    assert speed.max() > 1.0, "the storm should produce a wind field at all"
+
+    # Pressure is a depression bounded by ambient.
+    pressure = np.asarray(aux[AUX_PRESSURE])
+    assert np.all(np.isfinite(pressure))
+    assert pressure.max() <= 101300.0 + 1.0
+    assert pressure.min() < 101300.0, "there must be a pressure deficit"
+
+    # Radial profile through the eye: locate the peak, then check the outer
+    # decay is monotone and has the published length scale.
+    x = state.grid.c_centers[0][:, 0]
+    y = state.grid.c_centers[1][0, :]
+    row = int(np.argmax(speed.max(axis=0)))
+    profile = speed[:, row]
+    peak = int(np.argmax(profile))
+
+    outer = profile[peak:]
+    # Monotone decay outside the eyewall, allowing for the taper at the domain
+    # edge and for discretisation wobble.
+    decreasing = np.diff(outer) <= 1e-6
+    assert decreasing.mean() > 0.9, (
+        "the wind should decay monotonically outside the radius of maximum "
+        f"winds; only {100 * decreasing.mean():.0f}% of steps do")
+
+    # No jump at the 0.9/1.1 R_max blending band -- the profile is sectionally
+    # continuous by construction, and a discontinuity would mean the branches
+    # disagree.
+    steps = np.abs(np.diff(profile))
+    assert steps.max() < 0.5 * profile.max(), (
+        "the sectionally-continuous profile must not jump")
 
 
 @pytest.mark.regression

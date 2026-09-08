@@ -504,7 +504,10 @@ def available_models():
 
 # ``make_multi_structure`` moved to the workflow-tools namespace; kept
 # importable here for backwards compatibility.
-from clawpack.geoclaw.met.tools import make_multi_structure  # noqa: E402,F401
+from clawpack.geoclaw.met.tools import (  # noqa: E402,F401
+    make_multi_structure, iter_atcf)
+from clawpack.geoclaw.met.track import (  # noqa: E402,F401
+    iter_hurdat, iter_ibtracs, catalog_hurdat, catalog_ibtracs)
 
 
 if __name__ == '__main__':

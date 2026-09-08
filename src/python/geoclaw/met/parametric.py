@@ -115,6 +115,31 @@ class ParametricMetForcing(object):
 
     # =========================================================================
     # Write Routines
+    @staticmethod
+    def _is_missing(value):
+        r"""Whether *value* marks missing data in an intensity/geometry field.
+
+        ``np.nan`` is the in-memory contract (see the missing-data note in
+        ``met/track.py``).  A negative is also accepted, because objects built by
+        hand and community fill functions written against v5.9.0 still use ``-1``
+        as the marker; that path warns.  Zero is *not* missing -- some archives
+        report genuinely-zero radii.
+
+        Only applied to ``max_wind_speed``, ``central_pressure``,
+        ``max_wind_radius`` and ``storm_radius``; eye locations are untouched, so
+        negative longitudes and latitudes are unaffected.
+        """
+        if not np.isfinite(value):
+            return True
+        if value < 0.0:
+            warnings.warn(
+                "A negative value was found in an intensity or geometry field "
+                "and is being treated as missing.  The -1 missing-value "
+                "convention is deprecated; use numpy.nan instead.",
+                DeprecationWarning, stacklevel=3)
+            return True
+        return False
+
     def write_geoclaw(self, path, force=False, skip=True, verbose=False,
                       fill_dict={}, **kwargs):
         r"""Write out a GeoClaw formatted storm file
@@ -137,7 +162,15 @@ class ParametricMetForcing(object):
             be assumed redundant and will be ommitted.  Note that the older
             keyword arguments are put in this dictionary.  Currently the one
             default function is for `storm_radius`, which sets the value to
-            500 km.
+            500 km; a caller-supplied `storm_radius` fill overrides it.
+
+        Missing data is marked by `numpy.nan`.  A negative value in one of the
+        four intensity/geometry fields is also accepted as missing, for objects
+        built against the older `-1` convention, and warns.  Zero is *not*
+        treated as missing.  A fill function's return value is re-checked, so a
+        fill that cannot produce a value leaves the row skipped rather than
+        writing a sentinel into the file.  Fills are applied to internal copies;
+        the storm object is not modified.
         """
 
         # Get around the mutable-default-argument problem for the fill_dict
@@ -146,14 +179,28 @@ class ParametricMetForcing(object):
         else:
             fill_dict = dict(fill_dict)
 
-        # If a filling function is not provided we will provide some defaults
-        fill_dict.update({"storm_radius": lambda t, storm: 500e3})
+        # If a filling function is not provided we will provide some defaults.
+        # setdefault, not update: a caller-supplied storm_radius fill must win.
+        #
+        # Same value as the anonymous 500e3 constant this replaces, now named
+        # and documented in met.reconstruction; imported lazily to keep the
+        # import graph acyclic (reconstruction imports nothing from here, but
+        # this keeps it that way).
+        from clawpack.geoclaw.met import reconstruction
+        fill_dict.setdefault("storm_radius", reconstruction.roci_climatology)
         # Handle older interface that had specific fill functions
         if "max_wind_radius_fill" in kwargs.keys():
             fill_dict.update(
                 {"max_wind_radius": kwargs['max_wind_radius_fill']})
         if "storm_radius_fill" in kwargs.keys():
             fill_dict.update({"storm_radius": kwargs['storm_radius_fill']})
+
+        # Fills are applied to local copies rather than to self, so writing the
+        # same storm twice with different fill_dicts does not silently reuse the
+        # first fill (the object would no longer be missing the second time).
+        fields = {name: np.array(getattr(self, name), dtype=float)
+                  for name in ("max_wind_speed", "central_pressure",
+                               "max_wind_radius", "storm_radius")}
 
         # Loop through each line of data and if the line is valid, perform the
         # necessary work to write it out.  Otherwise either raise an exception
@@ -167,14 +214,17 @@ class ParametricMetForcing(object):
 
             # Check each value we need for this time to make sure it is valid
             valid = True
-            for name in ["max_wind_speed", "central_pressure",
-                         "max_wind_radius", "storm_radius"]:
-                if np.isnan(getattr(self, name)[n]):
+            for name, values in fields.items():
+                if self._is_missing(values[n]):
                     if name in fill_dict.keys():
-                        # Fill value with function provided
-                        getattr(self, name)[n] = fill_dict[name](
-                            self.t[n], self)
-                    elif skip:
+                        # Fill value with function provided, then re-check it:
+                        # a fill can legitimately fail (no data to interpolate
+                        # from), and an unchecked failure writes a sentinel into
+                        # the file that GeoClaw cannot run.
+                        values[n] = fill_dict[name](self.t[n], self)
+                        if not self._is_missing(values[n]):
+                            continue
+                    if skip:
                         # Skip this line
                         valid = False
                         if verbose:
@@ -218,14 +268,28 @@ class ParametricMetForcing(object):
             # Eye-location
             data[-1][1:3] = self.eye_location[n, :]
             # Max wind speed
-            data[-1][3] = self.max_wind_speed[n]
+            data[-1][3] = fields["max_wind_speed"][n]
             # Max wind radius
-            data[-1][4] = self.max_wind_radius[n]
+            data[-1][4] = fields["max_wind_radius"][n]
             # Central pressure
-            data[-1][5] = self.central_pressure[n]
+            data[-1][5] = fields["central_pressure"][n]
             # Outer storm radius
-            data[-1][6] = self.storm_radius[n]
+            data[-1][6] = fields["storm_radius"][n]
 
+        # GeoClaw cannot run a zero radius: storm_radius = 0 makes the spatial
+        # ramp in parametric_met_forcing_module zero the forcing everywhere, and
+        # max_wind_radius = 0 divides by zero in the Holland profiles.  Zero is
+        # legitimate *data* in some archives, so it is not treated as missing --
+        # but it is worth saying loudly that the file will not run.
+        if num_casts > 0:
+            radii = np.array([[row[4], row[6]] for row in data])
+            bad_rows = np.nonzero((radii <= 0.0).any(axis=1))[0]
+            if bad_rows.size > 0:
+                warnings.warn(
+                    f"{bad_rows.size} of {num_casts} casts have a "
+                    f"non-positive max_wind_radius or storm_radius (first at "
+                    f"cast {int(bad_rows[0])}).  GeoClaw cannot run this file; "
+                    f"supply a fill function for the affected field.")
 
         # Write out file
         format_string = ("{:19,.8e} " * 7)[:-1] + "\n"

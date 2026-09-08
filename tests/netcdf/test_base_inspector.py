@@ -5,6 +5,7 @@ Covers: coordinate discovery, lon convention, lat order, dim order,
 fill value resolution, crop bound validation, and laziness guarantee.
 """
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -297,3 +298,40 @@ def test_coord_variants_smoke(topo_file_factory, coord_kwargs):
 
     assert meta.lon_wrap == expected_conv
     assert meta.y_increasing == expected_increasing
+
+
+# ============================================================
+# URL vs local path handling (PR #726)
+# ============================================================
+
+def test_url_passed_through_unmangled(monkeypatch):
+    """
+    A remote OPeNDAP/THREDDS URL must reach xarray as a plain string with its
+    scheme intact -- not wrapped in pathlib.Path, which would collapse
+    "https://" to "https:/" and turn it into a cwd-relative local lookup.
+    """
+    import clawpack.geoclaw.netcdf_utils as ncu
+
+    captured = {}
+
+    def fake_open_dataset(path, *args, **kwargs):
+        captured["path"] = path
+        # We only need to inspect the argument; stop before a real open.
+        raise RuntimeError("stop before real open")
+
+    monkeypatch.setattr(ncu.xr, "open_dataset", fake_open_dataset)
+
+    url = ("https://www.ngdc.noaa.gov/thredds/dodsC/regional/"
+           "crescent_city_13_mhw_2010.nc")
+    with pytest.raises(RuntimeError):
+        NetCDFInspector(url)
+
+    assert captured["path"] == url            # exact string, "https://" intact
+    assert not isinstance(captured["path"], Path)
+
+
+def test_local_path_still_becomes_path(topo_file_factory):
+    """A local filesystem path is still wrapped in pathlib.Path."""
+    path = topo_file_factory()
+    with NetCDFInspector(path) as insp:
+        assert isinstance(insp.path, Path)

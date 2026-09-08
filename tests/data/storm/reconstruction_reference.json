@@ -1,0 +1,70 @@
+{
+  "_README": [
+    "Reference values for met/reconstruction.py estimators.",
+    "",
+    "WHAT THIS FILE IS, AND IS NOT.  The Willoughby cases below are computed from",
+    "the published Eq. (7a) coefficients, so they check that the implemented",
+    "functional form matches the transcribed constants -- a TRANSCRIPTION check.",
+    "They are NOT independent verification: values derived from the coefficients",
+    "cannot validate the coefficients.  Nor can the physical invariants in",
+    "tests/test_reconstruction.py (monotonicity, positivity, SI magnitude), all of",
+    "which pass with a units error still in place.",
+    "",
+    "The real verification is skill against observation:",
+    "test_skill_against_observed_rmw holds out the ~21,700 IBTrACS North Atlantic",
+    "1980-2025 points that DO report an RMW and checks median bias and MAE. A",
+    "units or wind-convention error fails that immediately.  It is marked remote",
+    "because it needs the archive; run it with GEOCLAW_TRACK_ARCHIVES set.",
+    "",
+    "If a published table of (V_max, latitude) -> R_max values is located, add",
+    "those cases with 'source': 'paper, Table N' and set tolerance_m from the",
+    "paper's reported scatter.  That would upgrade this to real verification.",
+    "",
+    "Eq. (7a) is fit to maximum azimuthally averaged FLIGHT-LEVEL winds",
+    "(predominantly 850/700 hPa), not to a storm file's 10 m point maximum; the",
+    "paper contrasts the two explicitly.  reconstruction.to_willoughby_wind does",
+    "the conversion.  max_wind_speed in the cases below is already on the",
+    "flight-level basis."
+  ],
+  "willoughby_2006_rmw": {
+    "equation": "Eq. (7a)",
+    "wind_basis": "flight-level azimuthal mean (see _README)",
+    "temporal_averaging": "not stated by the paper",
+    "basin": "Atlantic",
+    "units": "R_max km, V_max m/s, latitude degrees",
+    "tolerance_m": 1.0,
+    "_tolerance_note": "1 m -- this is a transcription check against values computed from the same coefficients, so the tolerance is arithmetic, not physical.  A paper-sourced case would use the paper's reported scatter instead.",
+    "cases": [
+      {
+        "max_wind_speed": 30.0,
+        "latitude": 15.0,
+        "max_wind_radius": 37554.735,
+        "source": "computed from Eq. (7a) coefficients"
+      },
+      {
+        "max_wind_speed": 36.7,
+        "latitude": 25.0,
+        "max_wind_radius": 40082.886,
+        "source": "computed from Eq. (7a) coefficients"
+      },
+      {
+        "max_wind_speed": 45.0,
+        "latitude": 25.0,
+        "max_wind_radius": 35244.147,
+        "source": "computed from Eq. (7a) coefficients"
+      },
+      {
+        "max_wind_speed": 55.0,
+        "latitude": 30.0,
+        "max_wind_radius": 32844.998,
+        "source": "computed from Eq. (7a) coefficients"
+      },
+      {
+        "max_wind_speed": 65.0,
+        "latitude": 20.0,
+        "max_wind_radius": 23755.153,
+        "source": "computed from Eq. (7a) coefficients"
+      }
+    ]
+  }
+}

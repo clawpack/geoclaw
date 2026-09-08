@@ -16,16 +16,16 @@ import clawpack.geoclaw.util as util
 testdir = Path(__file__).parent
 data_dir = testdir / "data" / "storm"
 
-# Current file-format tests
-FILE_FORMAT_TESTS = ["atcf", 
-                    "hurdat", 
-                    "jma", 
-                    "tcvitals", 
-                    pytest.param("ibtracs", 
-                                 marks=pytest.mark.xfail(
-                                 reason=("IBTrACS GeoClaw output does not ,"
-                                         "currently match baseline")))
-]
+# Current file-format tests.  The ibtracs case was xfail while the readers
+# marked missing data with -1 and write_geoclaw only tested np.isnan, so
+# fill_dict never fired and the radii were written as -1.  With the missing-value
+# contract unified on NaN it reproduces the committed baseline again.
+FILE_FORMAT_TESTS = ["atcf",
+                     "hurdat",
+                     "jma",
+                     "tcvitals",
+                     "ibtracs",
+                     ]
 
 DATA_FILE_FORMAT_MAP = {
     1: ["ascii", 1, "nws12", "owi"],
@@ -328,10 +328,18 @@ def _make_storm_from_format(file_format):
 
     test_storm = storm.Storm(input_path, file_format=file_format, **kwargs)
 
-    # Temporary normalization for formats that do not provide these radii.
+    # Neither HURDAT2 nor JMA supplies RMW or ROCI, so without a fill every row
+    # would be skipped and the write would emit a zero-cast file.  These
+    # placeholders keep the existing baselines intact; they are NOT physical, and
+    # a file written with them will not run in GeoClaw.  Replace with
+    # met.reconstruction.default_fill_dict() once the estimators land, and
+    # regenerate the two baselines then.
+    #
+    # These go through the fill path rather than overwriting the storm's arrays,
+    # so the test exercises the same code an ordinary caller would.
     if file_format in ["hurdat", "jma"]:
-        test_storm.max_wind_radius[:] = 0.0
-        test_storm.storm_radius[:] = 0.0
+        fill_mwr = lambda t, this_storm: 0.0        # noqa: E731
+        fill_rad = lambda t, this_storm: 0.0        # noqa: E731
 
     return test_storm, fill_mwr, fill_rad
 

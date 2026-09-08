@@ -52,7 +52,12 @@ class FGoutFrame(object):
         self._v = None
         self._s = None
         self._hss = None
+
+        # dclaw specific attributes
         self._hm = None
+        self._pb = None
+        self._hchi = None
+        self._bdif = None
 
     # Define shortcuts to attributes of self.fgout_grid that are the same
     # for all frames (e.g. X,Y) to avoid storing grid for every frame.

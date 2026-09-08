@@ -57,12 +57,12 @@
     "jma.txt"
   ],
   "max_wind_radius": [
-    -1.0,
-    -1.0,
-    -1.0,
-    -1.0,
-    -1.0,
-    -1.0
+    NaN,
+    NaN,
+    NaN,
+    NaN,
+    NaN,
+    NaN
   ],
   "max_wind_speed": [
     15.4333332,
@@ -88,12 +88,12 @@
     1.0
   ],
   "storm_radius": [
-    -1.0,
-    -1.0,
-    -1.0,
-    -1.0,
-    -1.0,
-    -1.0
+    NaN,
+    NaN,
+    NaN,
+    NaN,
+    NaN,
+    NaN
   ],
   "storm_time_scale": 1.0,
   "t": [

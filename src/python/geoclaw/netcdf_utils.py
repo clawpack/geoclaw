@@ -38,6 +38,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import importlib.util
+import re
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -404,7 +405,17 @@ class NetCDFInspector:
         path: str | Path,
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
     ) -> None:
-        self.path = Path(path)
+        # A remote OPeNDAP/THREDDS URL (e.g. "https://.../foo.nc") must reach
+        # xarray as a string.  Wrapping it in pathlib.Path collapses "https://"
+        # to "https:/" and makes it a *relative* path, which the netCDF4 backend
+        # then resolves against the cwd -- producing a bogus local-file lookup
+        # (PR #726).  The scheme-anchored regex ignores Windows drive paths
+        # like "C:\\..." (no "//").
+        if isinstance(path, str) and re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://",
+                                              path):
+            self.path = path
+        else:
+            self.path = Path(path)
         self.crop_bounds = crop_bounds
         # Activate Dask-lazy chunking if dask is available; fall back to
         # netCDF4 native lazy loading so dask is an optional dependency.
@@ -1671,6 +1682,7 @@ class CFNormalizer:
     Normalize CF metadata in an xarray Dataset.
 
     Performs in-memory attribute fixups:
+
     * Renames coordinate variables to CF standard names where unambiguous.
     * Adds ``standard_name``, ``axis``, and ``units`` attributes to coordinate
       variables if missing.

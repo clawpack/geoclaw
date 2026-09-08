@@ -306,7 +306,7 @@ class DTopography(object):
         # others raise NotImplementedError if set (see read()).
         self.crop_extent = None     # [x1,x2,y1,y2]; None = full domain
         self.coarsen = 1
-        self.buffer = 0.0
+        self.buffer = 0             # grid-point count (see Topography.crop)
         self.align = None
         self.x_shift = 0.0
         self.y_shift = 0.0
@@ -360,7 +360,7 @@ class DTopography(object):
         unsupported = [name for name, is_set in (
             ("crop_extent", self.crop_extent is not None),
             ("coarsen", self.coarsen != 1),
-            ("buffer", self.buffer != 0.0),
+            ("buffer", self.buffer != 0),
             ("align", self.align is not None),
         ) if is_set]
         if unsupported:

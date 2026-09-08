@@ -1566,11 +1566,23 @@ contains
 
         ! Get willoughby coeffs
         ! (See Section 4)
-        n = 2.134d0 + 0.0077d0*mod_mws - 0.4522d0*log(mwr/1.d3) - 0.0038*abs(sloc(2))
-        X1 = (317.1d0 - 2.026d0*mod_mws + 1.915d0*abs(sloc(2))) * 1.d3
+
+        ! Original - n is from eq 10, X1 and A are from eq 11.  Not actually mixable
+        ! X1 = (317.1d0 - 2.026d0*mod_mws + 1.915d0*abs(sloc(2))) * 1.d3                            ! Eq 10(a)
+        ! n = 2.134d0 + 0.0077d0*mod_mws - 0.4522d0*log(mwr/1.d3) - 0.0038*abs(sloc(2))             ! Eq 11(b)
+        ! A = max(0.5913d0 + 0.0029d0*mod_mws - 0.1361*log(mwr/1.d3) - 0.0042d0*abs(sloc(2)), 0.d0) ! Eq 11(c)
+
         X2 = 25.d3
-        A = max(0.5913d0 + 0.0029d0*mod_mws - 0.1361*log(mwr/1.d3) - 0.0042d0*abs(sloc(2)), &
-                0.d0)
+
+        ! Eq 10
+        ! X1 = 317.1d0 - 2.026d0 * mod_mws + 1.915d0 * abs(sloc(2))
+        ! n = 0.4067d0 + 0.0144d0 * mod_mws - 0.0038 * abs(sloc(2))
+        ! A = max(0.0696d0 + 0.0049d0 * mod_mws - 0.0064 * abs(sloc(2)), 0.d0)
+
+        ! Eq 11
+        X1 = (287.6d0 - 1.942d0 * mod_mws + 7.799d0 * log(mwr/1d3) + 1.819 * abs(sloc(2))) * 1d3 ! Convert to meters
+        n = 2.134d0 + 0.0077d0 * mod_mws - 0.4522d0 * log(mwr/1d3) - 0.0038d0 * abs(sloc(2))
+        A = max(0.5913d0 + 0.0029d0 * mod_mws - 0.1361d0 * log(mwr/1d3) - 0.0042d0 * abs(sloc(2)), 0.d0)
 
         ! Set fields
         do j=1-mbc,my+mbc
