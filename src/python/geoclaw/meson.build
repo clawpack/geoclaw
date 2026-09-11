@@ -4,6 +4,8 @@ pkg_dir = join_paths(package.split('.'))
 python_sources = {
   '': [
     '__init__.py',
+    'center_gauges.py',
+    'center_points.py',
     'data.py',
     'dtopotools.py',
     'etopotools.py',
@@ -22,6 +24,7 @@ python_sources = {
     'topotools.py',
     'units.py',
     'util.py',
+    'xarray_backends.py',
   ],
   'datatools': [
     '__init__.py',

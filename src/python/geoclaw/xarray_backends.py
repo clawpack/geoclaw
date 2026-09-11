@@ -134,13 +134,16 @@ import numpy as np
 try:
     import rioxarray  # activate the rio accessor
     import xarray as xr
-except ImportError:
+    from xarray.backends import BackendEntrypoint
+except ImportError as exc:
+    # Chained deliberately: the original exception names the module that is
+    # actually missing, which is what lets tooling tell an absent optional
+    # dependency apart from a module missing from the install.
     raise ImportError(
         "rioxarray and xarray are required to use the FGOutBackend and FGMaxBackend"
-    )
+    ) from exc
 
 from clawpack.geoclaw import fgmax_tools, fgout_tools
-from xarray.backends import BackendEntrypoint
 
 _qunits = {
     "h": "meters",
