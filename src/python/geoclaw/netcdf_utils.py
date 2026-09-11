@@ -383,6 +383,35 @@ class MetMetadata(FileMetadata):
 # Base inspector
 # ---------------------------------------------------------------------------
 
+def is_remote_url(path) -> bool:
+    """True if *path* is a remote URL rather than a local filesystem path.
+
+    Remote OPeNDAP/THREDDS URLs must be kept as strings all the way to xarray.
+    Passing one through ``pathlib.Path`` collapses ``"https://"`` to
+    ``"https:/"`` and makes it *relative*, and ``os.path.abspath`` then resolves
+    that against the cwd -- turning
+
+        https://www.ngdc.noaa.gov/thredds/dodsC/.../ETOPO_2022.nc
+
+    into
+
+        /your/run/directory/https:/www.ngdc.noaa.gov/thredds/.../ETOPO_2022.nc
+
+    which fails as a baffling FileNotFoundError naming a path the user never
+    typed.  This was fixed once inside the NetCDF reader (PR #726); the same
+    trap exists anywhere a path is normalized, so the test lives here and is
+    shared rather than repeated.
+
+    The regex is anchored on a URL scheme followed by "//", which excludes
+    Windows drive letters like ``C:\\data\\topo.nc`` (no "//").  It matches
+    any scheme, ``file://`` included -- that one is local, but it is still not
+    a path the Fortran reader can open, so callers that reject remote sources
+    should reject it too.
+    """
+    return (isinstance(path, str)
+            and re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", path) is not None)
+
+
 class NetCDFInspector:
     """
     Open a NetCDF file and inspect its coordinate metadata.
@@ -406,13 +435,8 @@ class NetCDFInspector:
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
     ) -> None:
         # A remote OPeNDAP/THREDDS URL (e.g. "https://.../foo.nc") must reach
-        # xarray as a string.  Wrapping it in pathlib.Path collapses "https://"
-        # to "https:/" and makes it a *relative* path, which the netCDF4 backend
-        # then resolves against the cwd -- producing a bogus local-file lookup
-        # (PR #726).  The scheme-anchored regex ignores Windows drive paths
-        # like "C:\\..." (no "//").
-        if isinstance(path, str) and re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://",
-                                              path):
+        # xarray as a string; see is_remote_url() for why Path() breaks it.
+        if is_remote_url(path):
             self.path = path
         else:
             self.path = Path(path)
@@ -950,9 +974,17 @@ class TopoInspector(NetCDFInspector):
     # Public interface
     # ------------------------------------------------------------------
 
-    def inspect_topo(self) -> TopoMetadata:
+    def inspect_topo(self, fill_scan: bool = True) -> TopoMetadata:
         """
         Fully inspect the topo file and return a TopoMetadata instance.
+
+        *fill_scan* controls the two data-reading checks (fill values and
+        elevation magnitude).  They are the only part of this method that
+        touches the array rather than its metadata, and they cost a pass over
+        the current crop region -- or over the **whole file** when
+        ``crop_bounds`` is None, which for a remote global DEM means
+        downloading it.  Pass False to skip them when the caller only needs
+        metadata; everything else is unaffected.
         """
         if self.var_name is None:
             self.var_name = self._find_topo_var_name()
@@ -962,9 +994,11 @@ class TopoInspector(NetCDFInspector):
         # applies on read (missing/unrecognized units still raise).
         source_units = self._check_topo_units()
         scale_factor = _units_scale(source_units, GEOCLAW_NETCDF_UNITS['topo'])
-        self._check_fill_in_crop(base.x_name, base.y_name, base.y_increasing)
-        self._check_topo_magnitude(base.x_name, base.y_name,
-                                   base.y_increasing, scale_factor)
+        if fill_scan:
+            self._check_fill_in_crop(base.x_name, base.y_name,
+                                     base.y_increasing)
+            self._check_topo_magnitude(base.x_name, base.y_name,
+                                       base.y_increasing, scale_factor)
 
         return TopoMetadata(
             **dataclasses.asdict(base),
@@ -975,7 +1009,7 @@ class TopoInspector(NetCDFInspector):
             lon_wrap_offset=0.0,
         )
 
-    def topo_entries(self) -> list[list]:
+    def topo_entries(self, fill_scan: bool = True) -> list[list]:
         """
         Return a list of ready-to-use topo entries for topofiles.
 
@@ -988,6 +1022,16 @@ class TopoInspector(NetCDFInspector):
         converts them to file coordinates before storing in the returned
         metadata. Fortran can then use crop_bounds directly against file
         coordinate arrays before applying lon_wrap_offset.
+
+        *fill_scan* is forwarded to :meth:`inspect_topo`.  Note that the
+        inspection below runs with ``crop_bounds`` unset -- it has to, because
+        a wrapping crop lies outside the file extent by construction and would
+        fail validation -- so with ``fill_scan=True`` those checks scan the
+        **entire file** and reject NaN anywhere in it, not just in the crop.
+        For a global DEM that is expensive and usually wrong; callers that
+        only need the descriptor metadata (``TopographyData.write``) pass
+        False.  Scoping the scan to each returned entry's own crop is the
+        better answer and is tracked for the topo-input refactor.
         """
 
         # Interrogate without crop validation: self.crop_bounds is in domain
@@ -995,7 +1039,7 @@ class TopoInspector(NetCDFInspector):
         saved_crop = self.crop_bounds
         self.crop_bounds = None
         try:
-            meta = self.inspect_topo()
+            meta = self.inspect_topo(fill_scan=fill_scan)
         finally:
             self.crop_bounds = saved_crop
 
