@@ -113,5 +113,5 @@ def make_dtopo(path=scratch_dir, makeplots=False):
 
 
 if __name__=='__main__':
-    get_topo(False)
-    make_dtopo(False)
+    get_topo(makeplots=False)
+    make_dtopo(makeplots=False)
