@@ -4,12 +4,14 @@ pkg_dir = join_paths(package.split('.'))
 python_sources = {
   '': [
     '__init__.py',
+    'coordinate_tools.py',
     'data.py',
     'dtopotools.py',
     'etopotools.py',
     'fgmax_tools.py',
     'fgout_tools.py',
     'geoplot.py',
+    'gridded_input.py',
     'kmltools.py',
     'marching_front.py',
     'most2geoclaw.py',

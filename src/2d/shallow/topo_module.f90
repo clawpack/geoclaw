@@ -291,6 +291,26 @@ contains
                     ! block that follows the preprocessing lines.
                     if (abs(itopotype(i)) == 4) then
                         call read_netcdf_descriptor(iunit, i)
+
+                        ! Authoritative coordinate-system gate: antimeridian
+                        ! longitude wrapping is only meaningful on a lon-lat
+                        ! sphere.  A non-zero lon_wrap_offset under a Cartesian
+                        ! run (coordinate_system == 1) is a coordinate-system
+                        ! mismatch -- refuse rather than silently add +/-360 to
+                        ! projected coordinates.  (set_geo runs before this in
+                        ! amr2, so coordinate_system is already set.)
+                        if (coordinate_system == 1 .and. &
+                                nc_lon_wrap_offset(i) /= 0.0d0) then
+                            print *, "ERROR in read_topo_settings: NetCDF topo ", &
+                                trim(topofname(i))
+                            print *, "  requests longitude wrapping ", &
+                                "(lon_wrap_offset =", nc_lon_wrap_offset(i), ")"
+                            print *, "  but coordinate_system = 1 (Cartesian). ", &
+                                "Longitude wrapping is only valid for lon-lat"
+                            print *, "  (coordinate_system = 2).  Use a projected ", &
+                                "topo file or set coordinate_system = 2."
+                            stop
+                        end if
                     end if
 
                     write(GEO_PARM_UNIT,*) '   '
@@ -1481,6 +1501,11 @@ contains
                                (xlocs <= nc_crop_bounds(2, topo_idx))
                     y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
                                (ylocs <= nc_crop_bounds(4, topo_idx))
+                    ! buffer applies to a descriptor crop exactly as it does to
+                    ! topo_crop_extent below; leaving nbuf4 = 0 here silently
+                    ! dropped topo_buffer for every file written by
+                    ! TopoInspector.topo_entries(), which always sets crop_bounds.
+                    nbuf4 = topo_buffer(topo_idx)
                 else if (present(topo_idx) .and. &
                          any(topo_crop_extent(:,topo_idx) /= 0.0d0)) then
                     ! topo_crop_extent is in domain coordinates (after nc_lon_wrap_offset
@@ -1749,6 +1774,23 @@ contains
             ! follows the preprocessing lines (written by DTopoData.write()).
             if (abs(dtopotype(i)) == 4) then
                 call read_dtopo_netcdf_descriptor(iunit, i)
+
+                ! Authoritative coordinate-system gate (mirrors the topo gate in
+                ! read_topo_settings): antimeridian longitude wrapping is only
+                ! meaningful on a lon-lat sphere.  A non-zero lon_wrap_offset
+                ! under a Cartesian run (coordinate_system == 1) is a mismatch --
+                ! refuse rather than add +/-360 to projected coordinates.
+                if (coordinate_system == 1 .and. &
+                        dnc_lon_wrap_offset(i) /= 0.0d0) then
+                    print *, "ERROR in read_dtopo_settings: NetCDF dtopo ", &
+                        trim(dtopofname(i))
+                    print *, "  requests longitude wrapping (lon_wrap_offset =", &
+                        dnc_lon_wrap_offset(i), ")"
+                    print *, "  but coordinate_system = 1 (Cartesian).  Longitude"
+                    print *, "  wrapping is only valid for lon-lat ", &
+                        "(coordinate_system = 2)."
+                    stop 1
+                end if
             end if
 
             write(GEO_PARM_UNIT,*) '   fname:',dtopofname(i)
