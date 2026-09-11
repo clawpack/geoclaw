@@ -10,6 +10,7 @@ from __future__ import absolute_import
 
 import sys
 import collections
+import dataclasses
 
 from clawpack.geoclaw.data import LAT2METER
 
@@ -116,6 +117,172 @@ GEOCLAW_NETCDF_UNITS = {
     # TODO: 'precipitation': ???  (unit TBD)
     # TODO: 'friction':      ???  (unit TBD)
 }
+
+
+# ---------------------------------------------------------------------------
+# Units policy registry
+# ---------------------------------------------------------------------------
+# GeoClaw's units policy is stated in dev/design/units_policy.md.  This registry
+# is the machine-readable form of the table in that document, and it is the
+# single source of truth for both:
+#
+#   * tests/test_units_policy.py, which drives each real reader with a fixture
+#     and asserts the behavior declared here -- so a row cannot claim
+#     something the code does not do; and
+#   * the generated table in dev/design/units_policy.md, rendered from these
+#     rows -- so the document cannot drift from the registry.
+#
+# A row whose `gap` is not None does *not* yet meet the policy.  Its
+# conformance test is marked xfail(strict=True), so the row is visible as a
+# known hole and the marker cannot be left behind once the hole is closed.
+
+
+@dataclasses.dataclass(frozen=True)
+class UnitsPolicyRow:
+    """One input path's declared units behavior.
+
+    The field values are the vocabulary the conformance test understands; see
+    ON_MISSING_VALUES etc. below.
+    """
+
+    key: str                   # stable identifier used by the tests
+    reader: str                # human-readable entry point
+    contract: str              # GeoClaw's internal unit for this quantity
+    declared_in_file: bool     # can the format carry a units declaration?
+    override: str              # the argument that states units explicitly
+    on_missing: str            # no declaration present
+    on_convertible: str        # recognized unit that is not the contract unit
+    on_unrecognized: str       # unit string we cannot interpret
+    magnitude_check: bool      # is the post-conversion sanity check applied?
+    gap: str = ''              # non-empty => does not yet conform, and why
+
+
+# Vocabulary for the behavior fields, so a typo in a row is caught rather
+# than silently producing an untested case.
+ON_MISSING_VALUES = frozenset({
+    'raise',            # refuse to guess (the policy default)
+    'warn+assume',      # assume the contract unit, but say so
+    'silent-assume',    # assume the contract unit with no message (a hole)
+    'format-default',   # the file format documents the unit; use it
+    'n/a',              # the format has no notion of declared units
+})
+ON_CONVERTIBLE_VALUES = frozenset({'convert+warn', 'convert', 'n/a'})
+ON_UNRECOGNIZED_VALUES = frozenset({'raise', 'n/a'})
+
+
+UNITS_POLICY: tuple[UnitsPolicyRow, ...] = (
+    UnitsPolicyRow(
+        key='topo_netcdf',
+        reader='Topography.read (topo_type=4)',
+        contract='m',
+        declared_in_file=True,
+        override="nc_params={'assume_units': str}",
+        on_missing='raise',
+        on_convertible='convert+warn',
+        on_unrecognized='raise',
+        magnitude_check=True,
+    ),
+    UnitsPolicyRow(
+        key='topo_ascii',
+        reader='Topography.read (topo_type=1,2,3)',
+        contract='m',
+        declared_in_file=False,
+        override='none',
+        on_missing='silent-assume',
+        on_convertible='n/a',
+        on_unrecognized='n/a',
+        magnitude_check=False,
+        gap='ASCII carries no units and has no override; elevation in cm or '
+            'feet is read as meters with no message and no sanity check.',
+    ),
+    UnitsPolicyRow(
+        key='dtopo_netcdf_dz',
+        reader='DTopoInspector (deformation)',
+        contract='m',
+        declared_in_file=True,
+        override='assume_units (str)',
+        on_missing='raise',
+        on_convertible='convert+warn',
+        on_unrecognized='raise',
+        magnitude_check=False,
+    ),
+    UnitsPolicyRow(
+        key='dtopo_netcdf_time',
+        reader='DTopoInspector (time axis)',
+        contract='s',
+        declared_in_file=True,
+        override='none',
+        on_missing='warn+assume',
+        on_convertible='convert',
+        on_unrecognized='raise',
+        magnitude_check=False,
+    ),
+    UnitsPolicyRow(
+        key='dtopo_ascii',
+        reader='DTopography.read (dtopo_type=1,2,3)',
+        contract='m',
+        declared_in_file=False,
+        override='none',
+        on_missing='silent-assume',
+        on_convertible='n/a',
+        on_unrecognized='n/a',
+        magnitude_check=False,
+        gap='ASCII dtopo carries no units and has no override.',
+    ),
+    UnitsPolicyRow(
+        key='met_netcdf',
+        reader='MetInspector (wind, pressure)',
+        contract='m/s, Pa',
+        declared_in_file=True,
+        override='assume_units (bool), format_units (dict)',
+        on_missing='raise',
+        on_convertible='convert+warn',
+        on_unrecognized='raise',
+        magnitude_check=True,
+    ),
+    UnitsPolicyRow(
+        key='subfault_generic',
+        reader='Fault.read (columnar subfault files)',
+        contract='m, Pa',
+        declared_in_file=False,
+        override='input_units (dict)',
+        on_missing='warn+assume',
+        on_convertible='convert',
+        on_unrecognized='raise',
+        magnitude_check=False,
+    ),
+    UnitsPolicyRow(
+        key='subfault_csv',
+        reader='CSVFault.read (units in column headings)',
+        contract='m, Pa',
+        declared_in_file=True,
+        override='input_units (dict), overrides the heading',
+        on_missing='warn+assume',
+        on_convertible='convert',
+        on_unrecognized='raise',
+        magnitude_check=False,
+    ),
+)
+
+
+def render_units_policy_table() -> str:
+    """Render :data:`UNITS_POLICY` as the Markdown table used in the design doc.
+
+    ``dev/design/units_policy.md`` holds this between generated-block markers
+    and a test asserts the two agree, so the prose cannot drift from the code.
+    """
+    header = ('| Path | Contract | Declared in file | Override | Missing | '
+              'Non-contract | Unrecognized | Magnitude | Conforms |')
+    sep = '|' + '---|' * 9
+    lines = [header, sep]
+    for row in UNITS_POLICY:
+        conforms = 'yes' if not row.gap else '**no** -- ' + row.gap
+        lines.append(
+            f"| `{row.reader}` | {row.contract} | "
+            f"{'yes' if row.declared_in_file else 'no'} | {row.override} | "
+            f"{row.on_missing} | {row.on_convertible} | {row.on_unrecognized} "
+            f"| {'yes' if row.magnitude_check else 'no'} | {conforms} |")
+    return "\n".join(lines)
 
 
 def units_available():

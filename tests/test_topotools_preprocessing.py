@@ -35,6 +35,7 @@ Group 11: backward-compat round-trip for legacy list/dict topofile entries
 
 from __future__ import annotations
 
+import re
 import textwrap
 import warnings
 from pathlib import Path
@@ -394,7 +395,7 @@ def test_preprocessing_order_shifts_before_crop(tt2_path):
 def test_preprocessing_negative_topotype_negates_z(tt2_path):
     """topo_type < 0 negates Z via the existing sign convention.
 
-    This is the pre-existing behaviour (Fortran topo_type sign convention).
+    This is the pre-existing behavior (Fortran topo_type sign convention).
     negate_z is not involved here.
     """
     t = Topography()
@@ -541,7 +542,7 @@ def test_read_header_netcdf_deferred_z_load(nc_topo_path, tmp_path):
 
 @pytest.mark.netcdf
 def test_read_header_netcdf_sn_normalization(tmp_path):
-    """read_header() normalises lat to S→N regardless of file storage order."""
+    """read_header() normalizes lat to S→N regardless of file storage order."""
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
 
@@ -643,7 +644,7 @@ def test_deprecation_type1_write_warns(tmp_path):
 
 
 def test_deprecation_type1_read_header_raises():
-    """read_header() for topo_type=1 raises IOError (pre-existing behaviour)."""
+    """read_header() for topo_type=1 raises IOError (pre-existing behavior)."""
     t = Topography()
     t.path = "dummy.tt1"
     t.topo_type = 1
@@ -1015,7 +1016,7 @@ def test_write_no_datum_warning_when_consistent(tmp_path, recwarn):
 # ===========================================================================
 
 def test_backward_compat_list_format_round_trip(tmp_path, tt2_path):
-    """Legacy [topo_type, path] list normalises to Topography and writes correctly."""
+    """Legacy [topo_type, path] list normalizes to Topography and writes correctly."""
     td = TopographyData()
     td.topofiles.append([2, str(tt2_path)])
 
@@ -1035,7 +1036,7 @@ def test_backward_compat_list_format_round_trip(tmp_path, tt2_path):
 
 
 def test_backward_compat_mixed_formats(tmp_path, tt2_path):
-    """Mix of Topography, list, and dict entries all normalise; dict extent → crop_extent."""
+    """Mix of Topography, list, and dict entries all normalize; dict extent → crop_extent."""
     t_obj = Topography()
     t_obj.path = str(tt2_path)
     t_obj.topo_type = 2
@@ -1165,7 +1166,7 @@ def test_crop_pushdown_with_coarsen_buffer_matches_full_read(nc_topo_path, buffe
 @pytest.mark.parametrize("s2n", [True, False], ids=["S→N", "N→S"])
 def test_crop_pushdown_respects_storage_order(tmp_path, s2n):
     """crop_extent pushdown matches full-read-then-crop for either lat storage
-    order, and always returns coordinates normalised S→N (y increasing).
+    order, and always returns coordinates normalized S→N (y increasing).
     (The bundled fixture flips only the coordinate on N→S, not the data, so the
     invariant is pushdown-vs-full on the *same* file, not S→N-vs-N→S.)"""
     pytest.importorskip("xarray")
@@ -1186,7 +1187,7 @@ def test_crop_pushdown_respects_storage_order(tmp_path, s2n):
     np.testing.assert_array_equal(t.x, ref.x)
     np.testing.assert_array_equal(t.y, ref.y)
     np.testing.assert_array_equal(t.Z, ref.Z)
-    # Coordinates are always normalised to S→N regardless of file order.
+    # Coordinates are always normalized to S→N regardless of file order.
     assert np.all(np.diff(t.y) > 0)
 
 
@@ -1202,7 +1203,11 @@ def test_crop_no_overlap_keeps_full_grid(nc_topo_path):
 
     t = Topography()
     t.crop_extent = [100.0, 200.0, 100.0, 200.0]
-    t.read(path, topo_type=4)
+    # The fall-back is kept, but it must not be silent: the Fortran reader
+    # treats the same condition as fatal, so a run that ignores this here
+    # fails there instead.
+    with pytest.warns(UserWarning, match="did not overlap"):
+        t.read(path, topo_type=4)
 
     np.testing.assert_array_equal(t.Z, ref.Z)
 
@@ -1302,3 +1307,484 @@ def test_coarsen_align_lattice_invariant(tmp_path):
         yphase = (tk.y[0] - align[1]) / coarsen
         assert abs(xphase - round(xphase)) < 1e-9, (k, tk.x[0])
         assert abs(yphase - round(yphase)) < 1e-9, (k, tk.y[0])
+
+
+# ===========================================================================
+# Group N — Antimeridian and degenerate crop windows
+#
+# Nothing exercised antimeridian cropping through Topography before these,
+# which is how the failures below shipped silently.  The point of the group is
+# that a Topography *never wraps*: a crop is either an ordinary ascending
+# window, or it is not expressible on a single Topography at all and has to go
+# through TopoInspector.topo_entries().
+# ===========================================================================
+
+_WRAPPED_CROP = [170.0, -170.0, -5.0, 5.0]      # crosses the seam, descending
+_CONTINUOUS_CROP = [-211.0, -99.0, -5.0, 5.0]   # same region, continuous coords
+
+
+def _write_global_tt3(path: Path) -> Path:
+    """A 1-degree global file spanning the antimeridian, x in [-180, 180]."""
+    x = np.linspace(-180.0, 180.0, 361)
+    y = np.linspace(-10.0, 10.0, 21)
+    Z = -1000.0 + 10.0 * np.cos(np.radians(x))[None, :] * np.ones((y.size, 1))
+    t = Topography()
+    t.set_xyZ(x, y, Z)
+    t.write(str(path), topo_type=3)
+    return path
+
+
+@pytest.fixture
+def global_tt3_path(tmp_path):
+    return _write_global_tt3(tmp_path / "global.tt3")
+
+
+def test_wrapped_crop_spelling_raises_not_empty_grid(global_tt3_path):
+    """[170, -170] used to produce an *empty* Topography (Z.shape == (11, 0))
+    whose .extent then raised an opaque "zero-size array to reduction" from
+    numpy, far from the cause."""
+    t = Topography()
+    t.crop_extent = list(_WRAPPED_CROP)
+    with pytest.raises(ValueError, match="must increase in both coordinates"):
+        t.read(str(global_tt3_path), topo_type=3)
+
+
+def test_wrapped_crop_error_names_the_supported_route(global_tt3_path):
+    """The error has to say what to do instead, or it just moves the confusion."""
+    t = Topography()
+    t.crop_extent = list(_WRAPPED_CROP)
+    with pytest.raises(ValueError) as excinfo:
+        t.read(str(global_tt3_path), topo_type=3)
+    assert "topo_entries" in str(excinfo.value)
+
+
+def test_descending_latitude_crop_also_raises(global_tt3_path):
+    """A descending *latitude* pair has no antimeridian excuse at all; it was
+    equally silent."""
+    t = Topography()
+    t.crop_extent = [-100.0, -80.0, 5.0, -5.0]
+    with pytest.raises(ValueError, match="must increase in both coordinates"):
+        t.read(str(global_tt3_path), topo_type=3)
+
+
+def test_continuous_crop_is_clipped_and_says_so(global_tt3_path):
+    """The continuous spelling is accepted, but it is *not* wrapped -- it is
+    reduced to the part of the file that exists (112 degrees requested, 81
+    delivered).  That silent reduction is the whole antimeridian confusion, so
+    it must warn."""
+    t = Topography()
+    t.crop_extent = list(_CONTINUOUS_CROP)
+    with pytest.warns(UserWarning, match="extends past the data"):
+        t.read(str(global_tt3_path), topo_type=3)
+
+    # Clipped to the file's western edge, not wrapped around to +149.
+    assert float(t.x[0]) == pytest.approx(-180.0)
+    assert float(t.x[-1]) == pytest.approx(-99.0)
+
+
+def test_ordinary_crop_does_not_warn(global_tt3_path):
+    """The clipping warning must not fire for a crop wholly inside the file,
+    or it becomes noise everyone filters."""
+    t = Topography()
+    t.crop_extent = [-100.0, -80.0, -5.0, 5.0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        t.read(str(global_tt3_path), topo_type=3)
+    assert float(t.x[0]) == pytest.approx(-100.0)
+
+
+def test_crop_between_grid_points_raises(global_tt3_path):
+    """A window inside the extent but narrower than one cell contains no data.
+    It used to return the *full file* -- the opposite of what was asked."""
+    t = Topography()
+    t.crop_extent = [10.2, 10.8, -5.0, 5.0]
+    with pytest.raises(ValueError, match="lies between grid points"):
+        t.read(str(global_tt3_path), topo_type=3)
+
+
+def test_crop_no_overlap_ascii_warns_and_keeps_full_grid(global_tt3_path):
+    """ASCII counterpart of test_crop_no_overlap_keeps_full_grid."""
+    t = Topography()
+    t.crop_extent = [300.0, 320.0, -5.0, 5.0]
+    with pytest.warns(UserWarning, match="did not overlap"):
+        t.read(str(global_tt3_path), topo_type=3)
+    assert t.x.size == 361
+
+
+def test_unstructured_with_crop_raises_not_typeerror(tmp_path):
+    """This used to die with `TypeError: list indices must be integers` from
+    indexing a Python list as an array, several frames from the cause.  crop()
+    already refused unstructured input; read() now agrees.
+
+    The fixture is a genuine 3-column xyz file (not a headed .tt3) so that the
+    read gets far enough to hit that bug when the guard is removed -- a test
+    whose "before" failure is an unrelated parse error would pin nothing.
+    """
+    xyz = tmp_path / "scattered.xyz"
+    with open(xyz, "w") as f:
+        for x in np.linspace(-110.0, -70.0, 9):
+            for y in np.linspace(-8.0, 8.0, 5):
+                f.write(f"{x} {y} {-1000.0 + x + y}\n")
+
+    t = Topography()
+    t.crop_extent = [-100.0, -80.0, -5.0, 5.0]
+    with pytest.raises(NotImplementedError, match="unstructured"):
+        t.read(str(xyz), topo_type=1, unstructured=True)
+
+
+def test_cross_seam_crop_raises_at_topo_data_write(global_tt3_path, tmp_path):
+    """Writing a descending crop_extent used to emit `crop_bounds = 170.0
+    -170.0`, which Fortran resolves to mx=0, my=0: an empty topo, no error.
+
+    The wrapped spelling stays an error even though the *continuous* spelling
+    is now split across the seam automatically -- a descending pair has no
+    unambiguous reading.  The message must offer the continuous equivalent
+    rather than telling the caller to go build descriptors by hand.
+    """
+    t = Topography()
+    t.path = str(global_tt3_path)
+    t.topo_type = 3
+    t.crop_extent = list(_WRAPPED_CROP)
+
+    td = TopographyData()
+    td.topofiles = [t]
+    with pytest.raises(ValueError, match="descending in longitude") as excinfo:
+        td.write(out_file=str(tmp_path / "topo.data"))
+
+    # _WRAPPED_CROP is [170, -170]; the continuous equivalent is [-190, -170].
+    assert "[-190.0, -170.0]" in str(excinfo.value)
+
+
+def test_topo_type_none_inferred_from_suffix(global_tt3_path, tmp_path):
+    """topo_type=None reached the `:3d` format and raised a TypeError naming
+    neither the file nor the attribute.  A .tt3 suffix is unambiguous."""
+    t = Topography()
+    t.path = str(global_tt3_path)
+    t.topo_type = None
+
+    td = TopographyData()
+    td.topofiles = [t]
+    out = tmp_path / "topo.data"
+    td.write(out_file=str(out))
+    assert t.topo_type == 3
+    assert "  3   # topo_type" in out.read_text()
+
+
+def test_topo_type_none_unknown_suffix_raises(tmp_path):
+    """When the suffix carries no type either, say which attribute to set."""
+    src = _write_global_tt3(tmp_path / "global.tt3")
+    unknown = tmp_path / "global.dat"
+    unknown.write_bytes(src.read_bytes())
+
+    t = Topography()
+    t.path = str(unknown)
+    t.topo_type = None
+
+    td = TopographyData()
+    td.topofiles = [t]
+    with pytest.raises(ValueError, match="topo_type is not set"):
+        td.write(out_file=str(tmp_path / "topo.data"))
+
+
+@pytest.mark.netcdf
+def test_cropped_netcdf_read_after_read_header_updates_extent(tmp_path):
+    """read_header() populates _extent from the file header; the topo_type=4
+    read applies its crop while reading the hyperslab, bypassing the property
+    setters that would invalidate it.  The object then reported the *full file*
+    extent alongside cropped data -- and .extent is what _compute_priority_order
+    and the plotting routines use."""
+    pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    path, _, _ = tmp_path / "nc_extent.nc", None, None
+    _make_nc_topo(path, "lon", "lat")
+
+    t = Topography()
+    t.path = str(path)
+    t.topo_type = 4
+    t.read_header()
+    assert list(t.extent) == pytest.approx([_ORIGIN_X, _ORIGIN_X + _NX - 1,
+                                            _ORIGIN_Y, _ORIGIN_Y + _NY - 1])
+
+    t.crop_extent = [_ORIGIN_X + 2, _ORIGIN_X + 5,
+                     _ORIGIN_Y + 2, _ORIGIN_Y + 5]
+    t.read()
+
+    assert list(t.extent) == pytest.approx(
+        [float(t.x[0]), float(t.x[-1]), float(t.y[0]), float(t.y[-1])])
+    assert float(t.extent[0]) == pytest.approx(_ORIGIN_X + 2)
+
+
+def test_buffer_and_coarsen_give_absolute_output_shape(tt2_path):
+    """The existing combined test is a *relative* netCDF-vs-ASCII equality, so
+    nothing pinned whether buffer=1, coarsen=2 adds 1 or 2 output points per
+    side.  buffer counts coarsened *output* points: the window is expanded by
+    buffer*coarsen native points before the strided slice."""
+    ref = Topography()
+    ref.crop_extent = [_ORIGIN_X + 2, _ORIGIN_X + 7, _ORIGIN_Y + 2,
+                       _ORIGIN_Y + 7]
+    ref.coarsen = 2
+    ref.read(str(tt2_path), topo_type=2)
+
+    t = Topography()
+    t.crop_extent = list(ref.crop_extent)
+    t.coarsen = 2
+    t.buffer = 1
+    t.read(str(tt2_path), topo_type=2)
+
+    # One extra coarsened point on each side of each axis.
+    assert t.x.size == ref.x.size + 2
+    assert t.y.size == ref.y.size + 2
+    assert t.Z.shape == (ref.Z.shape[0] + 2, ref.Z.shape[1] + 2)
+    # Coarsening is unchanged by the buffer: still every 2nd native point.
+    assert float(t.x[1] - t.x[0]) == pytest.approx(2.0 * _DELTA)
+    # And the buffered window still contains the unbuffered one.
+    assert float(t.x[0]) == pytest.approx(float(ref.x[0]) - 2.0 * _DELTA)
+
+
+# ===========================================================================
+# Group N+1 — Remote sources, and cross-seam crops from ordinary setrun code
+#
+# Both of these were reported from the field: the most natural possible setrun
+# (set .path, .crop_extent, .buffer; append to topofiles) failed, once with a
+# mangled local path and once with "crop_bounds exceed file extent", while the
+# machinery to handle each already existed and was tested one layer down.
+# These pin the two paths being reachable, not just present.
+# ===========================================================================
+
+REMOTE_URL = ("https://www.ngdc.noaa.gov/thredds/dodsC/global/ETOPO2022/30s/"
+              "30s_bed_elev_netcdf/ETOPO_2022_v1_30s_N90W180_bed.nc")
+
+
+def _make_global_nc(path, delta=0.5, lon0=-180.0, lon1=180.0,
+                    lat0=-70.0, lat1=10.0):
+    """A CF-compliant near-global NetCDF file spanning the antimeridian."""
+    netCDF4 = pytest.importorskip("netCDF4")
+    x = np.arange(lon0, lon1 + 1e-9, delta)
+    y = np.arange(lat0, lat1 + 1e-9, delta)
+    Z = -1000.0 + np.outer(np.linspace(0.0, 200.0, y.size), np.ones_like(x))
+    with netCDF4.Dataset(path, "w") as ds:
+        ds.createDimension("lon", x.size)
+        ds.createDimension("lat", y.size)
+        v = ds.createVariable("lon", "f8", ("lon",))
+        v[:] = x
+        v.units = "degrees_east"
+        v.standard_name = "longitude"
+        v = ds.createVariable("lat", "f8", ("lat",))
+        v[:] = y
+        v.units = "degrees_north"
+        v.standard_name = "latitude"
+        v = ds.createVariable("elevation", "f8", ("lat", "lon"))
+        v[:] = Z
+        v.units = "m"
+        v.standard_name = "height_above_mean_sea_level"
+        v.positive = "up"
+        ds.Conventions = "CF-1.8"
+    return path
+
+
+def _entry_blocks(text):
+    """Split a written topo.data into its per-file blocks."""
+    return [b for b in text.split("# topo_path") if "topo_type" in b]
+
+
+def _descriptor_values(text, key):
+    """Every value written for descriptor *key*, in file order."""
+    return re.findall(rf"^{re.escape(key)}\s*=\s*(.+)$", text, re.MULTILINE)
+
+
+def test_is_remote_url_discriminates_urls_from_paths():
+    """The regex must not mistake a Windows drive letter for a URL scheme."""
+    from clawpack.geoclaw.netcdf_utils import is_remote_url
+
+    assert is_remote_url("https://example.org/topo.nc")
+    assert is_remote_url("http://example.org/topo.nc")
+    assert not is_remote_url("/tmp/topo.nc")
+    assert not is_remote_url("topo.nc")
+    assert not is_remote_url(r"C:\data\topo.nc")
+    assert not is_remote_url(Path("/tmp/topo.nc"))
+
+
+def test_remote_url_in_topofiles_raises_with_the_recipe(tmp_path):
+    """A URL used to be run through os.path.abspath, producing
+
+        FileNotFoundError: /run/dir/https:/www.ngdc.noaa.gov/...
+
+    naming a path the user never typed and giving no hint that the fix is to
+    fetch it first.
+    """
+    t = Topography()
+    t.path = REMOTE_URL
+    t.topo_type = 4
+    t.crop_extent = [-160.0, -120.0, -60.0, 0.0]
+
+    td = TopographyData()
+    td.topofiles = [t]
+    with pytest.raises(ValueError) as excinfo:
+        td.write(out_file=str(tmp_path / "topo.data"))
+
+    msg = str(excinfo.value)
+    assert "fetch_remote_topo" in msg          # the actionable part
+    assert REMOTE_URL in msg                   # unmangled
+    assert "https:/www" not in msg             # specifically not collapsed
+
+
+def test_remote_url_in_dtopofiles_raises(tmp_path):
+    """Same trap on the dtopo writer, which shares the abspath pattern."""
+    import clawpack.geoclaw.dtopotools as dtopotools
+
+    d = dtopotools.DTopography()
+    d.path = REMOTE_URL
+    d.dtopo_type = 4
+
+    from clawpack.geoclaw.data import DTopoData
+
+    dtd = DTopoData()
+    dtd.dtopofiles = [d]
+    with pytest.raises(ValueError, match="URL"):
+        dtd.write(out_file=str(tmp_path / "dtopo.data"))
+
+
+@pytest.mark.netcdf
+def test_cross_seam_crop_writes_two_entries(tmp_path):
+    """The reported case: a continuous crop spanning the date line.
+
+    Previously raised `crop_bounds lon [...] exceed file extent` even though
+    _compute_lon_entries could already cover it.  Must now produce one entry
+    per side of the seam with complementary crop_bounds.
+    """
+    pytest.importorskip("xarray")
+    nc = _make_global_nc(tmp_path / "gebco_like.nc")
+
+    t = Topography()
+    t.path = str(nc)
+    t.topo_type = 4
+    t.crop_extent = [-190.0, -120.0, -60.0, 0.0]
+
+    td = TopographyData()
+    td.topofiles = [t]
+    out = tmp_path / "topo.data"
+    td.write(out_file=str(out))
+    text = out.read_text()
+
+    assert "2                    =: ntopofiles" in text
+    assert len(_entry_blocks(text)) == 2
+
+    offsets = [float(v) for v in _descriptor_values(text, "lon_wrap_offset")]
+    assert offsets == [0.0, -360.0]
+
+    bounds = _descriptor_values(text, "crop_bounds")
+    # East side comes from the file as-is; west side is the +170..180 strip
+    # read with a -360 shift so Fortran places it at -190..-180.
+    assert bounds[0].split() == ["-180.0", "-120.0", "-60.0", "0.0"]
+    assert bounds[1].split() == ["170.0", "180.0", "-60.0", "0.0"]
+
+
+@pytest.mark.netcdf
+def test_cross_seam_entries_keep_buffer_and_coarsen(tmp_path):
+    """buffer and coarsen must reach *every* expanded entry.
+
+    topo_entries() builds Topography objects carrying only _netcdf_meta, so
+    routing through it naively writes `buffer = 0` -- which would silently
+    undo the Fortran fix that made buffer work for descriptor crops at all.
+    """
+    pytest.importorskip("xarray")
+    nc = _make_global_nc(tmp_path / "gebco_like.nc")
+
+    t = Topography()
+    t.path = str(nc)
+    t.topo_type = 4
+    t.crop_extent = [-190.0, -120.0, -60.0, 0.0]
+    t.buffer = 1
+    t.coarsen = 20
+
+    td = TopographyData()
+    td.topofiles = [t]
+    out = tmp_path / "topo.data"
+    td.write(out_file=str(out))
+
+    blocks = _entry_blocks(out.read_text())
+    assert len(blocks) == 2
+    for block in blocks:
+        assert "1   # buffer" in block
+        assert "20   # coarsen" in block
+
+
+@pytest.mark.netcdf
+def test_off_seam_crop_writes_one_entry_with_nonzero_offset(tmp_path):
+    """A crop wholly on the far side of the cut needs a *single* entry with a
+    non-zero offset.  lon_wrap_offset was hard-coded to 0.0, so this case was
+    wrong even though it never needed splitting."""
+    pytest.importorskip("xarray")
+    nc = _make_global_nc(tmp_path / "g.nc")
+
+    t = Topography()
+    t.path = str(nc)
+    t.topo_type = 4
+    t.crop_extent = [185.0, 195.0, -60.0, 0.0]   # i.e. -175..-165
+
+    td = TopographyData()
+    td.topofiles = [t]
+    out = tmp_path / "topo.data"
+    td.write(out_file=str(out))
+    text = out.read_text()
+
+    assert "1                    =: ntopofiles" in text
+    assert [float(v) for v in
+            _descriptor_values(text, "lon_wrap_offset")] == [360.0]
+    assert _descriptor_values(text, "crop_bounds")[0].split() == [
+        "-175.0", "-165.0", "-60.0", "0.0"]
+
+
+@pytest.mark.netcdf
+def test_wrapping_write_does_not_scan_the_whole_file(tmp_path, monkeypatch):
+    """topo_entries() inspects with crop_bounds unset, so its fill/magnitude
+    checks would read the *entire* variable and reject NaN anywhere in it.
+
+    On a global DEM read over OPeNDAP that turns `make data` into a full
+    download.  The regression is invisible on a small local fixture, so it is
+    pinned directly rather than by timing.
+    """
+    pytest.importorskip("xarray")
+    from clawpack.geoclaw import netcdf_utils as ncutils
+
+    nc = _make_global_nc(tmp_path / "g.nc")
+
+    calls = []
+    original = ncutils.TopoInspector._check_fill_in_crop
+
+    def spy(self, *args, **kwargs):
+        calls.append(args)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(ncutils.TopoInspector, "_check_fill_in_crop", spy)
+
+    t = Topography()
+    t.path = str(nc)
+    t.topo_type = 4
+    t.crop_extent = [-190.0, -120.0, -60.0, 0.0]
+
+    td = TopographyData()
+    td.topofiles = [t]
+    td.write(out_file=str(tmp_path / "topo.data"))
+
+    assert calls == [], (
+        "write() triggered a fill scan; on a remote global DEM this "
+        "downloads the whole file during `make data`.")
+
+
+@pytest.mark.netcdf
+def test_wrapping_crop_still_checks_latitude(tmp_path):
+    """Longitude wraps; latitude does not.  Dropping crop_bounds validation to
+    allow the wrap must not also drop the latitude check."""
+    pytest.importorskip("xarray")
+    nc = _make_global_nc(tmp_path / "g.nc")   # lat spans -70..10
+
+    t = Topography()
+    t.path = str(nc)
+    t.topo_type = 4
+    t.crop_extent = [-190.0, -120.0, -60.0, 45.0]   # 45N is off the file
+
+    td = TopographyData()
+    td.topofiles = [t]
+    with pytest.raises(ValueError, match="latitude extent"):
+        td.write(out_file=str(tmp_path / "topo.data"))

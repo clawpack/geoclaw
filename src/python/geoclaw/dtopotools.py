@@ -33,6 +33,7 @@ writing out dtopo files, and calculating Okada based deformations.
 import os
 import sys
 import re
+import warnings
 
 import numpy
 
@@ -64,6 +65,58 @@ standard_units['depth'] = 'm'
 standard_units['slip'] = 'm'
 standard_units['mu'] = 'Pa'
 
+
+
+def _resolve_input_units(input_units, where, from_file=None):
+    """Return the effective ``{parameter: unit}`` mapping for a subfault read.
+
+    Subfault files are columnar text: most carry no unit information at all,
+    and the few that do (CSV headings like ``Depth(km)``) describe only some
+    columns.  So units come from up to three places, and the precedence matters:
+
+    1. an explicit *input_units* entry from the caller -- always wins;
+    2. *from_file*, units parsed out of the file itself -- fills the gaps;
+    3. :data:`standard_units` (SI) -- the last resort.
+
+    Explicit beats implicit so that a caller who knows better than a file's
+    heading can say so, and so a wrong heading is recoverable.  A disagreement
+    between (1) and (2) is warned about rather than resolved quietly.
+
+    *input_units* of None means "not specified": SI is assumed, but a warning
+    says so, because omitting it used to declare meters/pascals silently and a
+    km / dyne-cm file was then off by 10^3-10^7.  An explicit ``{}`` means "my
+    data really is SI" and stays silent -- the deliberate escape hatch.
+
+    The caller's dict is never mutated; a copy is returned.
+    """
+    resolved = standard_units.copy()
+
+    if from_file:
+        resolved.update(from_file)
+
+    if input_units is None:
+        warnings.warn(
+            f"No input_units given for {where}; assuming GeoClaw standard "
+            f"units ({', '.join('%s=%s' % kv for kv in sorted(standard_units.items()))}). "
+            f"If the file uses other units (km, cm, dyne/cm^2 are common) pass "
+            f"input_units explicitly; pass input_units={{}} to state that the "
+            f"data really is in standard units and silence this warning.",
+            UserWarning, stacklevel=3,
+        )
+        return resolved
+
+    for name, unit in input_units.items():
+        if from_file and name in from_file and from_file[name] != unit:
+            warnings.warn(
+                f"Units for '{name}' in {where} disagree: the file says "
+                f"'{from_file[name]}' and input_units says '{unit}'. Using "
+                f"'{unit}' (an explicit input_units entry takes precedence "
+                f"over the file's own heading).",
+                UserWarning, stacklevel=3,
+            )
+        resolved[name] = unit
+
+    return resolved
 
 def plot_dZ_contours(x, y, dZ, axes=None, dZ_interval=0.5, verbose=False,
                      fig_kwargs={}):
@@ -721,7 +774,7 @@ class DTopography(object):
             # Convert deformation to meters if the file declared another
             # (recognized) unit; contract is meters (GEOCLAW_NETCDF_UNITS).
             _src_units = getattr(inspector, "source_units", "m")
-            _meters_aliases = ("m", "meter", "meters", "metre", "metres")
+            _meters_aliases = ("m", "meter", "meters", "meter", "meters")
             if _src_units and _src_units not in _meters_aliases:
                 _canonical = _normalize_cf_unit(_src_units)
                 if _canonical is not None:
@@ -903,7 +956,7 @@ class Fault(object):
 
     """
 
-    def __init__(self, subfaults=None, input_units={},
+    def __init__(self, subfaults=None, input_units=None,
                  coordinate_specification=None):
         r"""Fault initialization routine.
 
@@ -916,9 +969,14 @@ class Fault(object):
         #self.times = numpy.array([0., 1.])   # or just [0.] ??
         self.dtopo = None
 
-        # Default units of each parameter type
-        self.input_units = standard_units.copy()
-        self.input_units.update(input_units)
+        # Units of each parameter type.  Only warn about an unspecified
+        # mapping when there is data to convert; constructing an empty Fault
+        # and filling it later is a normal pattern and converts nothing.
+        if subfaults is None and input_units is None:
+            self.input_units = standard_units.copy()
+        else:
+            self.input_units = _resolve_input_units(
+                input_units, f"{type(self).__name__}()")
 
         # Set the coordinate specification, e.g. 'top center':
         self.coordinate_specification = coordinate_specification
@@ -938,7 +996,8 @@ class Fault(object):
 
     def read(self, path, column_map, coordinate_specification="centroid",
                                      rupture_type="static", skiprows=0,
-                                     delimiter=None, input_units={}, defaults=None):
+                                     delimiter=None, input_units=None,
+                                     defaults=None, _units_from_file=None):
         r"""Read in subfault specification at *path*.
 
         Creates a list of subfaults from the subfault specification file at
@@ -976,8 +1035,8 @@ class Fault(object):
             data = numpy.array([data])
 
         self.coordinate_specification = coordinate_specification
-        self.input_units = standard_units.copy()
-        self.input_units.update(input_units)
+        self.input_units = _resolve_input_units(
+            input_units, f"'{path}'", from_file=_units_from_file)
         self.subfaults = []
         for n in range(data.shape[0]):
 
@@ -3107,13 +3166,17 @@ class CSVFault(Fault):
     Assumes that the first row gives the column headings
     """
 
-    def read(self, path, input_units={}, coordinate_specification="top center",
+    def read(self, path, input_units=None, coordinate_specification="top center",
                          rupture_type="static", verbose=False):
         r"""Read in subfault specification at *path*.
 
         Creates a list of subfaults from the subfault specification file at
         *path*.
 
+        Units may be annotated in the column headings, e.g. ``Depth(km)``.
+        Those are applied; an explicit *input_units* entry for the same column
+        overrides them and a disagreement warns.  See
+        ``dev/design/units_policy.md``.
         """
 
         possible_column_names = """longitude latitude length width depth strike dip
@@ -3126,6 +3189,10 @@ class CSVFault(Fault):
         param["rupture time"] = "rupture_time"
         param["rise time"] = "rise_time"
 
+        # Units parsed out of the column headings, e.g. "Depth(km)".  Keyed by
+        # the *file's* column name; remapped to parameter names below.
+        units_from_file = {}
+
         # Read header of file
         with open(path, 'r') as subfault_file:
             header_line = subfault_file.readline().split(",")
@@ -3135,13 +3202,16 @@ class CSVFault(Fault):
                     # Strip out units if present
                     unit_start = column_heading.find("(")
                     unit_end = column_heading.find(")")
-                    column_name = column_heading[:unit_start].lower()
+                    column_name = column_heading[:unit_start].lower().strip()
                     units = column_heading[unit_start+1:unit_end]
-                    if verbose and input_units.get(column_name,units) != units:
-                        print("*** Warning: input_units[%s] reset to %s" \
-                              % (column_name, units))
-                        print("    based on file header")
-                        input_units[column_name] = units
+                    # Record what the file says about this column.  This used
+                    # to be assigned only when `verbose` was true *and* the
+                    # caller had already named a different unit -- so with the
+                    # default verbose=False the heading was parsed and then
+                    # thrown away, and a "Depth(km)" file was read as meters.
+                    # Precedence against input_units is resolved in
+                    # _resolve_input_units, not here.
+                    units_from_file[column_name] = units
 
                 else:
                     column_name = column_heading.lower()
@@ -3153,10 +3223,17 @@ class CSVFault(Fault):
                     print("*** Warning: column name not recognized: %s" \
                         % column_name)
 
+        # Remap heading names onto parameter names (e.g. "rigidity" -> "mu")
+        # so they line up with input_units / standard_units keys.
+        units_from_file = {param.get(name, name): unit
+                           for name, unit in units_from_file.items()
+                           if param.get(name, name) in standard_units}
+
         super(CSVFault, self).read(path, column_map=column_map, skiprows=1,
                                 delimiter=",", input_units=input_units,
                                 coordinate_specification=coordinate_specification,
-                                rupture_type=rupture_type)
+                                rupture_type=rupture_type,
+                                _units_from_file=units_from_file)
 
 
 
@@ -3480,7 +3557,7 @@ class Fault1d(Fault):
 
     """
 
-    def __init__(self, subfaults=None, input_units={},
+    def __init__(self, subfaults=None, input_units=None,
                  coordinate_specification=None):
         r"""Fault initialization routine.
 

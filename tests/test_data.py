@@ -365,5 +365,178 @@ def test_surge_forcing_family_subtype(tmp_path):
         bad.write(out_file=tmp_path / "bad.data")
 
 
+# ---------------------------------------------------------------------------
+# 1D topo.data / dtopo.data layout
+#
+# src/1d_classic shares these data classes with the 2D code but not the Fortran
+# readers, and it was never updated for the per-file preprocessing block.  Its
+# read_topo_settings expects
+#
+#     topo_missing / test_topography / ntopofiles / override_order / '<path>'
+#
+# and read_dtopo_settings reads the dtopo path and type with a single
+# list-directed statement, so the path line must not carry a trailing comment.
+# These pin both layouts; getting either wrong makes every 1d_classic example
+# abort at startup.
+# ---------------------------------------------------------------------------
+
+
+def _payload(path):
+    """Data-file lines with the generated comment header and blanks removed."""
+    return [line for line in Path(path).read_text().splitlines()
+            if line.strip() and not line.lstrip().startswith("#")]
+
+
+def _field_names(path):
+    """Ordered field labels of a .data payload, one per line.
+
+    ``data_write`` emits ``<value>  =: <name>  # <description>``, while the
+    path/type lines are written by hand as ``<value>   # <name>``.  Taking the
+    ``=:`` label when present and the first comment token otherwise gives the
+    file's layout as a list of names -- so a layout assertion can say *which*
+    line is missing or misplaced rather than only that the count is wrong.
+    """
+    names = []
+    for line in _payload(path):
+        if "=:" in line:
+            names.append(line.split("=:", 1)[1].split()[0])
+        elif "#" in line:
+            names.append(line.split("#", 1)[1].split()[0])
+        else:
+            names.append(line.strip())
+    return names
+
+
+@pytest.mark.python
+def test_topo_data_1d_uses_legacy_layout(tmp_path):
+    r"""1D topo.data carries override_order and no preprocessing block."""
+    import clawpack.geoclaw.topotools as topotools
+
+    topo = topotools.Topography()
+    topo.path = "celledges.data"
+    topo.topo_type = 1
+
+    topo_data = clawpack.geoclaw.data.TopographyData(num_dim=1)
+    topo_data.topofiles = [topo]
+    out = tmp_path / "topo.data"
+    topo_data.write(out_file=out)
+
+    # Assert the layout by name, in order.  read_topo_settings reads these
+    # positionally, so a dropped or reordered line is a startup abort -- and
+    # naming them makes the failure say which one went missing.
+    assert _field_names(out) == ["topo_missing", "test_topography",
+                                 "ntopofiles", "override_order",
+                                 "topo_path", "topo_type"]
+
+    lines = _payload(out)
+    # Unlike dtopo below, the topo path line may keep its trailing comment:
+    # read_topo_settings reads the path as a *single* list-directed item, so
+    # the read is satisfied before reaching the comment.
+    assert lines[4].startswith("'") and "celledges.data'" in lines[4]
+    text = Path(out).read_text()
+    for attr in ("crop_extent", "coarsen", "buffer", "align", "negate_z"):
+        assert attr not in text
+
+
+@pytest.mark.python
+def test_topo_data_1d_override_order_written_once_for_multiple_files(tmp_path):
+    r"""override_order precedes the file entries and appears exactly once.
+
+    read_topo_settings reads the logical *once*, before any path, so it must
+    not migrate into the per-file loop.  With a single topo file a per-file
+    write would be indistinguishable from the correct one; two files pin it.
+    """
+    import clawpack.geoclaw.topotools as topotools
+
+    topos = []
+    for name in ("coarse.tt3", "fine.tt3"):
+        topo = topotools.Topography()
+        topo.path = name
+        topo.topo_type = 3
+        topos.append(topo)
+
+    topo_data = clawpack.geoclaw.data.TopographyData(num_dim=1)
+    topo_data.topofiles = topos
+    out = tmp_path / "topo.data"
+    topo_data.write(out_file=out)
+
+    assert _field_names(out) == ["topo_missing", "test_topography",
+                                 "ntopofiles", "override_order",
+                                 "topo_path", "topo_type",
+                                 "topo_path", "topo_type"]
+    # ntopofiles must still count the files, not the records.
+    assert _payload(out)[2].split()[0] == "2"
+
+
+@pytest.mark.python
+def test_topo_data_2d_layout_unchanged_by_1d_support(tmp_path):
+    r"""The default (2D) topo.data still carries the full block."""
+    import clawpack.geoclaw.topotools as topotools
+
+    topo = topotools.Topography()
+    topo.path = "topo.tt3"
+    topo.topo_type = 3
+
+    topo_data = clawpack.geoclaw.data.TopographyData()
+    assert topo_data.num_dim == 2, "2D must remain the default"
+    topo_data.topofiles = [topo]
+    out = tmp_path / "topo.data"
+    topo_data.write(out_file=out)
+
+    text = Path(out).read_text()
+    assert "override_order" not in text
+    for attr in ("crop_extent", "coarsen", "buffer", "align",
+                 "x_shift", "y_shift", "z_shift", "negate_z"):
+        assert attr in text
+
+
+@pytest.mark.python
+def test_dtopo_data_1d_path_line_has_no_trailing_comment(tmp_path):
+    r"""1D dtopo.data path line must be bare, and carry no preprocessing block.
+
+    ``read(iunit,*) dtopofname, dtopotype`` spans records, so the type may sit
+    on the following line -- but a trailing comment on the path line is
+    consumed as item 2 and aborts with "Bad integer for item 2 in list input".
+    """
+    import clawpack.geoclaw.dtopotools as dtopotools
+
+    d = dtopotools.DTopography()
+    d.path = "dtopo_okada.dtt1"
+    d.dtopo_type = 1
+
+    dtopo_data = clawpack.geoclaw.data.DTopoData(num_dim=1)
+    dtopo_data.dtopofiles = [d]
+    dtopo_data.dt_max_dtopo = 0.5
+    out = tmp_path / "dtopo.data"
+    dtopo_data.write(out_file=out)
+
+    lines = _payload(out)
+    # mdtopofiles, path, dtopo_type, dt_max_dtopo
+    assert len(lines) == 4, lines
+    assert lines[1].rstrip().endswith("'"), (
+        "path line must not carry a trailing comment: %r" % lines[1])
+    assert "dtopo_type" in lines[2]
+    assert "dt_max_dtopo" in lines[3]
+    assert "crop_extent" not in Path(out).read_text()
+
+
+@pytest.mark.python
+def test_1d_preprocessing_request_warns(tmp_path):
+    r"""Preprocessing asked for in 1D is reported, not silently dropped."""
+    import clawpack.geoclaw.topotools as topotools
+
+    topo = topotools.Topography()
+    topo.path = "celledges.data"
+    topo.topo_type = 1
+    topo.coarsen = 4
+    topo.z_shift = 2.0
+
+    topo_data = clawpack.geoclaw.data.TopographyData(num_dim=1)
+    topo_data.topofiles = [topo]
+
+    with pytest.warns(UserWarning, match="not supported for 1D"):
+        topo_data.write(out_file=tmp_path / "topo.data")
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
