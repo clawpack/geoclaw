@@ -1481,6 +1481,11 @@ contains
                                (xlocs <= nc_crop_bounds(2, topo_idx))
                     y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
                                (ylocs <= nc_crop_bounds(4, topo_idx))
+                    ! buffer applies to a descriptor crop exactly as it does to
+                    ! topo_crop_extent below; leaving nbuf4 = 0 here silently
+                    ! dropped topo_buffer for every file written by
+                    ! TopoInspector.topo_entries(), which always sets crop_bounds.
+                    nbuf4 = topo_buffer(topo_idx)
                 else if (present(topo_idx) .and. &
                          any(topo_crop_extent(:,topo_idx) /= 0.0d0)) then
                     ! topo_crop_extent is in domain coordinates (after nc_lon_wrap_offset

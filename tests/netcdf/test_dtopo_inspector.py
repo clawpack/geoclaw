@@ -193,13 +193,13 @@ def test_numeric_time_units_scaled_to_seconds(tmp_path, cf_unit, factor):
     assert np.isclose(meta.dt, 1.0 * factor)
 
 
-def test_numeric_time_unrecognised_units_raise(tmp_path):
-    """An unrecognised time-units string is rejected, never assumed seconds."""
+def test_numeric_time_unrecognized_units_raise(tmp_path):
+    """An unrecognized time-units string is rejected, never assumed seconds."""
     ds = make_dtopo_dataset(times=[0.0, 1.0, 2.0])
     ds["time"].attrs["units"] = "fortnights"
     path = write_dataset(ds, tmp_path / "dt.nc")
     with DTopoInspector(path) as insp:
-        with pytest.raises(ValueError, match="[Uu]nrecognised time units"):
+        with pytest.raises(ValueError, match="[Uu]nrecognized time units"):
             insp.inspect_dtopo()
 
 
