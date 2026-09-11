@@ -1,3 +1,19 @@
+# Carry the compile flags onto the link line.
+#
+# Makefile.common defaults the link flags with
+#
+#     LFLAGS ?= $(FFLAGS)
+#
+# but `?=` only fires when LFLAGS is still unset, and this file is included
+# *before* Makefile.common.  So the moment the LAPACK additions below touch
+# LFLAGS, that default is silently cancelled and FFLAGS never reaches the
+# linker -- an OpenMP build then compiles with -fopenmp but links without it
+# and fails on undefined _GOMP_* symbols, even under `make new`.  Adding
+# $(FFLAGS) here restores what the default would have supplied.  LFLAGS stays
+# recursively expanded, so this picks up any later FFLAGS additions (including
+# the MKL include path added below) at link time.
+LFLAGS += $(FFLAGS)
+
 # Include flags for LAPACK linking
 # Match on a substring of FC so versioned/pathed compiler names also work
 # (e.g. setup-fortran >= 1.9.2 exports FC=gfortran-14 rather than gfortran).
