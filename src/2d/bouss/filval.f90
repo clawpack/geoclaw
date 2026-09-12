@@ -233,7 +233,7 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
                                 (time <= tend_force_dry)) then
                            ! check if in force_dry region
                            ii = int((x - xlow_fdry + 1d-7) / dx_fdry) + 1
-                           jj = int((y - ylow_fdry + 1d-7) / dy_fdry) + 1
+                           jj = int((y - ylow_fdry + 1d-7) / dy_fdry)
                            jj = my_fdry - jj  ! since index 1 corresponds to north edge
                            if ((ii>=1) .and. (ii<=mx_fdry) .and. &
                                (jj>=1) .and. (jj<=my_fdry)) then
