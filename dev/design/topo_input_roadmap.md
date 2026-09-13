@@ -241,6 +241,59 @@ issue. Two real fixes were considered and both rejected for now:
   flags thrash the whole shared library on every `make`.
 - *Per-flags object directories* are the better fix and too large for this pass.
 
+### 2.6 Units policy: ASCII coverage and override unification
+
+**Owner: unassigned. Opened by clawpack/geoclaw#741.** Policy itself lives in
+`units_policy.md`; this entry records only what that PR deliberately left open.
+
+#741 states GeoClaw's units policy and makes it enforceable — a `UNITS_POLICY`
+registry in `units.py` that both `tests/test_units_policy.py` and the table in
+`units_policy.md` are generated from. It closed four violations and left **two
+rows open on purpose**, `topo_ascii` and `dtopo_ascii`:
+
+> ASCII carries no units and has no override; elevation in cm or feet is read
+> as meters with no message and no sanity check.
+
+Unlike the other deferrals in this section, half of this one is already
+machine-checked: both rows carry a `gap=` string and their conformance tests are
+marked `xfail(strict=True)`, so they are reported on every run and closing
+either without updating the registry fails the build. What is *not* recorded
+anywhere tracked is the rest of the work, which is why it is written down here.
+
+**The design question.** Rule 1 of the policy is "units must be declared in the
+file; never silently assumed". An ASCII topo header is `ncols / nrows / xlower /
+ylower / cellsize / nodata_value` — there is no field to declare them in, and
+none is proposed. So `on_missing='raise'` is not available: it would refuse
+every ASCII file GeoClaw has ever read. The honest answer is a distinct
+conformance state — *assume the contract unit, and magnitude-check it* — which
+has to be visibly different in the table from today's `silent-assume`, or the
+policy quietly reads as though ASCII were exempt. Rule 5 is doing the whole job
+alone on this path.
+
+**What the work involves**, beyond the two rows:
+
+- `assume_units` promoted from the netCDF-only `nc_params` channel to a
+  first-class `read()` argument on both `Topography` and `DTopography` — the
+  name is meaningless inside `nc_params` for a `.tt3`.
+- `_check_magnitude` extended to ASCII reads, raising as it does for NetCDF,
+  with `skip_sanity_check` as the documented opt-out. **This can break runs that
+  work today** and wants its own release note.
+- Unit-string matching widened: it is currently exact-string and case-sensitive,
+  so `Meters` and `KM` raise, and `feet`/`ft` have no conversion at all — a file
+  that correctly declares `units="ft"` cannot be read. Note the CF alias tables
+  deliberately contain British spellings (`metre`, `metres per second`); those
+  are *data* that real files declare and must not be "corrected".
+- `MetInspector.assume_units` accepting `{role: unit}`. Its `bool` is
+  defensible — Met covers several variables with different contract units — and
+  `units_policy.md` says so; the dict form is for parity, not correction.
+
+**Base it on #749, not #741.** `topo-input-parity` moves the format dispatch
+into `gridded_input.py`'s reader registry, which is where the ASCII read path
+now lives; work written against #741's `if/elif` ladder would be rewritten. The
+same refactor also makes the job smaller: `gridded_input`'s docstring already
+states that shared unit handling belongs in the product rather than the reader,
+so the ASCII case falls out of hoisting it instead of being added twice.
+
 ---
 
 ## 3. Correction on record: clawpack/geoclaw#740
