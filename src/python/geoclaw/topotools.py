@@ -921,9 +921,61 @@ class Topography(object):
                                                                      copy=False)
 
 
+    def _resolve_units(self, result, assume_units, skip_sanity_check):
+        r"""Convert ``self._Z`` to the contract unit and sanity-check magnitude.
+
+        This is the shared half of GeoClaw's units policy
+        (``dev/design/units_policy.md``), applied identically to every format:
+
+        * **Resolution order** -- what the file declared (``result.source_units``,
+          already accounting for a NetCDF ``assume_units``), else the caller's
+          *assume_units*, else the contract unit.
+        * **Rule 3** -- a recognized non-contract unit is converted here.  The
+          announcement was already made by the reader for a declared unit; an
+          assumed one is the caller's own statement and needs none.
+        * **Rule 4** -- an unrecognized unit raises; GeoClaw never guesses.
+        * **Rule 5** -- magnitude is checked *after* conversion, because units
+          can be declared wrongly and rules 1-4 cannot catch that.
+
+        Rule 5 carries the whole load for ASCII, which has no header field in
+        which to declare a unit at all, so it is the only defense available
+        there.  ``skip_sanity_check`` is the documented escape hatch for
+        exotic-but-valid data.
+        """
+        from clawpack.geoclaw import netcdf_utils as _ncutils
+        from clawpack.geoclaw.units import (convert as _units_convert,
+                                            GEOCLAW_NETCDF_UNITS as _NC_UNITS)
+
+        if self._Z is None:
+            return
+
+        contract = _NC_UNITS.get('topo', 'm')
+        source = result.source_units
+        if source is None:
+            # Format cannot declare units; the caller's word, or the contract.
+            source = assume_units if assume_units is not None else contract
+
+        if not _ncutils._unit_matches_contract(source, contract):
+            canonical = _ncutils._normalize_cf_unit(source)
+            if canonical is None:
+                raise ValueError(
+                    f"Unrecognized units {source!r} for {self.path}. GeoClaw "
+                    f"converts only units it knows; pre-convert the file to "
+                    f"{contract!r}, or pass a recognized assume_units.")
+            self._Z = self._Z * _units_convert(1.0, canonical, contract)
+
+        if not skip_sanity_check:
+            _ncutils._check_magnitude(
+                'topo',
+                float(numpy.nanmin(self._Z)),
+                float(numpy.nanmax(self._Z)),
+                var_name=result.var_name or '', path=str(self.path),
+            )
+
     def read(self, path=None, topo_type=None, unstructured=False,
              mask=False, crop_extent=None, force=False,
              coarsen=None, align=_ALIGN_UNSET, buffer=None, stride=None,
+             assume_units=None, skip_sanity_check=None,
              nc_params=None, filter_region=_CROP_EXTENT_UNSET):
         r"""Read in the data from the object's *path* attribute.
 
@@ -984,6 +1036,31 @@ class Topography(object):
         # NoneType; it is also safer than a shared mutable default.
         if nc_params is None:
             nc_params = {}
+
+        # `assume_units` and `skip_sanity_check` are format-independent -- an
+        # ASCII file needs them as much as a NetCDF one, and `nc_params` is a
+        # NetCDF-specific channel whose name means nothing for a .tt3.  They are
+        # first-class arguments now; the nc_params spellings keep working.
+        for _name, _value in (('assume_units', assume_units),
+                              ('skip_sanity_check', skip_sanity_check)):
+            if _name in nc_params:
+                if _value is not None:
+                    raise ValueError(
+                        f"{_name} was given both directly and in nc_params; "
+                        f"pass it once. The nc_params spelling is kept only for "
+                        f"backward compatibility -- prefer {_name}=.")
+                if _name == 'assume_units':
+                    assume_units = nc_params['assume_units']
+                else:
+                    skip_sanity_check = nc_params['skip_sanity_check']
+        if skip_sanity_check is None:
+            skip_sanity_check = False
+        # Readers still receive them through nc_params so the adapter signature
+        # does not have to change for every shared option.
+        nc_params = dict(nc_params)
+        if assume_units is not None:
+            nc_params['assume_units'] = assume_units
+        nc_params['skip_sanity_check'] = skip_sanity_check
 
         # A crop_extent passed here is equivalent to setting the attribute first;
         # fold the deprecated filter_region alias onto it, then store it so the
@@ -1148,6 +1225,24 @@ class Topography(object):
                                       numpy.nan, self._Z)
             if mask:
                 self._Z = numpy.ma.masked_invalid(self._Z)
+
+            # ------------------------------------------------------------
+            # Shared units resolution -- one implementation for every format.
+            #
+            # The reader reports what the *file* declared (None when the format
+            # cannot declare anything, which is every ASCII type).  Resolution
+            # order is: declared -> assume_units -> contract unit.  See
+            # dev/design/units_policy.md.
+            #
+            # This runs *after* missing data becomes NaN, and must.  Converting
+            # first would scale the numeric no_data_value sentinel along with
+            # the data -- a km file's -99999 becoming -99999000 -- so it would
+            # no longer match self.no_data_value and would never be normalized,
+            # silently turning missing cells into a -1e8 m seafloor.  The
+            # magnitude check would also read the sentinel as real elevation
+            # and reject a perfectly good file.
+            # ------------------------------------------------------------
+            self._resolve_units(_result, assume_units, skip_sanity_check)
 
             # ---------------------------------------------------------------
             # Apply preprocessing attributes in-memory (original file unchanged).

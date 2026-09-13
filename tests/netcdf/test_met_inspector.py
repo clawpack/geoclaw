@@ -211,18 +211,42 @@ def test_format_units_fallback_for_missing_units(tmp_path):
     assert roles["wind_u"].scale_factor == pytest.approx(1.0)
 
 
-def test_missing_units_assume_units_opt_in(met_file_factory):
-    """The explicit assume_units escape hatch assumes each variable's contract
-    unit for a unitless file, without raising or warning."""
+def test_missing_units_assume_units_bool_is_deprecated(met_file_factory):
+    """The legacy bool still works, but now says the mapping form is preferred.
+
+    It can only assert "already in contract units", so it cannot convert and it
+    never said *which* variable it covered -- hence the deprecation.
+    """
     path = met_file_factory(wind_units="", pressure_units="")
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
+    with pytest.warns(DeprecationWarning, match="assume_units=True is deprecated"):
         with MetInspector(path, variable_map=_VAR_MAP,
                           assume_units=True) as insp:
             meta = insp.inspect_met()
     roles = {v.geoclaw_role: v.source_units for v in meta.variables}
     assert roles["pressure"] == "Pa"
     assert roles["wind_u"] == "m/s"
+
+
+def test_missing_units_assume_units_mapping(met_file_factory):
+    """The mapping form states the unit per role, so unlike the bool it can
+    convert -- the same meaning `assume_units` has on the other inspectors."""
+    # Values really are in millibar, so stating mbar is the truth about the
+    # file -- and the resulting field must land in the plausible Pa range,
+    # which is what makes this a conversion test rather than a bookkeeping one.
+    path = met_file_factory(wind_units="", pressure_units="",
+                            pressure_value=1013.25)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        with MetInspector(path, variable_map=_VAR_MAP,
+                          assume_units={"pressure": "mbar",
+                                        "wind_u": "m/s",
+                                        "wind_v": "m/s"}) as insp:
+            meta = insp.inspect_met()
+    roles = {v.geoclaw_role: v for v in meta.variables}
+    # mbar stated for a unitless file converts to Pa, exactly as a declared
+    # mbar would; the bool form could only have claimed it was already Pa.
+    assert roles["pressure"].scale_factor == pytest.approx(100.0)
+    assert roles["wind_u"].scale_factor == pytest.approx(1.0)
 
 
 # ============================================================

@@ -50,6 +50,15 @@ class GridData:
     Z: numpy.ndarray
     delta: Optional[tuple] = None
     datum: object = _UNSET
+    #: Units the *file* declared for ``Z``, resolved by the reader (already
+    #: accounting for any caller-supplied ``assume_units``).  ``None`` means the
+    #: format cannot declare units at all -- ASCII has no header field for them
+    #: -- and the product then falls back to ``assume_units`` or the contract
+    #: unit.  Readers *report* units; converting is the product's job, so that
+    #: one implementation serves every format.
+    source_units: Optional[str] = None
+    #: Variable the units came from, for diagnostics.  ASCII has no such name.
+    var_name: Optional[str] = None
 
 
 class GriddedReader:
@@ -289,30 +298,18 @@ class NetCDFReader(GriddedReader):
                 _lon_vals = _lon_vals[::-1]
                 _z_vals = _z_vals[:, ::-1]
 
-            # Unit conversion if source is not already meters.
-            _contract = _NC_UNITS.get('topo', 'm')
-            _meters_aliases = frozenset(
-                {'m', 'meter', 'meters', 'metre', 'metres'}
-            )
-            if _source_units and _source_units not in _meters_aliases:
-                _canonical = _ncutils._normalize_cf_unit(_source_units)
-                if _canonical is not None:
-                    _factor = _units_convert(1.0, _canonical, _contract)
-                    _z_vals = _z_vals * _factor
-
-            # Magnitude sanity check on the resolved (meters) field.
-            if not _skip_sanity:
-                _ncutils._check_magnitude(
-                    'topo',
-                    float(numpy.nanmin(_z_vals)),
-                    float(numpy.nanmax(_z_vals)),
-                    var_name=_var_name, path=str(topo.path),
-                )
+            # Unit conversion and the magnitude sanity check are deliberately
+            # NOT done here.  They are identical for every format, so they live
+            # in the product (Topography.read) and this reader only *reports*
+            # what the file declared -- which is what lets ASCII, which can
+            # declare nothing, go through the same path instead of growing a
+            # second implementation.
 
             # Decoded fill values are already NaN (xarray mask_and_scale); NaN
             # is the in-memory missing-data representation, so they pass through.
 
-        return GridData(x=_lon_vals, y=_lat_vals, Z=_z_vals, datum=datum)
+        return GridData(x=_lon_vals, y=_lat_vals, Z=_z_vals, datum=datum,
+                        source_units=_source_units, var_name=_var_name)
 
 
 class GeoTIFFReader(GriddedReader):
