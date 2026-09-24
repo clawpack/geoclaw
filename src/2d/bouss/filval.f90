@@ -232,9 +232,13 @@ subroutine filval(val, mitot, mjtot, dx, dy, level, time,  mic, &
                                 (val(1,ifine,jfine) > 0) .and. &
                                 (time <= tend_force_dry)) then
                            ! check if in force_dry region
-                           ii = int((x - xlow_fdry + 1d-7) / dx_fdry) + 1
-                           jj = int((y - ylow_fdry + 1d-7) / dy_fdry) + 1
-                           jj = my_fdry - jj  ! since index 1 corresponds to north edge
+                           ! floor, not int: int truncates toward zero, so a
+                           ! cell west or south of the mask gives an in-range
+                           ! index and is wrongly forced dry rather than
+                           ! rejected by the bounds test below
+                           ii = floor((x - xlow_fdry + 1d-7) / dx_fdry) + 1
+                           ! index 1 corresponds to north edge:
+                           jj = my_fdry - floor((y - ylow_fdry + 1d-7) / dy_fdry)
                            if ((ii>=1) .and. (ii<=mx_fdry) .and. &
                                (jj>=1) .and. (jj<=my_fdry)) then
                                ! grid cell lies in region covered by force_dry,
