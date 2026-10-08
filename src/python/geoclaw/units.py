@@ -41,11 +41,17 @@ conversion_func['miles'] = [lambda L: L * 1.60934e3,
                             lambda L: L / 1.60934e3]
 conversion_func['nmi'] = [lambda L: L * 1852.0,
                           lambda L: L / 1852.0]
+# International foot, exactly 0.3048 m.  Present so that a DEM which correctly
+# declares units="ft" can be read: the policy requires a declaration, so
+# refusing a valid one is the worst of both worlds.
+conversion_func['ft'] = [lambda L: L * 0.3048,
+                         lambda L: L / 0.3048]
 conversion_func['lat-long'] = [lambda L: L * LAT2METER,
                                lambda L: L / LAT2METER]
 units['length'] = collections.OrderedDict({'m': 'meters', 'cm': 'centimeters', 
                                            'km': 'kilometers', 'miles': 'miles',
                                            'nmi': 'nautical miles', 
+                                           'ft': 'feet',
                                            'lat-long': 'longitude-latitude'})
 
 # Pressure - Rigidity
@@ -161,6 +167,10 @@ class UnitsPolicyRow:
 # than silently producing an untested case.
 ON_MISSING_VALUES = frozenset({
     'raise',            # refuse to guess (the policy default)
+    'assume+check',     # assume the contract unit, magnitude-checked (rule 5).
+                        # The honest answer for a format that can never declare
+                        # units: 'raise' would refuse every ASCII file GeoClaw
+                        # has ever read, so rule 5 carries the load alone.
     'warn+assume',      # assume the contract unit, but say so
     'silent-assume',    # assume the contract unit with no message (a hole)
     'format-default',   # the file format documents the unit; use it
@@ -176,7 +186,7 @@ UNITS_POLICY: tuple[UnitsPolicyRow, ...] = (
         reader='Topography.read (topo_type=4)',
         contract='m',
         declared_in_file=True,
-        override="nc_params={'assume_units': str}",
+        override='assume_units (str)',
         on_missing='raise',
         on_convertible='convert+warn',
         on_unrecognized='raise',
@@ -187,13 +197,11 @@ UNITS_POLICY: tuple[UnitsPolicyRow, ...] = (
         reader='Topography.read (topo_type=1,2,3)',
         contract='m',
         declared_in_file=False,
-        override='none',
-        on_missing='silent-assume',
-        on_convertible='n/a',
-        on_unrecognized='n/a',
-        magnitude_check=False,
-        gap='ASCII carries no units and has no override; elevation in cm or '
-            'feet is read as meters with no message and no sanity check.',
+        override='assume_units (str)',
+        on_missing='assume+check',
+        on_convertible='convert',
+        on_unrecognized='raise',
+        magnitude_check=True,
     ),
     UnitsPolicyRow(
         key='dtopo_netcdf_dz',
@@ -222,19 +230,21 @@ UNITS_POLICY: tuple[UnitsPolicyRow, ...] = (
         reader='DTopography.read (dtopo_type=1,2,3)',
         contract='m',
         declared_in_file=False,
-        override='none',
-        on_missing='silent-assume',
-        on_convertible='n/a',
-        on_unrecognized='n/a',
+        override='assume_units (str)',
+        # Not 'assume+check' like topo ASCII: _check_magnitude defines no bound
+        # for deformation, so there is no rule-5 backstop here and the
+        # assumption has to be announced instead.
+        on_missing='warn+assume',
+        on_convertible='convert',
+        on_unrecognized='raise',
         magnitude_check=False,
-        gap='ASCII dtopo carries no units and has no override.',
     ),
     UnitsPolicyRow(
         key='met_netcdf',
         reader='MetInspector (wind, pressure)',
         contract='m/s, Pa',
         declared_in_file=True,
-        override='assume_units (bool), format_units (dict)',
+        override='assume_units (dict; bool deprecated), format_units (dict)',
         on_missing='raise',
         on_convertible='convert+warn',
         on_unrecognized='raise',

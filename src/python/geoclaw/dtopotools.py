@@ -477,7 +477,7 @@ class DTopography(object):
                        float(self.y[0]), float(self.y[-1])]
 
     def read(self, path=None, dtopo_type=None, verbose=False,
-             time_reference=None):
+             time_reference=None, assume_units=None):
         r"""
         Read in a dtopo file and use to set attributes of this object.
 
@@ -490,6 +490,13 @@ class DTopography(object):
             is CF datetime ("<unit> since <date>"), the reference epoch that
             defines simulation t=0.  If omitted, the file's own CF reference
             epoch is used (so a file written with a time_reference round-trips).
+         - *assume_units* (str) - unit of the deformation values, treated as if
+            the file had declared it, so ``assume_units="cm"`` also converts.
+            ASCII dtopo (types 1/2/3) has no field in which to declare units, so
+            this is the only way to state them; omitting it assumes meters and
+            warns.  For ``dtopo_type=4`` it is forwarded to the inspector and
+            applies only when the file itself declares nothing.
+            See ``dev/design/units_policy.md``.
         """
 
         if path is not None:
@@ -613,7 +620,8 @@ class DTopography(object):
             self.dZ = dZ
 
         elif dtopo_type == 4:
-            self._read_netcdf(path, time_reference=time_reference)
+            self._read_netcdf(path, time_reference=time_reference,
+                              assume_units=assume_units)
 
         else:
             raise ValueError("Only topography types 1, 2, 3, and 4 are "
@@ -624,9 +632,20 @@ class DTopography(object):
         # read_dtopo ordering).  No-op unless one of those is requested.
         self._apply_crop()
 
+        # Units.  ASCII dtopo has no header field in which to declare them, so
+        # `assume_units` is the only way to say anything and meters is the
+        # contract fallback -- but unlike ASCII *topo*, there is no magnitude
+        # bound defined for deformation, so nothing would catch a cm file read
+        # as meters.  With no second line of defense the assumption has to be
+        # announced.  Pass assume_units='m' to state it deliberately and
+        # silence this.  (dtopo_type=4 resolves units in the inspector above.)
+        if dtopo_type in (1, 2, 3) and self.dZ is not None:
+            self._resolve_dZ_units(assume_units)
+
         # Apply preprocessing attributes in-memory (original file unchanged).
         # Fortran applies the same attributes independently in
         # read_dtopo_settings so neither side needs a modified copy.
+        # Runs after the unit conversion above so z_shift is in meters.
         # No fill-cell guard: deformation grids have no no-data convention.
         if self.negate_z:
             self.dZ = -self.dZ
@@ -837,7 +856,43 @@ class DTopography(object):
         })
 
 
-    def _read_netcdf(self, path, time_reference=None):
+    def _resolve_dZ_units(self, assume_units):
+        r"""Convert ``self.dZ`` to meters for a format that cannot declare units.
+
+        Mirrors ``Topography._resolve_units`` but without its rule-5 magnitude
+        check: ``_check_magnitude`` defines no bound for deformation, so there
+        is nothing to check against.  Defining one needs a defensible physical
+        limit on coseismic displacement, which is a separate decision and is
+        recorded as such rather than guessed at here.
+        """
+        from clawpack.geoclaw import netcdf_utils as _ncutils
+        from clawpack.geoclaw.units import (convert as _units_convert,
+                                            GEOCLAW_NETCDF_UNITS as _NC_UNITS)
+
+        contract = _NC_UNITS.get('topo', 'm')
+        if assume_units is None:
+            warnings.warn(
+                f"No units declared or assumed for the deformation in "
+                f"'{self.path}'; assuming {contract!r}. ASCII dtopo cannot "
+                f"record units, and no magnitude check covers deformation, so "
+                f"a file in cm would be read {1/_units_convert(1.0, 'cm', 'm'):g}x "
+                f"too small with nothing to catch it. Pass assume_units to "
+                f"state the file's units (assume_units={contract!r} silences "
+                f"this).",
+                UserWarning, stacklevel=3,
+            )
+            return
+
+        if _ncutils._unit_matches_contract(assume_units, contract):
+            return
+        canonical = _ncutils._normalize_cf_unit(assume_units)
+        if canonical is None:
+            raise ValueError(
+                f"Unrecognized assume_units {assume_units!r} for {self.path}. "
+                f"GeoClaw converts only units it knows.")
+        self.dZ = self.dZ * _units_convert(1.0, canonical, contract)
+
+    def _read_netcdf(self, path, time_reference=None, assume_units=None):
         """Read a NetCDF dtopo file (dtopo_type=4) via DTopoInspector.
 
         The inspector enforces the dtopo contract (time slowest dimension,
@@ -856,7 +911,8 @@ class DTopography(object):
                                                    _normalize_cf_unit)
         from clawpack.geoclaw.topotools import extract_datum
 
-        with DTopoInspector(path, time_reference=time_reference) as inspector:
+        with DTopoInspector(path, time_reference=time_reference,
+                            assume_units=assume_units) as inspector:
             # Adopt the file's own reference epoch when the caller gave none
             # and the time axis is CF datetime ("<unit> since <date>").
             if inspector.time_reference is None:

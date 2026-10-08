@@ -369,3 +369,162 @@ _COVERED_KEYS = (
     "topo_netcdf", "topo_ascii", "dtopo_netcdf_dz", "dtopo_netcdf_time",
     "dtopo_ascii", "met_netcdf", "subfault_generic", "subfault_csv",
 )
+
+
+# ===========================================================================
+# B2 — ASCII coverage, the unified override, and wider unit recognition
+#
+# The conformance rows above assert *that* each path behaves as the registry
+# claims.  These assert the specifics that a row cannot express: that the
+# conversion is numerically right, that the escape hatch works, and that
+# widening what we recognize did not weaken what we refuse.
+# ===========================================================================
+
+def _write_ascii_cm(path, meters_value=-1000.0):
+    """The same seafloor written in centimeters, as a topo_type=3 file."""
+    x = np.linspace(-100.0, -99.0, 9)
+    y = np.linspace(20.0, 21.0, 9)
+    Z = (meters_value * 100.0) + np.zeros((y.size, x.size))
+    t = topotools.Topography()
+    t.set_xyZ(x, y, Z)
+    t.write(str(path), topo_type=3)
+    return path
+
+
+def test_ascii_assume_units_round_trips_against_meters(tmp_path):
+    """cm data + assume_units='cm' must equal the same data written in meters.
+
+    A round-trip rather than a spot value: the point is that the conversion is
+    exact, not merely that it ran and produced something plausible.
+    """
+    cm_path = _write_ascii_cm(tmp_path / "cm.tt3")
+    m_path = _write_ascii_topo(tmp_path / "m.tt3")      # -1000 m flat
+
+    in_cm = topotools.Topography()
+    in_cm.read(str(cm_path), topo_type=3, assume_units="cm")
+    in_m = topotools.Topography()
+    in_m.read(str(m_path), topo_type=3)
+
+    np.testing.assert_allclose(in_cm.Z, in_m.Z, rtol=0, atol=1e-9)
+
+
+def test_ascii_without_assume_units_is_caught_by_magnitude(tmp_path):
+    """Rule 5 is the only defense ASCII has, so it has to actually fire."""
+    cm_path = _write_ascii_cm(tmp_path / "cm.tt3")
+    t = topotools.Topography()
+    with pytest.raises(ValueError, match="(?i)implausible range"):
+        t.read(str(cm_path), topo_type=3)
+
+
+def test_skip_sanity_check_is_the_escape_hatch(tmp_path):
+    """Synthetic-but-valid data must remain readable without a units lie."""
+    cm_path = _write_ascii_cm(tmp_path / "cm.tt3")
+    t = topotools.Topography()
+    t.read(str(cm_path), topo_type=3, skip_sanity_check=True)
+    assert float(np.nanmin(t.Z)) == pytest.approx(-100000.0)
+
+
+def test_assume_units_conflict_between_argument_and_nc_params(tmp_path):
+    """One spelling or the other, not both silently disagreeing."""
+    path = _write_ascii_topo(tmp_path / "a.tt3")
+    t = topotools.Topography()
+    with pytest.raises(ValueError, match="given both directly and in nc_params"):
+        t.read(str(path), topo_type=3, assume_units="m",
+               nc_params={"assume_units": "cm"})
+
+
+@pytest.mark.netcdf
+def test_nc_params_spelling_still_works(tmp_path):
+    """Back-compat: the old channel keeps working for existing setrun files."""
+    pytest.importorskip("xarray")
+    path = _write_nc_topo(tmp_path / "bare.nc", None, scale=1e-3)
+    t = topotools.Topography()
+    with pytest.warns(UserWarning, match="converting to 'm' on read"):
+        t.read(str(path), topo_type=4, nc_params={"assume_units": "km"})
+    assert float(np.nanmin(t.Z)) == pytest.approx(-1000.0)
+
+
+def test_unit_matching_is_case_insensitive():
+    """CF files in the wild write 'Meters' and 'KM'; refusing a correct
+    declaration is the one failure the policy cannot afford."""
+    from clawpack.geoclaw.netcdf_utils import (_unit_matches_contract,
+                                               _normalize_cf_unit)
+    for spelling in ("m", "meters", "Meters", "METERS", "metre", "metres"):
+        assert _unit_matches_contract(spelling, "m"), spelling
+    for spelling in ("km", "KM", "Km", "kilometers", "Kilometres"):
+        assert _normalize_cf_unit(spelling) == "km", spelling
+
+
+def test_case_folding_did_not_weaken_rule_4():
+    """Widening what we recognize must not widen what we accept."""
+    from clawpack.geoclaw.netcdf_utils import (_unit_matches_contract,
+                                               _normalize_cf_unit)
+    for junk in ("furlongs", "m^2", "degrees", "", "elevation"):
+        assert _normalize_cf_unit(junk) is None, junk
+        assert not _unit_matches_contract(junk, "m"), junk
+
+
+def test_cf_alias_data_survived_case_folding():
+    """The alias tables contain British spellings on purpose -- real files
+    declare them.  Folding the *lookup* must not drop the *data*."""
+    from clawpack.geoclaw.netcdf_utils import (_unit_matches_contract,
+                                               _normalize_cf_unit)
+    assert _unit_matches_contract("metre", "m")
+    assert _unit_matches_contract("metres", "m")
+    assert _unit_matches_contract("metres per second", "m/s")
+    assert _normalize_cf_unit("metres per second") == "m/s"
+
+
+def test_feet_is_convertible():
+    """We demand a units declaration, so a correct one must be readable.
+
+    `units="ft"` had no entry at all: declaring it correctly made the file
+    unreadable, which is the worst outcome the policy can produce.
+    """
+    from clawpack.geoclaw.netcdf_utils import _normalize_cf_unit
+    from clawpack.geoclaw.units import convert
+    assert _normalize_cf_unit("ft") == "ft"
+    assert _normalize_cf_unit("feet") == "ft"
+    # Everest, 29032 ft, is 8848 m.
+    assert convert(29032.0, "ft", "m") == pytest.approx(8848.6, abs=1.0)
+
+
+def _write_ascii_dtopo(path, scale=1.0):
+    """A minimal dtopo_type=3 file with a uniform deformation."""
+    dt = dtopotools.DTopography()
+    x = np.linspace(-100.0, -99.0, 5)
+    y = np.linspace(20.0, 21.0, 5)
+    dt.x, dt.y = x, y
+    dt.X, dt.Y = np.meshgrid(x, y)
+    dt.times = np.array([0.0, 1.0])
+    dt.dZ = np.stack([np.zeros((y.size, x.size)),
+                      np.full((y.size, x.size), 2.0 * scale)])
+    dt.write(str(path), dtopo_type=3)
+    return path
+
+
+def test_ascii_dtopo_warns_when_units_are_unstated(tmp_path):
+    """No magnitude bound exists for deformation, so the assumption is the
+    only thing standing between a cm file and a 100x error -- say so."""
+    path = _write_ascii_dtopo(tmp_path / "d.tt3")
+    dt = dtopotools.DTopography()
+    with pytest.warns(UserWarning, match="(?i)assuming 'm'|No units declared"):
+        dt.read(str(path), dtopo_type=3)
+
+
+def test_ascii_dtopo_assume_units_converts_and_silences(tmp_path):
+    """Stating the units both converts and removes the warning."""
+    path = _write_ascii_dtopo(tmp_path / "d.tt3", scale=100.0)  # 200 cm
+    dt = dtopotools.DTopography()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        dt.read(str(path), dtopo_type=3, assume_units="cm")
+    assert float(np.nanmax(dt.dZ)) == pytest.approx(2.0)
+
+
+def test_ascii_dtopo_rejects_unrecognized_assume_units(tmp_path):
+    """Rule 4 applies to the override as much as to a declaration."""
+    path = _write_ascii_dtopo(tmp_path / "d.tt3")
+    dt = dtopotools.DTopography()
+    with pytest.raises(ValueError, match="(?i)unrecognized assume_units"):
+        dt.read(str(path), dtopo_type=3, assume_units="furlongs")

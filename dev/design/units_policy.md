@@ -60,10 +60,22 @@ dtopo. So for these formats:
 - **Rule 2 is how you say otherwise**: `assume_units` states the file's real
   unit, and the value is converted.
 
-"Assumed, then checked" is the intended behavior. Note that until the ASCII
-rows below stop being marked as gaps, it is only *assumed* -- the magnitude
-check runs on the NetCDF path only, so an ASCII file in centimeters is read as
-meters with nothing said.
+"Assumed, then checked" is the behavior, and the two ASCII rows below now
+conform. `Topography.read` and `DTopography.read` both take `assume_units`, and
+unit resolution happens once in the product rather than per format, so ASCII and
+NetCDF go down the same path.
+
+**The two ASCII rows differ from each other, and the table shows it.** Topo
+ASCII is `assume+check`: meters is assumed and rule 5 catches a gross error.
+Dtopo ASCII is `warn+assume`, because `_check_magnitude` defines **no bound for
+deformation** -- there is no rule-5 backstop there, so the assumption is
+announced instead. Pass `assume_units='m'` to state it deliberately and silence
+the warning.
+
+Defining a deformation bound would let dtopo ASCII reach `assume+check` too. It
+needs a defensible physical limit on coseismic displacement, which is a
+judgement about earthquake physics rather than about code, so it is left open
+rather than guessed at.
 
 ## Contract units
 
@@ -79,12 +91,12 @@ Do not edit it by hand -- edit `UNITS_POLICY` instead.
 <!-- BEGIN GENERATED TABLE -->
 | Path | Contract | Declared in file | Override | Missing | Non-contract | Unrecognized | Magnitude | Conforms |
 |---|---|---|---|---|---|---|---|---|
-| `Topography.read (topo_type=4)` | m | yes | nc_params={'assume_units': str} | raise | convert+warn | raise | yes | yes |
-| `Topography.read (topo_type=1,2,3)` | m | no | none | silent-assume | n/a | n/a | no | **no** -- ASCII carries no units and has no override; elevation in cm or feet is read as meters with no message and no sanity check. |
+| `Topography.read (topo_type=4)` | m | yes | assume_units (str) | raise | convert+warn | raise | yes | yes |
+| `Topography.read (topo_type=1,2,3)` | m | no | assume_units (str) | assume+check | convert | raise | yes | yes |
 | `DTopoInspector (deformation)` | m | yes | assume_units (str) | raise | convert+warn | raise | no | yes |
 | `DTopoInspector (time axis)` | s | yes | none | warn+assume | convert | raise | no | yes |
-| `DTopography.read (dtopo_type=1,2,3)` | m | no | none | silent-assume | n/a | n/a | no | **no** -- ASCII dtopo carries no units and has no override. |
-| `MetInspector (wind, pressure)` | m/s, Pa | yes | assume_units (bool), format_units (dict) | raise | convert+warn | raise | yes | yes |
+| `DTopography.read (dtopo_type=1,2,3)` | m | no | assume_units (str) | warn+assume | convert | raise | no | yes |
+| `MetInspector (wind, pressure)` | m/s, Pa | yes | assume_units (dict; bool deprecated), format_units (dict) | raise | convert+warn | raise | yes | yes |
 | `Fault.read (columnar subfault files)` | m, Pa | no | input_units (dict) | warn+assume | convert | raise | no | yes |
 | `CSVFault.read (units in column headings)` | m, Pa | yes | input_units (dict), overrides the heading | warn+assume | convert | raise | no | yes |
 <!-- END GENERATED TABLE -->

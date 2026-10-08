@@ -84,7 +84,11 @@ def test_read_write_topo_bowl(tmp_path, topo_type):
     path = tmp_path / f"bowl.tt{topo_type}"
     topo.write(path, topo_type=topo_type, Z_format="%22.15e")
 
-    topo_in = topotools.Topography(path)
+    # skip_sanity_check: topo_bowl is an analytic parabola over a deliberately
+    # wide domain, peaking at 17 km -- fine as a round-trip fixture, but not
+    # Earth-like, so the magnitude check (units policy rule 5) would reject it.
+    # The escape hatch exists for exactly this: synthetic but valid data.
+    topo_in = topotools.Topography(path, skip_sanity_check=True)
     assert np.allclose(topo.Z, topo_in.Z), \
         "Difference in written and read topography found."
 
@@ -117,7 +121,11 @@ def test_no_data_value_nan_roundtrip(tmp_path, topo_type, ext):
         assert str(int(topo.no_data_value)) in path.read_text(), \
             "Numeric no_data_value sentinel not written to ASCII file."
 
-    topo_in = topotools.Topography(path)
+    # skip_sanity_check: topo_bowl is an analytic parabola over a deliberately
+    # wide domain, peaking at 17 km -- fine as a round-trip fixture, but not
+    # Earth-like, so the magnitude check (units policy rule 5) would reject it.
+    # The escape hatch exists for exactly this: synthetic but valid data.
+    topo_in = topotools.Topography(path, skip_sanity_check=True)
     topo_in.read()
 
     assert np.isnan(topo_in.Z[1, 2]), "Missing cell did not round-trip to NaN."
@@ -180,7 +188,11 @@ def test_read_write_topo_bowl_hill(tmp_path, topo_type):
 
     file_path = tmp_path / f"bowl_hill.tt{topo_type}"
     topo.write(file_path, topo_type=topo_type, Z_format="%22.15e")
-    topo_in = topotools.Topography(path=file_path, topo_type=topo_type)
+    # skip_sanity_check: topo_bowl_hill peaks at 9.25 km, just past the
+    # Earth-plausible bound the units policy checks against (rule 5).  Synthetic
+    # but valid; see the note in test_read_write_topo_bowl.
+    topo_in = topotools.Topography(path=file_path, topo_type=topo_type,
+                                   skip_sanity_check=True)
 
     assert np.allclose(topo.Z, topo_in.Z), (
         f"Written file of topo_type={topo_type} does not equal read in file."
