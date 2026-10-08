@@ -439,16 +439,27 @@ contains
                     call read_topo_file(mxtopo(i),mytopo(i),itopotype(i),topofname(i), &
                         xlowtopo(i),ylowtopo(i),topowork(i0topo(i):i0topo(i)+mtopo(i)-1), i)
                     ! set topo0save(i) = 1 if this topo file intersects any
-                    ! dtopo file.  This approach to setting topo0save is changed from 
+                    ! dtopo file.  This approach to setting topo0save is changed from
                     ! v5.4.1, where it only checked if some dtopo point lies within the
                     ! topo grid, which might not happen for small scale topo
-                    do j=mtopofiles - num_dtopo + 1, mtopofiles
-                        if ((xhitopo(i)<xlowtopo(j)) .or. &
-                            (xlowtopo(i)>xhitopo(j)) .or. &
-                            (yhitopo(i)<ylowtopo(j)) .or. &
-                            (ylowtopo(i)>yhitopo(j))) then
-                              topo0save(i) = 0
-                          else
+                    !
+                    ! The topo_for_dtopo entries occupy slots mtopofiles+1 ...
+                    ! mtopofiles+num_dtopo (filled above); mtopofiles itself is the
+                    ! real file count here, having been decremented after the
+                    ! allocates and not yet re-incremented.  Iterating
+                    ! "mtopofiles-num_dtopo+1, mtopofiles" instead compared the topo
+                    ! files against each other, which is only harmless when there is
+                    ! a single topo file (it then compares file 1 with itself).
+                    !
+                    ! Accumulate rather than assign: with num_dtopo > 1 an
+                    ! if/else that also cleared topo0save let each dtopo file
+                    ! overwrite the previous one's verdict, so only the last
+                    ! counted.  topo0save was zeroed above, so only ever set it.
+                    do j=mtopofiles + 1, mtopofiles + num_dtopo
+                        if (.not. ((xhitopo(i)<xlowtopo(j)) .or. &
+                                   (xlowtopo(i)>xhitopo(j)) .or. &
+                                   (yhitopo(i)<ylowtopo(j)) .or. &
+                                   (ylowtopo(i)>yhitopo(j)))) then
                               topo0save(i) = 1
                           endif
 
