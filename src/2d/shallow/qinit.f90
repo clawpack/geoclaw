@@ -43,7 +43,7 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
         if (ddxy < 0.01d0*min(dx_fdry,dy_fdry)) then
             do i=1,mx
                 x = xlower + (i-0.5d0)*dx
-                ii = int((x - xlow_fdry + 1d-7) / dx_fdry)
+                ii = int((x - xlow_fdry + 1d-7) / dx_fdry) + 1
                 do j=1,my
                     y = ylower + (j-0.5d0)*dy
                     jj = int((y - ylow_fdry + 1d-7) / dy_fdry)
