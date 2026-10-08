@@ -154,6 +154,28 @@ class RefinementData(clawpack.clawutil.data.ClawData):
 
 
 
+def _reject_remote_path(path, kind, fetch_hint):
+    """Raise if *path* is a URL rather than a local file.
+
+    GeoClaw's Fortran reader opens a filesystem path, and the ``.data`` writers
+    run every path through ``os.path.abspath``, which turns a URL into a bogus
+    local path (see ``netcdf_utils.is_remote_url``).  The result used to be a
+    FileNotFoundError naming a path the user never typed, which gives no hint
+    that the real problem is "remote sources must be fetched first".
+
+    *kind* is the noun for the message ("topography"/"dtopography") and
+    *fetch_hint* the recipe to show.
+    """
+    from clawpack.geoclaw.netcdf_utils import is_remote_url
+
+    if is_remote_url(path):
+        raise ValueError(
+            f"{kind} path is a URL, which GeoClaw's Fortran reader cannot "
+            f"open:\n    {path}\n"
+            f"Read it in Python first and write a local file, then reference "
+            f"that:\n{fetch_hint}")
+
+
 def _write_preprocessing_block(f, t):
     """Write the 8 preprocessing-attribute lines for one topo/dtopo file.
 
@@ -345,6 +367,157 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         # keeps the sort stable for equal-area files (they retain input order).
         return sorted(topos, key=_cell_area, reverse=True)
 
+    def _resolve_topo_records(self, topos, out_file):
+        """Expand *topos* into the entries that will be written to topo.data.
+
+        Returns a list of ``(fname, topo_type, topo, meta)``.  ``meta`` is a
+        ``TopoMetadata`` for type-4 files (written as a CF descriptor block)
+        and None otherwise.
+
+        Most files produce exactly one record.  A ``topo_type=4`` file whose
+        ``crop_extent`` runs past the file's longitude extent produces one
+        record per side of the antimeridian, each with its own
+        ``lon_wrap_offset`` -- this is what makes a cross-seam crop work from
+        an ordinary ``topofiles.append(topo)`` instead of requiring the caller
+        to build descriptors by hand.
+        """
+        import dataclasses
+        from clawpack.geoclaw import netcdf_utils as _ncutils
+        from clawpack.geoclaw import topotools
+
+        records = []
+        for topo in topos:
+            _reject_remote_path(
+                topo.path, "Topography",
+                "    topo = topotools.fetch_remote_topo(\n"
+                "        url, crop_extent=[...], coarsen=..., buffer=...)\n"
+                "    topo.write('topo_cropped.tt3', topo_type=3)\n"
+                "    rundata.topo_data.topofiles.append(topo)\n"
+                "Only the requested hyperslab is read, so this does not "
+                "download the whole file.")
+
+            # Resolve path relative to out_file's directory, same as before
+            fname = os.path.abspath(
+                os.path.join(os.path.dirname(out_file), topo.path))
+
+            # topo_type may still be None when a Topography was built by hand
+            # and never read; the :3d format would raise a TypeError naming
+            # neither the file nor the attribute.
+            topo_type = topo.topo_type
+            if topo_type is None:
+                topo_type = topotools.determine_topo_type(topo.path,
+                                                          default=None)
+                if topo_type is None:
+                    raise ValueError(
+                        f"topo_type is not set for {topo.path} and cannot be "
+                        f"inferred from its extension. Set topo.topo_type "
+                        f"explicitly, or pass topo_type= to Topography().")
+                topo.topo_type = topo_type
+
+            # Type 5 (GeoTIFF) is readable in Python but has no case(5) in the
+            # Fortran reader, which aborts with "Unrecognized topo_type".
+            if abs(topo_type) == 5:
+                warnings.warn(
+                    f"{topo.path} is written to {out_file} as topo_type=5 "
+                    f"(GeoTIFF). GeoClaw's Fortran reader does not support "
+                    f"type 5 and will abort; convert to topo_type 3 or 4 "
+                    f"(Topography.write) before running.",
+                    UserWarning, stacklevel=3)
+
+            # A descending crop_extent is not a rectangle in any frame.  The
+            # *continuous* spelling of a cross-seam crop ([-190, -120]) is
+            # handled below; the wrapped spelling ([170, -170]) cannot be, and
+            # written directly it would emit "crop_bounds = 170.0 -170.0",
+            # which Fortran resolves to mx=0, my=0 -- an empty topo, silently.
+            if (topo.crop_extent is not None
+                    and topo.crop_extent[0] >= topo.crop_extent[1]
+                    and getattr(topo, '_netcdf_meta', None) is None):
+                raise ValueError(
+                    f"crop_extent {list(topo.crop_extent)} for {topo.path} is "
+                    f"descending in longitude. To cross the antimeridian, "
+                    f"write the crop in continuous coordinates instead -- "
+                    f"[{topo.crop_extent[0] - 360.0}, {topo.crop_extent[1]}] "
+                    f"for this one -- which is split across the seam "
+                    f"automatically. A descending pair has no such reading and "
+                    f"would produce an empty grid in Fortran with no error.")
+
+            if abs(topo_type) != 4:
+                records.append((fname, topo_type, topo, None))
+                continue
+
+            # --- type 4: build the CF descriptor block -------------------
+            if getattr(topo, '_netcdf_meta', None) is not None:
+                # Pre-computed by topo_entries(); already carries the right
+                # lon_wrap_offset and file-coordinate crop_bounds.
+                records.append((fname, topo_type, topo, topo._netcdf_meta))
+                continue
+
+            crop = (tuple(float(v) for v in topo.crop_extent)
+                    if topo.crop_extent is not None else None)
+
+            # Opened without crop_bounds so the longitude extent can be read
+            # before deciding whether the crop needs wrapping; setting them at
+            # construction would validate (and reject) a cross-seam crop first.
+            with _ncutils.TopoInspector(fname) as insp:
+                if insp.var_name is None:
+                    insp.var_name = insp._find_topo_var_name()
+
+                needs_wrap = False
+                if crop is not None:
+                    x_name = insp._find_x_name()
+                    lon = insp.ds[x_name].values
+                    file_lon_min = float(lon.min())
+                    file_lon_max = float(lon.max())
+                    tol = 1e-9
+                    needs_wrap = (crop[0] < file_lon_min - tol
+                                  or crop[1] > file_lon_max + tol)
+
+                if not needs_wrap:
+                    # Unchanged path: validates crop_bounds (including
+                    # latitude) and skips the expensive fill scan, exactly as
+                    # before.
+                    insp.crop_bounds = crop
+                    file_meta = insp.inspect(insp.var_name)
+                    src_units = insp._check_topo_units()
+                    scale = _ncutils._units_scale(
+                        src_units, _ncutils.GEOCLAW_NETCDF_UNITS['topo'])
+                    records.append((fname, topo_type, topo,
+                                    _ncutils.TopoMetadata(
+                                        **dataclasses.asdict(file_meta),
+                                        var_name=insp.var_name,
+                                        source_units=src_units,
+                                        scale_factor=scale,
+                                        fill_action='abort',
+                                        lon_wrap_offset=0.0)))
+                    continue
+
+                # Cross-seam (or wholly off-seam) crop: one entry per side,
+                # each with its own lon_wrap_offset.  fill_scan=False because
+                # topo_entries inspects with crop_bounds unset, which would
+                # otherwise scan the whole file -- ruinous for a global DEM
+                # and prone to rejecting NaN far outside the crop.
+                y_name = insp._find_y_name()
+                lat = insp.ds[y_name].values
+                file_lat_min = float(lat.min())
+                file_lat_max = float(lat.max())
+                if (crop[2] < file_lat_min - 1e-9
+                        or crop[3] > file_lat_max + 1e-9):
+                    # Longitude wraps; latitude never does.
+                    raise ValueError(
+                        f"crop_extent {list(topo.crop_extent)} for {topo.path} "
+                        f"exceeds the file's latitude extent "
+                        f"[{file_lat_min}, {file_lat_max}]. Longitude is "
+                        f"wrapped across the antimeridian, but latitude cannot "
+                        f"be; narrow the requested latitude range.")
+
+                insp.crop_bounds = crop
+                entries = insp.topo_entries(fill_scan=False)
+
+            for _entry_type, _entry_path, entry_meta in entries:
+                records.append((fname, topo_type, topo, entry_meta))
+
+        return records
+
     def write(self, data_source='setrun.py', out_file='topo.data'):
 
         self.open_data_file(out_file, data_source)
@@ -371,53 +544,28 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     UserWarning, stacklevel=2,
                 )
 
-            self.data_write(value=len(topos), alt_name='ntopofiles')
-            for topo in topos:
-                # Resolve path relative to out_file's directory, same as before
-                fname = os.path.abspath(
-                    os.path.join(os.path.dirname(out_file), topo.path))
+            # Resolve first, write second.  A type-4 crop that runs off the
+            # file's longitude extent is covered by *two* descriptor entries
+            # (one per side of the seam), so the entry count is not known until
+            # every file has been resolved -- and ntopofiles is written before
+            # the blocks.
+            records = self._resolve_topo_records(topos, out_file)
 
-                f = self._out_file
+            self.data_write(value=len(records), alt_name='ntopofiles')
+            f = self._out_file
+            for fname, topo_type, topo, meta in records:
                 f.write(f"\n'{fname}'   # topo_path\n")
-                f.write(f"{topo.topo_type:3d}   # topo_type\n")
+                f.write(f"{topo_type:3d}   # topo_type\n")
+                # The originating Topography is reused for every entry it
+                # expanded into, so buffer/coarsen/align/shifts reach Fortran
+                # for each one.  (crop_extent is written as the user gave it;
+                # for type 4 the descriptor's crop_bounds takes priority, and
+                # for a wrapped pair it is the per-entry crop_bounds that
+                # differ.)
                 _write_preprocessing_block(f, topo)
-
-                # For NetCDF (type 4): write the CF descriptor block that
-                # Fortran's read_netcdf_descriptor parses (key=value lines
-                # terminated by a blank line).  Uses inspect() rather than
-                # inspect_topo() to avoid an expensive full-file fill scan.
-                if abs(topo.topo_type) == 4:
-                    import dataclasses
+                if meta is not None:
                     from clawpack.geoclaw import netcdf_utils as _ncutils
-                    if getattr(topo, '_netcdf_meta', None) is not None:
-                        # Pre-computed metadata from topo_entries() — already has
-                        # correct lon_wrap_offset and file-coordinate crop_bounds.
-                        _meta = topo._netcdf_meta
-                    else:
-                        _crop = (tuple(topo.crop_extent)
-                                 if topo.crop_extent is not None else None)
-                        with _ncutils.TopoInspector(
-                            fname, crop_bounds=_crop
-                        ) as _insp:
-                            if _insp.var_name is None:
-                                _insp.var_name = _insp._find_topo_var_name()
-                            _file_meta = _insp.inspect(_insp.var_name)
-                            # A recognized non-meter unit yields a scale_factor
-                            # Fortran applies on read (missing/unrecognized
-                            # units still raise).
-                            _src_units = _insp._check_topo_units()
-                            _scale = _ncutils._units_scale(
-                                _src_units,
-                                _ncutils.GEOCLAW_NETCDF_UNITS['topo'])
-                            _meta = _ncutils.TopoMetadata(
-                                **dataclasses.asdict(_file_meta),
-                                var_name=_insp.var_name,
-                                source_units=_src_units,
-                                scale_factor=_scale,
-                                fill_action='abort',
-                                lon_wrap_offset=0.0,
-                            )
-                    _ncutils.DescriptorWriter.write_topo_descriptor(f, _meta)
+                    _ncutils.DescriptorWriter.write_topo_descriptor(f, meta)
 
         elif self.test_topography == 1:
             self.data_write(name='topo_location',description='(Bathymetry jump location)')
@@ -659,6 +807,13 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                     "Preprocessing attributes %s are not implemented for "
                     "dtopography (file %s). Only x_shift, y_shift, z_shift and "
                     "negate_z are supported." % (", ".join(unsupported), d.path))
+
+            _reject_remote_path(
+                d.path, "DTopography",
+                "    dtopo = dtopotools.DTopography()\n"
+                "    dtopo.read(url, dtopo_type=4)\n"
+                "    dtopo.write('dtopo_local.tt3', dtopo_type=3)\n"
+                "    rundata.dtopo_data.dtopofiles.append(dtopo)")
 
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from

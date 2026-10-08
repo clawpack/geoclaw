@@ -29,6 +29,7 @@ topography (bathymetry) files.
 """
 
 import os
+import warnings
 
 import numpy
 
@@ -116,7 +117,34 @@ def _crop_indices(x, y, crop_extent, coarsen, buffer, align):
        ``None`` means no phase snap (start at the crop window).
 
     ``coarsen`` and ``buffer`` are assumed already ``int()``-coerced.
+
+    :Raises:
+     - *ValueError* if *crop_extent* is not increasing in both coordinates.  A
+       descending longitude pair is the natural way to *spell* a crop across the
+       antimeridian, and treating it as an ordinary window silently produced an
+       empty grid, so it is rejected explicitly.
+     - *ValueError* if *crop_extent* overlaps the data but contains no grid
+       point (a window narrower than one cell, falling between two points).
+
+    Warns when *crop_extent* extends beyond the data and is therefore clipped:
+    a crop is never wrapped, only reduced.
     """
+    # A descending pair is not an empty window; it is almost always an attempt
+    # to cross the antimeridian.  Both index lookups below succeed when
+    # crop_extent[0] > crop_extent[1], giving iupper < ilower and so a zero-size
+    # slice -- an empty Topography whose `.extent` then raises something opaque
+    # far from the cause.  Fail here instead.
+    if crop_extent[0] >= crop_extent[1] or crop_extent[2] >= crop_extent[3]:
+        raise ValueError(
+            f"crop_extent must increase in both coordinates, got "
+            f"{list(crop_extent)}. To cross the antimeridian use the "
+            f"continuous spelling (e.g. [-211, -99]) rather than the wrapped "
+            f"one ([170, -170]) -- and note that a Topography does not wrap on "
+            f"its own: longitude wrapping is applied by the Fortran reader "
+            f"from a descriptor written by TopoInspector.topo_entries(), which "
+            f"emits two entries for a cross-seam crop. See the 'Region "
+            f"terminology' note in the Topography docstring.")
+
     # dx/dy computed the same way as the `delta` property (round to 15 places),
     # so the align fractional-offset search matches crop() bit-for-bit.
     dx = numpy.round(abs(x[1] - x[0]), 15)
@@ -133,6 +161,38 @@ def _crop_indices(x, y, crop_extent, coarsen, buffer, align):
     except IndexError:
         # crop_extent does not overlap the data
         return None
+    if iupper < ilower or jupper < jlower:
+        # The window overlaps the extent but falls strictly between two grid
+        # points, so it contains no data.  Unlike a genuine non-overlap (which
+        # has a documented full-file fallback) nothing pins this case, and
+        # returning the full file for a crop the user narrowed *too far* is
+        # never what was meant.
+        raise ValueError(
+            f"crop_extent {list(crop_extent)} lies between grid points and "
+            f"contains no data: the grid spacing is dx={dx}, dy={dy}. Widen "
+            f"the crop to at least one cell, or use buffer= to include the "
+            f"surrounding points.")
+
+    # Silent clipping is the other half of the antimeridian confusion: a crop
+    # written in continuous coordinates ([-211, -99] for a file on [-180, 180])
+    # is not wrapped, it is quietly reduced to the part that exists.  Say so
+    # when more than a cell is dropped; the result is still returned, because
+    # over-wide crops are a legitimate and common way to say "all of this".
+    _clipped = []
+    if crop_extent[0] < x[0] - dx:
+        _clipped.append(f"x1 {crop_extent[0]} -> {x[0]}")
+    if crop_extent[1] > x[-1] + dx:
+        _clipped.append(f"x2 {crop_extent[1]} -> {x[-1]}")
+    if crop_extent[2] < y[0] - dy:
+        _clipped.append(f"y1 {crop_extent[2]} -> {y[0]}")
+    if crop_extent[3] > y[-1] + dy:
+        _clipped.append(f"y2 {crop_extent[3]} -> {y[-1]}")
+    if _clipped:
+        warnings.warn(
+            f"crop_extent {list(crop_extent)} extends past the data, which "
+            f"covers x=[{x[0]}, {x[-1]}], y=[{y[0]}, {y[-1]}]; it was clipped "
+            f"({', '.join(_clipped)}). A Topography does not wrap: to cross "
+            f"the antimeridian use TopoInspector.topo_entries().")
 
     # Shift indices if needed for alignment (matches crop() lines historically
     # at 2085-2099: pick the low index whose coord best lands on `align`).
@@ -396,7 +456,6 @@ def _resolve_crop_extent(crop_extent, deprecated):
     value as ``crop_extent``; raise ``TypeError`` if ``crop_extent`` is also
     supplied (ambiguous).
     """
-    import warnings
     for name, value in deprecated.items():
         if value is _CROP_EXTENT_UNSET:
             continue
@@ -465,6 +524,63 @@ class Topography(object):
 
     Convention: the ``_extent`` suffix denotes domain coordinates; ``_bounds``
     denotes file coordinates.
+
+    :The antimeridian, and what a cropped Topography represents:
+
+    **A Topography never wraps.**  It holds one ascending ``x`` array and one
+    ascending ``y`` array, so it can represent a rectangle in a continuous
+    coordinate frame and nothing else.  Wrapping is not a property of the
+    object; it is applied by the *Fortran* reader, from a ``lon_wrap_offset``
+    that only exists in a NetCDF descriptor.  This is the distinction behind
+    most antimeridian confusion, so it is worth being concrete about the three
+    cases:
+
+    1. **Ordinary ascending crop inside the file.**  The common case; nothing
+       special happens.
+
+    2. **Continuous spelling, e.g. ``crop_extent=[-211, -99, ...]`` for a file
+       on ``[-180, 180]``.**  What this means depends on where it is used, and
+       the two answers are different on purpose:
+
+       - **Reading into a Topography** (``read``, ``crop``): the part that lies
+         off the file is *clipped, not wrapped* -- you get ``[-180, -99]`` and
+         a ``UserWarning`` saying so.  An in-memory ``Topography`` is one
+         ascending array; it has nowhere to put the wrapped part.
+       - **Writing to ``topo.data``** (``TopographyData.write``): the crop is
+         *split across the seam*.  The writer emits one entry per side, each
+         with its own ``lon_wrap_offset`` and file-coordinate ``crop_bounds``,
+         and Fortran reassembles them into a single continuous region.
+
+       So a cross-seam crop works from ordinary setrun code -- set
+       ``crop_extent`` and append the ``Topography`` -- with no descriptor
+       handling by the caller.  ``buffer``, ``coarsen``, ``align`` and the
+       shifts are carried onto every entry.
+
+    3. **Wrapped spelling, ``crop_extent=[170, -170, ...]``.**  Rejected
+       wherever it appears, including at ``topo.data`` write time: Fortran
+       would resolve ``crop_bounds = 170.0 -170.0`` to ``mx=0, my=0`` -- an
+       empty topography, with no error.  Use the continuous spelling
+       (``[-190, -170]``), which case 2 handles.
+
+    :meth:`netcdf_utils.TopoInspector.topo_entries` is the underlying
+    machinery, and is still available if you want the entries directly; the
+    writer now calls it for you.  Latitude is never wrapped -- a crop whose
+    latitude runs off the file is an error, since there is no seam to cross.
+
+    The general shape of it: **Python is the single-rectangle case; the wrap
+    lives in the Fortran interface.**  The same split explains why
+    ``coordinate_system`` gates wrapping (a projected x axis in meters has no
+    seam to cross) and why ``crop_bounds`` is in file coordinates while
+    ``crop_extent`` is in domain coordinates.
+
+    :Order of preprocessing operations:
+
+    ``crop_extent`` -> ``align`` -> ``buffer`` -> ``coarsen``, applied in that
+    order by both :meth:`crop` and the Fortran reader
+    (``apply_align_buffer_coarsen``).  Because the strided subsample is last,
+    **``buffer`` counts coarsened output points, not native file points**: the
+    index window is widened by ``buffer * coarsen`` native points on each side,
+    so ``buffer=2, coarsen=4`` adds 2 points to each edge of the result, not 8.
 
     """
 
@@ -853,7 +969,10 @@ class Topography(object):
            ``align=[integer_lon, integer_lat]`` to lock the coarsened grid to a
            fixed lattice regardless of the requested ``crop_extent``.
          - *buffer* (int) - grid points to keep outside ``crop_extent`` on each
-           side; see :meth:`crop`.
+           side.  These are *output* points: with ``coarsen > 1`` the window
+           grows by ``buffer * coarsen`` native points, so the result gains
+           ``buffer`` points per edge, not ``buffer * coarsen``.  See
+           :meth:`crop`.
          - *stride* (list or int) - **Deprecated**: use ``coarsen`` instead.
            A NetCDF-only knob that silently did nothing for ASCII reads and used
            a different alignment convention.  A scalar (or equal-valued list) is
@@ -897,7 +1016,6 @@ class Topography(object):
         # for ASCII reads and used a different alignment convention than
         # crop()/coarsen.  Map it onto the unified scalar `coarsen`.
         if stride is not None:
-            import warnings
             warnings.warn(
                 "The 'stride' argument to Topography.read() is deprecated; use "
                 "'coarsen' (a scalar subsampling factor) instead.  'coarsen' is "
@@ -951,6 +1069,24 @@ class Topography(object):
                     raise ValueError("topo_type must be specified")
 
         if self.unstructured:
+            # crop() already refuses unstructured data (NotImplementedError);
+            # the read path used to attempt its own filter and then index a
+            # Python list as if it were an array, dying with an unrelated
+            # TypeError far from the cause.  Refuse consistently and early.
+            _unstructured_preprocessing = (
+                self.crop_extent is not None
+                or self.coarsen != 1
+                or self.buffer != 0
+                or self.align is not None
+            )
+            if _unstructured_preprocessing:
+                raise NotImplementedError(
+                    "Preprocessing attributes (crop_extent, coarsen, buffer, "
+                    "align) are not supported for unstructured data; "
+                    "Topography.crop() refuses them for the same reason. Grid "
+                    "the data first (e.g. interp_unstructured), then crop the "
+                    "result.")
+
             # Read in the data as series of tuples
             data = numpy.loadtxt(self.path)
             points = []
@@ -981,7 +1117,6 @@ class Topography(object):
         else:
             # Data is in one of the GeoClaw supported formats
             if abs(self.topo_type) == 1:
-                import warnings
                 warnings.warn(
                     "topo_type=1 is deprecated. Convert to topo_type=2, 3, or 4:\n"
                     "  topo.read()  # load the type-1 file\n"
@@ -1144,6 +1279,11 @@ class Topography(object):
                         # crop_extent misses the file: fall back to the full grid
                         # at native resolution (mirrors crop() returning None ->
                         # no-op), rather than coarsening the whole file.
+                        warnings.warn(
+                            f"crop_extent {list(_ce)} did not overlap "
+                            f"{self.path}; the full file was read uncropped at "
+                            f"native resolution. The Fortran reader treats a "
+                            f"non-overlapping crop as fatal.")
                         _il, _iu, _jl, _ju = 0, _nx, 0, _ny
                         _step = 1
                     else:
@@ -1231,6 +1371,13 @@ class Topography(object):
             # Make sure these are set to None to force re-generating:
             self._X = None
             self._Y = None
+            # _extent and _delta are derived from _x/_y, which were just
+            # replaced.  read_header() populates them from the file header, so
+            # without this a cropped topo_type=4 read (whose crop is applied
+            # while reading the hyperslab, bypassing the property setters)
+            # reported the *full file* extent alongside cropped data.
+            self._extent = None
+            self._delta = None
 
             # Normalize missing data to NaN in memory.  The numeric
             # self.no_data_value is only the on-file/Fortran sentinel (written
@@ -1278,6 +1425,14 @@ class Topography(object):
                     buffer=int(self.buffer),
                     align=self.align,
                 )
+                if _cropped is None:
+                    # crop() already warned about the non-overlap; say what the
+                    # consequence is here, because keeping the *full* file is
+                    # surprising and the Fortran reader would instead abort.
+                    warnings.warn(
+                        f"crop_extent {list(self.crop_extent)} did not overlap "
+                        f"{self.path}; the full file was read uncropped. The "
+                        f"Fortran reader treats this as fatal.")
                 if _cropped is not None:
                     self._x = _cropped._x
                     self._y = _cropped._y
@@ -1541,7 +1696,6 @@ class Topography(object):
                     outfile.write("%s %s %s\n" % (self.x[i], self.y[i], topo))
 
         elif topo_type == 1:
-            import warnings
             warnings.warn(
                 "Writing topo_type=1 is deprecated. Prefer topo_type=2 or 3 for ASCII "
                 "output, or topo_type=4 for NetCDF. Type-1 output will be removed in "
@@ -2149,7 +2303,13 @@ class Topography(object):
             - *buffer* (int): integer number of grid points to keep on each side
               of *crop_extent* (when possible) -- NOT a coordinate distance (cf.
               ``interp_unstructured``'s ``buffer_length``, which is in meters).
-              Truncated to an integer via ``int()``.
+              Truncated to an integer via ``int()``.  Counted in *coarsened
+              output* points: the operations apply in the order crop -> align ->
+              buffer -> coarsen, so the native index window is widened by
+              ``buffer * coarsen`` and the strided subsample then keeps
+              ``buffer`` of those per edge.  ``buffer=2, coarsen=4`` therefore
+              adds 2 points to each edge of the result, not 8.  Fortran
+              ``apply_align_buffer_coarsen`` does the same arithmetic.
             - *align* (tuple): (xalign,yalign) = desired alignment if coarsening
 
         Setting *buffer > 0* may be useful to insure that the
@@ -2218,7 +2378,13 @@ class Topography(object):
         # read path so ASCII and NetCDF reads of the same data match exactly).
         idx = _crop_indices(self.x, self.y, crop_extent, coarsen, buffer, align)
         if idx is None:
-            print('*** crop_extent does not overlap topo')
+            # Warned rather than printed so a caller can catch, filter or
+            # escalate it; the Fortran reader treats the same condition as
+            # fatal (topo_module.f90: "does not overlap topo file", stop 1),
+            # so a run that ignores this here will fail there.
+            warnings.warn(
+                f"crop_extent {list(crop_extent)} does not overlap this "
+                f"topography (extent {list(self.extent)}); no crop applied.")
             return None
         ilower, iupper, jlower, jupper = idx
 
@@ -2486,7 +2652,6 @@ def read_netcdf(path, zvar=None, extent='all', coarsen=1, return_topo=True,
        depending on ``return_topo`` / ``return_xarray`` (unchanged contract).
     """
 
-    import warnings
     warnings.warn(
         "topotools.read_netcdf is deprecated; use "
         "topotools.fetch_remote_topo (or Topography.read(topo_type=4)) instead.",
