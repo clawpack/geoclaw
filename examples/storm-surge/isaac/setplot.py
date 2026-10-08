@@ -44,7 +44,20 @@ def setplot(plotdata=None):
     friction_data.read(os.path.join(plotdata.outdir, 'friction.data'))
 
     # Load storm data
-    storm = stormtools.Storm(met_data.storm_file, file_format="data")
+    #
+    # The storm file's format follows the forcing family the run actually used,
+    # so read it off surge.data rather than hard-coding one: "data" is the
+    # gridded descriptor format, and feeding it a parametric track file makes
+    # GriddedMetForcing.read_data fail on a line it cannot parse.  storm_family
+    # is one of "parametric", "gridded" or "none" (see forcing_subtype_registry
+    # in geoclaw.data).
+    if met_data.storm_family == "gridded":
+        storm = stormtools.Storm(met_data.storm_file, file_format="data")
+    elif met_data.storm_family == "parametric":
+        storm = stormtools.Storm(met_data.storm_file, file_format="geoclaw")
+    else:
+        # Forcing is off: there is no storm file to read.
+        storm = None
     track = met_plot.track_data(os.path.join(plotdata.outdir, 'fort.track'))
 
     # Set afteraxes function

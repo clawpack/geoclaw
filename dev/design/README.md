@@ -48,3 +48,7 @@ lost. Several of these docs *were* lost that way (they lived in a gitignored
   rules, the per-path conformance table (generated from `UNITS_POLICY` in
   `geoclaw/units.py` and enforced by `tests/test_units_policy.py`), and the
   known deliberate looseness.
+- `topo\_input\_roadmap.md` — living roadmap for the topo/dtopo input rework:
+  merge order for the linear PR stack, superseded branches and what replaced
+  them, and the deferred items (antimeridian seam gap, dtopo Fortran parity,
+  1D preprocessing scope, build-flag hygiene, units-policy ASCII coverage).
