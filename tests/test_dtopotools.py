@@ -477,15 +477,70 @@ def test_dtopo_netcdf_bare_seconds_default(tmp_path):
     ("buffer", 1.0),
     ("align", (0.0, 0.5)),
 ])
-def test_dtopo_unsupported_preprocessing(tmp_path, attr, value):
-    r"""Unsupported preprocessing attributes raise in DTopography.read()."""
-    path = tmp_path / "synthetic.tt3"
-    _make_synthetic_dtopo().write(path, dtopo_type=3, dZ_format="%.12e")
+def test_dtopo_type1_preprocessing_unsupported(tmp_path, attr, value):
+    r"""Type-1 (column format) has no grid, so crop/coarsen/buffer/align raise."""
+    path = tmp_path / "synthetic.tt1"
+    _make_synthetic_dtopo().write(path, dtopo_type=1, dZ_format="%.12e")
 
     dtopo = dtopotools.DTopography()
     setattr(dtopo, attr, value)
     with pytest.raises(NotImplementedError, match=attr):
-        dtopo.read(path=path, dtopo_type=3)
+        dtopo.read(path=path, dtopo_type=1)
+
+
+@pytest.mark.python
+@pytest.mark.parametrize("dtopo_type", [3])   # type 2 write is not implemented
+def test_dtopo_crop_on_read_equivalence(tmp_path, dtopo_type):
+    r"""A crop_extent read reproduces a full read sliced to the same window,
+    for every time frame (manufactured-solution equivalence)."""
+    ext = f"tt{dtopo_type}"
+    path = tmp_path / f"synthetic.{ext}"
+    _make_synthetic_dtopo().write(path, dtopo_type=dtopo_type, dZ_format="%.12e")
+
+    full = dtopotools.DTopography(path, dtopo_type=dtopo_type)
+    crop = [0.25, 0.75, 0.25, 0.75]
+    cropped = dtopotools.DTopography()
+    cropped.crop_extent = list(crop)
+    cropped.read(path=path, dtopo_type=dtopo_type)
+
+    xm = (full.x >= crop[0]) & (full.x <= crop[1])
+    ym = (full.y >= crop[2]) & (full.y <= crop[3])
+    np.testing.assert_allclose(cropped.x, full.x[xm])
+    np.testing.assert_allclose(cropped.y, full.y[ym])
+    ref_dZ = full.dZ[:, ym][:, :, xm]
+    assert cropped.dZ.shape == ref_dZ.shape
+    np.testing.assert_allclose(cropped.dZ, ref_dZ, rtol=0, atol=1e-12)
+
+
+@pytest.mark.python
+def test_dtopo_coarsen_on_read(tmp_path):
+    r"""coarsen=2 subsamples every other point on each spatial axis."""
+    path = tmp_path / "synthetic.tt3"
+    _make_synthetic_dtopo().write(path, dtopo_type=3, dZ_format="%.12e")
+
+    full = dtopotools.DTopography(path, dtopo_type=3)
+    coarse = dtopotools.DTopography()
+    coarse.coarsen = 2
+    coarse.read(path=path, dtopo_type=3)
+
+    np.testing.assert_allclose(coarse.x, full.x[::2])
+    np.testing.assert_allclose(coarse.y, full.y[::2])
+    np.testing.assert_allclose(coarse.dZ, full.dZ[:, ::2, ::2], rtol=0, atol=1e-12)
+
+
+@pytest.mark.python
+def test_dtopo_read_header(tmp_path):
+    r"""read_header() reports extent/delta without loading dZ (types 2/3)."""
+    path = tmp_path / "synthetic.tt3"
+    ref = _make_synthetic_dtopo()
+    ref.write(path, dtopo_type=3, dZ_format="%.12e")
+
+    d = dtopotools.DTopography()
+    mx, my, mt = d.read_header(path=path, dtopo_type=3)
+    assert (mx, my) == (len(ref.x), len(ref.y))
+    np.testing.assert_allclose(d.extent,
+                               [ref.x[0], ref.x[-1], ref.y[0], ref.y[-1]])
+    assert d.dZ is None   # header only, no deformation loaded
 
 
 @pytest.mark.parametrize("attr, axis", [("x_shift", "x"), ("y_shift", "y")])

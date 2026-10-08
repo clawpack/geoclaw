@@ -1788,3 +1788,112 @@ def test_wrapping_crop_still_checks_latitude(tmp_path):
     td.topofiles = [t]
     with pytest.raises(ValueError, match="latitude extent"):
         td.write(out_file=str(tmp_path / "topo.data"))
+
+
+# ===========================================================================
+# _crop_indices: two-axis behavior preservation
+#
+# _crop_indices used to inline the whole index computation; the per-axis math
+# now lives in coordinate_tools.crop_indices (shared with dtopo).  These pin
+# that the move changed nothing observable, including the precedence between
+# its two failure modes.
+# ===========================================================================
+
+def _ref_crop_indices_two_axis(x, y, crop_extent, coarsen, buffer, align):
+    """Pre-refactor ``topotools._crop_indices``, inlined verbatim as an oracle.
+
+    Returns the four-tuple, ``None`` for a non-overlap, or raises for a
+    sub-cell window -- exactly as before the per-axis math moved out.  The
+    clipping warning is omitted; only the index result is compared.
+    """
+    dx = np.round(abs(x[1] - x[0]), 15)
+    dy = np.round(abs(y[1] - y[0]), 15)
+    dx_new = dx * coarsen
+    dy_new = dy * coarsen
+
+    try:
+        ilower = (x >= crop_extent[0]).nonzero()[0][0]
+        iupper = (x <= crop_extent[1]).nonzero()[0][-1]
+        jlower = (y >= crop_extent[2]).nonzero()[0][0]
+        jupper = (y <= crop_extent[3]).nonzero()[0][-1]
+    except IndexError:
+        return None
+    if iupper < ilower or jupper < jlower:
+        raise ValueError("lies between grid points")
+
+    if (coarsen > 1) and (align is not None):
+        xs = np.array([x[ilower + i] for i in range(coarsen)])
+        offsets = (xs - align[0]) / dx_new
+        offsets_frac = offsets - np.round(offsets)
+        ioffset = np.argmin(abs(offsets_frac))
+        ilower = ilower + ioffset
+        iupper = iupper - np.remainder(iupper - ilower, coarsen)
+
+        ys = np.array([y[jlower + j] for j in range(coarsen)])
+        offsets = (ys - align[1]) / dy_new
+        offsets_frac = offsets - np.round(offsets)
+        joffset = np.argmin(abs(offsets_frac))
+        jlower = jlower + joffset
+        jupper = jupper - np.remainder(jupper - jlower, coarsen)
+
+    ilower = np.maximum(0, ilower - buffer * coarsen)
+    jlower = np.maximum(0, jlower - buffer * coarsen)
+    iupper = np.minimum(len(x) - 1, iupper + buffer * coarsen) + 1
+    jupper = np.minimum(len(y) - 1, jupper + buffer * coarsen) + 1
+    return int(ilower), int(iupper), int(jlower), int(jupper)
+
+
+@pytest.mark.python
+def test_crop_indices_two_axis_matches_pre_refactor():
+    """Sweep crop x coarsen x buffer x align; windows must be identical.
+
+    Behavior-preservation Vet for delegating the per-axis math: the two grids
+    differ in spacing (dx != dy) and origin so an x/y mix-up cannot pass.
+    """
+    import itertools
+
+    dx, dy = 0.25, 0.5
+    x = np.arange(-5.0, 15.0 + dx / 2, dx)
+    y = np.arange(2.0, 22.0 + dy / 2, dy)
+
+    x_pairs = [(-5.0, 15.0), (-2.1, 6.0), (0.0, 9.9), (3.3, 12.5)]
+    y_pairs = [(2.0, 22.0), (4.4, 13.0), (7.0, 19.9), (10.5, 21.0)]
+    coarsens = [1, 2, 3, 5]
+    buffers = [0, 1, 4]
+    aligns = [None, (0.0, 0.0), (0.5, 0.25), (-1.0, 3.0)]
+
+    checked = 0
+    for (x1, x2), (y1, y2), coarsen, buffer, align in itertools.product(
+            x_pairs, y_pairs, coarsens, buffers, aligns):
+        crop_extent = [x1, x2, y1, y2]
+        ref = _ref_crop_indices_two_axis(x, y, crop_extent, coarsen, buffer,
+                                         align)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")   # clipping warning is not the subject
+            got = topotools._crop_indices(x, y, crop_extent, coarsen, buffer,
+                                          align)
+        assert got == ref, (crop_extent, coarsen, buffer, align, got, ref)
+        checked += 1
+
+    assert checked == 4 * 4 * 4 * 3 * 4   # 768 combinations actually compared
+
+
+@pytest.mark.python
+def test_crop_indices_non_overlap_outranks_subcell_on_the_other_axis():
+    """A non-overlapping axis still returns None, even when the other is empty.
+
+    The original wrapped all four index lookups in one try/except, so an
+    IndexError from *either* axis escaped before the sub-cell check ran.
+    Resolving the axes independently would have turned this None into a
+    ValueError -- a silent change in which failure the caller sees.
+    """
+    dx, dy = 0.5, 0.5
+    x = np.arange(0.0, 10.0, dx)
+    y = np.arange(0.0, 10.0, dy)
+
+    # x: sub-cell (strictly between 1.0 and 1.5).  y: no overlap at all.
+    crop_extent = [1.1, 1.4, 50.0, 60.0]
+    assert _ref_crop_indices_two_axis(x, y, crop_extent, 1, 0, None) is None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert topotools._crop_indices(x, y, crop_extent, 1, 0, None) is None

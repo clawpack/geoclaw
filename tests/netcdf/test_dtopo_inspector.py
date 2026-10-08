@@ -234,3 +234,68 @@ def test_descriptor_writer_output(tmp_path):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
+
+
+# ---------------------------------------------------------------------------
+# dtopo_entries: antimeridian wrap-split + coordinate_system gate
+# (direct analogue of TopoInspector.topo_entries)
+# ---------------------------------------------------------------------------
+
+def _geographic_dtopo(lon_min, lon_max, nlon=37):
+    """A positively-geographic dtopo dataset (degree units + longitude name)."""
+    lons = np.linspace(lon_min, lon_max, nlon)
+    lats = np.linspace(-5.0, 5.0, 5)
+    t = np.array([0.0, 60.0])
+    dz = np.zeros((2, 5, nlon), dtype=float)
+    return xr.Dataset(
+        {"dz": (("time", "lat", "lon"), dz, {"units": "m"})},
+        coords={
+            "lon": ("lon", lons,
+                    {"units": "degrees_east", "standard_name": "longitude"}),
+            "lat": ("lat", lats,
+                    {"units": "degrees_north", "standard_name": "latitude"}),
+            "time": ("time", t, {"units": "seconds"}),
+        },
+    )
+
+
+def test_dtopo_entries_wrap_split_geographic_run(tmp_path):
+    """coordinate_system=2 + a crop crossing -180 splits into two wrap entries."""
+    path = write_dataset(_geographic_dtopo(-180.0, 180.0), tmp_path / "dt.nc")
+    with DTopoInspector(path, crop_bounds=(-190.0, -170.0, -3.0, 3.0)) as insp:
+        entries = insp.dtopo_entries(coordinate_system=2)
+    offsets = sorted(meta.lon_wrap_offset for _, _, meta in entries)
+    assert offsets == [-360.0, 0.0]
+    # Each entry carries file-coordinate crop_bounds for Fortran.
+    for _, _, meta in entries:
+        assert meta.crop_bounds is not None
+
+
+def test_dtopo_entries_gate_geographic_file_in_cartesian_run(tmp_path):
+    """A geographic dtopo under a Cartesian run (coordinate_system=1) is refused."""
+    path = write_dataset(_geographic_dtopo(-180.0, 180.0), tmp_path / "dt.nc")
+    with DTopoInspector(path, crop_bounds=(-170.0, -150.0, -3.0, 3.0)) as insp:
+        with pytest.raises(ValueError, match="mismatch"):
+            insp.dtopo_entries(coordinate_system=1)
+
+
+def test_dtopo_entries_no_crop_single_entry(tmp_path):
+    """No crop -> a single entry with no wrap offset."""
+    path = write_dataset(_geographic_dtopo(-180.0, 180.0), tmp_path / "dt.nc")
+    with DTopoInspector(path) as insp:
+        entries = insp.dtopo_entries(coordinate_system=2)
+    assert len(entries) == 1
+    assert entries[0][2].lon_wrap_offset == 0.0
+
+
+def test_write_dtopo_descriptor_emits_crop_bounds(tmp_path):
+    """write_dtopo_descriptor emits crop_bounds when the metadata carries them."""
+    from clawpack.geoclaw.netcdf_utils import DescriptorWriter
+    path = write_dataset(_geographic_dtopo(-180.0, 180.0), tmp_path / "dt.nc")
+    with DTopoInspector(path, crop_bounds=(-170.0, -150.0, -3.0, 3.0)) as insp:
+        entries = insp.dtopo_entries(coordinate_system=2)
+    buf = io.StringIO()
+    DescriptorWriter.write_dtopo_descriptor(buf, entries[0][2])
+    text = buf.getvalue()
+    assert "crop_bounds" in text
+    assert "lon_wrap_offset" in text

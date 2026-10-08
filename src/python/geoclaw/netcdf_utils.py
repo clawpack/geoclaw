@@ -47,6 +47,14 @@ import numpy as np
 import xarray as xr
 
 from clawpack.geoclaw.units import GEOCLAW_NETCDF_UNITS, convert as units_convert
+from clawpack.geoclaw.coordinate_tools import (
+    is_geographic_lon,
+    classify_lon_axis,
+    resolve_wrap,
+    _compute_lon_entries,
+    _PROJECTED_LENGTH_UNITS,
+    _PROJECTED_STANDARD_NAMES,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -88,18 +96,11 @@ _CF_TO_UNITS_PY: dict[str, str] = {
 }
 
 
-# Length unit strings (lower-cased) on an x axis that mark it as a projected /
-# rectilinear (non-geographic) grid, for which the 0-360 longitude wrap is
-# meaningless and must be skipped.  Detection defaults to geographic; only
-# positive evidence (these units, a projection standard_name, or values
-# outside the plausible degree range) disables the wrap.
-_PROJECTED_LENGTH_UNITS: frozenset[str] = frozenset({
-    'm', 'meter', 'meters', 'metre', 'metres',
-    'km', 'kilometer', 'kilometers', 'kilometre', 'kilometres',
-})
-_PROJECTED_STANDARD_NAMES: frozenset[str] = frozenset({
-    'projection_x_coordinate', 'projection_y_coordinate',
-})
+# ``_PROJECTED_LENGTH_UNITS`` / ``_PROJECTED_STANDARD_NAMES`` and the geographic
+# vs projected longitude test (``is_geographic_lon``) now live in
+# ``coordinate_tools`` so that every input path (topo/dtopo/met, ASCII/NetCDF)
+# shares one implementation.  They are imported above and re-exported here for
+# backward compatibility.
 
 
 def _normalize_cf_unit(cf_unit: str) -> Optional[str]:
@@ -433,6 +434,7 @@ class NetCDFInspector:
         self,
         path: str | Path,
         crop_bounds: Optional[tuple[float, float, float, float]] = None,
+        buffer: int = 0,
     ) -> None:
         # A remote OPeNDAP/THREDDS URL (e.g. "https://.../foo.nc") must reach
         # xarray as a string; see is_remote_url() for why Path() breaks it.
@@ -441,6 +443,10 @@ class NetCDFInspector:
         else:
             self.path = Path(path)
         self.crop_bounds = crop_bounds
+        # Grid-point buffer count (used by topo_entries/dtopo_entries to bake a
+        # coordinate margin into crop_bounds).  TopoInspector re-sets this from
+        # its own signature; DTopoInspector inherits it here.
+        self.buffer = int(buffer)
         # Activate Dask-lazy chunking if dask is available; fall back to
         # netCDF4 native lazy loading so dask is an optional dependency.
         try:
@@ -566,13 +572,7 @@ class NetCDFInspector:
         std_name = coord.attrs.get('standard_name', '')
         x_min = float(coord.min())
         x_max = float(coord.max())
-        projected = (
-            units in _PROJECTED_LENGTH_UNITS
-            or std_name in _PROJECTED_STANDARD_NAMES
-            or x_min < -360.0 - 1e-6
-            or x_max > 360.0 + 1e-6
-        )
-        if projected:
+        if not is_geographic_lon(x_min, x_max, units, std_name):
             return None
         return 360 if x_max > 180.0 else 180
 
@@ -1009,7 +1009,8 @@ class TopoInspector(NetCDFInspector):
             lon_wrap_offset=0.0,
         )
 
-    def topo_entries(self, fill_scan: bool = True) -> list[list]:
+    def topo_entries(self, fill_scan: bool = True,
+                     coordinate_system: Optional[int] = None) -> list[list]:
         """
         Return a list of ready-to-use topo entries for topofiles.
 
@@ -1032,6 +1033,12 @@ class TopoInspector(NetCDFInspector):
         only need the descriptor metadata (``TopographyData.write``) pass
         False.  Scoping the scan to each returned entry's own crop is the
         better answer and is tracked for the topo-input refactor.
+
+        *coordinate_system* is the run's authoritative system (GeoClaw
+        ``geodata``: 1 = Cartesian, 2 = lon-lat).  When provided it gates
+        antimeridian wrapping via :func:`coordinate_tools.resolve_wrap` and
+        raises on a genuine geographic/Cartesian mismatch; ``None`` (the
+        default) falls back to the per-file heuristic (no cross-check).
         """
 
         # Interrogate without crop validation: self.crop_bounds is in domain
@@ -1043,27 +1050,37 @@ class TopoInspector(NetCDFInspector):
         finally:
             self.crop_bounds = saved_crop
 
+        # Classify the file's x axis and gate wrapping on the run's coordinate
+        # system (authoritative).  This runs even when no crop is requested so a
+        # geographic-vs-Cartesian mismatch is caught regardless of cropping.
+        lon_coords = self.ds[meta.x_name].values
+        file_lon_min = float(lon_coords.min())
+        file_lon_max = float(lon_coords.max())
+        _xattrs = self.ds[meta.x_name].attrs
+        nature = classify_lon_axis(
+            _xattrs.get('units'), _xattrs.get('standard_name'),
+            file_lon_min, file_lon_max)
+        allow_wrap = resolve_wrap(coordinate_system, nature)
+
         if saved_crop is None:
             return [[4, self.path, dataclasses.replace(meta, lon_wrap_offset=0.0)]]
 
         assert saved_crop is not None  # narrowing hint: already returned above
-        lon_coords = self.ds[meta.x_name].values
-        file_lon_min = float(lon_coords.min())
-        file_lon_max = float(lon_coords.max())
         if len(lon_coords) > 1:
             lon_resolution = float(abs(lon_coords[1] - lon_coords[0]))
         else:
             lon_resolution = 1e-10  # single-point file, no gap tolerance needed
         crop_lon_min, crop_lon_max, crop_lat_min, crop_lat_max = saved_crop
 
-        # The +/-360 wrap candidates only make sense for a geographic
-        # longitude axis.  For a non-geographic x axis (lon_wrap is None,
-        # e.g. projected meters) restrict to the identity offset so the crop
+        # The +/-360 wrap candidates only make sense for a geographic longitude
+        # axis under a geographic run; ``allow_wrap`` was resolved above from the
+        # run's coordinate_system (authoritative) and the file's axis nature.
+        # For a non-wrapping axis, only the identity offset is tried so the crop
         # is taken straight from the file extent.
         entries_spec = _compute_lon_entries(
             file_lon_min, file_lon_max, crop_lon_min, crop_lon_max,
             max_gap=lon_resolution,
-            allow_wrap=meta.lon_wrap is not None,
+            allow_wrap=allow_wrap,
         )
 
         result = []
@@ -1261,6 +1278,84 @@ class DTopoInspector(NetCDFInspector):
             scale_factor=_units_scale(self.source_units,
                                       GEOCLAW_NETCDF_UNITS['topo']),
         )
+
+    def dtopo_entries(self, coordinate_system: Optional[int] = None) -> list[list]:
+        """Ready-to-use dtopo entries -- the direct analogue of
+        :meth:`TopoInspector.topo_entries`.
+
+        Each entry is ``[4, filepath, DTopoMetadata]``.  A single entry when no
+        wrapping is needed; two entries (same file, different ``lon_wrap_offset``
+        and file-coordinate ``crop_bounds``) when the crop straddles the file's
+        longitude cut (the antimeridian split).  *coordinate_system* gates the
+        wrapping (see :func:`coordinate_tools.resolve_wrap`) and raises on a
+        geographic/Cartesian mismatch; ``None`` keeps the legacy per-file
+        heuristic with no cross-check.
+        """
+        saved_crop = self.crop_bounds
+        self.crop_bounds = None
+        try:
+            meta = self.inspect_dtopo()
+        finally:
+            self.crop_bounds = saved_crop
+
+        # Classify the file's x axis and gate wrapping on the run's coordinate
+        # system (runs even with no crop so a mismatch is always caught).
+        lon_coords = self.ds[meta.x_name].values
+        file_lon_min = float(lon_coords.min())
+        file_lon_max = float(lon_coords.max())
+        _xattrs = self.ds[meta.x_name].attrs
+        nature = classify_lon_axis(
+            _xattrs.get('units'), _xattrs.get('standard_name'),
+            file_lon_min, file_lon_max)
+        allow_wrap = resolve_wrap(coordinate_system, nature)
+
+        if saved_crop is None:
+            return [[4, self.path,
+                     dataclasses.replace(meta, lon_wrap_offset=0.0)]]
+
+        if len(lon_coords) > 1:
+            lon_resolution = float(abs(lon_coords[1] - lon_coords[0]))
+        else:
+            lon_resolution = 1e-10
+        crop_lon_min, crop_lon_max, crop_lat_min, crop_lat_max = saved_crop
+
+        # Bake the requested buffer (a grid-point count) into the crop rectangle
+        # as a coordinate margin, mirroring topo_entries -- all buffer handling
+        # stays on the Python side.
+        max_gap = lon_resolution
+        if self.buffer:
+            lat_coords = self.ds[meta.y_name].values
+            if len(lat_coords) > 1:
+                lat_resolution = float(abs(lat_coords[1] - lat_coords[0]))
+            else:
+                lat_resolution = 0.0
+            dlon = self.buffer * lon_resolution
+            dlat = self.buffer * lat_resolution
+            crop_lon_min -= dlon
+            crop_lon_max += dlon
+            file_lat_min = float(lat_coords.min())
+            file_lat_max = float(lat_coords.max())
+            crop_lat_min = max(crop_lat_min - dlat, file_lat_min)
+            crop_lat_max = min(crop_lat_max + dlat, file_lat_max)
+            max_gap = lon_resolution * (self.buffer + 1)
+
+        entries_spec = _compute_lon_entries(
+            file_lon_min, file_lon_max, crop_lon_min, crop_lon_max,
+            max_gap=max_gap,
+            allow_wrap=allow_wrap,
+        )
+
+        result = []
+        for file_crop_min, file_crop_max, lon_offset in entries_spec:
+            new_meta = dataclasses.replace(
+                meta,
+                crop_bounds=(file_crop_min, file_crop_max,
+                             crop_lat_min, crop_lat_max),
+                lon_wrap_offset=lon_offset,
+            )
+            result.append([4, self.path, new_meta])
+
+        return result
 
 
 class MetInspector(NetCDFInspector):
@@ -1850,78 +1945,12 @@ class CFNormalizer:
 
 # ---------------------------------------------------------------------------
 # Longitude entry computation
+#
+# ``_compute_lon_entries`` now lives in ``coordinate_tools`` (imported at the top
+# of this module and re-exported here for backward compatibility) so that the
+# antimeridian-wrap geometry has a single implementation shared by every input
+# product and file format.
 # ---------------------------------------------------------------------------
-
-def _compute_lon_entries(
-    file_lon_min: float,
-    file_lon_max: float,
-    domain_lon_min: float,
-    domain_lon_max: float,
-    max_gap: float = 1e-10,
-    allow_wrap: bool = True,
-) -> list[tuple[float, float, float]]:
-    """
-    Compute (file_crop_min, file_crop_max, lon_offset) tuples needed to cover
-    [domain_lon_min, domain_lon_max] from a file with lons in
-    [file_lon_min, file_lon_max].
-
-    lon_offset is the scalar Fortran adds to file coordinates to produce
-    domain coordinates: x_domain = x_file + lon_offset.
-
-    Returns 1 tuple if a single offset suffices, 2 tuples if the domain
-    straddles the file's cut point.
-
-    max_gap controls how much under-coverage is tolerated.  The default
-    (1e-10) is tight enough to catch genuine gaps.  Pass the file's grid
-    spacing to allow for the half-cell gap at the dateline that near-global
-    files (e.g. GEBCO) have between their last and first longitude columns.
-
-    allow_wrap enables the +/-360 wrap candidate offsets (the default, for a
-    geographic longitude axis).  Pass False for a non-geographic x axis
-    (projected meters, etc.), which never wraps: only the identity offset 0
-    is considered.
-
-    Raises ValueError if the file cannot cover the requested domain even
-    with all candidate offsets, or if the remaining uncovered gap exceeds
-    max_gap.
-    """
-    candidate_offsets = [0.0, 360.0, -360.0] if allow_wrap else [0.0]
-    entries: list[tuple[float, float, float]] = []
-    total_coverage = 0.0
-
-    for offset in candidate_offsets:
-        shifted_min = file_lon_min + offset
-        shifted_max = file_lon_max + offset
-        intersect_min = max(domain_lon_min, shifted_min)
-        intersect_max = min(domain_lon_max, shifted_max)
-        width = intersect_max - intersect_min
-        if width > 1e-10:
-            file_crop_min = intersect_min - offset
-            file_crop_max = intersect_max - offset
-            # Clamp to file extent (guards against floating-point overshoot)
-            file_crop_min = max(file_crop_min, file_lon_min)
-            file_crop_max = min(file_crop_max, file_lon_max)
-            entries.append((file_crop_min, file_crop_max, offset))
-            total_coverage += width
-
-    if not entries:
-        raise ValueError(
-            f"File longitude range [{file_lon_min}, {file_lon_max}] cannot cover "
-            f"domain [{domain_lon_min}, {domain_lon_max}] with candidate offsets "
-            f"{candidate_offsets}."
-        )
-
-    # One-sided check: overcoverage is harmless; under-coverage beyond max_gap
-    # indicates that the file genuinely cannot cover the requested domain.
-    gap = (domain_lon_max - domain_lon_min) - total_coverage
-    if gap > max_gap:
-        raise ValueError(
-            f"File longitudes [{file_lon_min}, {file_lon_max}] cannot "
-            f"cover requested domain [{domain_lon_min}, {domain_lon_max}]. "
-            f"Gap of {gap:.6f} degrees exceeds tolerance {max_gap:.6f}."
-        )
-
-    return entries
 
 
 # ---------------------------------------------------------------------------
@@ -2014,6 +2043,12 @@ class DescriptorWriter:
         f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
         f.write(f"t0             = {meta.t0!r}\n")
         f.write(f"dt             = {meta.dt!r}\n")
+        # crop_bounds are in FILE coordinates (converted from domain coords by
+        # dtopo_entries), so Fortran compares them directly against the file's
+        # coordinate arrays before applying lon_wrap_offset.  Mirrors topo.
+        if meta.crop_bounds is not None:
+            x0, x1, y0, y1 = meta.crop_bounds
+            f.write(f"crop_bounds    = {x0} {x1} {y0} {y1}\n")
         f.write("\n")  # blank line terminates block for Fortran parser
 
     @staticmethod

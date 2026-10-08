@@ -36,6 +36,8 @@ import numpy
 import clawpack.geoclaw.util as util
 import clawpack.clawutil.data
 import clawpack.geoclaw.data
+from clawpack.geoclaw import coordinate_tools
+from clawpack.geoclaw import gridded_input
 
 # ==============================================================================
 #  Topography Related Functions
@@ -149,29 +151,52 @@ def _crop_indices(x, y, crop_extent, coarsen, buffer, align):
     # so the align fractional-offset search matches crop() bit-for-bit.
     dx = numpy.round(abs(x[1] - x[0]), 15)
     dy = numpy.round(abs(y[1] - y[0]), 15)
-    dx_new = dx * coarsen
-    dy_new = dy * coarsen
 
-    # Find indices of the arrays inside crop_extent:
-    try:
-        ilower = (x >= crop_extent[0]).nonzero()[0][0]
-        iupper = (x <= crop_extent[1]).nonzero()[0][-1]
-        jlower = (y >= crop_extent[2]).nonzero()[0][0]
-        jupper = (y <= crop_extent[3]).nonzero()[0][-1]
-    except IndexError:
-        # crop_extent does not overlap the data
+    # Per-axis index math (crop window, align shift, buffer) lives in
+    # coordinate_tools.crop_indices so the topo and dtopo crop paths share one
+    # implementation; this function keeps only the two-axis vocabulary --
+    # crop_extent validation, the clipping warning, and the (i, j) tuple.
+    #
+    # Both axes are resolved before either failure is reported, because the
+    # original single try/except around all four index lookups let a
+    # *non-overlap* on one axis win over a sub-cell window on the other (the
+    # IndexError escaped first).  Raising per axis instead would turn that
+    # None into a ValueError.
+    _empty = None
+    xwin = ywin = None
+    for _axis, _coords, _lo, _hi, _delta, _align in (
+            ('x', x, crop_extent[0], crop_extent[1], dx,
+             None if align is None else align[0]),
+            ('y', y, crop_extent[2], crop_extent[3], dy,
+             None if align is None else align[1])):
+        try:
+            _win = coordinate_tools.crop_indices(
+                _coords, _lo, _hi, _delta, coarsen, buffer, _align)
+        except coordinate_tools.EmptyCropWindow as e:
+            _empty = _empty or e
+            _win = 'empty'
+        if _axis == 'x':
+            xwin = _win
+        else:
+            ywin = _win
+
+    if (xwin is None) or (ywin is None):
+        # crop_extent does not overlap the data.  Reported by the caller, which
+        # knows whether the fall-back is "leave uncropped" or something else;
+        # in particular no clipping warning here -- nothing was clipped.
         return None
-    if iupper < ilower or jupper < jlower:
+
+    if _empty is not None:
         # The window overlaps the extent but falls strictly between two grid
         # points, so it contains no data.  Unlike a genuine non-overlap (which
         # has a documented full-file fallback) nothing pins this case, and
         # returning the full file for a crop the user narrowed *too far* is
-        # never what was meant.
+        # never what was meant.  Re-raised here to name both axes and spacings.
         raise ValueError(
             f"crop_extent {list(crop_extent)} lies between grid points and "
             f"contains no data: the grid spacing is dx={dx}, dy={dy}. Widen "
             f"the crop to at least one cell, or use buffer= to include the "
-            f"surrounding points.")
+            f"surrounding points.") from _empty
 
     # Silent clipping is the other half of the antimeridian confusion: a crop
     # written in continuous coordinates ([-211, -99] for a file on [-180, 180])
@@ -194,55 +219,16 @@ def _crop_indices(x, y, crop_extent, coarsen, buffer, align):
             f"({', '.join(_clipped)}). A Topography does not wrap: to cross "
             f"the antimeridian use TopoInspector.topo_entries().")
 
-    # Shift indices if needed for alignment (matches crop() lines historically
-    # at 2085-2099: pick the low index whose coord best lands on `align`).
-    if (coarsen > 1) and (align is not None):
-        xs = numpy.array([x[ilower + i] for i in range(coarsen)])
-        offsets = (xs - align[0]) / dx_new
-        offsets_frac = offsets - numpy.round(offsets)
-        ioffset = numpy.argmin(abs(offsets_frac))
-        ilower = ilower + ioffset
-        iupper = iupper - numpy.remainder(iupper - ilower, coarsen)
-
-        ys = numpy.array([y[jlower + j] for j in range(coarsen)])
-        offsets = (ys - align[1]) / dy_new
-        offsets_frac = offsets - numpy.round(offsets)
-        joffset = numpy.argmin(abs(offsets_frac))
-        jlower = jlower + joffset
-        jupper = jupper - numpy.remainder(jupper - jlower, coarsen)
-
-    # buffer, checking limits of arrays:
-    ilower = numpy.maximum(0, ilower - buffer * coarsen)
-    jlower = numpy.maximum(0, jlower - buffer * coarsen)
-    iupper = numpy.minimum(len(x) - 1, iupper + buffer * coarsen) + 1
-    jupper = numpy.minimum(len(y) - 1, jupper + buffer * coarsen) + 1
+    ilower, iupper = xwin
+    jlower, jupper = ywin
 
     return int(ilower), int(iupper), int(jlower), int(jupper)
 
 
-def _axis_file_slice(coord_full, descending, lo, hi, step, n):
-    r"""Map an ascending window ``[lo:hi:step]`` to a positive-stride slice.
-
-    Used by the ``topo_type=4`` read: :func:`_crop_indices` returns bounds into
-    an *ascending* view of a file axis, but NetCDF/xarray lazy indexing requires
-    a **positive** step into the *file-order* axis.  For an axis stored
-    descending (e.g. latitude N->S), the ascending sample indices
-    ``lo, lo+step, ..., lo+(m-1)*step`` map to file indices ``n-1-(that)``, whose
-    minimum is ``f0``; reading ``slice(f0, f0+m*step, step)`` returns those same
-    ``m`` samples in file (descending) order, to be flipped to ascending in
-    memory afterward.
-
-    Returns ``(file_slice, coord_subset, flip)`` where
-    ``coord_subset == coord_full[file_slice]`` and ``flip`` is True when the
-    subset (and the corresponding data axis) must be reversed to be ascending.
-    """
-    if not descending:
-        sl = slice(lo, hi, step)
-        return sl, coord_full[sl], False
-    m = len(range(lo, hi, step))
-    f0 = n - 1 - (lo + (m - 1) * step)
-    sl = slice(f0, f0 + m * step, step)
-    return sl, coord_full[sl], True
+# The ascending-window -> file-order-slice mapping is format-neutral geometry
+# shared by every NetCDF input reader, so it lives in coordinate_tools.
+# Re-exported here under its original private name.
+_axis_file_slice = coordinate_tools.axis_file_slice
 
 
 def create_topo_func(loc,verbose=False):
@@ -1122,253 +1108,19 @@ class Topography(object):
                 self._z = data[:,2]
 
         else:
-            # Data is in one of the GeoClaw supported formats
-            if abs(self.topo_type) == 1:
-                warnings.warn(
-                    "topo_type=1 is deprecated. Convert to topo_type=2, 3, or 4:\n"
-                    "  topo.read()  # load the type-1 file\n"
-                    "  topo.write('output.tt2', topo_type=2)  # save as type 2\n"
-                    "Note: topo_type=1 assumes regularly spaced data. Genuinely "
-                    "unstructured (scattered) point data must be gridded externally "
-                    "(e.g., scipy.interpolate, GMT) before use with GeoClaw.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                _preprocessing_requested = (
-                    self.crop_extent is not None
-                    or self.coarsen != 1
-                    or self.buffer != 0
-                    or self.align is not None
-                    or self.x_shift != 0.0
-                    or self.y_shift != 0.0
-                    or self.z_shift != 0.0
-                    or self.negate_z
-                )
-                if _preprocessing_requested:
-                    raise NotImplementedError(
-                        "Preprocessing attributes (crop_extent, coarsen, buffer, align, "
-                        "shift) are not supported for topo_type=1. Convert to type 2/3/4 first:\n"
-                        "  topo_raw = Topography(path=self.path, topo_type=1)\n"
-                        "  topo_raw.read()\n"
-                        "  topo_raw.write('converted.tt2', topo_type=2)"
-                    )
-                data = numpy.loadtxt(self.path)
-                N = [0,0]
-                y0 = data[0,1]
-                for (n, y) in enumerate(data[1:,1]):
-                    if y != y0:
-                        N[1] = n + 1
-                        break
-                N[0] = data.shape[0] // N[1]
-
-                self._x = data[:N[1],0]
-                self._y = data[::N[1],1]
-                self._Z = numpy.flipud(data[:,2].reshape(N))
-                dx = self.X[0,1] - self.X[0,0]
-                dy = self.Y[1,0] - self.Y[0,0]
-                self._delta = (dx,dy)
-
-            elif abs(self.topo_type) in [2,3]:
-                # Get header information
-                N = self.read_header()  # note this also sets self._extent
-                                        # self._x, self._y, self._delta,
-                                        # and  self.grid_registration
-
-                if abs(self.topo_type) == 2:
-                    # Data is read in as a single column, reshape it
-                    self._Z = numpy.loadtxt(self.path, skiprows=6).reshape(N[1],N[0])
-                    self._Z = numpy.flipud(self._Z)
-                elif abs(self.topo_type) == 3:
-                    # Data is read in starting at the top right corner
-                    self._Z = numpy.flipud(numpy.loadtxt(self.path, skiprows=6))
-
-            elif abs(self.topo_type) == 4:
-                from clawpack.geoclaw import netcdf_utils as _ncutils
-                from clawpack.geoclaw.units import (
-                    convert as _units_convert,
-                    GEOCLAW_NETCDF_UNITS as _NC_UNITS,
-                )
-
-                # Allow explicit variable name override via nc_params (backward
-                # compat with old 'z_var' key).
-                _var_hint: str | None = nc_params.get('z_var', None)
-                # Opt-in escape hatch for a file with no 'units' attribute;
-                # units are otherwise required, never silently assumed.
-                _assume_units: str | None = nc_params.get('assume_units', None)
-                # Opt-out of the post-conversion magnitude sanity check.
-                _skip_sanity: bool = nc_params.get('skip_sanity_check', False)
-
-                with _ncutils.TopoInspector(
-                    self.path, var_name=_var_hint, assume_units=_assume_units,
-                    skip_sanity_check=_skip_sanity,
-                ) as inspector:
-                    # Auto-detect elevation variable if not provided
-                    if inspector.var_name is None:
-                        inspector.var_name = inspector._find_topo_var_name()
-
-                    # Get CF coordinate metadata (no fill-value data scan here;
-                    # fill values are handled below via NaN replacement)
-                    _meta = inspector.inspect(inspector.var_name)
-                    # Check and record units; warns if conversion is needed.
-                    # In-memory read converts recognized non-meter units to
-                    # meters (the conversion block below applies the factor);
-                    # the Fortran descriptor path applies the same factor via
-                    # the descriptor scale_factor.
-                    _source_units = inspector._check_topo_units()
-
-                    ds = inspector.ds
-                    _x_name = _meta.x_name
-                    _y_name = _meta.y_name
-                    _var_name = inspector.var_name
-
-                    # Record an optional vertical datum from CF/common
-                    # attributes (informational only; no transformation).
-                    self.datum = extract_datum(ds[_var_name].attrs, ds.attrs)
-
-                    # Load the 1-D coordinate arrays in full: these are
-                    # O(nx)+O(ny) (a few MB even for a global grid), unlike the
-                    # O(nx*ny) elevation variable.  Kept in file order for now;
-                    # any N→S flip is applied below after windowing.
-                    _lon_full = numpy.asarray(ds[_x_name].values, dtype=float)
-                    _lat_full = numpy.asarray(ds[_y_name].values, dtype=float)
-
-                    # Load variable, squeezing singleton non-spatial dims
-                    _da = ds[_var_name]
-                    for _dim in list(_da.dims):
-                        if _dim not in (_x_name, _y_name):
-                            if _da.sizes[_dim] == 1:
-                                _da = _da.isel({_dim: 0})
-                            else:
-                                raise ValueError(
-                                    f"NetCDF variable '{_var_name}' has "
-                                    f"non-singleton dimension '{_dim}' "
-                                    f"(size {_da.sizes[_dim]}).  Cannot load "
-                                    f"as static topography."
-                                )
-
-                    # Transpose to (lat, lon) = (y, x) order expected by
-                    # Topography.
-                    _da = _da.transpose(_y_name, _x_name)
-
-                    # Push the crop+coarsen+align window down to xarray's lazy
-                    # indexing so the NetCDF backend reads ONLY the final
-                    # hyperslab.  Otherwise `_da.values` materializes the whole
-                    # variable (a global DEM is many GB, and CF fill decoding
-                    # promotes it to float), which is prohibitively slow and can
-                    # exhaust memory even when the caller asked for a small,
-                    # coarsened subset.  The window is computed on the cheap 1-D
-                    # coordinate arrays via _crop_indices -- the SAME routine
-                    # crop() uses -- so this read matches an ASCII read + crop()
-                    # of the same data exactly; the post-read crop() is then
-                    # skipped for topo_type 4 (the data is already final).
-                    _nx = _lon_full.size
-                    _ny = _lat_full.size
-                    _c = max(int(self.coarsen), 1)
-
-                    # _crop_indices requires ascending coords; build ascending
-                    # views of the file axes (lon is usually ascending, lat is
-                    # often stored N→S).
-                    _lon_desc = _lon_full[0] > _lon_full[-1]
-                    _lat_desc = not _meta.y_increasing
-                    _lon_asc = _lon_full[::-1] if _lon_desc else _lon_full
-                    _lat_asc = _lat_full[::-1] if _lat_desc else _lat_full
-
-                    if self.crop_extent is not None:
-                        _ce = list(self.crop_extent)
-                    else:
-                        # whole file (mirrors crop()'s crop_extent=self.extent)
-                        _ce = [_lon_asc[0], _lon_asc[-1],
-                               _lat_asc[0], _lat_asc[-1]]
-
-                    _idx = _crop_indices(_lon_asc, _lat_asc, _ce, _c,
-                                         int(self.buffer), self.align)
-                    if _idx is None:
-                        # crop_extent misses the file: fall back to the full grid
-                        # at native resolution (mirrors crop() returning None ->
-                        # no-op), rather than coarsening the whole file.
-                        warnings.warn(
-                            f"crop_extent {list(_ce)} did not overlap "
-                            f"{self.path}; the full file was read uncropped at "
-                            f"native resolution. The Fortran reader treats a "
-                            f"non-overlapping crop as fatal.")
-                        _il, _iu, _jl, _ju = 0, _nx, 0, _ny
-                        _step = 1
-                    else:
-                        _il, _iu, _jl, _ju = _idx
-                        _step = _c
-
-                    # Map each ascending [lo:hi:step] window to a positive-stride
-                    # slice into the FILE-order axis; descending axes are flipped
-                    # in memory afterward.
-                    _x_slice, _lon_vals, _flip_x = _axis_file_slice(
-                        _lon_full, _lon_desc, _il, _iu, _step, _nx)
-                    _y_slice, _lat_vals, _flip_y = _axis_file_slice(
-                        _lat_full, _lat_desc, _jl, _ju, _step, _ny)
-
-                    _da = _da.isel({_y_name: _y_slice, _x_name: _x_slice})
-                    _z_vals = numpy.asarray(_da.values, dtype=float)
-
-                    # Flip descending axes to ascending (S→N, W→E) in memory.
-                    if _flip_y:
-                        _lat_vals = _lat_vals[::-1]
-                        _z_vals = _z_vals[::-1, :]
-                    if _flip_x:
-                        _lon_vals = _lon_vals[::-1]
-                        _z_vals = _z_vals[:, ::-1]
-
-                    # Apply unit conversion if source is not already meters
-                    _contract = _NC_UNITS.get('topo', 'm')
-                    _meters_aliases = frozenset(
-                        {'m', 'meter', 'meters', 'metre', 'metres'}
-                    )
-                    if _source_units and _source_units not in _meters_aliases:
-                        _canonical = _ncutils._normalize_cf_unit(_source_units)
-                        if _canonical is not None:
-                            _factor = _units_convert(1.0, _canonical, _contract)
-                            _z_vals = _z_vals * _factor
-
-                    # Magnitude sanity check on the resolved (meters) field.
-                    if not _skip_sanity:
-                        _ncutils._check_magnitude(
-                            'topo',
-                            float(numpy.nanmin(_z_vals)),
-                            float(numpy.nanmax(_z_vals)),
-                            var_name=_var_name, path=str(self.path),
-                        )
-
-                    # Decoded fill values are already NaN (from xarray
-                    # mask_and_scale).  NaN is the in-memory missing-data
-                    # representation, so they pass through unchanged.
-
-                self._x = _lon_vals
-                self._y = _lat_vals
-                self._Z = _z_vals
-
-            elif abs(self.topo_type) == 5:
-                # GeoTIFF
-                try:
-                    import gdal
-                except ImportError as e:
-                    print("Reading GeoTIFF files requires GDAL.")
-                    raise e
-
-                data = gdal.Open(self.path)
-                z = data.GetRasterBand(1).ReadAsArray()
-                transform = data.GetGeoTransform()
-                x_origin = transform[0]
-                y_origin = transform[3]
-                dx = transform[1]
-                dy = -transform[5]
-
-                self._Z = numpy.flipud(z)
-                self._x = numpy.linspace(x_origin,
-                                   x_origin + (z.shape[0] - 1) * dx, z.shape[0])
-                self._y = numpy.linspace(y_origin - (z.shape[1] - 1) * dy,
-                                   y_origin, z.shape[1])
-
-
-            else:
-                raise IOError("Unrecognized topo_type: %s" % self.topo_type)
+            # Data is in one of the GeoClaw supported formats.  Format-specific
+            # reading is delegated to a registered GriddedReader (gridded_input);
+            # the shared post-read processing below is identical for every
+            # format.  Adding a format = registering a new adapter there.
+            reader = gridded_input.get_reader(self.topo_type)
+            _result = reader.read_window(self, nc_params=nc_params)
+            self._x = _result.x
+            self._y = _result.y
+            self._Z = _result.Z
+            if _result.delta is not None:
+                self._delta = _result.delta
+            if _result.datum is not gridded_input._UNSET:
+                self.datum = _result.datum
 
             if self.topo_type < 0:
                 # positive Z means distance below sea level for these
@@ -1407,10 +1159,10 @@ class Topography(object):
             #   3. x_shift   (shift x array; Fortran shifts xlowtopo/xhitopo)
             #   3b. y_shift  (shift y array; Fortran shifts ylowtopo/yhitopo)
             #   4+5. crop + coarsen via self.crop() (Fortran: crop+buffer done,
-            #        coarsen not yet implemented).  SKIPPED for topo_type 4:
-            #        the NetCDF read already applied crop+coarsen+align+buffer
-            #        via _crop_indices while reading the hyperslab, so running
-            #        crop() again would double-coarsen.
+            #        coarsen not yet implemented).  SKIPPED for a reader that
+            #        declares applies_preprocessing (the NetCDF reader applies
+            #        crop+coarsen+align+buffer via _crop_indices while reading
+            #        the hyperslab, so running crop() again would double-coarsen).
             # Steps are skipped when the attribute equals its default value.
             # ---------------------------------------------------------------
             if self.negate_z:
@@ -1424,7 +1176,7 @@ class Topography(object):
             if self.y_shift != 0.0:
                 self._y = self._y + self.y_shift
                 self._extent = None
-            if abs(self.topo_type) != 4 \
+            if not reader.applies_preprocessing \
                     and (self.crop_extent is not None or self.coarsen > 1):
                 _cropped = self.crop(
                     crop_extent=self.crop_extent,

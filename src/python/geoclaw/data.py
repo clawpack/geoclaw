@@ -269,6 +269,13 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         self.add_attribute('override_order', False)
         self.add_attribute('topofiles', [])
 
+        # Run coordinate system (mirrors geodata.coordinate_system: 1 =
+        # Cartesian, 2 = lon-lat).  Registered but never data_write-n, so it is
+        # NOT emitted to topo.data -- it only gates the Python-side antimeridian-
+        # wrap early check at write time (the Fortran read applies the
+        # authoritative gate).  None => per-file heuristic, no cross-check.
+        self.add_attribute('coordinate_system', None)
+
         # Jump discontinuity
         self.add_attribute('topo_location',-50e3)
         self.add_attribute('topo_left',-4000.0)
@@ -520,6 +527,17 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     # before.
                     insp.crop_bounds = crop
                     file_meta = insp.inspect(insp.var_name)
+                    # Gate on the run's coordinate system.  This path never
+                    # wraps (lon_wrap_offset stays 0.0), but a geographic file
+                    # under a Cartesian run -- or the reverse -- is a setup
+                    # error worth catching here rather than in Fortran.
+                    _xc = insp.ds[file_meta.x_name]
+                    _ncutils.resolve_wrap(
+                        self.coordinate_system,
+                        _ncutils.classify_lon_axis(
+                            _xc.attrs.get('units'),
+                            _xc.attrs.get('standard_name'),
+                            float(_xc.min()), float(_xc.max())))
                     src_units = insp._check_topo_units()
                     scale = _ncutils._units_scale(
                         src_units, _ncutils.GEOCLAW_NETCDF_UNITS['topo'])
@@ -553,7 +571,9 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                         f"be; narrow the requested latitude range.")
 
                 insp.crop_bounds = crop
-                entries = insp.topo_entries(fill_scan=False)
+                entries = insp.topo_entries(
+                    fill_scan=False,
+                    coordinate_system=self.coordinate_system)
 
             for _entry_type, _entry_path, entry_meta in entries:
                 records.append((fname, topo_type, topo, entry_meta))

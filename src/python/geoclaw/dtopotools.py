@@ -40,6 +40,7 @@ import numpy
 import clawpack.geoclaw.topotools as topotools
 import clawpack.geoclaw.util as util
 import clawpack.geoclaw.units as units
+from clawpack.geoclaw import coordinate_tools
 
 # ==============================================================================
 #  Constants
@@ -342,6 +343,7 @@ class DTopography(object):
         self.X = None
         self.Y = None
         self.delta = None
+        self.extent = None          # [x1,x2,y1,y2]; set by read/read_header/crop
         self.path = path
         self.dtopo_type = dtopo_type
 
@@ -375,6 +377,105 @@ class DTopography(object):
             self.read(path, dtopo_type, time_reference=time_reference)
 
 
+    def read_header(self, path=None, dtopo_type=None):
+        r"""Read only the grid header of a gridded dtopo file (types 2/3).
+
+        Populates ``self.extent`` = ``[x1, x2, y1, y2]`` and ``self.delta`` =
+        ``(dx, dy)`` in file coordinates without reading the deformation array,
+        so ``DTopoData.write()`` can size the antimeridian split cheaply
+        (mirrors ``topotools.Topography.read_header``).  The gridded dtopo
+        header is nine numeric lines: ``mx, my, mt, xlower, ylower, t0, dx, dy,
+        dt``.  Type 1 (column format) has no header and type 4 carries its
+        geometry in NetCDF metadata; both raise here.
+        """
+        if path is not None:
+            self.path = path
+        if dtopo_type is not None:
+            self.dtopo_type = dtopo_type
+        dtopo_type = self.dtopo_type
+        if dtopo_type is None:
+            dtopo_type = topotools.determine_topo_type(self.path, default=3)
+            self.dtopo_type = dtopo_type
+
+        if abs(dtopo_type) not in (2, 3):
+            raise ValueError(
+                "read_header() is only defined for gridded dtopo types 2 and "
+                "3; got dtopo_type=%s (type 1 has no header, type 4 carries "
+                "geometry in NetCDF metadata)." % dtopo_type)
+
+        with open(self.path) as fid:
+            mx = int(fid.readline().split()[0])
+            my = int(fid.readline().split()[0])
+            mt = int(fid.readline().split()[0])
+            xlower = float(fid.readline().split()[0])
+            ylower = float(fid.readline().split()[0])
+            t0 = float(fid.readline().split()[0])
+            dx = float(fid.readline().split()[0])
+            dy = float(fid.readline().split()[0])
+            dt = float(fid.readline().split()[0])
+
+        self.delta = (dx, dy)
+        self.extent = [xlower, xlower + (mx - 1) * dx,
+                       ylower, ylower + (my - 1) * dy]
+        return mx, my, mt
+
+    def _apply_crop(self):
+        r"""Crop / coarsen / buffer / align the in-memory deformation arrays.
+
+        Reuses :func:`coordinate_tools.crop_indices` (the same index-window math
+        as :meth:`topotools.Topography.crop`) on each spatial axis, applied to
+        every time slice of the 3-D ``dZ`` (time, y, x).  ``crop_extent`` is in
+        domain coordinates and is converted to file coordinates by subtracting
+        the registration shift, so this must run *before* x/y_shift is added to
+        ``self.x``/``self.y`` (matching the Fortran read_dtopo ordering).  A
+        no-op when no crop/coarsen/buffer/align is requested.
+        """
+        coarsen = max(1, int(self.coarsen))
+        buffer = int(self.buffer)
+        if (self.crop_extent is None and coarsen == 1 and buffer == 0
+                and self.align is None):
+            return
+        if self.dZ is None or self.x is None or self.y is None:
+            return
+
+        # crop_extent is in domain coords; self.x/self.y are still file coords
+        # here, so subtract the shift to compare in file coords.
+        if self.crop_extent is not None:
+            x1, x2, y1, y2 = [float(v) for v in self.crop_extent]
+            x1 -= self.x_shift
+            x2 -= self.x_shift
+            y1 -= self.y_shift
+            y2 -= self.y_shift
+        else:
+            x1, x2 = float(self.x[0]), float(self.x[-1])
+            y1, y2 = float(self.y[0]), float(self.y[-1])
+
+        dx = (self.x[1] - self.x[0]) if len(self.x) > 1 else 1.0
+        dy = (self.y[1] - self.y[0]) if len(self.y) > 1 else 1.0
+
+        xwin = coordinate_tools.crop_indices(
+            self.x, x1, x2, dx, coarsen, buffer,
+            None if self.align is None else self.align[0])
+        ywin = coordinate_tools.crop_indices(
+            self.y, y1, y2, dy, coarsen, buffer,
+            None if self.align is None else self.align[1])
+        if xwin is None or ywin is None:
+            raise ValueError(
+                "crop_extent %s does not overlap dtopo file %s"
+                % (self.crop_extent, self.path))
+        ilower, iupper = xwin
+        jlower, jupper = ywin
+
+        self.x = self.x[ilower:iupper:coarsen]
+        self.y = self.y[jlower:jupper:coarsen]
+        # dZ is (time, y, x): window the two trailing spatial axes identically
+        # for every time slice.
+        self.dZ = self.dZ[:, jlower:jupper:coarsen, ilower:iupper:coarsen]
+        self.X, self.Y = numpy.meshgrid(self.x, self.y)
+        self.delta = (dx * coarsen, dy * coarsen)
+        self.extent = [float(self.x[0]), float(self.x[-1]),
+                       float(self.y[0]), float(self.y[-1])]
+
     def read(self, path=None, dtopo_type=None, verbose=False,
              time_reference=None):
         r"""
@@ -406,21 +507,23 @@ class DTopography(object):
                 dtopo_type = topotools.determine_topo_type(path, default=3)
         self.dtopo_type = dtopo_type
 
-        # Unsupported preprocessing attributes: fail loudly rather than
-        # silently ignoring them (an ignored x_shift, for example, would
-        # mis-place the deformation).  Mirrors the Fortran guard in
-        # read_dtopo_settings.
-        unsupported = [name for name, is_set in (
-            ("crop_extent", self.crop_extent is not None),
-            ("coarsen", self.coarsen != 1),
-            ("buffer", self.buffer != 0),
-            ("align", self.align is not None),
-        ) if is_set]
-        if unsupported:
-            raise NotImplementedError(
-                "Preprocessing attributes %s are not implemented for "
-                "dtopography. Only x_shift, y_shift, z_shift and negate_z "
-                "are supported." % ", ".join(unsupported))
+        # Type 1 (column format) has no regular grid header, so crop / coarsen /
+        # buffer / align are undefined for it: fail loudly rather than silently
+        # ignoring them.  Types 2/3/4 support them via _apply_crop below.
+        if abs(dtopo_type) == 1:
+            unsupported = [name for name, is_set in (
+                ("crop_extent", self.crop_extent is not None),
+                ("coarsen", self.coarsen != 1),
+                ("buffer", self.buffer != 0),
+                ("align", self.align is not None),
+            ) if is_set]
+            if unsupported:
+                raise NotImplementedError(
+                    "Preprocessing attributes %s are not implemented for "
+                    "dtopo_type=1 (column format, no grid header).  Only "
+                    "x_shift, y_shift, z_shift and negate_z are supported; use "
+                    "type 2/3/4 for crop/coarsen/buffer/align."
+                    % ", ".join(unsupported))
 
         if dtopo_type == 1:
             data = numpy.loadtxt(path)
@@ -515,6 +618,11 @@ class DTopography(object):
         else:
             raise ValueError("Only topography types 1, 2, 3, and 4 are "
                              "supported, given %s." % dtopo_type)
+
+        # Crop / coarsen / buffer / align in file coordinates, before the
+        # x/y_shift below adds the registration shift (matches Fortran
+        # read_dtopo ordering).  No-op unless one of those is requested.
+        self._apply_crop()
 
         # Apply preprocessing attributes in-memory (original file unchanged).
         # Fortran applies the same attributes independently in
