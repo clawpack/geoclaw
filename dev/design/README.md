@@ -44,3 +44,7 @@ lost. Several of these docs *were* lost that way (they lived in a gitignored
   verification plan (**\*\*partial reconstruction\*\***; original lost, no full mirror).
 - `friction-file-plan.md` — file-based friction field input implementation plan
   (relocated from `.plans/`).
+- `units\_policy.md` — the units policy for every gridded input path: the five
+  rules, the per-path conformance table (generated from `UNITS_POLICY` in
+  `geoclaw/units.py` and enforced by `tests/test_units_policy.py`), and the
+  known deliberate looseness.

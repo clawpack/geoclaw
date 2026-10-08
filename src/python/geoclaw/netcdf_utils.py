@@ -78,6 +78,8 @@ _CF_TO_UNITS_PY: dict[str, str] = {
     'm': 'm', 'meter': 'm', 'meters': 'm', 'metre': 'm', 'metres': 'm',
     'cm': 'cm', 'centimeter': 'cm', 'centimeters': 'cm',
     'km': 'km', 'kilometer': 'km', 'kilometers': 'km',
+    'kilometre': 'km', 'kilometres': 'km',
+    'ft': 'ft', 'feet': 'ft', 'foot': 'ft',
     # speed
     'm/s': 'm/s', 'm s-1': 'm/s', 'm s**-1': 'm/s',
     'meters per second': 'm/s', 'metres per second': 'm/s',
@@ -103,15 +105,29 @@ _CF_TO_UNITS_PY: dict[str, str] = {
 # backward compatibility.
 
 
+#: Case-folded views of the tables above, built once.  Matching is
+#: case-insensitive because CF files in the wild write "Meters", "KM" and
+#: "Kilometres", and rejecting those means rejecting a *correct* declaration --
+#: the one thing the policy asks users to provide.  The tables stay explicit
+#: (rule 4 still refuses anything not listed); only the lookup is relaxed.
+_CF_TO_UNITS_PY_FOLDED: dict[str, str] = {
+    k.casefold(): v for k, v in _CF_TO_UNITS_PY.items()
+}
+_CONTRACT_UNIT_CF_ALIASES_FOLDED: dict[str, frozenset[str]] = {
+    contract: frozenset(a.casefold() for a in aliases)
+    for contract, aliases in _CONTRACT_UNIT_CF_ALIASES.items()
+}
+
+
 def _normalize_cf_unit(cf_unit: str) -> Optional[str]:
     """Return the units.py abbreviation for *cf_unit*, or None if unknown."""
-    return _CF_TO_UNITS_PY.get(cf_unit.strip())
+    return _CF_TO_UNITS_PY_FOLDED.get(cf_unit.strip().casefold())
 
 
 def _unit_matches_contract(cf_unit: str, contract_unit: str) -> bool:
     """Return True if *cf_unit* is equivalent to *contract_unit*."""
-    aliases = _CONTRACT_UNIT_CF_ALIASES.get(contract_unit, frozenset())
-    return cf_unit.strip() in aliases
+    aliases = _CONTRACT_UNIT_CF_ALIASES_FOLDED.get(contract_unit, frozenset())
+    return cf_unit.strip().casefold() in aliases
 
 
 # units.py time-unit abbreviations (the canonical forms _CF_TO_UNITS_PY maps
@@ -1392,11 +1408,20 @@ class MetInspector(NetCDFInspector):
     fill_action : str, optional
         'abort' or 'warn'.  Met files may legitimately have fill values at
         the domain edges (Fortran handles edge fill).  Default is 'warn'.
-    assume_units : bool, optional
+    assume_units : dict or bool, optional
         Explicit escape hatch for a file whose forcing variables have *no*
-        ``units`` attribute.  When True, each variable is assumed to already
-        be in its contract unit instead of raising.  This must be set
-        deliberately; missing units are never silently assumed.
+        ``units`` attribute.  This must be set deliberately; missing units are
+        never silently assumed.
+
+        A ``{role: unit}`` mapping (e.g. ``{'pressure': 'mbar'}``) states the
+        unit for that role and is treated as if the file had declared it, so it
+        converts -- the same meaning ``assume_units`` has on
+        :class:`TopoInspector` and :class:`DTopoInspector`, spelled per role
+        because Met covers several variables with *different* contract units
+        and a single string would be ambiguous.
+
+        ``True`` is the deprecated legacy form: it asserts every variable is
+        already in its own contract unit and therefore cannot convert.
     format_units : dict, optional
         ``{geoclaw_role: unit_string}`` giving the units documented by the
         storm *format* (e.g. NWS13/OWI pressure is ``mbar``).  Used only for a
@@ -1621,8 +1646,25 @@ class MetInspector(NetCDFInspector):
                     # (e.g. NWS13/OWI pressure = mbar) and fall through to the
                     # match/convert logic below (mbar -> Pa scale, etc.).
                     cf_unit = self.format_units[role]
-                elif self.assume_units:
-                    # Deliberate caller override for a known-unitless file.
+                elif isinstance(self.assume_units, dict) \
+                        and role in self.assume_units:
+                    # Per-role override: states the unit, so it converts like a
+                    # declaration would (the str form the other inspectors take,
+                    # spelled per role because Met covers several variables with
+                    # different contract units).
+                    cf_unit = self.assume_units[role]
+                elif self.assume_units is True:
+                    # Legacy bool: "every variable is already in its own
+                    # contract unit".  Retained, but the dict form says which
+                    # unit for which role and can therefore also convert.
+                    warnings.warn(
+                        "assume_units=True is deprecated; pass a mapping such "
+                        "as assume_units={'pressure': 'mbar'} instead. The bool "
+                        "can only assert that data is already in contract "
+                        "units, so it cannot convert, and it says nothing about "
+                        "which variable it was meant to cover.",
+                        DeprecationWarning, stacklevel=3,
+                    )
                     result.append(MetVariableInfo(
                         var_name=var_name,
                         geoclaw_role=role,
