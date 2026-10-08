@@ -33,12 +33,14 @@ writing out dtopo files, and calculating Okada based deformations.
 import os
 import sys
 import re
+import warnings
 
 import numpy
 
 import clawpack.geoclaw.topotools as topotools
 import clawpack.geoclaw.util as util
 import clawpack.geoclaw.units as units
+from clawpack.geoclaw import coordinate_tools
 
 # ==============================================================================
 #  Constants
@@ -64,6 +66,58 @@ standard_units['depth'] = 'm'
 standard_units['slip'] = 'm'
 standard_units['mu'] = 'Pa'
 
+
+
+def _resolve_input_units(input_units, where, from_file=None):
+    """Return the effective ``{parameter: unit}`` mapping for a subfault read.
+
+    Subfault files are columnar text: most carry no unit information at all,
+    and the few that do (CSV headings like ``Depth(km)``) describe only some
+    columns.  So units come from up to three places, and the precedence matters:
+
+    1. an explicit *input_units* entry from the caller -- always wins;
+    2. *from_file*, units parsed out of the file itself -- fills the gaps;
+    3. :data:`standard_units` (SI) -- the last resort.
+
+    Explicit beats implicit so that a caller who knows better than a file's
+    heading can say so, and so a wrong heading is recoverable.  A disagreement
+    between (1) and (2) is warned about rather than resolved quietly.
+
+    *input_units* of None means "not specified": SI is assumed, but a warning
+    says so, because omitting it used to declare meters/pascals silently and a
+    km / dyne-cm file was then off by 10^3-10^7.  An explicit ``{}`` means "my
+    data really is SI" and stays silent -- the deliberate escape hatch.
+
+    The caller's dict is never mutated; a copy is returned.
+    """
+    resolved = standard_units.copy()
+
+    if from_file:
+        resolved.update(from_file)
+
+    if input_units is None:
+        warnings.warn(
+            f"No input_units given for {where}; assuming GeoClaw standard "
+            f"units ({', '.join('%s=%s' % kv for kv in sorted(standard_units.items()))}). "
+            f"If the file uses other units (km, cm, dyne/cm^2 are common) pass "
+            f"input_units explicitly; pass input_units={{}} to state that the "
+            f"data really is in standard units and silence this warning.",
+            UserWarning, stacklevel=3,
+        )
+        return resolved
+
+    for name, unit in input_units.items():
+        if from_file and name in from_file and from_file[name] != unit:
+            warnings.warn(
+                f"Units for '{name}' in {where} disagree: the file says "
+                f"'{from_file[name]}' and input_units says '{unit}'. Using "
+                f"'{unit}' (an explicit input_units entry takes precedence "
+                f"over the file's own heading).",
+                UserWarning, stacklevel=3,
+            )
+        resolved[name] = unit
+
+    return resolved
 
 def plot_dZ_contours(x, y, dZ, axes=None, dZ_interval=0.5, verbose=False,
                      fig_kwargs={}):
@@ -289,6 +343,7 @@ class DTopography(object):
         self.X = None
         self.Y = None
         self.delta = None
+        self.extent = None          # [x1,x2,y1,y2]; set by read/read_header/crop
         self.path = path
         self.dtopo_type = dtopo_type
 
@@ -322,8 +377,107 @@ class DTopography(object):
             self.read(path, dtopo_type, time_reference=time_reference)
 
 
+    def read_header(self, path=None, dtopo_type=None):
+        r"""Read only the grid header of a gridded dtopo file (types 2/3).
+
+        Populates ``self.extent`` = ``[x1, x2, y1, y2]`` and ``self.delta`` =
+        ``(dx, dy)`` in file coordinates without reading the deformation array,
+        so ``DTopoData.write()`` can size the antimeridian split cheaply
+        (mirrors ``topotools.Topography.read_header``).  The gridded dtopo
+        header is nine numeric lines: ``mx, my, mt, xlower, ylower, t0, dx, dy,
+        dt``.  Type 1 (column format) has no header and type 4 carries its
+        geometry in NetCDF metadata; both raise here.
+        """
+        if path is not None:
+            self.path = path
+        if dtopo_type is not None:
+            self.dtopo_type = dtopo_type
+        dtopo_type = self.dtopo_type
+        if dtopo_type is None:
+            dtopo_type = topotools.determine_topo_type(self.path, default=3)
+            self.dtopo_type = dtopo_type
+
+        if abs(dtopo_type) not in (2, 3):
+            raise ValueError(
+                "read_header() is only defined for gridded dtopo types 2 and "
+                "3; got dtopo_type=%s (type 1 has no header, type 4 carries "
+                "geometry in NetCDF metadata)." % dtopo_type)
+
+        with open(self.path) as fid:
+            mx = int(fid.readline().split()[0])
+            my = int(fid.readline().split()[0])
+            mt = int(fid.readline().split()[0])
+            xlower = float(fid.readline().split()[0])
+            ylower = float(fid.readline().split()[0])
+            t0 = float(fid.readline().split()[0])
+            dx = float(fid.readline().split()[0])
+            dy = float(fid.readline().split()[0])
+            dt = float(fid.readline().split()[0])
+
+        self.delta = (dx, dy)
+        self.extent = [xlower, xlower + (mx - 1) * dx,
+                       ylower, ylower + (my - 1) * dy]
+        return mx, my, mt
+
+    def _apply_crop(self):
+        r"""Crop / coarsen / buffer / align the in-memory deformation arrays.
+
+        Reuses :func:`coordinate_tools.crop_indices` (the same index-window math
+        as :meth:`topotools.Topography.crop`) on each spatial axis, applied to
+        every time slice of the 3-D ``dZ`` (time, y, x).  ``crop_extent`` is in
+        domain coordinates and is converted to file coordinates by subtracting
+        the registration shift, so this must run *before* x/y_shift is added to
+        ``self.x``/``self.y`` (matching the Fortran read_dtopo ordering).  A
+        no-op when no crop/coarsen/buffer/align is requested.
+        """
+        coarsen = max(1, int(self.coarsen))
+        buffer = int(self.buffer)
+        if (self.crop_extent is None and coarsen == 1 and buffer == 0
+                and self.align is None):
+            return
+        if self.dZ is None or self.x is None or self.y is None:
+            return
+
+        # crop_extent is in domain coords; self.x/self.y are still file coords
+        # here, so subtract the shift to compare in file coords.
+        if self.crop_extent is not None:
+            x1, x2, y1, y2 = [float(v) for v in self.crop_extent]
+            x1 -= self.x_shift
+            x2 -= self.x_shift
+            y1 -= self.y_shift
+            y2 -= self.y_shift
+        else:
+            x1, x2 = float(self.x[0]), float(self.x[-1])
+            y1, y2 = float(self.y[0]), float(self.y[-1])
+
+        dx = (self.x[1] - self.x[0]) if len(self.x) > 1 else 1.0
+        dy = (self.y[1] - self.y[0]) if len(self.y) > 1 else 1.0
+
+        xwin = coordinate_tools.crop_indices(
+            self.x, x1, x2, dx, coarsen, buffer,
+            None if self.align is None else self.align[0])
+        ywin = coordinate_tools.crop_indices(
+            self.y, y1, y2, dy, coarsen, buffer,
+            None if self.align is None else self.align[1])
+        if xwin is None or ywin is None:
+            raise ValueError(
+                "crop_extent %s does not overlap dtopo file %s"
+                % (self.crop_extent, self.path))
+        ilower, iupper = xwin
+        jlower, jupper = ywin
+
+        self.x = self.x[ilower:iupper:coarsen]
+        self.y = self.y[jlower:jupper:coarsen]
+        # dZ is (time, y, x): window the two trailing spatial axes identically
+        # for every time slice.
+        self.dZ = self.dZ[:, jlower:jupper:coarsen, ilower:iupper:coarsen]
+        self.X, self.Y = numpy.meshgrid(self.x, self.y)
+        self.delta = (dx * coarsen, dy * coarsen)
+        self.extent = [float(self.x[0]), float(self.x[-1]),
+                       float(self.y[0]), float(self.y[-1])]
+
     def read(self, path=None, dtopo_type=None, verbose=False,
-             time_reference=None):
+             time_reference=None, assume_units=None):
         r"""
         Read in a dtopo file and use to set attributes of this object.
 
@@ -336,6 +490,13 @@ class DTopography(object):
             is CF datetime ("<unit> since <date>"), the reference epoch that
             defines simulation t=0.  If omitted, the file's own CF reference
             epoch is used (so a file written with a time_reference round-trips).
+         - *assume_units* (str) - unit of the deformation values, treated as if
+            the file had declared it, so ``assume_units="cm"`` also converts.
+            ASCII dtopo (types 1/2/3) has no field in which to declare units, so
+            this is the only way to state them; omitting it assumes meters and
+            warns.  For ``dtopo_type=4`` it is forwarded to the inspector and
+            applies only when the file itself declares nothing.
+            See ``dev/design/units_policy.md``.
         """
 
         if path is not None:
@@ -353,21 +514,23 @@ class DTopography(object):
                 dtopo_type = topotools.determine_topo_type(path, default=3)
         self.dtopo_type = dtopo_type
 
-        # Unsupported preprocessing attributes: fail loudly rather than
-        # silently ignoring them (an ignored x_shift, for example, would
-        # mis-place the deformation).  Mirrors the Fortran guard in
-        # read_dtopo_settings.
-        unsupported = [name for name, is_set in (
-            ("crop_extent", self.crop_extent is not None),
-            ("coarsen", self.coarsen != 1),
-            ("buffer", self.buffer != 0),
-            ("align", self.align is not None),
-        ) if is_set]
-        if unsupported:
-            raise NotImplementedError(
-                "Preprocessing attributes %s are not implemented for "
-                "dtopography. Only x_shift, y_shift, z_shift and negate_z "
-                "are supported." % ", ".join(unsupported))
+        # Type 1 (column format) has no regular grid header, so crop / coarsen /
+        # buffer / align are undefined for it: fail loudly rather than silently
+        # ignoring them.  Types 2/3/4 support them via _apply_crop below.
+        if abs(dtopo_type) == 1:
+            unsupported = [name for name, is_set in (
+                ("crop_extent", self.crop_extent is not None),
+                ("coarsen", self.coarsen != 1),
+                ("buffer", self.buffer != 0),
+                ("align", self.align is not None),
+            ) if is_set]
+            if unsupported:
+                raise NotImplementedError(
+                    "Preprocessing attributes %s are not implemented for "
+                    "dtopo_type=1 (column format, no grid header).  Only "
+                    "x_shift, y_shift, z_shift and negate_z are supported; use "
+                    "type 2/3/4 for crop/coarsen/buffer/align."
+                    % ", ".join(unsupported))
 
         if dtopo_type == 1:
             data = numpy.loadtxt(path)
@@ -457,15 +620,32 @@ class DTopography(object):
             self.dZ = dZ
 
         elif dtopo_type == 4:
-            self._read_netcdf(path, time_reference=time_reference)
+            self._read_netcdf(path, time_reference=time_reference,
+                              assume_units=assume_units)
 
         else:
             raise ValueError("Only topography types 1, 2, 3, and 4 are "
                              "supported, given %s." % dtopo_type)
 
+        # Crop / coarsen / buffer / align in file coordinates, before the
+        # x/y_shift below adds the registration shift (matches Fortran
+        # read_dtopo ordering).  No-op unless one of those is requested.
+        self._apply_crop()
+
+        # Units.  ASCII dtopo has no header field in which to declare them, so
+        # `assume_units` is the only way to say anything and meters is the
+        # contract fallback -- but unlike ASCII *topo*, there is no magnitude
+        # bound defined for deformation, so nothing would catch a cm file read
+        # as meters.  With no second line of defense the assumption has to be
+        # announced.  Pass assume_units='m' to state it deliberately and
+        # silence this.  (dtopo_type=4 resolves units in the inspector above.)
+        if dtopo_type in (1, 2, 3) and self.dZ is not None:
+            self._resolve_dZ_units(assume_units)
+
         # Apply preprocessing attributes in-memory (original file unchanged).
         # Fortran applies the same attributes independently in
         # read_dtopo_settings so neither side needs a modified copy.
+        # Runs after the unit conversion above so z_shift is in meters.
         # No fill-cell guard: deformation grids have no no-data convention.
         if self.negate_z:
             self.dZ = -self.dZ
@@ -676,7 +856,43 @@ class DTopography(object):
         })
 
 
-    def _read_netcdf(self, path, time_reference=None):
+    def _resolve_dZ_units(self, assume_units):
+        r"""Convert ``self.dZ`` to meters for a format that cannot declare units.
+
+        Mirrors ``Topography._resolve_units`` but without its rule-5 magnitude
+        check: ``_check_magnitude`` defines no bound for deformation, so there
+        is nothing to check against.  Defining one needs a defensible physical
+        limit on coseismic displacement, which is a separate decision and is
+        recorded as such rather than guessed at here.
+        """
+        from clawpack.geoclaw import netcdf_utils as _ncutils
+        from clawpack.geoclaw.units import (convert as _units_convert,
+                                            GEOCLAW_NETCDF_UNITS as _NC_UNITS)
+
+        contract = _NC_UNITS.get('topo', 'm')
+        if assume_units is None:
+            warnings.warn(
+                f"No units declared or assumed for the deformation in "
+                f"'{self.path}'; assuming {contract!r}. ASCII dtopo cannot "
+                f"record units, and no magnitude check covers deformation, so "
+                f"a file in cm would be read {1/_units_convert(1.0, 'cm', 'm'):g}x "
+                f"too small with nothing to catch it. Pass assume_units to "
+                f"state the file's units (assume_units={contract!r} silences "
+                f"this).",
+                UserWarning, stacklevel=3,
+            )
+            return
+
+        if _ncutils._unit_matches_contract(assume_units, contract):
+            return
+        canonical = _ncutils._normalize_cf_unit(assume_units)
+        if canonical is None:
+            raise ValueError(
+                f"Unrecognized assume_units {assume_units!r} for {self.path}. "
+                f"GeoClaw converts only units it knows.")
+        self.dZ = self.dZ * _units_convert(1.0, canonical, contract)
+
+    def _read_netcdf(self, path, time_reference=None, assume_units=None):
         """Read a NetCDF dtopo file (dtopo_type=4) via DTopoInspector.
 
         The inspector enforces the dtopo contract (time slowest dimension,
@@ -695,7 +911,8 @@ class DTopography(object):
                                                    _normalize_cf_unit)
         from clawpack.geoclaw.topotools import extract_datum
 
-        with DTopoInspector(path, time_reference=time_reference) as inspector:
+        with DTopoInspector(path, time_reference=time_reference,
+                            assume_units=assume_units) as inspector:
             # Adopt the file's own reference epoch when the caller gave none
             # and the time axis is CF datetime ("<unit> since <date>").
             if inspector.time_reference is None:
@@ -721,7 +938,7 @@ class DTopography(object):
             # Convert deformation to meters if the file declared another
             # (recognized) unit; contract is meters (GEOCLAW_NETCDF_UNITS).
             _src_units = getattr(inspector, "source_units", "m")
-            _meters_aliases = ("m", "meter", "meters", "metre", "metres")
+            _meters_aliases = ("m", "meter", "meters", "meter", "meters")
             if _src_units and _src_units not in _meters_aliases:
                 _canonical = _normalize_cf_unit(_src_units)
                 if _canonical is not None:
@@ -903,7 +1120,7 @@ class Fault(object):
 
     """
 
-    def __init__(self, subfaults=None, input_units={},
+    def __init__(self, subfaults=None, input_units=None,
                  coordinate_specification=None):
         r"""Fault initialization routine.
 
@@ -916,9 +1133,14 @@ class Fault(object):
         #self.times = numpy.array([0., 1.])   # or just [0.] ??
         self.dtopo = None
 
-        # Default units of each parameter type
-        self.input_units = standard_units.copy()
-        self.input_units.update(input_units)
+        # Units of each parameter type.  Only warn about an unspecified
+        # mapping when there is data to convert; constructing an empty Fault
+        # and filling it later is a normal pattern and converts nothing.
+        if subfaults is None and input_units is None:
+            self.input_units = standard_units.copy()
+        else:
+            self.input_units = _resolve_input_units(
+                input_units, f"{type(self).__name__}()")
 
         # Set the coordinate specification, e.g. 'top center':
         self.coordinate_specification = coordinate_specification
@@ -938,7 +1160,8 @@ class Fault(object):
 
     def read(self, path, column_map, coordinate_specification="centroid",
                                      rupture_type="static", skiprows=0,
-                                     delimiter=None, input_units={}, defaults=None):
+                                     delimiter=None, input_units=None,
+                                     defaults=None, _units_from_file=None):
         r"""Read in subfault specification at *path*.
 
         Creates a list of subfaults from the subfault specification file at
@@ -976,8 +1199,8 @@ class Fault(object):
             data = numpy.array([data])
 
         self.coordinate_specification = coordinate_specification
-        self.input_units = standard_units.copy()
-        self.input_units.update(input_units)
+        self.input_units = _resolve_input_units(
+            input_units, f"'{path}'", from_file=_units_from_file)
         self.subfaults = []
         for n in range(data.shape[0]):
 
@@ -3107,13 +3330,17 @@ class CSVFault(Fault):
     Assumes that the first row gives the column headings
     """
 
-    def read(self, path, input_units={}, coordinate_specification="top center",
+    def read(self, path, input_units=None, coordinate_specification="top center",
                          rupture_type="static", verbose=False):
         r"""Read in subfault specification at *path*.
 
         Creates a list of subfaults from the subfault specification file at
         *path*.
 
+        Units may be annotated in the column headings, e.g. ``Depth(km)``.
+        Those are applied; an explicit *input_units* entry for the same column
+        overrides them and a disagreement warns.  See
+        ``dev/design/units_policy.md``.
         """
 
         possible_column_names = """longitude latitude length width depth strike dip
@@ -3126,6 +3353,10 @@ class CSVFault(Fault):
         param["rupture time"] = "rupture_time"
         param["rise time"] = "rise_time"
 
+        # Units parsed out of the column headings, e.g. "Depth(km)".  Keyed by
+        # the *file's* column name; remapped to parameter names below.
+        units_from_file = {}
+
         # Read header of file
         with open(path, 'r') as subfault_file:
             header_line = subfault_file.readline().split(",")
@@ -3135,13 +3366,16 @@ class CSVFault(Fault):
                     # Strip out units if present
                     unit_start = column_heading.find("(")
                     unit_end = column_heading.find(")")
-                    column_name = column_heading[:unit_start].lower()
+                    column_name = column_heading[:unit_start].lower().strip()
                     units = column_heading[unit_start+1:unit_end]
-                    if verbose and input_units.get(column_name,units) != units:
-                        print("*** Warning: input_units[%s] reset to %s" \
-                              % (column_name, units))
-                        print("    based on file header")
-                        input_units[column_name] = units
+                    # Record what the file says about this column.  This used
+                    # to be assigned only when `verbose` was true *and* the
+                    # caller had already named a different unit -- so with the
+                    # default verbose=False the heading was parsed and then
+                    # thrown away, and a "Depth(km)" file was read as meters.
+                    # Precedence against input_units is resolved in
+                    # _resolve_input_units, not here.
+                    units_from_file[column_name] = units
 
                 else:
                     column_name = column_heading.lower()
@@ -3153,10 +3387,17 @@ class CSVFault(Fault):
                     print("*** Warning: column name not recognized: %s" \
                         % column_name)
 
+        # Remap heading names onto parameter names (e.g. "rigidity" -> "mu")
+        # so they line up with input_units / standard_units keys.
+        units_from_file = {param.get(name, name): unit
+                           for name, unit in units_from_file.items()
+                           if param.get(name, name) in standard_units}
+
         super(CSVFault, self).read(path, column_map=column_map, skiprows=1,
                                 delimiter=",", input_units=input_units,
                                 coordinate_specification=coordinate_specification,
-                                rupture_type=rupture_type)
+                                rupture_type=rupture_type,
+                                _units_from_file=units_from_file)
 
 
 
@@ -3480,7 +3721,7 @@ class Fault1d(Fault):
 
     """
 
-    def __init__(self, subfaults=None, input_units={},
+    def __init__(self, subfaults=None, input_units=None,
                  coordinate_specification=None):
         r"""Fault initialization routine.
 

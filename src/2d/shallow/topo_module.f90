@@ -291,6 +291,26 @@ contains
                     ! block that follows the preprocessing lines.
                     if (abs(itopotype(i)) == 4) then
                         call read_netcdf_descriptor(iunit, i)
+
+                        ! Authoritative coordinate-system gate: antimeridian
+                        ! longitude wrapping is only meaningful on a lon-lat
+                        ! sphere.  A non-zero lon_wrap_offset under a Cartesian
+                        ! run (coordinate_system == 1) is a coordinate-system
+                        ! mismatch -- refuse rather than silently add +/-360 to
+                        ! projected coordinates.  (set_geo runs before this in
+                        ! amr2, so coordinate_system is already set.)
+                        if (coordinate_system == 1 .and. &
+                                nc_lon_wrap_offset(i) /= 0.0d0) then
+                            print *, "ERROR in read_topo_settings: NetCDF topo ", &
+                                trim(topofname(i))
+                            print *, "  requests longitude wrapping ", &
+                                "(lon_wrap_offset =", nc_lon_wrap_offset(i), ")"
+                            print *, "  but coordinate_system = 1 (Cartesian). ", &
+                                "Longitude wrapping is only valid for lon-lat"
+                            print *, "  (coordinate_system = 2).  Use a projected ", &
+                                "topo file or set coordinate_system = 2."
+                            stop
+                        end if
                     end if
 
                     write(GEO_PARM_UNIT,*) '   '
@@ -439,16 +459,27 @@ contains
                     call read_topo_file(mxtopo(i),mytopo(i),itopotype(i),topofname(i), &
                         xlowtopo(i),ylowtopo(i),topowork(i0topo(i):i0topo(i)+mtopo(i)-1), i)
                     ! set topo0save(i) = 1 if this topo file intersects any
-                    ! dtopo file.  This approach to setting topo0save is changed from 
+                    ! dtopo file.  This approach to setting topo0save is changed from
                     ! v5.4.1, where it only checked if some dtopo point lies within the
                     ! topo grid, which might not happen for small scale topo
-                    do j=mtopofiles - num_dtopo + 1, mtopofiles
-                        if ((xhitopo(i)<xlowtopo(j)) .or. &
-                            (xlowtopo(i)>xhitopo(j)) .or. &
-                            (yhitopo(i)<ylowtopo(j)) .or. &
-                            (ylowtopo(i)>yhitopo(j))) then
-                              topo0save(i) = 0
-                          else
+                    !
+                    ! The topo_for_dtopo entries occupy slots mtopofiles+1 ...
+                    ! mtopofiles+num_dtopo (filled above); mtopofiles itself is the
+                    ! real file count here, having been decremented after the
+                    ! allocates and not yet re-incremented.  Iterating
+                    ! "mtopofiles-num_dtopo+1, mtopofiles" instead compared the topo
+                    ! files against each other, which is only harmless when there is
+                    ! a single topo file (it then compares file 1 with itself).
+                    !
+                    ! Accumulate rather than assign: with num_dtopo > 1 an
+                    ! if/else that also cleared topo0save let each dtopo file
+                    ! overwrite the previous one's verdict, so only the last
+                    ! counted.  topo0save was zeroed above, so only ever set it.
+                    do j=mtopofiles + 1, mtopofiles + num_dtopo
+                        if (.not. ((xhitopo(i)<xlowtopo(j)) .or. &
+                                   (xlowtopo(i)>xhitopo(j)) .or. &
+                                   (yhitopo(i)<ylowtopo(j)) .or. &
+                                   (ylowtopo(i)>yhitopo(j)))) then
                               topo0save(i) = 1
                           endif
 
@@ -1481,6 +1512,11 @@ contains
                                (xlocs <= nc_crop_bounds(2, topo_idx))
                     y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
                                (ylocs <= nc_crop_bounds(4, topo_idx))
+                    ! buffer applies to a descriptor crop exactly as it does to
+                    ! topo_crop_extent below; leaving nbuf4 = 0 here silently
+                    ! dropped topo_buffer for every file written by
+                    ! TopoInspector.topo_entries(), which always sets crop_bounds.
+                    nbuf4 = topo_buffer(topo_idx)
                 else if (present(topo_idx) .and. &
                          any(topo_crop_extent(:,topo_idx) /= 0.0d0)) then
                     ! topo_crop_extent is in domain coordinates (after nc_lon_wrap_offset
@@ -1749,6 +1785,23 @@ contains
             ! follows the preprocessing lines (written by DTopoData.write()).
             if (abs(dtopotype(i)) == 4) then
                 call read_dtopo_netcdf_descriptor(iunit, i)
+
+                ! Authoritative coordinate-system gate (mirrors the topo gate in
+                ! read_topo_settings): antimeridian longitude wrapping is only
+                ! meaningful on a lon-lat sphere.  A non-zero lon_wrap_offset
+                ! under a Cartesian run (coordinate_system == 1) is a mismatch --
+                ! refuse rather than add +/-360 to projected coordinates.
+                if (coordinate_system == 1 .and. &
+                        dnc_lon_wrap_offset(i) /= 0.0d0) then
+                    print *, "ERROR in read_dtopo_settings: NetCDF dtopo ", &
+                        trim(dtopofname(i))
+                    print *, "  requests longitude wrapping (lon_wrap_offset =", &
+                        dnc_lon_wrap_offset(i), ")"
+                    print *, "  but coordinate_system = 1 (Cartesian).  Longitude"
+                    print *, "  wrapping is only valid for lon-lat ", &
+                        "(coordinate_system = 2)."
+                    stop 1
+                end if
             end if
 
             write(GEO_PARM_UNIT,*) '   fname:',dtopofname(i)

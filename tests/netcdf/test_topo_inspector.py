@@ -560,3 +560,84 @@ def test_geographic_axis_without_units_keeps_wrap(topo_file_factory):
                              lat_min=-10.0, lat_max=10.0)
     with TopoInspector(path, var_name="z") as insp:
         assert insp.inspect_topo().lon_wrap == 360
+
+
+# ---------------------------------------------------------------------------
+# coordinate_system wrap gate (end-to-end through topo_entries)
+# ---------------------------------------------------------------------------
+
+def _geographic_ds(lon_min, lon_max):
+    """A positively-geographic topo dataset (CF degree units + longitude name)."""
+    xr = pytest.importorskip("xarray")
+    lons = np.linspace(lon_min, lon_max, 9)
+    lats = np.linspace(-5.0, 5.0, 5)
+    z = np.full((5, 9), -100.0, dtype=float)
+    return xr.Dataset(
+        {"z": (("lat", "lon"), z, {"units": "m"})},
+        coords={
+            "lon": ("lon", lons,
+                    {"units": "degrees_east", "standard_name": "longitude"}),
+            "lat": ("lat", lats,
+                    {"units": "degrees_north", "standard_name": "latitude"}),
+        },
+    )
+
+
+def _projected_ds():
+    """A positively-projected topo dataset (meters + projection standard_name)."""
+    xr = pytest.importorskip("xarray")
+    xs = np.linspace(0.0, 8000.0, 9)
+    ys = np.linspace(0.0, 4000.0, 5)
+    z = np.full((5, 9), -100.0, dtype=float)
+    return xr.Dataset(
+        {"z": (("y", "x"), z, {"units": "m"})},
+        coords={
+            "x": ("x", xs,
+                  {"units": "m", "standard_name": "projection_x_coordinate"}),
+            "y": ("y", ys,
+                  {"units": "m", "standard_name": "projection_y_coordinate"}),
+        },
+    )
+
+
+def test_gate_geographic_file_in_cartesian_run_raises(topo_file_factory):
+    """A geographic file under a Cartesian run (coordinate_system=1) is refused."""
+    path = topo_file_factory(ds=_geographic_ds(-180.0, 180.0))
+    with TopoInspector(path, crop_bounds=(-170.0, -150.0, -3.0, 3.0)) as insp:
+        with pytest.raises(ValueError, match="mismatch"):
+            insp.topo_entries(coordinate_system=1)
+
+
+def test_gate_projected_file_in_geographic_run_raises(topo_file_factory):
+    """A projected file under a geographic run (coordinate_system=2) is refused."""
+    path = topo_file_factory(ds=_projected_ds())
+    with TopoInspector(path, crop_bounds=(1000.0, 5000.0, 500.0, 3000.0)) as insp:
+        with pytest.raises(ValueError, match="mismatch"):
+            insp.topo_entries(coordinate_system=2)
+
+
+def test_gate_geographic_run_wraps_across_dateline(topo_file_factory):
+    """coordinate_system=2 + a crop crossing -180 splits into two wrap entries."""
+    path = topo_file_factory(ds=_geographic_ds(-180.0, 180.0))
+    with TopoInspector(path, crop_bounds=(-190.0, -170.0, -3.0, 3.0)) as insp:
+        entries = insp.topo_entries(coordinate_system=2)
+    offsets = sorted(meta.lon_wrap_offset for _, _, meta in entries)
+    assert offsets == [-360.0, 0.0]   # dateline split
+
+
+def test_gate_cartesian_run_projected_file_no_wrap(topo_file_factory):
+    """coordinate_system=1 + a projected file: single entry, no wrap, no error."""
+    path = topo_file_factory(ds=_projected_ds())
+    with TopoInspector(path, crop_bounds=(1000.0, 5000.0, 500.0, 3000.0)) as insp:
+        entries = insp.topo_entries(coordinate_system=1)
+    assert len(entries) == 1
+    assert entries[0][2].lon_wrap_offset == 0.0
+
+
+def test_gate_none_coordinate_system_is_legacy(topo_file_factory):
+    """coordinate_system=None keeps the legacy per-file wrap behavior."""
+    path = topo_file_factory(ds=_geographic_ds(-180.0, 180.0))
+    with TopoInspector(path, crop_bounds=(-190.0, -170.0, -3.0, 3.0)) as insp:
+        entries = insp.topo_entries(coordinate_system=None)
+    offsets = sorted(meta.lon_wrap_offset for _, _, meta in entries)
+    assert offsets == [-360.0, 0.0]   # geographic file still wraps
