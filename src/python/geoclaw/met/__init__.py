@@ -16,7 +16,24 @@ unchanged.
 
 The ``plot`` submodule (:mod:`clawpack.geoclaw.met.plot`) is imported lazily to
 avoid a hard ``matplotlib`` dependency for non-plotting use.
+
+``pandas`` *is* required here, and is an optional dependency of Clawpack:
+install it with ``pip install "clawpack[met]"``.
 """
+
+# track, parametric and plot each import pandas at module scope, and importing
+# any of them runs this file first, so one check here covers every way into the
+# package.  Chained deliberately: `from exc` keeps __cause__.name == 'pandas',
+# which is how tooling tells an absent optional dependency apart from a module
+# missing from the install.
+try:
+    import pandas as _pandas
+except ImportError as exc:
+    raise ImportError(
+        'pandas is required for clawpack.geoclaw.met '
+        '(pip install "clawpack[met]")') from exc
+else:
+    del _pandas
 
 from clawpack.geoclaw.met.storm import (  # noqa: F401
     Storm, construct_fields, available_formats, available_models)
