@@ -938,7 +938,7 @@ class Topography(object):
     def read(self, path=None, topo_type=None, unstructured=False,
              mask=False, crop_extent=None, force=False,
              coarsen=None, align=_ALIGN_UNSET, buffer=None, stride=None,
-             nc_params={}, filter_region=_CROP_EXTENT_UNSET):
+             nc_params=None, filter_region=_CROP_EXTENT_UNSET):
         r"""Read in the data from the object's *path* attribute.
 
         Stores the resulting data in one of the sets of *x*, *y*, and *z* or
@@ -982,15 +982,22 @@ class Topography(object):
              - `z_var` (str): name of the elevation variable, if it cannot be
                auto-detected by CF `standard_name` or common names.
              - `assume_units` (str): unit to assume for the elevation variable
-               when the file has **no** `units` attribute (e.g. `"m"`).  Units
-               are otherwise required and never silently assumed: a file whose
-               elevation variable lacks `units`, or whose units are not meters,
-               raises `ValueError` (GeoClaw does not convert on read; pre-
-               convert non-meter data to meters first).
+               when the file has **no** `units` attribute (e.g. `"m"`), treated
+               as if the file had declared it -- so `assume_units="km"` also
+               converts.  Units are otherwise required and never silently
+               assumed: a file whose elevation variable lacks `units` raises
+               `ValueError`.  A *recognized* non-meter unit (e.g. `km`) is
+               converted to meters on read, with a warning; an unrecognized
+               unit raises.  See `dev/design/units_policy.md`.
 
         The first three might have already been set when instatiating object.
 
         """
+
+        # None is the natural "no options" value and used to reach .get() as a
+        # NoneType; it is also safer than a shared mutable default.
+        if nc_params is None:
+            nc_params = {}
 
         # A crop_extent passed here is equivalent to setting the attribute first;
         # fold the deprecated filter_region alias onto it, then store it so the
@@ -2556,7 +2563,8 @@ def fetch_remote_topo(name_or_url, crop_extent=None, coarsen=1, buffer=0,
     This is the modern one-call "remote DEM -> Topography" path.  It resolves a
     nickname or URL and reads it through the `topo_type=4` reader
     (`Topography.read`, backed by `netcdf_utils.TopoInspector`), so it inherits
-    that path's unit handling (elevation must be in meters, or supply
+    that path's unit handling (a recognized non-meter unit such as `km` is
+    converted on read with a warning; a file with no `units` attribute needs
     `assume_units` via `nc_params`), datum handling, fill->NaN conversion, CF
     coordinate/variable detection, and lazy hyperslab windowing.
 

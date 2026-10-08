@@ -395,7 +395,7 @@ def test_preprocessing_order_shifts_before_crop(tt2_path):
 def test_preprocessing_negative_topotype_negates_z(tt2_path):
     """topo_type < 0 negates Z via the existing sign convention.
 
-    This is the pre-existing behaviour (Fortran topo_type sign convention).
+    This is the pre-existing behavior (Fortran topo_type sign convention).
     negate_z is not involved here.
     """
     t = Topography()
@@ -542,7 +542,7 @@ def test_read_header_netcdf_deferred_z_load(nc_topo_path, tmp_path):
 
 @pytest.mark.netcdf
 def test_read_header_netcdf_sn_normalization(tmp_path):
-    """read_header() normalises lat to S→N regardless of file storage order."""
+    """read_header() normalizes lat to S→N regardless of file storage order."""
     pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
 
@@ -644,7 +644,7 @@ def test_deprecation_type1_write_warns(tmp_path):
 
 
 def test_deprecation_type1_read_header_raises():
-    """read_header() for topo_type=1 raises IOError (pre-existing behaviour)."""
+    """read_header() for topo_type=1 raises IOError (pre-existing behavior)."""
     t = Topography()
     t.path = "dummy.tt1"
     t.topo_type = 1
@@ -1016,7 +1016,7 @@ def test_write_no_datum_warning_when_consistent(tmp_path, recwarn):
 # ===========================================================================
 
 def test_backward_compat_list_format_round_trip(tmp_path, tt2_path):
-    """Legacy [topo_type, path] list normalises to Topography and writes correctly."""
+    """Legacy [topo_type, path] list normalizes to Topography and writes correctly."""
     td = TopographyData()
     td.topofiles.append([2, str(tt2_path)])
 
@@ -1036,7 +1036,7 @@ def test_backward_compat_list_format_round_trip(tmp_path, tt2_path):
 
 
 def test_backward_compat_mixed_formats(tmp_path, tt2_path):
-    """Mix of Topography, list, and dict entries all normalise; dict extent → crop_extent."""
+    """Mix of Topography, list, and dict entries all normalize; dict extent → crop_extent."""
     t_obj = Topography()
     t_obj.path = str(tt2_path)
     t_obj.topo_type = 2
@@ -1166,7 +1166,7 @@ def test_crop_pushdown_with_coarsen_buffer_matches_full_read(nc_topo_path, buffe
 @pytest.mark.parametrize("s2n", [True, False], ids=["S→N", "N→S"])
 def test_crop_pushdown_respects_storage_order(tmp_path, s2n):
     """crop_extent pushdown matches full-read-then-crop for either lat storage
-    order, and always returns coordinates normalised S→N (y increasing).
+    order, and always returns coordinates normalized S→N (y increasing).
     (The bundled fixture flips only the coordinate on N→S, not the data, so the
     invariant is pushdown-vs-full on the *same* file, not S→N-vs-N→S.)"""
     pytest.importorskip("xarray")
@@ -1187,7 +1187,7 @@ def test_crop_pushdown_respects_storage_order(tmp_path, s2n):
     np.testing.assert_array_equal(t.x, ref.x)
     np.testing.assert_array_equal(t.y, ref.y)
     np.testing.assert_array_equal(t.Z, ref.Z)
-    # Coordinates are always normalised to S→N regardless of file order.
+    # Coordinates are always normalized to S→N regardless of file order.
     assert np.all(np.diff(t.y) > 0)
 
 

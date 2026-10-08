@@ -122,10 +122,10 @@ _TIME_UNIT_ABBREVS: frozenset[str] = frozenset({'s', 'min', 'h', 'days'})
 def _units_scale(cf_unit: str, contract: str) -> float:
     """Multiplicative factor converting a value in *cf_unit* to *contract*.
 
-    Returns 1.0 when *cf_unit* is a recognised alias of *contract* (no
+    Returns 1.0 when *cf_unit* is a recognized alias of *contract* (no
     conversion needed).  Assumes *cf_unit* has already been validated as
     convertible (see NetCDFInspector._check_units); raises ValueError if it
-    cannot be normalised, as a defensive guard.
+    cannot be normalized, as a defensive guard.
     """
     if _unit_matches_contract(cf_unit, contract):
         return 1.0
@@ -133,7 +133,7 @@ def _units_scale(cf_unit: str, contract: str) -> float:
     if canonical is None:
         raise ValueError(
             f"Cannot compute a scale factor for units '{cf_unit}' -> "
-            f"'{contract}': unit not recognised."
+            f"'{contract}': unit not recognized."
         )
     return float(units_convert(1.0, canonical, contract))
 
@@ -143,13 +143,13 @@ def _cf_time_units_to_seconds_factor(cf_unit: str) -> float:
 
     *cf_unit* must be a bare CF duration unit (``seconds``, ``minutes``,
     ``hours``, ``days`` and their aliases).  Raises ValueError if it is not a
-    recognised time unit -- callers must never silently assume seconds for an
-    unrecognised or non-time unit string.
+    recognized time unit -- callers must never silently assume seconds for an
+    unrecognized or non-time unit string.
     """
     canonical = _normalize_cf_unit(cf_unit)
     if canonical is None or canonical not in _TIME_UNIT_ABBREVS:
         raise ValueError(
-            f"Unrecognised time units {cf_unit!r}; expected a CF duration unit "
+            f"Unrecognized time units {cf_unit!r}; expected a CF duration unit "
             f"such as 'seconds', 'minutes', 'hours', or 'days'."
         )
     return float(units_convert(1.0, canonical, 's'))
@@ -163,7 +163,7 @@ def _cf_time_units_to_seconds_factor(cf_unit: str) -> float:
 # elevation in feet, or an absurd wind speed.  These bounds catch that final
 # class of silent-wrong.  Only the unambiguous pressure ~1000x gap is
 # auto-corrected; everything else that is implausible hard-errors, because the
-# correction (feet vs metres, knots vs m/s) is ambiguous at plausible
+# correction (feet vs meters, knots vs m/s) is ambiguous at plausible
 # magnitudes.  Tune as module constants; keep them conservative.
 
 # topo elevation, meters (Challenger Deep ~-10935, Everest ~8849)
@@ -185,7 +185,7 @@ def _check_magnitude(role: str, vmin: float, vmax: float,
     further multiplicative correction (1.0 when none is needed):
 
     * ``topo`` -- raise if the elevation range is implausible (no auto-correct;
-      feet-vs-metres is ambiguous at moderate elevations).
+      feet-vs-meters is ambiguous at moderate elevations).
     * ``wind_u`` / ``wind_v`` -- raise if ``|wind|`` is absurd (never
       auto-correct; knots-vs-m/s cannot be told apart by magnitude).
     * ``pressure`` -- return 1.0 when already plausible; a field maxing at
@@ -203,7 +203,7 @@ def _check_magnitude(role: str, vmin: float, vmax: float,
                 f"Elevation{where} has an implausible range "
                 f"[{vmin:g}, {vmax:g}] m; expected roughly "
                 f"[{_ELEV_MIN_M:g}, {_ELEV_MAX_M:g}] m.  Check the 'units' "
-                f"attribute (e.g. feet vs metres) -- GeoClaw will not guess."
+                f"attribute (e.g. feet vs meters) -- GeoClaw will not guess."
             )
         return 1.0
 
@@ -718,13 +718,13 @@ class NetCDFInspector:
         Resolve ``self.var_name``'s units against *contract*.
 
         Returns the source unit string; the caller (or Fortran, via the
-        descriptor ``scale_factor``) converts the data when it is a recognised
+        descriptor ``scale_factor``) converts the data when it is a recognized
         non-contract unit.  Units are never silently assumed or mixed:
 
         * missing ``units`` -> ValueError unless ``self.assume_units`` is set
           (the assumed unit is then treated as if it were declared);
-        * unrecognised / dimensionally-incompatible unit -> ValueError;
-        * recognised non-contract unit (e.g. ``km``) -> returned for conversion
+        * unrecognized / dimensionally-incompatible unit -> ValueError;
+        * recognized non-contract unit (e.g. ``km``) -> returned for conversion
           (a warning is emitted); the caller resolves the scale factor.
         """
         var_name = self.var_name
@@ -747,7 +747,7 @@ class NetCDFInspector:
         canonical = _normalize_cf_unit(cf_unit)
         if canonical is None:
             raise ValueError(
-                f"Unrecognised units '{cf_unit}' on variable '{var_name}' "
+                f"Unrecognized units '{cf_unit}' on variable '{var_name}' "
                 f"in '{self.path}'.  Contract requires '{contract}'.  "
                 f"Pre-convert the file to '{contract}'."
             )
@@ -773,7 +773,7 @@ class TopoInspector(NetCDFInspector):
     * Verifies the data variable's units attribute matches the contract unit
       (meters).  If units are convertible via units.py, records the
       source units in the metadata; Fortran will need a conversion factor.
-      If units are unrecognised, raises ValueError.
+      If units are unrecognized, raises ValueError.
     * Checks for fill values (NaN) within the crop region and raises
       ValueError — silent NaN in bathymetry is numerically fatal.
 
@@ -885,12 +885,12 @@ class TopoInspector(NetCDFInspector):
 
         Returns the source unit string; the caller (or Fortran, via the
         descriptor ``scale_factor``) converts the data to meters when it is a
-        recognised non-meter unit.  Units are never silently assumed or mixed:
+        recognized non-meter unit.  Units are never silently assumed or mixed:
 
         * missing ``units`` -> ValueError unless ``assume_units`` was set
           (the assumed unit is then treated as if it were declared);
-        * unrecognised / dimensionally-incompatible unit -> ValueError;
-        * recognised non-meter unit (e.g. ``km``) -> returned for conversion
+        * unrecognized / dimensionally-incompatible unit -> ValueError;
+        * recognized non-meter unit (e.g. ``km``) -> returned for conversion
           (a warning is emitted).
         """
         return self._check_units(GEOCLAW_NETCDF_UNITS['topo'])
@@ -1185,6 +1185,21 @@ class DTopoInspector(NetCDFInspector):
             if cf_unit:
                 seconds = arr * _cf_time_units_to_seconds_factor(cf_unit)
             else:
+                # The assumption stays -- a bare numeric dtopo time axis has
+                # always meant seconds and files rely on it -- but it is stated.
+                # Silence here is what makes an "hours" file run 3600x too
+                # fast with nothing to notice, and it is the one place this
+                # module departs from its own rule (see
+                # _cf_time_units_to_seconds_factor: callers must never silently
+                # assume seconds).
+                warnings.warn(
+                    f"Time axis '{time_name}' in '{self.path}' is numeric with "
+                    f"no 'units' attribute; assuming seconds. Add a CF 'units' "
+                    f"attribute (e.g. 'seconds', 'hours') to the time "
+                    f"coordinate -- a file in hours read as seconds runs "
+                    f"3600x too fast.",
+                    stacklevel=3,
+                )
                 seconds = arr
 
         if mt < 2:
@@ -1206,9 +1221,9 @@ class DTopoInspector(NetCDFInspector):
 
         Verifies deformation units (meters), records the source unit on
         ``self.source_units``, and stores a ``scale_factor`` in the metadata.
-        A recognised non-meter unit yields a scale_factor (applied in memory by
+        A recognized non-meter unit yields a scale_factor (applied in memory by
         ``DTopography.read`` or by Fortran via the descriptor); a missing or
-        unrecognised unit still raises (units are never assumed).
+        unrecognized unit still raises (units are never assumed).
         """
         if self.var_name is None:
             self.var_name = self._find_dtopo_var_name()
@@ -1480,11 +1495,11 @@ class MetInspector(NetCDFInspector):
         Verify units for each variable match its contract unit.
 
         Returns a list of MetVariableInfo with source_units and a
-        scale_factor populated.  A recognised non-contract unit (e.g. ``hPa``,
+        scale_factor populated.  A recognized non-contract unit (e.g. ``hPa``,
         ``mbar``, ``knots``) yields a multiplicative scale_factor that Fortran
         applies on read.  Units are never silently assumed: a missing ``units``
         attribute raises ValueError (unless *assume_units* was set), and an
-        unrecognised / dimensionally-incompatible unit also raises.
+        unrecognized / dimensionally-incompatible unit also raises.
         """
         result: list[MetVariableInfo] = []
         for role, var_name in self.variable_map.items():
@@ -1537,13 +1552,13 @@ class MetInspector(NetCDFInspector):
                 ))
                 continue
 
-            # Recognised non-contract unit (e.g. 'hPa', 'mbar', 'knots'):
+            # Recognized non-contract unit (e.g. 'hPa', 'mbar', 'knots'):
             # compute a scale_factor Fortran applies on read.  An
-            # unrecognised unit is rejected (never silently misread).
+            # unrecognized unit is rejected (never silently misread).
             canonical = _normalize_cf_unit(cf_unit)
             if canonical is None:
                 raise ValueError(
-                    f"Unrecognised units '{cf_unit}' on variable '{var_name}' "
+                    f"Unrecognized units '{cf_unit}' on variable '{var_name}' "
                     f"(role '{role}') in '{self.path}'.  Contract requires "
                     f"'{contract}'.  Pre-convert the file to '{contract}'."
                 )
@@ -1627,7 +1642,7 @@ class MetInspector(NetCDFInspector):
         # so a "hours since"/"days since" axis (e.g. a raw ERA5 file) is
         # converted to seconds via time_scale; a "seconds since" axis gives
         # 1.0 (unchanged).  xarray moves the original units to .encoding after
-        # decoding the datetime axis.  An unrecognised time unit raises.
+        # decoding the datetime axis.  An unrecognized time unit raises.
         time_scale = 1.0
         _raw_units = str(time_coord.encoding.get('units')
                          or time_coord.attrs.get('units', '')).strip()
@@ -1739,7 +1754,7 @@ class CFNormalizer:
     Parameters
     ----------
     ds : xr.Dataset
-        Dataset to normalise.  A copy is made; the original is not modified.
+        Dataset to normalize.  A copy is made; the original is not modified.
 
     Examples
     --------

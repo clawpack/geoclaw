@@ -10,7 +10,7 @@ fixed-format ``read`` statements, so those details are the contract.
 These goldens were generated **before** ``write()`` was restructured into
 resolve-then-write (PR A2).  That restructuring must be a pure refactor for
 every case that does not wrap across the antimeridian, and this file is what
-pins it: if a byte moves in any case below, the refactor changed behaviour it
+pins it: if a byte moves in any case below, the refactor changed behavior it
 was not supposed to touch.
 
 Regenerate deliberately with ``GEOCLAW_REGEN=1`` and review the diff -- never
