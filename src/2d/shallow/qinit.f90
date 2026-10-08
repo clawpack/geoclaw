@@ -43,11 +43,14 @@ subroutine qinit(meqn,mbc,mx,my,xlower,ylower,dx,dy,q,maux,aux)
         if (ddxy < 0.01d0*min(dx_fdry,dy_fdry)) then
             do i=1,mx
                 x = xlower + (i-0.5d0)*dx
-                ii = int((x - xlow_fdry + 1d-7) / dx_fdry)
+                ! floor, not int: int truncates toward zero, so a cell west or
+                ! south of the mask gives an in-range index and is wrongly
+                ! forced dry rather than rejected by the bounds test below
+                ii = floor((x - xlow_fdry + 1d-7) / dx_fdry) + 1
                 do j=1,my
                     y = ylower + (j-0.5d0)*dy
-                    jj = int((y - ylow_fdry + 1d-7) / dy_fdry)
-                    jj = my_fdry - jj  ! since index 1 corresponds to north edge
+                    ! index 1 corresponds to north edge:
+                    jj = my_fdry - floor((y - ylow_fdry + 1d-7) / dy_fdry)
                     if ((ii>=1) .and. (ii<=mx_fdry) .and. &
                         (jj>=1) .and. (jj<=my_fdry)) then
                         ! grid cell lies in region covered by force_dry,

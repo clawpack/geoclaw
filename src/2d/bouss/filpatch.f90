@@ -335,9 +335,13 @@ recursive subroutine filrecur(level,nvar,valbig,aux,naux,t,mx,my, &
                             .and. (h_fine > 0) &
                             .and. (t <= tend_force_dry)) then
                         ! check if in force_dry region
-                        ii = int((xcent_fine - xlow_fdry + 1d-7) / dx_fdry) + 1
-                        jj = int((ycent_fine - ylow_fdry + 1d-7) / dy_fdry) + 1
-                        jj = my_fdry - jj  ! since index 1 corresponds to north edge
+                        ! floor, not int: int truncates toward zero, so a
+                        ! cell west or south of the mask gives an in-range
+                        ! index and is wrongly forced dry rather than rejected
+                        ! by the bounds test below
+                        ii = floor((xcent_fine - xlow_fdry + 1d-7) / dx_fdry) + 1
+                        ! index 1 corresponds to north edge:
+                        jj = my_fdry - floor((ycent_fine - ylow_fdry + 1d-7) / dy_fdry)
                         if ((ii>=1) .and. (ii<=mx_fdry) .and. &
                             (jj>=1) .and. (jj<=my_fdry)) then
                             ! grid cell lies in region covered by force_dry,
