@@ -115,6 +115,7 @@ COMMON_SOURCES += \
   $(GEOLIB)/topointegral.f \
   $(GEOLIB)/bilinearintegral.f \
   $(BOUSSLIB)/stepgrid.f \
+  $(BOUSSLIB)/fixdry.f90 \
   $(GEOLIB)/src2.f90 \
   $(GEOLIB)/src1d.f90 \
   $(GEOLIB)/set_eta_init.f90 \
