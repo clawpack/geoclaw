@@ -312,32 +312,98 @@ class NetCDFReader(GriddedReader):
                         source_units=_source_units, var_name=_var_name)
 
 
+def _open_geotiff_rasterio(path, read_data):
+    import rasterio
+    with rasterio.open(path) as ds:
+        z = ds.read(1) if read_data else None
+        return z, ds.height, ds.width, tuple(ds.transform.to_gdal()), ds.nodata
+
+
+def _open_geotiff_osgeo(path, read_data):
+    from osgeo import gdal
+    ds = gdal.Open(str(path))
+    if ds is None:
+        raise IOError("GDAL could not open GeoTIFF file %s" % path)
+    band = ds.GetRasterBand(1)
+    z = band.ReadAsArray() if read_data else None
+    return (z, ds.RasterYSize, ds.RasterXSize, tuple(ds.GetGeoTransform()),
+            band.GetNoDataValue())
+
+
+# Tried in order.  rasterio comes first because its wheels bundle libgdal, so it
+# installs with plain pip; the GDAL Python bindings (``osgeo``) need a matching
+# system libgdal.
+_GEOTIFF_BACKENDS = {
+    "rasterio": _open_geotiff_rasterio,
+    "osgeo": _open_geotiff_osgeo,
+}
+
+
+def read_geotiff(path, read_data=True, backends=("rasterio", "osgeo")):
+    r"""Read band 1 of a GeoTIFF and its grid geometry.
+
+    Returns ``(x, y, Z, delta)`` in :class:`GridData` conventions: ``x``/``y``
+    ascending 1-D arrays of **pixel centers**, ``Z`` in ``(y, x)`` order with
+    row 0 at the south edge and the file's nodata value replaced by NaN, and
+    ``delta = (dx, dy)``.  With ``read_data=False`` the pixel data is not read
+    and ``Z`` is ``None``.
+
+    The GDAL geotransform locates pixel *corners* (GDAL already shifts
+    ``PixelIsPoint`` files onto the area convention by default), so pixel
+    ``(row, col)`` is centered at ``gt[0] + (col + 1/2) gt[1]``,
+    ``gt[3] + (row + 1/2) gt[5]``.
+
+    *backends* names the libraries to try, in order (``"rasterio"``,
+    ``"osgeo"``).  Rotated/sheared rasters are refused.
+    """
+    open_errors = []
+    for name in backends:
+        try:
+            z, nrows, ncols, gt, nodata = _GEOTIFF_BACKENDS[name](path,
+                                                                   read_data)
+            break
+        except ImportError as e:
+            open_errors.append("%s: %s" % (name, e))
+    else:
+        raise ImportError(
+            "Reading GeoTIFF files (topo_type 5) requires rasterio "
+            "(`pip install rasterio`) or the GDAL Python bindings "
+            "(`from osgeo import gdal`).  Tried: %s" % "; ".join(open_errors))
+
+    if gt[2] != 0 or gt[4] != 0:
+        raise ValueError("GeoTIFF %s has a rotated geotransform %s; only "
+                         "north-up rasters are supported." % (path, gt))
+    dx, dy = gt[1], abs(gt[5])
+    if dx <= 0 or dy == 0:
+        raise ValueError("GeoTIFF %s has an invalid pixel size in "
+                         "geotransform %s." % (path, gt))
+
+    x = gt[0] + (numpy.arange(ncols) + 0.5) * dx
+    y = gt[3] + (numpy.arange(nrows) + 0.5) * gt[5]
+
+    Z = None
+    if z is not None:
+        Z = numpy.asarray(z, dtype=float)
+        if nodata is not None and not numpy.isnan(nodata):
+            Z[z == nodata] = numpy.nan
+    if gt[5] < 0:
+        # Usual north-up file: row 0 is the north edge.
+        y = y[::-1]
+        if Z is not None:
+            Z = numpy.flipud(Z)
+
+    return x, y, Z, (dx, dy)
+
+
 class GeoTIFFReader(GriddedReader):
-    r"""GeoTIFF DEM (type 5) via GDAL.  Ingest-only: transcode to type 3/4 for Fortran."""
+    r"""GeoTIFF DEM (type 5) via rasterio or GDAL.  Ingest-only: transcode to
+    type 3/4 for Fortran.  See :func:`read_geotiff`."""
 
     topo_types = frozenset({5})
 
     def read_window(self, topo, *, nc_params=None) -> GridData:
-        try:
-            import gdal
-        except ImportError as e:
-            print("Reading GeoTIFF files requires GDAL.")
-            raise e
-
-        data = gdal.Open(topo.path)
-        z = data.GetRasterBand(1).ReadAsArray()
-        transform = data.GetGeoTransform()
-        x_origin = transform[0]
-        y_origin = transform[3]
-        dx = transform[1]
-        dy = -transform[5]
-
-        Z = numpy.flipud(z)
-        x = numpy.linspace(x_origin,
-                           x_origin + (z.shape[0] - 1) * dx, z.shape[0])
-        y = numpy.linspace(y_origin - (z.shape[1] - 1) * dy,
-                           y_origin, z.shape[1])
-        return GridData(x=x, y=y, Z=Z)
+        x, y, Z, delta = read_geotiff(topo.path)
+        return GridData(x=x, y=y, Z=Z, delta=delta)
 
 
 # ---------------------------------------------------------------------------
