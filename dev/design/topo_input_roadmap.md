@@ -4,6 +4,13 @@
 rework, what has landed, what was superseded and why, and what is deliberately
 deferred.*
 
+**Status (2026-10-13): the stack has landed.** Every geoclaw and clawutil PR
+in §1 merged to `master` on 2026-10-08, in the order below (rjleveque/doc#5,
+the user docs, is still open); the supersession clean-up is done;
+§2.6 is closed by clawpack/geoclaw#755. The rest of §2 and §3 are still open.
+§1 below the "Landed" table is kept as the record of the plan the merges
+followed.
+
 **Provenance.** Written 2026-09-07 from the branch and PR state at that date,
 and amended later the same day after test-merging the open PRs in order: §1
 (the stack forks at #741; #745 rebased onto it), §2.3 (layout guards, and the
@@ -23,8 +30,27 @@ meteorological side of the same input-handling effort.
 |---|---|---|
 | `fetch_remote_topo`; deprecate `read_netcdf`; refactor `etopotools` | clawpack/geoclaw#726 | `a3ee4b27` |
 | User docs for the above | rjleveque/doc#5 | open, commit `c17e0eff` |
+| This roadmap | clawpack/geoclaw#748 | `15bcbc30` |
+| Silent-failure fixes (order 1) | clawpack/geoclaw#739 | `658738fe` |
+| Units policy (order 2) | clawpack/geoclaw#741 | `96fcfeb9` |
+| `topo0save` slot indexing | clawpack/geoclaw#742 | `947f5bde` |
+| Multilayer OpenMP link | clawpack/geoclaw#743 | `3b94335b` |
+| isaac `setplot` storm format | clawpack/geoclaw#744 | `4bfae834` |
+| 1D `topo.data` / `dtopo.data` layouts (order 3a) | clawpack/geoclaw#745 | `ab5916e7` |
+| `num_dim` passed to the data classes | clawpack/clawutil#208 | `3236167e` |
+| Input parity (order 3b) | clawpack/geoclaw#749 | `1687a021` |
+| Units policy, ASCII coverage (§2.6) | clawpack/geoclaw#755 | `58d0290c` |
 
-### Open, in intended merge order
+Merged 2026-10-08 in Randy LeVeque's order (#748, #739, #741, #742, #743,
+#745, then clawutil#208 after #745 as required below), followed by #749 and
+#755. #755 re-lands #753, which had merged into its stacked base branch
+`topo-input-parity` rather than `master`. `Test GeoClaw` on `master` passed at
+each merge commit from `947f5bde` through `58d0290c`. Before merging, the
+combined tree was tested locally (Python unit tests, the regression suite under
+gcc debug and optimized flags, and `examples/1d_classic/okada_dtopo`); see the
+update to §4's "not verified" note.
+
+### Merge order as planned (historical)
 
 The topo stack is linear through #741 and then **forks**: both #745 and #749
 sit directly on #741 and neither contains the other. So #739 and #741 must
@@ -71,6 +97,9 @@ geoclaw `setrun`. #208 guards that with a `TypeError` fallback, which should be
 removed once the geoclaw requirement catches up.
 
 ### Superseded — close, do not merge
+
+*Done:* #727 is closed and the `topo-input-unify` and `topo-input-parity`
+branches are deleted (checked 2026-10-13).
 
 Both verified by comparing branch contents, not from memory.
 
@@ -243,7 +272,14 @@ issue. Two real fixes were considered and both rejected for now:
 
 ### 2.6 Units policy: ASCII coverage and override unification
 
-**Owner: unassigned. Opened by clawpack/geoclaw#741.** Policy itself lives in
+**Done: clawpack/geoclaw#755 (`58d0290c`, re-landing #753).** `topo_ascii` is
+now `assume+check` and `dtopo_ascii` is `warn+assume` (no deformation bound
+exists for rule 5); `assume_units` is a `read()` argument on both readers; `ft`
+converts; `MetInspector.assume_units` takes a dict, with the bool deprecated.
+`units_policy.md` and the `UNITS_POLICY` registry are the record. The text
+below is the plan as written before #755.
+
+*Originally:* **Owner: unassigned. Opened by clawpack/geoclaw#741.** Policy itself lives in
 `units_policy.md`; this entry records only what that PR deliberately left open.
 
 #741 states GeoClaw's units policy and makes it enforceable — a `UNITS_POLICY`
@@ -346,7 +382,14 @@ Claims in §1 were checked as follows, at 2026-09-07:
   `ClawRunData` path rather than a hand-built object. Only that one example was
   re-run, not all six.
 
-**Not verified:** that `topo-input-parity` passes CI on a machine other than the
+**Update 2026-10-13.** Resolved by the merges: CI on a machine other than the
+author's (`Test GeoClaw` on `master` at `1687a021` and `58d0290c`), and the
+Fortran regression suite on the combined tree (42 passed under gcc debug and
+optimized flags, locally, before merging). Still not verified here: the
+remote-fetch tests (marked `remote`), and the five other `examples/1d_classic`
+cases.
+
+**Not verified (as of 2026-09-07):** that `topo-input-parity` passes CI on a machine other than the
 author's, and the remote-fetch tests throughout (marked `remote`, skipped).
 Also not re-run after #745's rebase: the other five `examples/1d_classic` cases,
 and any Fortran regression suite (`-m regression`) on the combined tree.
