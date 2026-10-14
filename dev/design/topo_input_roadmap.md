@@ -64,7 +64,7 @@ Independent of the stack, all off `master`:
 | clawpack/geoclaw#743 | `fix-multilayer-openmp-link` | `$(FFLAGS)` dropped from the multilayer link line |
 | clawpack/geoclaw#744 | `fix-isaac-setplot-storm-format` | isaac `setplot` hard-coded the storm file format |
 | clawpack/clawutil#208 | `fix-1d-topo-data-format` | passes `num_dim` to `TopographyData` / `DTopoData` |
-| *(PR not yet opened)* | `fix-geotiff-reader` | type 5 (GeoTIFF) reader: dead `import gdal` replaced by rasterio → `osgeo` fallback; swapped row/column counts; pixel-corner origin read as a grid point; nodata not mapped to NaN; `read_header` type 5 branch raised `NameError` |
+| clawpack/geoclaw#756 | `fix-geotiff-reader` | type 5 (GeoTIFF) reader: dead `import gdal` replaced by rasterio → `osgeo` fallback; swapped row/column counts; pixel-corner origin read as a grid point; nodata not mapped to NaN; `read_header` type 5 branch raised `NameError` |
 
 **Merge geoclaw#745 before clawutil#208.** #745 defaults to `num_dim=2` and is
 inert alone; clawutil landing first against an older geoclaw would break every
@@ -352,7 +352,10 @@ Claims in §1 were checked as follows, at 2026-09-07:
   nodata, S→N row order, header-only reads, and type 3 ↔ type 5 equivalence
   where the GeoTIFF pixel centers sit on the type 3 grid points. **Not
   verified:** the `osgeo` backend. No GDAL Python bindings were available, so
-  its parametrized case skipped.
+  its parametrized case skipped. Independently, rjleveque (geoclaw#756 thread,
+  2026-10-13) found `topo.x`/`topo.y` agree with a direct rasterio read, and
+  NCEI CUDEM tiles carry `AREA_OR_POINT=Area` (cell-edge bounding box, points
+  `delta/2` inside), matching the pixel-center convention used here.
 
 **Not verified:** that `topo-input-parity` passes CI on a machine other than the
 author's, and the remote-fetch tests throughout (marked `remote`, skipped).
