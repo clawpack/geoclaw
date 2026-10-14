@@ -90,6 +90,7 @@ Independent of the stack, all off `master`:
 | clawpack/geoclaw#743 | `fix-multilayer-openmp-link` | `$(FFLAGS)` dropped from the multilayer link line |
 | clawpack/geoclaw#744 | `fix-isaac-setplot-storm-format` | isaac `setplot` hard-coded the storm file format |
 | clawpack/clawutil#208 | `fix-1d-topo-data-format` | passes `num_dim` to `TopographyData` / `DTopoData` |
+| clawpack/geoclaw#756 | `fix-geotiff-reader` | type 5 (GeoTIFF) reader: dead `import gdal` replaced by rasterio → `osgeo` fallback; swapped row/column counts; pixel-corner origin read as a grid point; nodata not mapped to NaN; `read_header` type 5 branch raised `NameError` |
 
 **Merge geoclaw#745 before clawutil#208.** #745 defaults to `num_dim=2` and is
 inert alone; clawutil landing first against an older geoclaw would break every
@@ -381,6 +382,16 @@ Claims in §1 were checked as follows, at 2026-09-07:
   through both 1D Fortran readers, with `num_dim = 1` arriving via the real
   `ClawRunData` path rather than a hand-built object. Only that one example was
   re-run, not all six.
+- `fix-geotiff-reader`, checked 2026-10-11 against `master` at `6df4c00a`:
+  `tests/ -m "not remote"` is 621 passed / 5 skipped / 1 xfailed with rasterio
+  1.5.2 (bundled GDAL 3.12.2). The new tests cover a non-square raster with
+  nodata, S→N row order, header-only reads, and type 3 ↔ type 5 equivalence
+  where the GeoTIFF pixel centers sit on the type 3 grid points. **Not
+  verified:** the `osgeo` backend. No GDAL Python bindings were available, so
+  its parametrized case skipped. Independently, rjleveque (geoclaw#756 thread,
+  2026-10-13) found `topo.x`/`topo.y` agree with a direct rasterio read, and
+  NCEI CUDEM tiles carry `AREA_OR_POINT=Area` (cell-edge bounding box, points
+  `delta/2` inside), matching the pixel-center convention used here.
 
 **Update 2026-10-13.** Resolved by the merges: CI on a machine other than the
 author's (`Test GeoClaw` on `master` at `1687a021` and `58d0290c`), and the
