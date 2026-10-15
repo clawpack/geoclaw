@@ -460,8 +460,10 @@ contains
                cycle
             endif
             ! Minimum increment
-            ! TODO Maybe always allow last time output recording?
-            if (tgrid - gauges(i)%last_time < gauges(i)%min_time_increment) then
+            ! If gauge is Lagrangian, update its position without writing to file
+            ! TODO Maybe always allow last time output recor
+            if ((tgrid - gauges(i)%last_time < gauges(i)%min_time_increment) .and. &
+                (gauges(i)%gtype /= 2)) then
                 cycle
             end if
 
@@ -665,6 +667,12 @@ contains
                 gauges(i)%y = yg
                 var(2) = xg
                 var(3) = yg
+
+                ! Minimum increment. Exit loop before writing to output
+                if (tgrid - gauges(i)%last_time < gauges(i)%min_time_increment) then
+                    cycle
+                endif
+
             endif
 
             ! save info for this time
