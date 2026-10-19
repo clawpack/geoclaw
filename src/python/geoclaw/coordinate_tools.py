@@ -227,6 +227,16 @@ class EmptyCropWindow(ValueError):
     """
 
 
+class EmptyAlignedCropWindow(EmptyCropWindow):
+    r"""A crop request holds grid points, but none on the aligned coarse lattice.
+
+    Raised by :func:`crop_indices` when coarsening with ``align`` moves the
+    start of the window past its end.  A subclass of :class:`EmptyCropWindow`
+    so callers that only care that the window is empty need not distinguish
+    it; callers that word their own message can.
+    """
+
+
 def crop_indices(coords, lo, hi, delta, coarsen=1, buffer=0, align=None):
     r"""Half-open slice bounds ``(lower, upper)`` for a 1-D crop + coarsen.
 
@@ -253,7 +263,9 @@ def crop_indices(coords, lo, hi, delta, coarsen=1, buffer=0, align=None):
 
     :Raises:
      - :class:`EmptyCropWindow` when ``[lo, hi]`` lies inside the coordinate
-       range but between two grid points, so the window is empty.
+       range but between two grid points, so the window is empty; or when
+       coarsening with *align* and no point of the aligned coarse lattice
+       falls inside ``[lo, hi]``.
     """
     coords = numpy.asarray(coords)
     n = len(coords)
@@ -271,13 +283,25 @@ def crop_indices(coords, lo, hi, delta, coarsen=1, buffer=0, align=None):
     delta_new = delta * coarsen
 
     # Shift the low index for alignment when coarsening (mirrors the original
-    # Topography.crop math exactly: search the first `coarsen` points for the
+    # Topography.crop math: search the first `coarsen` points for the
     # best-aligned start, then trim the high index to a whole coarsen stride).
+    # Candidates past the end of the array are extrapolated rather than
+    # indexed, so a window near the upper edge cannot IndexError; any window
+    # wider than `coarsen` points sees exactly the original values.
     if (coarsen > 1) and (align is not None):
-        vs = numpy.array([coords[lower + i] for i in range(coarsen)])
+        vs = numpy.array([coords[lower + i] if lower + i < n
+                          else coords[lower] + i * delta
+                          for i in range(coarsen)])
         offsets = (vs - align) / delta_new
         offsets_frac = offsets - numpy.round(offsets)
         ioffset = numpy.argmin(abs(offsets_frac))
+        if lower + ioffset > upper:
+            # The aligned coarse lattice has no point inside [lo, hi]; slicing
+            # from the shifted start would give an empty (inverted) window.
+            raise EmptyAlignedCropWindow(
+                f"crop bounds [{lo}, {hi}] contain no point of the coarsened "
+                f"lattice (spacing {delta_new}, aligned to {align}). Widen the "
+                f"crop to at least {coarsen} grid points, or change align.")
         lower = lower + ioffset
         upper = upper - numpy.remainder(upper - lower, coarsen)
 

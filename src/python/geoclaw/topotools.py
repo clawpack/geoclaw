@@ -126,7 +126,8 @@ def _crop_indices(x, y, crop_extent, coarsen, buffer, align):
        antimeridian, and treating it as an ordinary window silently produced an
        empty grid, so it is rejected explicitly.
      - *ValueError* if *crop_extent* overlaps the data but contains no grid
-       point (a window narrower than one cell, falling between two points).
+       point (a window narrower than one cell, falling between two points), or
+       none that survives coarsening with *align*.
 
     Warns when *crop_extent* extends beyond the data and is therefore clipped:
     a crop is never wrapped, only reduced.
@@ -192,6 +193,15 @@ def _crop_indices(x, y, crop_extent, coarsen, buffer, align):
         # has a documented full-file fallback) nothing pins this case, and
         # returning the full file for a crop the user narrowed *too far* is
         # never what was meant.  Re-raised here to name both axes and spacings.
+        if isinstance(_empty, coordinate_tools.EmptyAlignedCropWindow):
+            # Grid points are inside the window, but coarsening with align
+            # keeps none of them.
+            raise ValueError(
+                f"crop_extent {list(crop_extent)} contains no point of the "
+                f"coarsened grid: coarsen={coarsen} with align={align} keeps "
+                f"every {coarsen}th point (dx={dx}, dy={dy}) and none falls "
+                f"inside the crop. Widen the crop to at least {coarsen} grid "
+                f"points, or change align.") from _empty
         raise ValueError(
             f"crop_extent {list(crop_extent)} lies between grid points and "
             f"contains no data: the grid spacing is dx={dx}, dy={dy}. Widen "

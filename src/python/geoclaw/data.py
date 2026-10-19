@@ -210,6 +210,80 @@ def _warn_unsupported_1d_preprocessing(t):
         )
 
 
+def _file_cell_edges(path, topo_type):
+    """Cell-edge extent ``(x1, x2, y1, y2)``, spacing ``(dx, dy)`` and point
+    extent ``(x1, x2, y1, y2)`` of a topo file, in file coordinates.
+
+    The edges are the outermost grid points plus half a cell, read from the
+    header only (``Topography.read_header``), so an ``llcorner`` ASCII header
+    and a cell-centered netCDF file both come out as the cells they describe.
+    The point extent is returned as read, not rebuilt from the edges: a crop
+    clipped to ``(x1 - dx/2) + dx/2`` can land a round-off inside ``x1`` and
+    drop the outermost column.
+    """
+    from clawpack.geoclaw import topotools
+
+    t = topotools.Topography(path=path, topo_type=abs(topo_type))
+    t.read_header()
+    x1, x2, y1, y2 = (float(v) for v in t._extent)
+    dx, dy = (abs(float(v)) for v in t._delta)
+    return ((x1 - dx / 2, x2 + dx / 2, y1 - dy / 2, y2 + dy / 2), (dx, dy),
+            (x1, x2, y1, y2))
+
+
+def _covered_length(lo, hi, intervals):
+    """Length of ``[lo, hi]`` covered by the union of *intervals*."""
+    covered = 0.0
+    reach = lo
+    for a, b in sorted(intervals):
+        a, b = max(a, reach), min(b, hi)
+        if b > a:
+            covered += b - a
+            reach = b
+    return covered
+
+
+def _check_crop_covered(crop, path, edges, delta, wrap_lon=False):
+    """Raise ValueError unless *edges* cover *crop* (both ``[x1, x2, y1, y2]``).
+
+    The topo crop-coverage rule (#760, dev/design/topo_input_roadmap.md §2.7):
+    a ``crop_extent`` the file does not cover is an error for every topo type.
+    *edges* are the file's cell edges in the frame *crop* is written in, so a
+    crop at the edges of a tile is accepted.  With *wrap_lon* the file's
+    longitude cells are also tried shifted by +/-360, which is how a type-4
+    crop across the antimeridian is covered (by two descriptor entries).
+    """
+    x1, x2, y1, y2 = (float(v) for v in crop)
+    ex1, ex2, ey1, ey2 = edges
+    tol_x, tol_y = 1e-6 * delta[0], 1e-6 * delta[1]
+
+    shifts = (0.0, 360.0, -360.0) if wrap_lon else (0.0,)
+    x_ok = _covered_length(x1, x2, [(ex1 + s, ex2 + s) for s in shifts]) \
+        >= (x2 - x1) - tol_x
+    y_ok = ey1 - tol_y <= y1 and y2 <= ey2 + tol_y
+    if x_ok and y_ok:
+        return
+
+    # The overlap the user can use instead.  Longitude that is covered only
+    # through the wrap is reported as requested.
+    ox = (x1, x2) if x_ok else (max(x1, ex1), min(x2, ex2))
+    oy = (max(y1, ey1), min(y2, ey2))
+
+    def _fmt(*values):
+        # Rounded so the numbers can be pasted back into setrun.py without
+        # the spacing's round-off (-123.99999999999989).
+        return ", ".join(repr(round(v, 10)) for v in values)
+
+    if ox[0] < ox[1] and oy[0] < oy[1]:
+        overlap = f"the overlap is [{_fmt(*ox, *oy)}]; set crop_extent to it"
+    else:
+        overlap = "there is no overlap; remove this file from topofiles"
+    raise ValueError(
+        f"crop_extent [{_fmt(x1, x2, y1, y2)}] for {path} is not covered by "
+        f"the file, whose cells span x = [{_fmt(ex1, ex2)}], "
+        f"y = [{_fmt(ey1, ey2)}]: {overlap}.")
+
+
 def _write_preprocessing_block(f, t):
     """Write the 8 preprocessing-attribute lines for one topo/dtopo file.
 
@@ -491,6 +565,17 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     f"would produce an empty grid in Fortran with no error.")
 
             if abs(topo_type) != 4:
+                # ASCII crops are in domain coordinates (after x/y_shift) and
+                # never wrap: Fortran clamps the crop to the file, so a crop
+                # past the file used to lose the rest silently.
+                if topo.crop_extent is not None and abs(topo_type) in (2, 3):
+                    edges, delta, _ = _file_cell_edges(fname, topo_type)
+                    xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
+                    ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+                    _check_crop_covered(
+                        topo.crop_extent, topo.path,
+                        (edges[0] + xs, edges[1] + xs,
+                         edges[2] + ys, edges[3] + ys), delta)
                 records.append((fname, topo_type, topo, None))
                 continue
 
@@ -513,13 +598,35 @@ class TopographyData(clawpack.clawutil.data.ClawData):
 
                 needs_wrap = False
                 if crop is not None:
-                    x_name = insp._find_x_name()
-                    lon = insp.ds[x_name].values
-                    file_lon_min = float(lon.min())
-                    file_lon_max = float(lon.max())
-                    tol = 1e-9
-                    needs_wrap = (crop[0] < file_lon_min - tol
-                                  or crop[1] > file_lon_max + tol)
+                    # One coverage rule for every topo type (#760): the crop
+                    # must lie within the file's cells, or -- for a geographic
+                    # file under a geographic run -- within them once shifted
+                    # by +/-360, which the two-entry split below handles.
+                    edges, delta, points = _file_cell_edges(fname, topo_type)
+                    _xc = insp.ds[insp._find_x_name()]
+                    wrap_lon = _ncutils.resolve_wrap(
+                        self.coordinate_system,
+                        _ncutils.classify_lon_axis(
+                            _xc.attrs.get('units'),
+                            _xc.attrs.get('standard_name'),
+                            float(_xc.min()), float(_xc.max())))
+                    _check_crop_covered(crop, topo.path, edges, delta,
+                                        wrap_lon=wrap_lon)
+
+                    # Past the cell edges in longitude means the wrap.  Within
+                    # half a cell of the outermost points it does not: clip to
+                    # the points there, which selects the same points and is
+                    # what the inspector's point-based validation and the
+                    # descriptor crop_bounds expect.  Latitude never wraps.
+                    dx, dy = delta
+                    needs_wrap = (crop[0] < edges[0] - 1e-6 * dx
+                                  or crop[1] > edges[1] + 1e-6 * dx)
+                    x1, x2 = crop[0], crop[1]
+                    if not needs_wrap:
+                        x1 = max(x1, points[0])
+                        x2 = min(x2, points[1])
+                    crop = (x1, x2, max(crop[2], points[2]),
+                            min(crop[3], points[3]))
 
                 if not needs_wrap:
                     # Unchanged path: validates crop_bounds (including
@@ -556,20 +663,6 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 # topo_entries inspects with crop_bounds unset, which would
                 # otherwise scan the whole file -- ruinous for a global DEM
                 # and prone to rejecting NaN far outside the crop.
-                y_name = insp._find_y_name()
-                lat = insp.ds[y_name].values
-                file_lat_min = float(lat.min())
-                file_lat_max = float(lat.max())
-                if (crop[2] < file_lat_min - 1e-9
-                        or crop[3] > file_lat_max + 1e-9):
-                    # Longitude wraps; latitude never does.
-                    raise ValueError(
-                        f"crop_extent {list(topo.crop_extent)} for {topo.path} "
-                        f"exceeds the file's latitude extent "
-                        f"[{file_lat_min}, {file_lat_max}]. Longitude is "
-                        f"wrapped across the antimeridian, but latitude cannot "
-                        f"be; narrow the requested latitude range.")
-
                 insp.crop_bounds = crop
                 entries = insp.topo_entries(
                     fill_scan=False,
