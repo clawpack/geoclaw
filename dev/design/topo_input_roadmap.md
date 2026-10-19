@@ -55,7 +55,7 @@ update to §4's "not verified" note.
 | Change | Tracking | Status |
 |---|---|---|
 | coarsen + `align` with no aligned point in the crop: Python `crop_indices` raises `EmptyAlignedCropWindow`; Fortran `apply_align_buffer_coarsen` stops naming the file and axis | clawpack/geoclaw#761 | clawpack/geoclaw#762 (open, branch `crop-align-overshoot`, head `c1ac4691`). Verified 2026-10-19: the new Python tests and the `topo_crop` Fortran regression (types 3 and 4) fail on `0ba4db7b` and pass with the fix; the two sweeps comparing against the old code are unchanged |
-| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | decided (error); folds into the PR that drops `crop_bounds`. See §2.7 |
+| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | coverage rule + Fortran backstop on branch `topo-crop-coverage` (stacked on #762), ahead of the `crop_bounds` PR; tile helper next. See §2.7 |
 
 ### Merge order as planned (historical)
 
@@ -342,8 +342,25 @@ so the ASCII case falls out of hoisting it instead of being added twice.
 
 **Decision (2026-10-19): a crop the file doesn't cover is an error, for every
 topo type, checked in Python at `make data`.** "Covered" allows half a cell
-beyond the outermost grid points. Not implemented yet; it goes in the PR that
-drops the descriptor `crop_bounds`.
+beyond the outermost grid points.
+
+**Status (2026-10-19): implemented on branch `topo-crop-coverage`**, a PR of its
+own ahead of the `crop_bounds` PR rather than folded into it. Python: one check,
+`data._check_crop_covered`, for types 2/3 (in domain coordinates, after
+`x/y_shift`) and type 4 (in file coordinates until the `crop_bounds` PR, with
+the ±360 shifts allowed when `resolve_wrap` permits). One error message for all
+cases, naming the file, its cell-edge extent and the usable overlap. Fortran:
+type 4 now stops like types 2/3 when a requested crop misses its file. Verified:
+the 22 rejection and tile-edge cases in `tests/test_topo_crop_coverage.py`
+and `test_crop_missing_the_file_stops[4]` fail on `dc6b65d8`, and all 31 cases
+plus both backstop runs pass with the change; full `tests/` passes (669). One example regression,
+`bowl-slosh-netcdf[coarsened]`, caught a round-off in the first version (clipping
+to a point rebuilt as `(x0 - dx/2) + dx/2` dropped the first column). It is now
+pinned by `test_netcdf_crop_at_the_points_keeps_the_outermost_points`.
+
+**Behavior changes:** an ASCII (type 2/3) crop past the file, including across
+the antimeridian, now errors instead of being clipped by Fortran. Type 4's three
+error messages become one.
 
 Behavior on `0ba4db7b`, from a 0.25° cell-centered test tile written as type 3
 and type 4:
@@ -367,7 +384,8 @@ Points to carry into the implementation:
 - Fortran type 4 turns an entry that misses the crop into `mx = my = 0` with
   extents `(0, 0)` and keeps it in the topo list. Nothing has checked how
   `topoarea`, `rectintegral` or the `topo0save` overlap test treat such an
-  entry, so stop with a message naming the file instead. In the one run so far
+  entry, so stop with a message naming the file instead (done; see Status
+  above). In the one run before the fix
   (`test_crop_missing_the_file_stops[4]`, domain on the real file) it went
   through `topoarea` without crashing and only tripped the coverage check.
   Type 2/3 already stops with "topo_crop_extent does not overlap topo file",

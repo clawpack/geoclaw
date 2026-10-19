@@ -198,3 +198,29 @@ def test_netcdf_crop_across_the_antimeridian_checks_latitude(tmp_path):
                        y_edges=(-40.0, 0.0), dx=1.0)
     with pytest.raises(ValueError, match=NOT_COVERED):
         _write_topo_data(tmp_path, path, 4, [-190.0, -150.0, -30.0, 5.0])
+
+
+def test_netcdf_crop_at_the_points_keeps_the_outermost_points(tmp_path):
+    """A crop equal to a point-registered file's point extent must keep the
+    outermost points.  Clipping to a point rebuilt as ``(x0 - dx/2) + dx/2``
+    landed a round-off inside ``x0``, Fortran's ``xlocs >= crop_bounds`` then
+    dropped the first column, and a coarsened read flipped parity (caught by
+    examples/tsunami/bowl-slosh-netcdf[coarsened])."""
+    xr = pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    x = np.linspace(-3.1, 3.1, 619)
+    y = np.linspace(-3.5, 2.5, 599)
+    path = tmp_path / "bowl.nc"
+    xr.Dataset(
+        {"z": (("lat", "lon"), np.zeros((y.size, x.size)), {"units": "m"})},
+        coords={"lon": ("lon", x, {"units": "degrees_east",
+                                   "standard_name": "longitude"}),
+                "lat": ("lat", y, {"units": "degrees_north",
+                                   "standard_name": "latitude"})},
+    ).to_netcdf(path)
+
+    text = _write_topo_data(tmp_path, path, 4, [-3.1, 3.1, -3.5, 2.5])
+    line = next(l for l in text.splitlines() if l.startswith("crop_bounds"))
+    bounds = [float(v) for v in line.split("=")[1].split()]
+    assert bounds[0] <= x[0] and bounds[1] >= x[-1], bounds
+    assert bounds[2] <= y[0] and bounds[3] >= y[-1], bounds

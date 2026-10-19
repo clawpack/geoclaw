@@ -1798,7 +1798,8 @@ def test_wrapping_crop_still_checks_latitude(tmp_path):
 
     td = TopographyData()
     td.topofiles = [t]
-    with pytest.raises(ValueError, match="latitude extent"):
+    # The shared crop-coverage message (#760), not a latitude-specific one.
+    with pytest.raises(ValueError, match="not covered by"):
         td.write(out_file=str(tmp_path / "topo.data"))
 
 

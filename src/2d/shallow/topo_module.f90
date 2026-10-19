@@ -1570,8 +1570,26 @@ contains
                 end if
 
                 if (count(x_in_dom) == 0 .or. count(y_in_dom) == 0) then
-                    ! No overlap with the requested region: report an empty
-                    ! topo; read_topo_file skips loading when mx/my = 0.
+                    ! A requested crop that misses the file is an error, as
+                    ! for types 2/3 (#760).  TopographyData.write rejects it,
+                    ! so it only gets here from a stale or hand-edited
+                    ! topo.data; an empty entry would otherwise stay in the
+                    ! topo list with extents (0, 0).
+                    if (present(topo_idx)) then
+                        if (nc_has_crop(topo_idx) .or. &
+                                any(topo_crop_extent(:,topo_idx) /= 0.0d0)) then
+                            print *, "ERROR: topo_crop_extent does not overlap topo file:"
+                            print *, "  file = ", trim(fname)
+                            print *, "  crop = ", topo_crop_extent(:,topo_idx)
+                            if (nc_has_crop(topo_idx)) then
+                                print *, "  crop_bounds = ", nc_crop_bounds(:,topo_idx)
+                            end if
+                            stop 1
+                        end if
+                    end if
+                    ! No crop requested and no overlap with the AMR domain:
+                    ! report an empty topo; read_topo_file skips loading when
+                    ! mx/my = 0.
                     mx = 0
                     my = 0
                     xll = 0.0d0
