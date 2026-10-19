@@ -487,3 +487,74 @@ def test_crop_with_no_aligned_point_stops(tmp_path, netcdf_xgeoclaw,
     assert "crop contains no point of the coarsened grid" in out, out
     assert topo_path.name in out, out
     assert re.search(r"axis\s*=\s*x", out), out
+
+
+# ===========================================================================
+# Fortran backstop: a crop that misses its file (#760)
+#
+# TopographyData.write rejects a crop the file does not cover, so a missing
+# crop only reaches Fortran through a hand-edited or stale topo.data.  Fortran
+# must still stop and name the file.  Types 2/3 already did; type 4 turned the
+# entry into a 0x0 grid with extents (0, 0) and kept it in the topo list.
+# ===========================================================================
+
+# Wholly east of the file (TOPO_X = -100..-80).
+MISSING_CROP = (-70.0, -65.0, 22.0, 25.0)
+
+
+def _run_missing_crop(tmp_path, prebuilt, topo_type):
+    """Write a valid topo.data, then move the crop off the file by editing it,
+    as a stale or hand-edited topo.data would."""
+    nc_path = _write_nc_topo(tmp_path / "topo.nc")
+    if topo_type == 4:
+        topo_path = nc_path
+    else:
+        src = topotools.Topography()
+        src.read(str(nc_path), topo_type=4)
+        topo_path = tmp_path / "topo.tt3"
+        src.write(str(topo_path), topo_type=3)
+
+    runner = gtest.GeoClawTestRunner(tmp_path, test_path=testdir)
+    runner.set_data()
+    cd = runner.rundata.clawdata
+    cd.lower = [-96.0, 22.0]
+    cd.upper = [-90.0, 25.0]
+    cd.num_cells = [20, 12]
+    runner.write_data()
+
+    topo = topotools.Topography()
+    topo.path = str(topo_path)
+    topo.topo_type = topo_type
+    topo.crop_extent = list(CROP)
+    td = TopographyData()
+    td.topofiles = [topo]
+    td.write(out_file=str(tmp_path / "topo.data"))
+
+    missing = " ".join(repr(v) for v in MISSING_CROP)
+    text = (tmp_path / "topo.data").read_text()
+    text, n = re.subn(r"^.*# crop_extent.*$", f"{missing}   # crop_extent",
+                      text, flags=re.M)
+    assert n == 1, text
+    if topo_type == 4:
+        text, n = re.subn(r"^crop_bounds\s*=.*$",
+                          f"crop_bounds    = {missing}", text, flags=re.M)
+        assert n == 1, text
+    (tmp_path / "topo.data").write_text(text)
+
+    shutil.copy(prebuilt, tmp_path / runner.executable_name)
+    (tmp_path / "_output").mkdir(exist_ok=True)
+    proc = subprocess.run([str(tmp_path / runner.executable_name)],
+                          cwd=tmp_path, capture_output=True, text=True)
+    (tmp_path / "run.log").write_text(proc.stdout + proc.stderr)
+    return proc.returncode, proc.stdout + proc.stderr, topo_path
+
+
+@pytest.mark.parametrize("topo_type", [3, 4])
+def test_crop_missing_the_file_stops(tmp_path, netcdf_xgeoclaw, topo_type):
+    """A crop wholly outside its file stops the run, naming the file."""
+    rc, out, topo_path = _run_missing_crop(tmp_path, netcdf_xgeoclaw,
+                                           topo_type)
+
+    assert rc != 0, out
+    assert "does not overlap topo file" in out, out
+    assert topo_path.name in out, out

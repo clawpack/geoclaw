@@ -367,8 +367,14 @@ Points to carry into the implementation:
 - Fortran type 4 turns an entry that misses the crop into `mx = my = 0` with
   extents `(0, 0)` and keeps it in the topo list. Nothing has checked how
   `topoarea`, `rectintegral` or the `topo0save` overlap test treat such an
-  entry, so stop with a message naming the file instead. Type 2/3 already
-  stops, but its message gives no context.
+  entry, so stop with a message naming the file instead. In the one run so far
+  (`test_crop_missing_the_file_stops[4]`, domain on the real file) it went
+  through `topoarea` without crashing and only tripped the coverage check.
+  Type 2/3 already stops with "topo_crop_extent does not overlap topo file",
+  printing the file and the crop.
+- The coverage check itself (`topo arrays do not cover domain`,
+  `topo_module.f90` after `topoarea`) ends with a bare `stop`, so the run exits
+  with status 0. Scripts and CI can't tell it from success.
 - Tile selection: Randy's use case is a long list of tiles, of which only those
   that intersect the crop should be used. Give it a helper (working name
   `topotools.tiles_covering(paths, crop_extent, coarsen=, align=, buffer=)`)
