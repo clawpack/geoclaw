@@ -593,7 +593,9 @@ contains
                     write(6,*) '**** topo arrays do not cover domain'
                     write(6,*) '**** area of overlap = ', area
                     write(6,*) '**** area of domain  = ', area_domain
-                    stop
+                    ! Nonzero status so scripts and CI see the failure; a
+                    ! bare stop exits 0.
+                    stop 1
                 else if (abs(area - area_domain) > 1e-12*area_domain) then
                     write(6,*) '**** WARNING'
                     write(6,*) '**** topo arrays do not quite cover domain'

@@ -258,6 +258,8 @@ def test_descriptor_crop_without_buffer_does_not_cover_ring(
     assert "topo arrays do not cover domain" in out, (
         "buffer=0 should leave the ring outside crop_bounds uncovered; the "
         f"reader appears not to be applying crop_bounds at all.\n{out}")
+    # The coverage failure is fatal and must say so in the exit status.
+    assert rc != 0, out
 
 
 def test_descriptor_crop_inside_window_runs_either_way(

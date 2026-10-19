@@ -391,8 +391,14 @@ Points to carry into the implementation:
   Type 2/3 already stops with "topo_crop_extent does not overlap topo file",
   printing the file and the crop.
 - The coverage check itself (`topo arrays do not cover domain`,
-  `topo_module.f90` after `topoarea`) ends with a bare `stop`, so the run exits
-  with status 0. Scripts and CI can't tell it from success.
+  `topo_module.f90` after `topoarea`) ended with a bare `stop`, so the run
+  exited with status 0 and scripts and CI couldn't tell it from success. It is
+  now `stop 1` (2026-10-19, same branch). Only the fatal branch changed: an
+  uncovered area over 1% of the domain stops, while one between 1e-12 and 1%
+  still only warns ("do not quite cover") and continues. GeoClaw never
+  documented an exit status, so nothing is broken by the change.
+  `test_descriptor_crop_without_buffer_does_not_cover_ring` now also asserts
+  the nonzero status.
 - Tile selection: Randy's use case is a long list of tiles, of which only those
   that intersect the crop should be used. Give it a helper (working name
   `topotools.tiles_covering(paths, crop_extent, coarsen=, align=, buffer=)`)
