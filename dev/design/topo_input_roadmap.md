@@ -50,6 +50,13 @@ combined tree was tested locally (Python unit tests, the regression suite under
 gcc debug and optimized flags, and `examples/1d_classic/okada_dtopo`); see the
 update to §4's "not verified" note.
 
+### In review / open
+
+| Change | Tracking | Status |
+|---|---|---|
+| coarsen + `align` with no aligned point in the crop: Python `crop_indices` raises `EmptyAlignedCropWindow`; Fortran `apply_align_buffer_coarsen` stops naming the file and axis | clawpack/geoclaw#761 | branch `crop-align-overshoot`. Verified 2026-10-19: the new Python tests and the `topo_crop` Fortran regression (types 3 and 4) fail on `0ba4db7b` and pass with the fix; the two sweeps comparing against the old code are unchanged |
+| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | decided (error); folds into the PR that drops `crop_bounds` |
+
 ### Merge order as planned (historical)
 
 The topo stack is linear through #741 and then **forks**: both #745 and #749
