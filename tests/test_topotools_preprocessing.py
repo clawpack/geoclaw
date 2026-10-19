@@ -1402,6 +1402,18 @@ def test_crop_between_grid_points_raises(global_tt3_path):
         t.read(str(global_tt3_path), topo_type=3)
 
 
+def test_crop_with_no_aligned_point_raises():
+    """A crop holding grid points, none of them on the aligned coarse lattice,
+    used to return an empty Topography silently (#761).  Points 5.0 and 6.0
+    are inside the crop; coarsen=3 aligned to 7.0 keeps 4.0, 7.0, ..."""
+    t = Topography()
+    t.x = np.arange(10) * 1.0
+    t.y = np.arange(10) * 1.0
+    t.Z = np.zeros((10, 10))
+    with pytest.raises(ValueError, match="no point of the coarsened grid"):
+        t.crop(crop_extent=[5.0, 6.0, 0.0, 9.0], coarsen=3, align=(7.0, 0.0))
+
+
 def test_crop_no_overlap_ascii_warns_and_keeps_full_grid(global_tt3_path):
     """ASCII counterpart of test_crop_no_overlap_keeps_full_grid."""
     t = Topography()
