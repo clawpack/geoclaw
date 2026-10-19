@@ -134,6 +134,62 @@ def test_crop_indices_subcell_window_raises():
         crop_indices(coords, 1.1, 1.4, 0.5)   # strictly between 1.0 and 1.5
 
 
+# The align search tries the first `coarsen` points from the window start and
+# moves the start to the best-aligned one, without checking that it stays
+# inside the window or the array.  The oracle sweep above never sees this
+# because its windows are all wider than coarsen*delta.
+
+@pytest.mark.python
+def test_crop_indices_align_near_upper_edge_does_not_index_past_array():
+    """A window within `coarsen` points of the array end must not IndexError.
+
+    Index 9 (x=9.0) is the only point in [8.5, 9.0] and lies on the coarse
+    lattice through align=0 (spacing 3), so it is the one point kept.
+    """
+    coords = numpy.arange(10) * 1.0
+    assert crop_indices(coords, 8.5, 9.0, 1.0, coarsen=3, align=0.0) == (9, 10)
+
+
+@pytest.mark.python
+def test_crop_indices_align_past_window_end_raises():
+    """No aligned point inside the window means an empty crop, so raise.
+
+    [5, 6] holds indices 5 and 6; the coarse lattice through align=7 (spacing
+    3) is ..., 4, 7, 10, ..., so neither is kept.  This must raise
+    EmptyCropWindow like a sub-cell window does, not return the inverted
+    window (7, 5), which slices to an empty array.
+    """
+    coords = numpy.arange(10) * 1.0
+    with pytest.raises(EmptyCropWindow):
+        crop_indices(coords, 5.0, 6.0, 1.0, coarsen=3, align=7.0)
+
+
+@pytest.mark.python
+def test_crop_indices_align_keeps_a_point_inside_the_window():
+    """Every non-raising narrow crop keeps at least one point inside [lo, hi].
+
+    Sweeps windows of 1..coarsen points over the whole array, including both
+    ends, with buffer=0 so the first kept point must lie in the request.
+    """
+    delta = 1.0
+    coords = numpy.arange(12) * delta
+    for coarsen, align, width in itertools.product(
+            [2, 3, 4], [0.0, 1.0, 2.0, 3.0], [1, 2, 3, 4]):
+        for i0 in range(len(coords)):
+            lo = coords[i0]
+            hi = lo + (width - 1) * delta
+            try:
+                got = crop_indices(coords, lo, hi, delta, coarsen=coarsen,
+                                   align=align)
+            except EmptyCropWindow:
+                continue
+            case = (lo, hi, coarsen, align, got)
+            assert got is not None, case
+            lower, upper = got
+            assert upper > lower, case
+            assert lo <= coords[lower] <= hi, case
+
+
 @pytest.mark.python
 def test_axis_file_slice_ascending_is_the_identity_window():
     coords = numpy.arange(0.0, 10.0, 1.0)   # ascending
