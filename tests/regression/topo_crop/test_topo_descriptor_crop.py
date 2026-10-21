@@ -560,3 +560,121 @@ def test_crop_missing_the_file_stops(tmp_path, netcdf_xgeoclaw, topo_type):
     assert rc != 0, out
     assert "does not overlap topo file" in out, out
     assert topo_path.name in out, out
+
+
+# ===========================================================================
+# crop_extent is in domain coordinates under x_shift/y_shift (§2.8)
+#
+# The same Topography settings must load the same region for ASCII and NetCDF.
+# Types 2/3 subtract the shift before cropping; type 4 used to crop the file's
+# own coordinates and shift afterwards, so it loaded CROP + shift and a domain
+# inside CROP was reported as not covered.
+#
+# Checked on values, not on fort.geo: for types 2/3 fort.geo reports the file
+# header before the crop, so it cannot show which window was used.  The field
+# is linear, which GeoClaw's bilinear cell integral reproduces exactly, so each
+# cell's B is the field at the cell centre, shifted back into file coordinates.
+# ===========================================================================
+
+SHIFT = (2.0, 1.0)      # whole multiples of DELTA
+
+
+def _linear_field(x_file, y_file):
+    return -100.0 + 2.0 * (x_file - TOPO_X[0]) + 3.0 * (y_file - TOPO_Y[0])
+
+
+def _write_linear_topo(tmp_path, topo_type):
+    x = np.arange(TOPO_X[0], TOPO_X[1] + 1e-9, DELTA)
+    y = np.arange(TOPO_Y[0], TOPO_Y[1] + 1e-9, DELTA)
+    X, Y = np.meshgrid(x, y)
+    src = topotools.Topography()
+    src.x, src.y, src.Z = x, y, _linear_field(X, Y)
+    if topo_type == 4:
+        netCDF4 = pytest.importorskip("netCDF4")
+        path = tmp_path / "topo.nc"
+        with netCDF4.Dataset(path, 'w') as ds:
+            ds.createDimension('lon', x.size)
+            ds.createDimension('lat', y.size)
+            v = ds.createVariable('lon', 'f8', ('lon',))
+            v[:] = x
+            v.units = 'degrees_east'
+            v.standard_name = 'longitude'
+            v = ds.createVariable('lat', 'f8', ('lat',))
+            v[:] = y
+            v.units = 'degrees_north'
+            v.standard_name = 'latitude'
+            v = ds.createVariable('elevation', 'f8', ('lat', 'lon'))
+            v[:] = src.Z
+            v.units = 'm'
+            ds.Conventions = 'CF-1.8'
+        return path
+    path = tmp_path / "topo.tt3"
+    src.write(str(path), topo_type=3)
+    return path
+
+
+@pytest.mark.parametrize("topo_type", [3, 4])
+def test_shifted_crop_is_in_domain_coordinates(tmp_path, netcdf_xgeoclaw,
+                                               topo_type):
+    """With a shift, the loaded topo is CROP in domain coordinates."""
+    from clawpack.pyclaw import Solution
+
+    topo_path = _write_linear_topo(tmp_path, topo_type)
+
+    runner = gtest.GeoClawTestRunner(tmp_path, test_path=testdir)
+    runner.set_data()
+    cd = runner.rundata.clawdata
+    inset = 4 * DELTA                 # domain strictly inside CROP
+    cd.lower = [CROP[0] + inset, CROP[2] + inset]
+    cd.upper = [CROP[1] - inset, CROP[3] - inset]
+    cd.num_cells = [16, 8]
+    cd.output_t0 = True               # aux is written with frame 0
+    cd.output_aux_components = 'all'
+    cd.output_aux_onlyonce = True
+    runner.write_data()
+
+    topo = topotools.Topography()
+    topo.path = str(topo_path)
+    topo.topo_type = topo_type
+    topo.crop_extent = list(CROP)
+    topo.x_shift, topo.y_shift = SHIFT
+    td = TopographyData()
+    td.topofiles = [topo]
+    td.write(out_file=str(tmp_path / "topo.data"))
+
+    shutil.copy(netcdf_xgeoclaw, tmp_path / runner.executable_name)
+    (tmp_path / "_output").mkdir(exist_ok=True)
+    proc = subprocess.run([str(tmp_path / runner.executable_name)],
+                          cwd=tmp_path, capture_output=True, text=True)
+    out = proc.stdout + proc.stderr
+    (tmp_path / "run.log").write_text(out)
+
+    assert "topo arrays do not cover domain" not in out, (
+        f"type {topo_type} cropped in file coordinates: the topo loaded is "
+        f"CROP shifted by {SHIFT}, not CROP.\n{out}")
+    assert proc.returncode == 0, out
+
+    sol = Solution(0, path=str(tmp_path), file_format='ascii', read_aux=True)
+    state = sol.states[0]
+    xc, yc = state.grid.p_centers
+    dy = state.grid.delta[1]
+    B = state.aux[0]
+    np.testing.assert_allclose(
+        B, _linear_field(xc - SHIFT[0], _cos_weighted_mean(yc, dy) - SHIFT[1]),
+        rtol=0, atol=1e-8)
+
+
+def _cos_weighted_mean(yc, dy):
+    """Mean latitude of each cell weighted by cos(latitude), in degrees.
+
+    On the sphere (coordinate_system 2) the topo cell average is weighted by
+    area, i.e. by cos(latitude) (bilinearintegral.f), so a field linear in y
+    averages to its value at this latitude rather than at the cell centre.
+    """
+    k = np.pi / 180.0
+    lo, hi = yc - dy / 2, yc + dy / 2
+    # Integral of y cos(k y) is y sin(k y) / k + cos(k y) / k**2.
+    num = (hi * np.sin(k * hi) + np.cos(k * hi) / k
+           - lo * np.sin(k * lo) - np.cos(k * lo) / k)
+    den = np.sin(k * hi) - np.sin(k * lo)
+    return num / den
