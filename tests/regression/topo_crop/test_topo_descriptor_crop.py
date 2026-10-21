@@ -6,11 +6,14 @@ This is the first test that compiles GeoClaw and feeds it a NetCDF topo file
 through a descriptor written by ``TopoInspector.topo_entries()``.  That path had
 no coverage at all, which is how the bug below shipped.
 
-``read_topo_file`` selects the file subset three ways, in priority order:
-descriptor ``crop_bounds``, then ``topo_crop_extent``, then the AMR domain.  The
-buffer expansion (``nbuf4``) was applied on the second branch only, so any file
-carrying ``crop_bounds`` -- which is *every* file ``topo_entries()`` writes --
-silently discarded its declared ``buffer``.
+``read_topo_file`` used to select the file subset three ways, in priority
+order: descriptor ``crop_bounds``, then ``topo_crop_extent``, then the AMR
+domain.  The buffer expansion (``nbuf4``) was applied on the second branch
+only, so any file carrying ``crop_bounds`` -- which was *every* file
+``topo_entries()`` wrote -- silently discarded its declared ``buffer``.
+topo.data no longer has ``crop_bounds`` (dev/design/topo_input_roadmap.md
+§2.8): the crop is ``topo_crop_extent`` for every entry, and the cases below
+still pin that the buffer is honoured.
 
 The failure is not subtle once you look for it: GeoClaw refuses to start with
 "topo arrays do not cover domain" for a domain the user correctly sized against
@@ -40,7 +43,7 @@ testdir = Path(__file__).parent
 
 # Topo file, generously larger than any crop below.  DELTA is a negative power
 # of two so every coordinate is exact in binary: with 0.05 the file's own
-# spacing came out as 4.9999999999997e-2 and the crop_bounds comparison
+# spacing came out as 4.9999999999997e-2 and the crop comparison
 # (an inclusive >= / <= on the raw coordinates) landed one index differently on
 # each edge, which made the window asymmetric for reasons having nothing to do
 # with what is under test.
@@ -133,11 +136,13 @@ def _write_nc_topo(path):
 
 
 def _write_topo_data(out_path, nc_path, buffer):
-    """Write topo.data via topo_entries(), so the descriptor has crop_bounds.
+    """Write topo.data from hand-built ``topo_entries()`` entries.
 
-    Going through ``topo_entries()`` rather than setting ``crop_extent`` alone
-    is the point: it is what puts a ``crop_bounds`` line in the descriptor, and
-    therefore what selects the Fortran branch under test.
+    The entries carry the crop only as their metadata's file-coordinate
+    ``crop_bounds``; ``crop_extent`` is deliberately left unset.  topo.data has
+    no ``crop_bounds`` line, so ``TopographyData.write`` must turn it into the
+    entry's ``crop_extent`` -- otherwise the crop would be lost and Fortran
+    would fall back to the AMR domain.
     """
     with ncutils.TopoInspector(str(nc_path), crop_bounds=CROP) as insp:
         entries = insp.topo_entries()
@@ -147,7 +152,6 @@ def _write_topo_data(out_path, nc_path, buffer):
         t = topotools.Topography()
         t.path = str(nc_path)
         t.topo_type = 4
-        t.crop_extent = list(CROP)
         t.buffer = buffer
         t._netcdf_meta = meta
         topos.append(t)
@@ -217,7 +221,7 @@ def _run(tmp_path, prebuilt, domain, buffer):
 def test_descriptor_crop_honors_buffer(tmp_path, netcdf_xgeoclaw):
     """A domain inside crop+buffer but outside crop alone must run.
 
-    This is the regression.  With ``nbuf4`` pinned to 0 on the ``crop_bounds``
+    This is the regression.  With ``nbuf4`` pinned to 0 on the old ``crop_bounds``
     branch the loaded topo covered only CROP, leaving the outer 0.20-degree ring
     empty, and GeoClaw stopped with "topo arrays do not cover domain" -- an
     abort, for inputs that were correctly specified.
@@ -232,7 +236,7 @@ def test_descriptor_crop_honors_buffer(tmp_path, netcdf_xgeoclaw):
 
     # Stronger than "it ran": the loaded window must be CROP grown by exactly
     # BUFFER points on every side.  A test that only checks for the abort would
-    # also pass if the reader over-buffered, or ignored crop_bounds and loaded
+    # also pass if the reader over-buffered, or ignored the crop and loaded
     # the whole file.
     xll, xhi, yll, yhi, mx, my = _topo_window(tmp_path)
     assert xll == pytest.approx(CROP[0] - BUFFER_DEG)
@@ -248,7 +252,7 @@ def test_descriptor_crop_without_buffer_does_not_cover_ring(
     """The complement: with buffer=0 the same domain is genuinely uncovered.
 
     Without this, the test above would still pass if the reader started
-    ignoring ``crop_bounds`` entirely and loaded the whole file -- which would
+    ignoring the crop entirely and loaded the whole file -- which would
     be a different bug with the same symptom.  Here the coverage failure is the
     correct answer, and seeing it proves the crop is being applied at all.
     """
@@ -256,8 +260,8 @@ def test_descriptor_crop_without_buffer_does_not_cover_ring(
     rc, out = _run(tmp_path, netcdf_xgeoclaw, domain, 0)
 
     assert "topo arrays do not cover domain" in out, (
-        "buffer=0 should leave the ring outside crop_bounds uncovered; the "
-        f"reader appears not to be applying crop_bounds at all.\n{out}")
+        "buffer=0 should leave the ring outside the crop uncovered; the "
+        f"reader appears not to be applying the crop at all.\n{out}")
     # The coverage failure is fatal and must say so in the exit status.
     assert rc != 0, out
 
@@ -379,7 +383,7 @@ def test_wrapped_entries_cover_a_cross_seam_domain(tmp_path, netcdf_xgeoclaw):
     date line.  Neither entry covers it alone: the offset-0 entry supplies
     -180..-150 and the offset -360 entry supplies -190..-180 by reading the
     file's 170..180 strip.  If Fortran ignored lon_wrap_offset, or applied it
-    before selecting on crop_bounds, the west half would be missing and the
+    before selecting the crop, the west half would be missing and the
     coverage check would fail.
     """
     domain = (-185.0, -155.0, -28.0, -12.0)
@@ -537,10 +541,6 @@ def _run_missing_crop(tmp_path, prebuilt, topo_type):
     text, n = re.subn(r"^.*# crop_extent.*$", f"{missing}   # crop_extent",
                       text, flags=re.M)
     assert n == 1, text
-    if topo_type == 4:
-        text, n = re.subn(r"^crop_bounds\s*=.*$",
-                          f"crop_bounds    = {missing}", text, flags=re.M)
-        assert n == 1, text
     (tmp_path / "topo.data").write_text(text)
 
     shutil.copy(prebuilt, tmp_path / runner.executable_name)
@@ -678,3 +678,51 @@ def _cos_weighted_mean(yc, dy):
            - lo * np.sin(k * lo) - np.cos(k * lo) / k)
     den = np.sin(k * hi) - np.sin(k * lo)
     return num / den
+
+
+# ===========================================================================
+# An old topo.data with a descriptor crop_bounds line stops (§2.8)
+#
+# Older GeoClaw wrote crop_bounds and Fortran preferred it to crop_extent.  A
+# hand-built entry could carry its crop in crop_bounds alone, so ignoring the
+# line would load the wrong window without a message; the reader stops instead.
+# ===========================================================================
+
+def test_old_topo_data_with_crop_bounds_stops(tmp_path, netcdf_xgeoclaw):
+    nc_path = _write_nc_topo(tmp_path / "topo.nc")
+
+    runner = gtest.GeoClawTestRunner(tmp_path, test_path=testdir)
+    runner.set_data()
+    cd = runner.rundata.clawdata
+    cd.lower = [-95.0, 22.0]
+    cd.upper = [-90.0, 25.0]
+    cd.num_cells = [20, 12]
+    runner.write_data()
+
+    topo = topotools.Topography()
+    topo.path = str(nc_path)
+    topo.topo_type = 4
+    topo.crop_extent = list(CROP)
+    td = TopographyData()
+    td.topofiles = [topo]
+    td.write(out_file=str(tmp_path / "topo.data"))
+
+    # Put back the line an older writer emitted, just before the blank line
+    # that ends the descriptor.
+    old = " ".join(repr(v) for v in CROP)
+    text = (tmp_path / "topo.data").read_text()
+    text, n = re.subn(r"^(fill_action\s*=.*)$",
+                      rf"\1\ncrop_bounds    = {old}", text, flags=re.M)
+    assert n == 1, text
+    (tmp_path / "topo.data").write_text(text)
+
+    shutil.copy(netcdf_xgeoclaw, tmp_path / runner.executable_name)
+    (tmp_path / "_output").mkdir(exist_ok=True)
+    proc = subprocess.run([str(tmp_path / runner.executable_name)],
+                          cwd=tmp_path, capture_output=True, text=True)
+    out = proc.stdout + proc.stderr
+    (tmp_path / "run.log").write_text(out)
+
+    assert proc.returncode != 0, out
+    assert "Regenerate topo.data" in out, out
+    assert nc_path.name in out, out

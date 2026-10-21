@@ -26,5 +26,4 @@ y_increasing   = True
 dim_order      = y,x
 scale_factor   = 1.0
 fill_action    = abort
-crop_bounds    = -98.0 -92.0 22.0 28.0
 

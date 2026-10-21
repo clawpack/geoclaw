@@ -111,14 +111,14 @@ def test_crop_at_tile_cell_edges_is_accepted(tmp_path, topo_type):
     assert path.name in text
 
 
-@pytest.mark.parametrize("topo_type", [2, 3])
+@pytest.mark.parametrize("topo_type", TOPO_TYPES)
 def test_crop_is_checked_in_domain_coordinates(tmp_path, topo_type):
-    """For ASCII types crop_extent is in domain coordinates, after x/y_shift.
+    """crop_extent is in domain coordinates, after x/y_shift, for every type.
 
     The tile shifted by +10 in x covers [-114.25, -114.0]; a crop there is
     covered even though it lies outside the file's own coordinates.  (Type 4
-    still crops in file coordinates until the crop_bounds PR, so it is not
-    tested here.)
+    was checked in file coordinates until dev/design/topo_input_roadmap.md
+    §2.8; tests/test_topo_crop_frame.py covers the read side.)
     """
     path = _write_tile(tmp_path, topo_type)
     text = _write_topo_data(tmp_path, path, topo_type,
@@ -203,9 +203,15 @@ def test_netcdf_crop_across_the_antimeridian_checks_latitude(tmp_path):
 def test_netcdf_crop_at_the_points_keeps_the_outermost_points(tmp_path):
     """A crop equal to a point-registered file's point extent must keep the
     outermost points.  Clipping to a point rebuilt as ``(x0 - dx/2) + dx/2``
-    landed a round-off inside ``x0``, Fortran's ``xlocs >= crop_bounds`` then
-    dropped the first column, and a coarsened read flipped parity (caught by
-    examples/tsunami/bowl-slosh-netcdf[coarsened])."""
+    once landed a round-off inside ``x0``, Fortran's ``xlocs >= crop_bounds``
+    then dropped the first column, and a coarsened read flipped parity (caught
+    by examples/tsunami/bowl-slosh-netcdf[coarsened]).
+
+    topo.data no longer has crop_bounds (dev/design/topo_input_roadmap.md
+    §2.8): the crop reaches Fortran as written, on the crop_extent line, so
+    no clipped value can round inside the outermost points.  Fortran's own
+    comparison has a 1e-6*dx tolerance, as for types 2/3; the example above
+    still covers that end to end."""
     xr = pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
     x = np.linspace(-3.1, 3.1, 619)
@@ -220,7 +226,8 @@ def test_netcdf_crop_at_the_points_keeps_the_outermost_points(tmp_path):
     ).to_netcdf(path)
 
     text = _write_topo_data(tmp_path, path, 4, [-3.1, 3.1, -3.5, 2.5])
-    line = next(l for l in text.splitlines() if l.startswith("crop_bounds"))
-    bounds = [float(v) for v in line.split("=")[1].split()]
+    assert "crop_bounds" not in text
+    line = next(l for l in text.splitlines() if "# crop_extent" in l)
+    bounds = [float(v) for v in line.split("#")[0].split()]
     assert bounds[0] <= x[0] and bounds[1] >= x[-1], bounds
     assert bounds[2] <= y[0] and bounds[3] >= y[-1], bounds

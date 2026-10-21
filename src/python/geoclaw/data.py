@@ -28,12 +28,14 @@ Classes representing parameters for GeoClaw runs
  - LAT2METER factor to convert degrees in latitude to meters
 """
 
+import copy
 import os
 from pathlib import Path
 import numpy as np
 import warnings
 
 import clawpack.clawutil.data
+from clawpack.geoclaw.coordinate_tools import CROP_TOL
 
 # Radius of earth in meters.
 # For consistency, should always use this value when needed, e.g.
@@ -255,7 +257,7 @@ def _check_crop_covered(crop, path, edges, delta, wrap_lon=False):
     """
     x1, x2, y1, y2 = (float(v) for v in crop)
     ex1, ex2, ey1, ey2 = edges
-    tol_x, tol_y = 1e-6 * delta[0], 1e-6 * delta[1]
+    tol_x, tol_y = CROP_TOL * delta[0], CROP_TOL * delta[1]
 
     shifts = (0.0, 360.0, -360.0) if wrap_lon else (0.0,)
     x_ok = _covered_length(x1, x2, [(ex1 + s, ex2 + s) for s in shifts]) \
@@ -550,8 +552,8 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             # A descending crop_extent is not a rectangle in any frame.  The
             # *continuous* spelling of a cross-seam crop ([-190, -120]) is
             # handled below; the wrapped spelling ([170, -170]) cannot be, and
-            # written directly it would emit "crop_bounds = 170.0 -170.0",
-            # which Fortran resolves to mx=0, my=0 -- an empty topo, silently.
+            # written directly Fortran would resolve it to mx=0, my=0 -- an
+            # empty topo, silently.
             if (topo.crop_extent is not None
                     and topo.crop_extent[0] >= topo.crop_extent[1]
                     and getattr(topo, '_netcdf_meta', None) is None):
@@ -582,11 +584,37 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             # --- type 4: build the CF descriptor block -------------------
             if getattr(topo, '_netcdf_meta', None) is not None:
                 # Pre-computed by topo_entries(); already carries the right
-                # lon_wrap_offset and file-coordinate crop_bounds.
-                records.append((fname, topo_type, topo, topo._netcdf_meta))
+                # lon_wrap_offset.  topo.data has no crop_bounds line, so an
+                # entry whose crop exists only as the metadata's file-
+                # coordinate crop_bounds gets it as crop_extent instead, in
+                # domain coordinates.  Fortran subtracts lon_wrap_offset and
+                # the shift again and clips to the file, so the window is the
+                # same.  A copy, so the caller's object is left alone.
+                meta = topo._netcdf_meta
+                if topo.crop_extent is None and meta.crop_bounds is not None:
+                    xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
+                    ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+                    x0, x1, y0, y1 = (float(v) for v in meta.crop_bounds)
+                    off = float(meta.lon_wrap_offset)
+                    topo = copy.copy(topo)
+                    topo.crop_extent = [x0 + off + xs, x1 + off + xs,
+                                        y0 + ys, y1 + ys]
+                records.append((fname, topo_type, topo, meta))
                 continue
 
-            crop = (tuple(float(v) for v in topo.crop_extent)
+            # crop_extent is in domain coordinates (after x/y_shift), as for
+            # ASCII.  Everything below compares it with the file, so take the
+            # shift off first: ``crop`` is the requested crop in the file's
+            # own coordinates.  It is used only for these checks and for the
+            # inspector; topo.data carries crop_extent itself, and Fortran
+            # subtracts the shift (and each entry's lon_wrap_offset) the same
+            # way.
+            xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
+            ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+            crop = ((float(topo.crop_extent[0]) - xs,
+                     float(topo.crop_extent[1]) - xs,
+                     float(topo.crop_extent[2]) - ys,
+                     float(topo.crop_extent[3]) - ys)
                     if topo.crop_extent is not None else None)
 
             # Opened without crop_bounds so the longitude extent can be read
@@ -610,17 +638,22 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                             _xc.attrs.get('units'),
                             _xc.attrs.get('standard_name'),
                             float(_xc.min()), float(_xc.max())))
-                    _check_crop_covered(crop, topo.path, edges, delta,
-                                        wrap_lon=wrap_lon)
+                    # Checked in domain coordinates, as for ASCII, so the
+                    # message quotes the crop as the user wrote it.
+                    _check_crop_covered(
+                        topo.crop_extent, topo.path,
+                        (edges[0] + xs, edges[1] + xs,
+                         edges[2] + ys, edges[3] + ys), delta,
+                        wrap_lon=wrap_lon)
 
                     # Past the cell edges in longitude means the wrap.  Within
                     # half a cell of the outermost points it does not: clip to
                     # the points there, which selects the same points and is
-                    # what the inspector's point-based validation and the
-                    # descriptor crop_bounds expect.  Latitude never wraps.
+                    # what the inspector's point-based validation expects.
+                    # Latitude never wraps.
                     dx, dy = delta
-                    needs_wrap = (crop[0] < edges[0] - 1e-6 * dx
-                                  or crop[1] > edges[1] + 1e-6 * dx)
+                    needs_wrap = (crop[0] < edges[0] - CROP_TOL * dx
+                                  or crop[1] > edges[1] + CROP_TOL * dx)
                     x1, x2 = crop[0], crop[1]
                     if not needs_wrap:
                         x1 = max(x1, points[0])
@@ -733,10 +766,11 @@ class TopographyData(clawpack.clawutil.data.ClawData):
 
                 # The originating Topography is reused for every entry it
                 # expanded into, so buffer/coarsen/align/shifts reach Fortran
-                # for each one.  (crop_extent is written as the user gave it;
-                # for type 4 the descriptor's crop_bounds takes priority, and
-                # for a wrapped pair it is the per-entry crop_bounds that
-                # differ.)
+                # for each one.  crop_extent is written as the user gave it,
+                # in domain coordinates; for a wrapped pair only the entries'
+                # lon_wrap_offset differ, and Fortran derives each entry's
+                # window in the file from crop_extent, the offset and the
+                # shift.
                 _write_preprocessing_block(f, topo)
                 if meta is not None:
                     from clawpack.geoclaw import netcdf_utils as _ncutils

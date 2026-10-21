@@ -510,11 +510,16 @@ class Topography(object):
       setting the attribute and then reading.  Mirrors Fortran
       ``topo_crop_extent``.  (The older argument spellings ``filter_region`` and
       ``extent=`` are deprecated aliases.)
-    - ``crop_bounds`` -- the same requested crop expressed in FILE coordinates.
-      Used only in the NetCDF (type-4) layer
-      (``netcdf_utils.FileMetadata.crop_bounds`` -> Fortran ``nc_crop_bounds``);
-      converted from ``crop_extent`` by subtracting ``lon_wrap_offset``/
-      ``x_shift``.
+      It is in domain coordinates for every topo type: the shifts are applied
+      first, then the crop.  Fortran gets each ``topo.data`` entry's window in
+      the file as ``crop_extent`` minus ``x_shift``/``y_shift`` and, for
+      NetCDF, minus the entry's ``lon_wrap_offset``.
+    - ``crop_bounds`` -- a crop in one NetCDF file's own (FILE) coordinates.
+      Internal to the NetCDF inspectors
+      (``netcdf_utils.FileMetadata.crop_bounds``), which use it to validate a
+      crop against the file and to describe each side of a crop split at the
+      antimeridian.  It is not written to ``topo.data``; there the crop is
+      ``crop_extent`` only.
     - ``crop()`` -- the operation that turns a ``crop_extent`` request (plus
       ``coarsen``/``buffer``/``align``) into a new cropped object.
 
@@ -540,12 +545,13 @@ class Topography(object):
 
        - **Reading into a Topography** (``read``, ``crop``): the part that lies
          off the file is *clipped, not wrapped* -- you get ``[-180, -99]`` and
-         a ``UserWarning`` saying so.  An in-memory ``Topography`` is one
-         ascending array; it has nowhere to put the wrapped part.
+         a ``UserWarning`` saying so.  Wrapping on read is planned
+         (dev/design/topo_input_roadmap.md §2.8, PR A2).
        - **Writing to ``topo.data``** (``TopographyData.write``): the crop is
          *split across the seam*.  The writer emits one entry per side, each
-         with its own ``lon_wrap_offset`` and file-coordinate ``crop_bounds``,
-         and Fortran reassembles them into a single continuous region.
+         with the same ``crop_extent`` and its own ``lon_wrap_offset``;
+         Fortran clips each to its side of the file and reassembles them into
+         a single continuous region.
 
        So a cross-seam crop works from ordinary setrun code -- set
        ``crop_extent`` and append the ``Topography`` -- with no descriptor
@@ -554,8 +560,8 @@ class Topography(object):
 
     3. **Wrapped spelling, ``crop_extent=[170, -170, ...]``.**  Rejected
        wherever it appears, including at ``topo.data`` write time: Fortran
-       would resolve ``crop_bounds = 170.0 -170.0`` to ``mx=0, my=0`` -- an
-       empty topography, with no error.  Use the continuous spelling
+       would resolve it to ``mx=0, my=0`` -- an empty topography, with no
+       error.  Use the continuous spelling
        (``[-190, -170]``), which case 2 handles.
 
     :meth:`netcdf_utils.TopoInspector.topo_entries` is the underlying
@@ -566,8 +572,7 @@ class Topography(object):
     The general shape of it: **Python is the single-rectangle case; the wrap
     lives in the Fortran interface.**  The same split explains why
     ``coordinate_system`` gates wrapping (a projected x axis in meters has no
-    seam to cross) and why ``crop_bounds`` is in file coordinates while
-    ``crop_extent`` is in domain coordinates.
+    seam to cross).
 
     :Order of preprocessing operations:
 
@@ -757,9 +762,9 @@ class Topography(object):
 
         # Preprocessing attributes — applied by read() after data is loaded.
         # See the "Region terminology" section of the class docstring for the
-        # extent / crop_extent / crop_bounds glossary and the Python<->Fortran
-        # name mapping. Convention recap: the ``_extent`` suffix is domain
-        # coords, ``_bounds`` is file coords, all ordered [x1, x2, y1, y2].
+        # extent / crop_extent glossary and the Python<->Fortran name
+        # mapping. Convention recap: the ``_extent`` suffix is domain coords,
+        # ``_bounds`` is file coords, all ordered [x1, x2, y1, y2].
         # PATH NOTE: 'path' already exists as an instance attribute set above;
         # no topo_path alias is needed, callers should use self.path.
         self.crop_extent: list[float] | None = None  # [x1,x2,y1,y2]; None=full domain

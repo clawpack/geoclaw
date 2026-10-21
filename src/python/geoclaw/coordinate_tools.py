@@ -28,6 +28,17 @@ from typing import Optional
 import numpy
 
 
+#: Round-off allowance where a crop edge meets a grid point, as a fraction of
+#: the grid spacing.  A point within ``CROP_TOL * delta`` outside a crop edge
+#: counts as on it, so a crop written on a grid line keeps that line even when
+#: the coordinate is rebuilt with round-off (``-99.50000000000003`` for a crop
+#: at ``-99.5``).  It guards round-off only and does not move crop edges.
+#: Fortran uses the same value (``CROP_TOL`` in src/2d/shallow/topo_module.f90);
+#: tests/test_crop_tolerance.py checks they agree.  See
+#: dev/design/topo_input_roadmap.md §2.8.
+CROP_TOL = 1.0e-6
+
+
 # Length unit strings (lower-cased) on an x axis that mark it as a projected /
 # rectilinear (non-geographic) grid, for which the 0-360 longitude wrap is
 # meaningless and must be skipped.  Detection defaults to geographic; only
@@ -247,7 +258,8 @@ def crop_indices(coords, lo, hi, delta, coarsen=1, buffer=0, align=None):
 
     :Input:
      - *coords* (ndarray) - 1-D ascending coordinate array with uniform spacing.
-     - *lo*, *hi* (float) - inclusive requested crop bounds (domain coords).
+     - *lo*, *hi* (float) - inclusive requested crop bounds (domain coords),
+       with a :data:`CROP_TOL` round-off allowance.
      - *delta* (float) - grid spacing of *coords* (``coords[1] - coords[0]``).
      - *coarsen* (int) - coarsening (subsampling) factor; 1 = none.
      - *buffer* (int) - integer number of grid points to keep on each side (NOT
@@ -269,9 +281,10 @@ def crop_indices(coords, lo, hi, delta, coarsen=1, buffer=0, align=None):
     """
     coords = numpy.asarray(coords)
     n = len(coords)
+    tol = CROP_TOL * abs(delta)
     try:
-        lower = (coords >= lo).nonzero()[0][0]
-        upper = (coords <= hi).nonzero()[0][-1]
+        lower = (coords >= lo - tol).nonzero()[0][0]
+        upper = (coords <= hi + tol).nonzero()[0][-1]
     except IndexError:
         return None
     if upper < lower:
