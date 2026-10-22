@@ -477,8 +477,9 @@ old file that still has a `crop_bounds` line. Verified at the PR's commit:
 regressions (including the netCDF + `x_shift` case and the old-file stop),
 `bowl-slosh-netcdf` (including coarsened), `dtopo`, `topo0save`,
 `force_dry`, and `chile2010` (including `lon_360`, the only end-to-end user of
-hand-built entries with a −360 offset). Not yet done from the PR A row: the
-windows diagram and the user docs.
+hand-built entries with a −360 offset). The windows are documented, with a
+diagram, in `topo_crop_windows.md`. Not yet done from the PR A row: the user
+docs.
 
 **Crop round-off tolerance (folded into PR A, Kyle 2026-10-21).** Python's
 crop window compared exactly, while Fortran's had a `1e-6·dx` allowance. So a

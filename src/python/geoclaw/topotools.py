@@ -524,7 +524,8 @@ class Topography(object):
       ``coarsen``/``buffer``/``align``) into a new cropped object.
 
     Convention: the ``_extent`` suffix denotes domain coordinates; ``_bounds``
-    denotes file coordinates.
+    denotes file coordinates.  dev/design/topo_crop_windows.md describes every
+    window, with a diagram.
 
     :The antimeridian, and what a cropped Topography represents:
 
