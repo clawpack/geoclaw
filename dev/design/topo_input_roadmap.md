@@ -481,6 +481,18 @@ hand-built entries with a −360 offset). The windows are documented, with a
 diagram, in `topo_crop_windows.md`. Not yet done from the PR A row: the user
 docs.
 
+**ASCII and netCDF (Kyle, 2026-10-22).** The windowing logic and the names
+apply to both formats wherever it makes sense, and any difference has to be
+justified. `topo_crop_windows.md` lists the differences that remain. Three are
+not justified:
+
+- The antimeridian wrap is netCDF-only. This moves into PR B: a per-entry
+  `lon_wrap_offset` line for every type.
+- Fortran computes the window in two separate places.
+- `fort.geo` reports the ASCII header but the netCDF window.
+
+The last two can go in one small Fortran refactor PR, separate from B.
+
 **Crop round-off tolerance (folded into PR A, Kyle 2026-10-21).** Python's
 crop window compared exactly, while Fortran's had a `1e-6·dx` allowance. So a
 crop written on a grid line could keep that line in Fortran and drop it in

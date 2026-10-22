@@ -102,6 +102,34 @@ Two consequences worth knowing:
   the part inside the file, with a warning. Returning one object across the
   seam that matches the entries above is roadmap §2.8, PR A2.
 
+## ASCII and netCDF
+
+The rule: the windowing logic and the names above apply to ASCII (types 2/3)
+and netCDF (type 4) alike, wherever it makes sense. Any difference has to be
+justified here. These are already shared:
+
+- The names (`crop_extent`, `coarsen`, `buffer`, `align`, `x_shift`/`y_shift`)
+  and the `topo.data` preprocessing lines.
+- The coordinate frame.
+- `CROP_TOL`.
+- The coverage rule.
+- The index arithmetic: Python's `_crop_indices` and Fortran's
+  `apply_align_buffer_coarsen`.
+
+Differences that remain (checked 2026-10-22 against `d6e579f8`):
+
+| Difference | Justified? | Plan |
+|---|---|---|
+| **The antimeridian wrap is netCDF-only.** `lon_wrap_offset` is carried only in the netCDF descriptor, so an ASCII crop across the seam fails the coverage check. | No. Global geographic ASCII grids exist, and the wrap does not depend on the format. | Roadmap §2.8 PR B: make `lon_wrap_offset` a per-entry `topo.data` line for every type, and have the Fortran ASCII path subtract it as the netCDF path does. |
+| **Fortran computes the window in two places.** ASCII uses index arithmetic from the header in `read_topo_settings` (`topo_i_start`, `mxtopo_full`). netCDF masks the actual coordinates in `read_topo_header`'s netCDF branch (locals `i_lo4`, `nbuf4`, `cf4`). | No. The tolerance and the align/buffer/coarsen routine are shared, but nothing tests that the two paths agree. | One Fortran routine, given coordinate arrays (built from the header for ASCII), used by both. |
+| **`fort.geo` reports different windows.** It shows the whole-file header for ASCII and the loaded window for netCDF. | No. A test cannot read the ASCII window from it (`test_shifted_crop_is_in_domain_coordinates` checks values instead). | Report the loaded window for both, together with the shared routine above. |
+| **With no crop**, Fortran reads a whole ASCII file but only the domain plus ghost cells of a netCDF file. | Yes. Memory only: a global DEM is never loaded in full, and the values used are the same. ASCII text has to be parsed anyway. | None. |
+
+Python agrees for both formats apart from the wrap, which is roadmap §2.8 PR
+A2. That PR should apply to every format that can wrap, so it depends on the
+first row. Python reads only the window for netCDF but reads a whole ASCII
+file and then crops, which is again a difference in memory use only.
+
 ## History
 
 Before §2.8's PR A, netCDF crops were applied in file coordinates, before the
