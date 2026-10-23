@@ -32,7 +32,15 @@ from urllib.request import urlopen
 # ==============================================================================
 from clawpack.geoclaw.data import Rearth, DEG2RAD, RAD2DEG, LAT2METER
 
-NOAA_API_URL = 'https://tidesandcurrents.noaa.gov/api/datagetter'
+NOAA_API_URL = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter'
+
+# Observed water-level products supported by fetch_noaa_tide_data, mapped to
+# (expected CSV header, tide-prediction interval matching their sampling)
+NOAA_WATER_LEVEL_PRODUCTS = {
+    'water_level': ('Date Time, Water Level, Sigma, O or I (for verified), '
+                    'F, R, L, Quality', None),
+    'hourly_height': ('Date Time, Water Level, Sigma, I, L', 'h'),
+}
 
 # ==============================================================================
 #  Functions for calculating Distances
@@ -425,12 +433,16 @@ def wrap_coords(input_path, output_path=None, force=False, dim_mapping=None):
 
 def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
                          datum='STND', units='metric', cache_dir=None,
-                         verbose=True):
+                         verbose=True, product='water_level', timeout=30):
     """Fetch water levels and tide predictions at given NOAA tide station.
 
-    The data is returned in 6 minute intervals between the specified begin and
-    end dates/times.  A complete specification of the NOAA CO-OPS API for Data
-    Retrieval used to fetch the data can be found at:
+    The data is returned between the specified begin and end dates/times in
+    6 minute intervals (product='water_level', the default) or hourly
+    (product='hourly_height').  NOAA only offers 6 minute water levels from
+    roughly 1996 onward; use 'hourly_height' for older records.  Tide
+    predictions are requested at the same interval as the water levels.  A
+    complete specification of the NOAA CO-OPS API for Data Retrieval used to
+    fetch the data can be found at:
 
         https://tidesandcurrents.noaa.gov/api/
 
@@ -450,6 +462,16 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
       - units (string): see NOAA API documentation for possible values
       - cache_dir (string): alternative directory to use for caching data
       - verbose (bool): whether to output informational messages
+      - product (string): observed water level product, either 'water_level'
+        (6 minute, default) or 'hourly_height' (hourly, available for older
+        records)
+      - timeout (float): seconds to wait on each NOAA request before giving
+        up, so an unreachable network (e.g. an HPC compute node) fails
+        instead of hanging
+
+    Any failure to retrieve the water levels or the predictions (network
+    error, timeout, or an error response from NOAA) is reported and that
+    array is returned as None rather than raised.
 
     :Returns:
       - date_time (numpy.ndarray): times corresponding to retrieved data
@@ -463,9 +485,18 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
         claw_dir = os.environ['CLAW']
         cache_dir = os.path.join(claw_dir, 'geoclaw', 'scratch')
 
-    def fetch(product, expected_header, col_idx, col_types):
+    if product not in NOAA_WATER_LEVEL_PRODUCTS:
+        raise ValueError('Unknown product {!r}, expected one of {}'.format(
+            product, ', '.join(NOAA_WATER_LEVEL_PRODUCTS)))
+    water_level_header, interval = NOAA_WATER_LEVEL_PRODUCTS[product]
+
+    def fetch(product, expected_header, col_idx, col_types, interval=None):
         noaa_params = get_noaa_params(product)
         cache_path = get_cache_path(product)
+        if interval is not None:
+            noaa_params['interval'] = interval
+            # keep default-interval cache entries distinct from this one
+            cache_path = get_cache_path('{}_{}'.format(product, interval))
 
         # use cached data if available
         if os.path.exists(cache_path):
@@ -479,7 +510,7 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
             print('Fetching {} data from NOAA for station {}'.format(
                 product, station))
         full_url = '{}?{}'.format(NOAA_API_URL, urlencode(noaa_params))
-        with urlopen(full_url) as response:
+        with urlopen(full_url, timeout=timeout) as response:
             text = response.read().decode('utf-8')
             with io.StringIO(text) as data:
                 # ensure that received header is correct
@@ -543,21 +574,22 @@ def fetch_noaa_tide_data(station, begin_date, end_date, time_zone='GMT',
 
     # fetch water levels and tide predictions
     try:
-        date_time, water_level = fetch(
-            'water_level', 'Date Time, Water Level, Sigma, O or I (for verified), F, R, L, Quality',
-            col_idx, col_types)
-    except:
-        print('*** Fetching water_level failed, returning None')
+        date_time, water_level = fetch(product, water_level_header,
+                                       col_idx, col_types)
+    except Exception:
+        print('*** Fetching {} failed, returning None'.format(product))
+        if product == 'water_level':
+            print("    For records before ~1996 try product='hourly_height'")
         date_time = None
         water_level = None
 
     try:
         date_time2, prediction = fetch('predictions', 'Date Time, Prediction',
-                                       col_idx, col_types)
+                                       col_idx, col_types, interval=interval)
         if date_time is None:
             date_time = date_time2
 
-    except:
+    except Exception:
         print('*** Fetching prediction failed, returning None')
         date_time2 = None
         prediction = None
