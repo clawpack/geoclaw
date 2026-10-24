@@ -5,6 +5,7 @@ import os.path
 import shutil
 import tempfile
 import pytest
+from urllib.error import URLError
 
 import numpy as np
 
@@ -164,11 +165,81 @@ class TestFetchNoaaTideData:
         self._fetch_and_assert(date_time_expected, water_level_expected,
                                prediction_expected, cache_dir)
 
+    def test_hourly_height(self):
+        cache_dir = os.path.join(self.temp_dir,
+                                 self.test_hourly_height.__name__)
+
+        # hourly heights (pre-1996 records) with a missing value; NOAA's
+        # header carries a trailing space
+        hourly_height_response = \
+            ('Date Time, Water Level, Sigma, I, L \n'
+             '1992-12-11 00:00,2.835,0.0,0,0\n'
+             '1992-12-11 01:00,,0.0,0,0\n'
+             '1992-12-11 02:00,3.214,0.0,0,0\n')
+
+        predictions_response = ('Date Time, Prediction\n'
+                                '1992-12-11 00:00,2.208\n'
+                                '1992-12-11 01:00,2.331\n'
+                                '1992-12-11 02:00,2.250\n')
+
+        date_time_expected = np.array(['1992-12-11T00:00',
+                                       '1992-12-11T01:00',
+                                       '1992-12-11T02:00'],
+                                      dtype='datetime64[m]')
+        water_level_expected = np.array([2.835, np.nan, 3.214])
+        prediction_expected = np.array([2.208, 2.331, 2.250])
+
+        # predictions must be requested hourly to match the hourly heights
+        def mock_read_response(url):
+            if 'product=hourly_height' in url:
+                return hourly_height_response
+            if 'product=predictions' in url:
+                assert 'interval=h' in url
+                return predictions_response
+            raise AssertionError
+        self._monkey_patch_urlopen(mock_read_response)
+
+        self._fetch_and_assert(date_time_expected, water_level_expected,
+                               prediction_expected, cache_dir,
+                               product='hourly_height')
+
+        # hourly predictions are cached apart from 6 minute ones
+        assert os.path.isdir(os.path.join(cache_dir, 'predictions_h'))
+        assert not os.path.exists(os.path.join(cache_dir, 'predictions'))
+
+        # second time, should read data from cache
+        self._monkey_patch_urlopen(lambda url: 'Should read from cache')
+        self._fetch_and_assert(date_time_expected, water_level_expected,
+                               prediction_expected, cache_dir,
+                               product='hourly_height')
+
+    def test_network_failure(self):
+        cache_dir = os.path.join(self.temp_dir,
+                                 self.test_network_failure.__name__)
+
+        # unreachable network (e.g. an HPC compute node): report, don't raise
+        def mock_urlopen(url, timeout=None):
+            assert timeout == 5
+            raise URLError('Network is unreachable')
+        util.urlopen = mock_urlopen
+
+        d, w, p = fetch_noaa_tide_data(self.station, self.begin_date,
+                                       self.end_date, cache_dir=cache_dir,
+                                       product='hourly_height', timeout=5)
+        assert d is None and w is None and p is None
+
+    def test_unknown_product(self):
+        with pytest.raises(ValueError):
+            fetch_noaa_tide_data(self.station, self.begin_date, self.end_date,
+                                 cache_dir=self.temp_dir, product='monthly_mean')
+
     def _fetch_and_assert(self, date_time_expected, water_level_expected,
-                          prediction_expected, cache_dir):
+                          prediction_expected, cache_dir,
+                          product='water_level'):
         # fetch data
         date_time, water_level, prediction = fetch_noaa_tide_data(
-            self.station, self.begin_date, self.end_date, cache_dir=cache_dir)
+            self.station, self.begin_date, self.end_date, cache_dir=cache_dir,
+            product=product)
 
         # make sure data was correctly retrieved
         np.testing.assert_equal(date_time, date_time_expected)
@@ -178,7 +249,7 @@ class TestFetchNoaaTideData:
     @staticmethod
     def _monkey_patch_urlopen(mock_read_response):
         """Modify 'util.urlopen' to return a custom response."""
-        def mock_urlopen(url):
+        def mock_urlopen(url, timeout=None):
             class MockHttpResponse:
                 def __enter__(self):
                     return self
