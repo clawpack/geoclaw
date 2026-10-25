@@ -377,12 +377,14 @@ contains
                                 mxtopo(i), xlowtopo(i), dxtopo(i), &
                                 topo_align(1,i) - topo_x_shift(i), &
                                 any(topo_align(:,i) /= 0.0d0), &
-                                max(1, topo_coarsen(i)), topo_buffer(i))
+                                max(1, topo_coarsen(i)), topo_buffer(i), &
+                                topofname(i), 'x')
                             call apply_align_buffer_coarsen(j_start, j_end, &
                                 mytopo(i), ylowtopo(i), dytopo(i), &
                                 topo_align(2,i) - topo_y_shift(i), &
                                 any(topo_align(:,i) /= 0.0d0), &
-                                max(1, topo_coarsen(i)), topo_buffer(i))
+                                max(1, topo_coarsen(i)), topo_buffer(i), &
+                                topofname(i), 'y')
 
                             ! Update stored extents/sizes to the kept lattice
                             ! (still file coords; topo_x_shift is applied below).
@@ -591,7 +593,9 @@ contains
                     write(6,*) '**** topo arrays do not cover domain'
                     write(6,*) '**** area of overlap = ', area
                     write(6,*) '**** area of domain  = ', area_domain
-                    stop
+                    ! Nonzero status so scripts and CI see the failure; a
+                    ! bare stop exits 0.
+                    stop 1
                 else if (abs(area - area_domain) > 1e-12*area_domain) then
                     write(6,*) '**** WARNING'
                     write(6,*) '**** topo arrays do not quite cover domain'
@@ -647,11 +651,18 @@ contains
     !
     !  The kept points are then i_lo + k*c for k = 0..(i_hi-i_lo)/c.
     !
+    !  If the align shift moves i_lo past i_hi, no point of the aligned coarse
+    !  lattice lies inside the window and the run stops, naming fname and axis
+    !  (Python's crop_indices raises EmptyAlignedCropWindow in the same case).
+    !  Continuing would keep a point outside the crop, possibly outside the
+    !  file.
+    !
     !  x0 is the coordinate of file index 0 and dxf the signed spacing in
     !  file index order (negative for descending axes, e.g. N-to-S latitude).
     ! ========================================================================
     subroutine apply_align_buffer_coarsen(i_lo, i_hi, n_avail, x0, dxf, &
-                                          align_val, has_align, c, nbuf)
+                                          align_val, has_align, c, nbuf, &
+                                          fname, axis)
 
         implicit none
 
@@ -659,6 +670,7 @@ contains
         integer, intent(in) :: n_avail, c, nbuf
         real(kind=8), intent(in) :: x0, dxf, align_val
         logical, intent(in) :: has_align
+        character(len=*), intent(in) :: fname, axis
 
         integer :: k, ioff
         real(kind=8) :: dx_new, r, frac, best
@@ -675,6 +687,15 @@ contains
                     ioff = k
                 end if
             end do
+            if (i_lo + ioff > i_hi) then
+                print *, "ERROR: crop contains no point of the coarsened grid:"
+                print *, "  file    = ", trim(fname)
+                print *, "  axis    = ", axis
+                print *, "  coarsen = ", c, "  align = ", align_val
+                print *, "  Widen the crop to at least coarsen grid points,"
+                print *, "  or change align."
+                stop 1
+            end if
             i_lo = i_lo + ioff
             i_hi = i_hi - mod(i_hi - i_lo, c)
         end if
@@ -1551,8 +1572,26 @@ contains
                 end if
 
                 if (count(x_in_dom) == 0 .or. count(y_in_dom) == 0) then
-                    ! No overlap with the requested region: report an empty
-                    ! topo; read_topo_file skips loading when mx/my = 0.
+                    ! A requested crop that misses the file is an error, as
+                    ! for types 2/3 (#760).  TopographyData.write rejects it,
+                    ! so it only gets here from a stale or hand-edited
+                    ! topo.data; an empty entry would otherwise stay in the
+                    ! topo list with extents (0, 0).
+                    if (present(topo_idx)) then
+                        if (nc_has_crop(topo_idx) .or. &
+                                any(topo_crop_extent(:,topo_idx) /= 0.0d0)) then
+                            print *, "ERROR: topo_crop_extent does not overlap topo file:"
+                            print *, "  file = ", trim(fname)
+                            print *, "  crop = ", topo_crop_extent(:,topo_idx)
+                            if (nc_has_crop(topo_idx)) then
+                                print *, "  crop_bounds = ", nc_crop_bounds(:,topo_idx)
+                            end if
+                            stop 1
+                        end if
+                    end if
+                    ! No crop requested and no overlap with the AMR domain:
+                    ! report an empty topo; read_topo_file skips loading when
+                    ! mx/my = 0.
                     mx = 0
                     my = 0
                     xll = 0.0d0
@@ -1598,10 +1637,10 @@ contains
 
                     call apply_align_buffer_coarsen(i_lo4, i_hi4, mx, &
                         xlocs(1), xlocs(2) - xlocs(1), al_x4, has_al4, &
-                        cf4, nbuf4)
+                        cf4, nbuf4, fname, 'x')
                     call apply_align_buffer_coarsen(j_lo4, j_hi4, my, &
                         ylocs(1), ylocs(2) - ylocs(1), al_y4, has_al4, &
-                        cf4, nbuf4)
+                        cf4, nbuf4, fname, 'y')
 
                     ! Kept-lattice extents from the actual coordinate values
                     ! (min/max handles descending axes).  Spacings become the
