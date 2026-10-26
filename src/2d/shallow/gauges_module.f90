@@ -438,7 +438,7 @@ contains
         integer :: i, j, n, var_index, eta_index
         real(kind=8) :: h(4), mod_dry_tolerance, topo, h_interp
         real(kind=8) :: dt, xg, yg, ug, vg  ! for lagrangian gauges
-        logical :: need_to_reset_patch
+        logical :: need_to_reset_patch, record_this_step
 
         ! No gauges to record, exit
         if (num_gauges == 0) then
@@ -461,9 +461,14 @@ contains
             endif
             ! Minimum increment
             ! TODO Maybe always allow last time output recording?
+            record_this_step = .true.      
             if (tgrid - gauges(i)%last_time < gauges(i)%min_time_increment) then
-                cycle
-            end if
+                if (gauges(i)%gtype == 2) then      ! Update Lagrangian gauge positions every timestep
+                    record_this_step = .false.      ! and write only once per min_time_increment
+                else
+                    cycle
+                endif
+            endif
 
             ! Compute indexing and bilinear interpolant weights
             ! and check if gauge is outside patch
@@ -668,20 +673,22 @@ contains
             endif
 
             ! save info for this time
-            n = gauges(i)%buffer_index
+            if (record_this_step) then
+                n = gauges(i)%buffer_index
+    
+                gauges(i)%level(n) = level
+                gauges(i)%data(1,n) = tgrid
+                do j = 1, gauges(i)%num_out_vars
+                    gauges(i)%data(1 + j, n) = var(j)
+                end do
+    
+                gauges(i)%buffer_index = n + 1
+                if (gauges(i)%buffer_index > MAX_BUFFER) then
+                    call print_gauges_and_reset_nextLoc(i)
+                endif
 
-            gauges(i)%level(n) = level
-            gauges(i)%data(1,n) = tgrid
-            do j = 1, gauges(i)%num_out_vars
-                gauges(i)%data(1 + j, n) = var(j)
-            end do
-
-            gauges(i)%buffer_index = n + 1
-            if (gauges(i)%buffer_index > MAX_BUFFER) then
-                call print_gauges_and_reset_nextLoc(i)
+                gauges(i)%last_time = tgrid
             endif
-
-            gauges(i)%last_time = tgrid
 
             if (need_to_reset_patch) then
                 call setbestsrc(i)
