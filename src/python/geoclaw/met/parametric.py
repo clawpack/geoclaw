@@ -96,8 +96,11 @@ class ParametricMetForcing(object):
         if isinstance(self.time_offset, np.datetime64):
             # GeoClaw storm files write elapsed time as floating-point seconds,
             # so construct timedeltas with sub-second support rather than
-            # passing floats directly to ``np.timedelta64``.
-            time_deltas = pd.to_timedelta(data[:, 0], unit="s").to_numpy()
+            # passing floats directly to ``np.timedelta64``.  Pin the unit to
+            # microseconds: pandas infers the resolution, and the inferred
+            # unit changed between releases (``s`` in 3.0, ``us`` in 3.1).
+            time_deltas = (pd.to_timedelta(data[:, 0], unit="s")
+                           .as_unit("us").to_numpy())
             self.t = self.time_offset + time_deltas
         else:
             self.t = data[:, 0]
