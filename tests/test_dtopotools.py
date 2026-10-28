@@ -627,6 +627,33 @@ def test_dtopo_read_header_every_gridded_type(tmp_path, dtopo_type):
 
 
 @pytest.mark.python
+@pytest.mark.parametrize("dtopo_type", [3, pytest.param(4, marks=pytest.mark.netcdf)])
+def test_dtopo_read_header_extent_ignores_shift(tmp_path, dtopo_type):
+    r"""read_header() reports the file as stored: x/y_shift set on the
+    object do not move it.  read() does apply them, so the two extents differ
+    by exactly the shift.  Topography.read_header behaves the same way, and
+    data.py relies on it (_file_cell_edges adds the shift itself), so a
+    caller drawing a box from the header -- e.g. kmltools -- must add
+    x_shift/y_shift."""
+    path = _write_rectangular(tmp_path, dtopo_type)
+    xs, ys = 360.0, 0.5
+
+    header = dtopotools.DTopography()
+    header.x_shift, header.y_shift = xs, ys
+    header.read_header(path=path, dtopo_type=dtopo_type)
+    np.testing.assert_allclose(header.extent, RECT_EXTENT, rtol=0, atol=1e-12)
+
+    loaded = dtopotools.DTopography()
+    loaded.x_shift, loaded.y_shift = xs, ys
+    loaded.read(path=path, dtopo_type=dtopo_type)
+    np.testing.assert_allclose(
+        loaded.extent,
+        [header.extent[0] + xs, header.extent[1] + xs,
+         header.extent[2] + ys, header.extent[3] + ys],
+        rtol=0, atol=1e-12)
+
+
+@pytest.mark.python
 @pytest.mark.netcdf
 def test_dtopo_read_header_netcdf_north_to_south(tmp_path):
     r"""A NetCDF file stored north-to-south still gives a south-to-north
