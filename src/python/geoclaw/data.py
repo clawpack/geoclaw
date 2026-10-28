@@ -225,7 +225,11 @@ def _file_cell_edges(path, topo_type):
     """
     from clawpack.geoclaw import topotools
 
-    t = topotools.Topography(path=path, topo_type=abs(topo_type))
+    # Set path after construction: Topography(path=...) reads the whole file,
+    # which for a global netCDF dataset can be many GB.
+    t = topotools.Topography()
+    t.path = path
+    t.topo_type = abs(topo_type)
     t.read_header()
     x1, x2, y1, y2 = (float(v) for v in t._extent)
     dx, dy = (abs(float(v)) for v in t._delta)

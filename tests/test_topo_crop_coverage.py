@@ -231,3 +231,26 @@ def test_netcdf_crop_at_the_points_keeps_the_outermost_points(tmp_path):
     bounds = [float(v) for v in line.split("#")[0].split()]
     assert bounds[0] <= x[0] and bounds[1] >= x[-1], bounds
     assert bounds[2] <= y[0] and bounds[3] >= y[-1], bounds
+
+
+# ---------------------------------------------------------------------------
+# Header only
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("topo_type", TOPO_TYPES)
+def test_coverage_check_reads_only_the_header(tmp_path, topo_type,
+                                              monkeypatch):
+    """The coverage check must not load the file's data (#765 review).
+
+    ``make data`` on a 7 GB global netCDF file with a small crop read the
+    whole file: building ``Topography(path=...)`` reads it at construction,
+    before ``read_header`` is reached.  Only the header is needed here."""
+    path = _write_tile(tmp_path, topo_type)
+
+    def no_full_read(self, *args, **kwargs):
+        raise AssertionError("Topography.read called during make data")
+
+    monkeypatch.setattr(topotools.Topography, "read", no_full_read)
+    text = _write_topo_data(tmp_path, path, topo_type,
+                            [-124.2, -124.1, 46.8, 46.9])
+    assert path.name in text
