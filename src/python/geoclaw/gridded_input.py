@@ -276,18 +276,12 @@ class NetCDFReader(GriddedReader):
             _idx = _topotools._crop_indices(_lon_dom, _lat_dom, _ce, _c,
                                             int(topo.buffer), topo.align)
             if _idx is None:
-                # crop_extent misses the file: fall back to the full grid at
-                # native resolution (mirrors crop() returning None -> no-op),
-                # rather than coarsening the whole file.
-                warnings.warn(
-                    f"crop_extent {list(_ce)} did not overlap {topo.path}; the "
-                    f"full file was read uncropped at native resolution. The "
-                    f"Fortran reader treats a non-overlapping crop as fatal.")
-                _il, _iu, _jl, _ju = 0, _nx, 0, _ny
-                _step = 1
-            else:
-                _il, _iu, _jl, _ju = _idx
-                _step = _c
+                # As make data and the Fortran reader do: a crop that misses
+                # the file is an error, not the whole file.
+                raise ValueError(
+                    f"crop_extent {list(_ce)} does not overlap {topo.path}.")
+            _il, _iu, _jl, _ju = _idx
+            _step = _c
 
             # Map each ascending [lo:hi:step] window to a positive-stride slice
             # into the FILE-order axis; descending axes are flipped in memory

@@ -39,6 +39,27 @@ import numpy
 CROP_TOL = 1.0e-6
 
 
+def crop_keyword(crop_extent):
+    """Return ``'all'``, ``'none'`` or ``None`` for a ``crop_extent`` value.
+
+    ``None`` and ``'all'`` mean the whole file, ``'none'`` means the file is
+    not used (a tile ``TopographyData.select_tiles`` dropped, or one switched
+    off by hand), and anything else is a window ``[x1, x2, y1, y2]``, for which
+    ``None`` is returned.  Any other string is a ValueError, so a misspelling
+    is never read as a window or as the whole file.
+    """
+    if crop_extent is None:
+        return 'all'
+    if isinstance(crop_extent, str):
+        if crop_extent in ('all', 'none'):
+            return crop_extent
+        raise ValueError(
+            f"crop_extent {crop_extent!r} is not recognized: use 'all' (the "
+            f"whole file, as None), 'none' (file not used) or "
+            f"[x1, x2, y1, y2].")
+    return None
+
+
 # Length unit strings (lower-cased) on an x axis that mark it as a projected /
 # rectilinear (non-geographic) grid, for which the 0-360 longitude wrap is
 # meaningless and must be skipped.  Detection defaults to geographic; only

@@ -1192,24 +1192,17 @@ def test_crop_pushdown_respects_storage_order(tmp_path, s2n):
 
 
 @pytest.mark.netcdf
-def test_crop_no_overlap_keeps_full_grid(nc_topo_path):
-    """A crop_extent that misses the file leaves the array uncropped, matching
-    crop()'s own fall-back (does not crash or return an empty grid)."""
+def test_crop_no_overlap_raises(nc_topo_path):
+    """A crop_extent that misses the file is an error, as in make data and
+    the Fortran reader.  It used to warn and return the whole file, which a
+    tile list (#765 review) then used as if it were the crop."""
     pytest.importorskip("xarray")
     path, _, _ = nc_topo_path
 
-    ref = Topography()
-    ref.read(path, topo_type=4)
-
     t = Topography()
     t.crop_extent = [100.0, 200.0, 100.0, 200.0]
-    # The fall-back is kept, but it must not be silent: the Fortran reader
-    # treats the same condition as fatal, so a run that ignores this here
-    # fails there instead.
-    with pytest.warns(UserWarning, match="did not overlap"):
+    with pytest.raises(ValueError, match="does not overlap"):
         t.read(path, topo_type=4)
-
-    np.testing.assert_array_equal(t.Z, ref.Z)
 
 
 @pytest.mark.netcdf
@@ -1414,13 +1407,12 @@ def test_crop_with_no_aligned_point_raises():
         t.crop(crop_extent=[5.0, 6.0, 0.0, 9.0], coarsen=3, align=(7.0, 0.0))
 
 
-def test_crop_no_overlap_ascii_warns_and_keeps_full_grid(global_tt3_path):
-    """ASCII counterpart of test_crop_no_overlap_keeps_full_grid."""
+def test_crop_no_overlap_ascii_raises(global_tt3_path):
+    """ASCII counterpart of test_crop_no_overlap_raises."""
     t = Topography()
     t.crop_extent = [300.0, 320.0, -5.0, 5.0]
-    with pytest.warns(UserWarning, match="did not overlap"):
+    with pytest.raises(ValueError, match="does not overlap"):
         t.read(str(global_tt3_path), topo_type=3)
-    assert t.x.size == 361
 
 
 def test_unstructured_with_crop_raises_not_typeerror(tmp_path):

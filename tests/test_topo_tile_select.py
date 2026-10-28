@@ -259,6 +259,27 @@ def test_select_tiles_edge_contact_is_not_a_use(tmp_path):
                                [-124.2, -124.0, 46.8, 46.9])
 
 
+def test_select_tiles_sliver_without_a_point_is_a_gap(tmp_path):
+    """A crop that ends less than half a cell into a tile overlaps its cells
+    but holds none of its points.  The tile is decided by the same window
+    logic as Fortran (crop_indices), so it is not used, and the sliver it
+    would have filled is a gap: an error now, rather than an entry with no
+    points that fails later in the read or in Fortran."""
+    td = _tile_data(tmp_path, names=("sw", "se"))
+    with pytest.raises(ValueError, match="not covered"):
+        td.select_tiles([-124.1, -124.0 + DX / 4, 46.8, 46.9])
+    assert all(t.crop_extent is None for t in td.topofiles)
+
+
+def test_select_tiles_first_point_inside_uses_the_tile(tmp_path):
+    """Control for the sliver: once the crop reaches the tile's first point
+    the tile is used."""
+    td = _tile_data(tmp_path, names=("sw", "se"))
+    td.select_tiles([-124.1, -124.0 + DX / 2, 46.8, 46.9])
+    np.testing.assert_allclose(_crop(td, "se.tt3"),
+                               [-124.0, -124.0 + DX / 2, 46.8, 46.9])
+
+
 def test_select_tiles_uses_domain_coordinates(tmp_path):
     """The crop is in domain coordinates: a tile's x_shift moves it."""
     td = _tile_data(tmp_path, names=("sw", "se"), x_shift=360.0)

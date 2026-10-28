@@ -1085,6 +1085,15 @@ class Topography(object):
                                            {'filter_region': filter_region})
         if crop_extent is not None:
             self.crop_extent = crop_extent
+        # 'all' is the explicit spelling of None; 'none' marks a tile that is
+        # not used, so there is nothing to read.
+        _keyword = coordinate_tools.crop_keyword(self.crop_extent)
+        if _keyword == 'none':
+            raise ValueError(
+                f"crop_extent is 'none' for {path or self.path}: the file is "
+                f"marked as not used, so there is nothing to read.")
+        if _keyword == 'all':
+            self.crop_extent = None
 
         # Fold coarsen/align/buffer args onto the attributes (mirrors crop_extent
         # above): passing them to read() is equivalent to setting the attribute
@@ -1296,14 +1305,12 @@ class Topography(object):
                     align=self.align,
                 )
                 if _cropped is None:
-                    # crop() already warned about the non-overlap; say what the
-                    # consequence is here, because keeping the *full* file is
-                    # surprising and the Fortran reader would instead abort.
-                    warnings.warn(
-                        f"crop_extent {list(self.crop_extent)} did not overlap "
-                        f"{self.path}; the full file was read uncropped. The "
-                        f"Fortran reader treats this as fatal.")
-                if _cropped is not None:
+                    # As make data and the Fortran reader do: a crop that
+                    # misses the file is an error, not the whole file.
+                    raise ValueError(
+                        f"crop_extent {list(self.crop_extent)} does not "
+                        f"overlap {self.path}.")
+                else:
                     self._x = _cropped._x
                     self._y = _cropped._y
                     self._Z = _cropped._Z

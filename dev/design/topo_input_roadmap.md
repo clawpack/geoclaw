@@ -55,7 +55,7 @@ update to §4's "not verified" note.
 | Change | Tracking | Status |
 |---|---|---|
 | coarsen + `align` with no aligned point in the crop: Python `crop_indices` raises `EmptyAlignedCropWindow`; Fortran `apply_align_buffer_coarsen` stops naming the file and axis | clawpack/geoclaw#761 | clawpack/geoclaw#762 (open, branch `crop-align-overshoot`, head `c1ac4691`). Verified 2026-10-19: the new Python tests and the `topo_crop` Fortran regression (types 3 and 4) fail on `0ba4db7b` and pass with the fix; the two sweeps comparing against the old code are unchanged |
-| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | coverage rule + Fortran backstop on branch `topo-crop-coverage` (stacked on #762), ahead of the `crop_bounds` PR; tile helper next. See §2.7 |
+| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | coverage rule + Fortran backstop on branch `topo-crop-coverage` (stacked on #762), ahead of the `crop_bounds` PR. Tile helper `TopographyData.select_tiles` and `crop_extent = 'all'`/`'none'` on branch `topo-tile-select` (stacked on #765), from the #765 review. See §2.7 |
 
 ### Merge order as planned (historical)
 
@@ -404,12 +404,33 @@ Points to carry into the implementation:
   `test_descriptor_crop_without_buffer_does_not_cover_ring` now also asserts
   the nonzero status.
 - Tile selection: Randy's use case is a long list of tiles, of which only those
-  that intersect the crop should be used. Give it a helper (working name
-  `topotools.tiles_covering(paths, crop_extent, coarsen=, align=, buffer=)`)
-  that sets each `crop_extent` to the intersection and drops tiles whose kept
-  window is empty. It should decide that with `crop_indices`, so that it agrees
-  with Fortran. That relies on #761 (§1, "In review / open"). `kmltools` can
-  then draw the extents actually used.
+  that intersect the crop should be used. Implemented on branch
+  `topo-tile-select` (stacked on #765) as `TopographyData.select_tiles(crop)`,
+  run over the tiles already in `topofiles` so each keeps its own
+  `coarsen`/`buffer`/shifts (decided 2026-10-28, from the #765 review):
+  - `crop_extent` takes `None` or `'all'` (whole file), `[x1, x2, y1, y2]`
+    (strict coverage rule above), or `'none'` (tile not used). `None` keeps
+    meaning the whole file; it never means "skip". Other strings raise.
+  - Headers only. A tile the crop misses, touches only along an edge, or
+    overlaps without holding a grid point gets `'none'`; the last is decided
+    with `crop_indices` and the tile's `coarsen`/`buffer`/`align`, as Fortran
+    decides its window, so a crop ending less than half a cell into a tile
+    does not produce an entry with no points. Other tiles get the overlap,
+    clipped to their cells. A hand-set `'none'` is left alone.
+  - The tiles used must cover the crop together; a gap (including a sliver
+    left by a pointless tile) raises with the uncovered box, and nothing is
+    changed.
+  - Interim, until the `value =: key` format (§2.8, PR B): `'none'` entries
+    are left out of `topo.data` and listed by `make data` with the reason;
+    their files are never opened. PR B writes `none =: crop_extent  # reason`
+    in place. Fortran (`topo_module.f90`) sizes every topo array by
+    `mtopofiles + num_dtopo`, with dtopo grids in the slots after the topo
+    files, so the PR B reader should read every entry, store the used ones
+    contiguously and set `mtopofiles` to the number used.
+  - A Python read of a crop that misses the file now raises, for every type,
+    as `make data` and Fortran do (it warned and returned the whole file).
+  - Not handled: a tile list across the antimeridian (no wrap), and dtopo.
+  - `kmltools` can then draw the extents actually used.
 - Python and Fortran search for the aligned start from opposite ends of an axis
   stored descending (e.g. latitude north-to-south). Python works on an
   ascending view and searches from the south. Fortran works in file-index order

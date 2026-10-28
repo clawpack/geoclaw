@@ -249,6 +249,31 @@ def _covered_length(lo, hi, intervals):
     return covered
 
 
+def _uncovered_part(crop, rects, tol):
+    """Bounding box ``[x1, x2, y1, y2]`` of the part of *crop* the union of
+    *rects* misses, or None when they cover it.
+
+    The rectangle edges cut *crop* into cells; a cell is covered when some
+    rectangle contains its centre.  Cells thinner than *tol*, which only
+    round-off between abutting rectangles can make, are ignored.
+    """
+    x1, x2, y1, y2 = crop
+
+    def _cuts(lo, hi, values):
+        cuts = sorted({lo, hi} | {v for v in values if lo < v < hi})
+        return [(a, b) for a, b in zip(cuts[:-1], cuts[1:]) if b - a > tol]
+
+    xcells = _cuts(x1, x2, [v for r in rects for v in r[:2]])
+    ycells = _cuts(y1, y2, [v for r in rects for v in r[2:]])
+    missed = [(a, b, c, d) for a, b in xcells for c, d in ycells
+              if not any(r[0] <= (a + b) / 2 <= r[1]
+                         and r[2] <= (c + d) / 2 <= r[3] for r in rects)]
+    if not missed:
+        return None
+    return [min(m[0] for m in missed), max(m[1] for m in missed),
+            min(m[2] for m in missed), max(m[3] for m in missed)]
+
+
 def _check_crop_covered(crop, path, edges, delta, wrap_lon=False):
     """Raise ValueError unless *edges* cover *crop* (both ``[x1, x2, y1, y2]``).
 
@@ -496,6 +521,118 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         # keeps the sort stable for equal-area files (they retain input order).
         return sorted(topos, key=_cell_area, reverse=True)
 
+    def _drop_unused_topofiles(self, topos, out_file):
+        """Resolve the ``crop_extent`` keywords of *topos* for writing.
+
+        ``'none'`` entries are left out and listed on stdout: the current
+        topo.data format has no way to carry them (the value =: key format
+        will write them in place).  Their files are never opened, so they need
+        not exist.  ``'all'`` entries are written as ``None`` (whole file), on
+        a copy so the caller's object is unchanged.  Any other string raises.
+        """
+        from clawpack.geoclaw.coordinate_tools import crop_keyword
+
+        used, skipped = [], []
+        for topo in topos:
+            keyword = crop_keyword(topo.crop_extent)
+            if keyword == 'none':
+                skipped.append(topo)
+                continue
+            if keyword == 'all' and topo.crop_extent is not None:
+                topo = copy.copy(topo)
+                topo.crop_extent = None
+            used.append(topo)
+
+        if skipped:
+            print(f"{len(skipped)} topo file(s) with crop_extent = 'none' "
+                  f"not written to {out_file}:")
+            for topo in skipped:
+                reason = getattr(topo, '_crop_reason', None) or 'set by hand'
+                print(f"    {topo.path}   ({reason})")
+        if topos and not used:
+            raise ValueError(
+                "Every topo file has crop_extent = 'none', so the run would "
+                "have no topography.")
+        return used
+
+    def select_tiles(self, crop_extent):
+        """Choose the tiles in ``topofiles`` that *crop_extent* uses.
+
+        For a predefined list of tiles (all of a coast's DEM tiles, say) and
+        one crop region ``[x1, x2, y1, y2]`` in domain coordinates (after each
+        tile's ``x_shift``/``y_shift``):
+
+        * a tile the crop misses, only touches along an edge, or overlaps
+          without holding any of its grid points (a crop ending less than
+          half a cell into it; decided by ``crop_indices``, as Fortran
+          decides its window) gets ``crop_extent = 'none'`` and is not
+          written to topo.data;
+        * a tile the crop overlaps gets the overlap as its ``crop_extent``,
+          clipped to the tile's cells, so it passes the coverage rule;
+        * a tile already set to ``'none'`` is left alone.
+
+        Only headers are read.  The entries are changed in place, so the list
+        keeps every tile considered; only ``crop_extent`` changes.  Raises
+        ValueError, changing nothing, if the tiles used do not cover the crop.
+        Longitude wrapping across the antimeridian is not considered.
+        """
+        from clawpack.geoclaw import topotools
+        from clawpack.geoclaw.coordinate_tools import crop_keyword
+
+        x1, x2, y1, y2 = (float(v) for v in crop_extent)
+        if not (x1 < x2 and y1 < y2):
+            raise ValueError(
+                f"crop_extent {list(crop_extent)} must have x1 < x2 and "
+                f"y1 < y2.")
+
+        self.topofiles = self._normalize_topofiles()
+        crops, used, tol = [], [], np.inf
+        for topo in self.topofiles:
+            if crop_keyword(topo.crop_extent) == 'none':
+                crops.append((topo.crop_extent,
+                              getattr(topo, '_crop_reason', None)))
+                continue
+            edges, (dx, dy), points = _file_cell_edges(topo.path,
+                                                       topo.topo_type)
+            xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
+            ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+            ox1, ox2 = max(x1, edges[0] + xs), min(x2, edges[1] + xs)
+            oy1, oy2 = max(y1, edges[2] + ys), min(y2, edges[3] + ys)
+            tol = min(tol, CROP_TOL * dx, CROP_TOL * dy)
+            if ox2 - ox1 <= CROP_TOL * dx or oy2 - oy1 <= CROP_TOL * dy:
+                crops.append(('none', f"no overlap with crop_extent "
+                                      f"{[x1, x2, y1, y2]}"))
+                continue
+            # Used only if the window Fortran would load holds a point: a
+            # crop ending less than half a cell into the tile overlaps its
+            # cells but none of its points.  The sliver is then left to the
+            # gap check below.  Same window logic as the read and Fortran
+            # (crop_indices, with this tile's coarsen/buffer/align).
+            nx = int(round((points[1] - points[0]) / dx)) + 1
+            ny = int(round((points[3] - points[2]) / dy)) + 1
+            window = topotools._crop_indices(
+                points[0] + xs + dx * np.arange(nx),
+                points[2] + ys + dy * np.arange(ny),
+                [ox1, ox2, oy1, oy2], max(1, int(topo.coarsen)),
+                int(topo.buffer), topo.align)
+            if window is None:
+                crops.append(('none', f"no grid point inside crop_extent "
+                                      f"{[x1, x2, y1, y2]}"))
+            else:
+                crops.append(([ox1, ox2, oy1, oy2], None))
+                used.append((ox1, ox2, oy1, oy2))
+
+        gap = _uncovered_part([x1, x2, y1, y2], used,
+                              tol if np.isfinite(tol) else 0.0)
+        if gap is not None:
+            raise ValueError(
+                f"crop_extent {[x1, x2, y1, y2]} is not covered by the tiles "
+                f"in topofiles: no tile covers {gap}.")
+
+        for topo, (crop, reason) in zip(self.topofiles, crops):
+            topo.crop_extent = crop
+            topo._crop_reason = reason
+
     def _resolve_topo_records(self, topos, out_file):
         """Expand *topos* into the entries that will be written to topo.data.
 
@@ -719,6 +856,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                         description='(Type topography specification)')
         if self.test_topography == 0:
             topos = self._normalize_topofiles()
+            topos = self._drop_unused_topofiles(topos, out_file)
             topos = self._compute_priority_order(topos)
 
             # Warn if the topo files carry mismatched vertical datums: GeoClaw
