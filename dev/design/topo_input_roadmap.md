@@ -693,21 +693,29 @@ sources silently gives seams of centimeters to decimeters. That is small in
 deep water and matters near shore, in the intertidal zone and overland, which
 is where surge and wet/dry gauges live.
 
-The sources in play for the US East Coast:
+Commonly used sources differ in kind, not only in offset: a global bathymetry
+may declare no datum at all (GEBCO: EPSG:5831, "Instantaneous Water Level
+depth"), while regional DEMs use a geodetic datum (NCEI CUDEM tiles in the US:
+NAVD88; NCEI CRM 2023: the EGM2008 geoid). The size of the correction is not
+predictable from the resolution or the provider.
 
-| Source | Resolution | Vertical datum |
-|---|---|---|
-| GEBCO_2025 | 15″ | nominal MSL, not rigorously defined |
-| NCEI CUDEM tiles (`ncei19_*`) | 1/9″ | NAVD88 |
-| NCEI CRM 2023 | 1″ | EGM2008 (per the dataset's `info.md`) |
+**Motivating example.** For the US Northeast (NY Bight to Narragansett Bay),
+the shift to local MSL is +0.07 to +0.12 m for NAVD88 sources but +0.39 to
++0.47 m for EGM2008 sources. Applying it moves a gauge cell from wet to dry at
+~1 km resolution. Measured per-gauge values, method and checks are recorded in
+the application that needed them (ETC-NSLT-project `README.md`, "Topography and
+vertical datums"); this section keeps only what generalizes.
 
-NOAA CO-OPS datum sheets (NTDE 1983–2001, fetched 2026-10-29) give MSL −
-NAVD88 at The Battery −0.063, Kings Point −0.096, Montauk −0.101, Bridgeport
-−0.067, Newport −0.093, Sandy Hook −0.073 and Atlantic City −0.122 m (New
-Haven publishes no NAVD88). So NAVD88 tiles need `z_shift ≈ +0.06 to +0.12 m`
-here to be MSL-referenced. The EGM2008 → local MSL offset in this region is
-`VERIFY:` not established. It was guessed at 0.1–0.3 m and must be computed,
-not assumed.
+**Traps (general):**
+- Read the datum from the source file's own metadata, not from a converted
+  copy. Locally converted netCDF files often carry a generic "above mean sea
+  level" label that is not the datum.
+- Never take a NAD83 ↔ WGS 84/EGM2008 height from a PROJ "ballpark" operation:
+  it treats the two frames as identical, about 1.25 m wrong in CONUS. Use
+  VDatum, or an explicit chain (geoid grid → time-dependent Helmert → geoid
+  grid).
+- Check the sign of any shift by comparing two corrected sources where they
+  overlap: corrected sources should agree better than raw ones.
 
 **Principles:**
 
@@ -724,8 +732,8 @@ not assumed.
 3. **MSL is not a level surface; `sea_level` is.** No constant `sea_level`
    matches MSL along a long coast.
    - For small crops, a constant `z_shift` per entry from the nearest station's
-     datum sheet is adequate. MSL − NAVD88 varies by only 6 cm across NY Bight
-     to Narragansett Bay.
+     datum sheet is often adequate (in the example above it varies by 6–8 cm
+     across the region).
    - For large coverage, convert the file once with a spatially varying shift
      grid and use the converted file as an ordinary topo input. No
      spatially varying shift in Fortran.
@@ -741,7 +749,7 @@ not assumed.
      port it. Its optional engines (NGS HTDP, NOAA VDatum) have their own terms,
      which need checking before the docs recommend them. `VERIFY:` its support
      for NAVD88, EGM2008 and NTDE local MSL was not confirmed from the README;
-     test it on the stations above against the CO-OPS numbers before
+     test it on a few CO-OPS stations against their datum sheets before
      recommending it.
 
 **Proposed Python-side feature (no Fortran change):**
@@ -757,7 +765,8 @@ not assumed.
   Nothing is checked when nothing is declared, which keeps old runs working.
 - **Sign convention.** Document it explicitly: `z_model = z_file + z_shift`,
   where `z_shift` is the height of the file datum's zero above the model
-  datum's zero. NAVD88 → local MSL at The Battery is `z_shift = +0.063`.
+  datum's zero. For example, NAVD88 → local MSL at The Battery (NY) is
+  `z_shift = +0.063`.
 - **Optional helpers.**
   - A CO-OPS datum lookup (`station_datum_offset(station, from_, to)`) for
     constant shifts, alongside the existing `fetch_noaa_tide_data`.
