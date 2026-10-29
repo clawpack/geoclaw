@@ -257,13 +257,23 @@ class NetCDFReader(GriddedReader):
             _lon_asc = _lon_full[::-1] if _lon_desc else _lon_full
             _lat_asc = _lat_full[::-1] if _lat_desc else _lat_full
 
+            # crop_extent and align are in domain coordinates, i.e. after
+            # x_shift/y_shift, exactly as for an ASCII read, where crop() runs
+            # on the already-shifted arrays.  So choose the window on shifted
+            # axes; the values read are still the file's, and Topography.read
+            # applies the shift to them afterward.
+            _xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
+            _ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+            _lon_dom = _lon_asc + _xs
+            _lat_dom = _lat_asc + _ys
+
             if topo.crop_extent is not None:
                 _ce = list(topo.crop_extent)
             else:
                 # whole file (mirrors crop()'s crop_extent=self.extent)
-                _ce = [_lon_asc[0], _lon_asc[-1], _lat_asc[0], _lat_asc[-1]]
+                _ce = [_lon_dom[0], _lon_dom[-1], _lat_dom[0], _lat_dom[-1]]
 
-            _idx = _topotools._crop_indices(_lon_asc, _lat_asc, _ce, _c,
+            _idx = _topotools._crop_indices(_lon_dom, _lat_dom, _ce, _c,
                                             int(topo.buffer), topo.align)
             if _idx is None:
                 # crop_extent misses the file: fall back to the full grid at

@@ -1402,6 +1402,18 @@ def test_crop_between_grid_points_raises(global_tt3_path):
         t.read(str(global_tt3_path), topo_type=3)
 
 
+def test_crop_with_no_aligned_point_raises():
+    """A crop holding grid points, none of them on the aligned coarse lattice,
+    used to return an empty Topography silently (#761).  Points 5.0 and 6.0
+    are inside the crop; coarsen=3 aligned to 7.0 keeps 4.0, 7.0, ..."""
+    t = Topography()
+    t.x = np.arange(10) * 1.0
+    t.y = np.arange(10) * 1.0
+    t.Z = np.zeros((10, 10))
+    with pytest.raises(ValueError, match="no point of the coarsened grid"):
+        t.crop(crop_extent=[5.0, 6.0, 0.0, 9.0], coarsen=3, align=(7.0, 0.0))
+
+
 def test_crop_no_overlap_ascii_warns_and_keeps_full_grid(global_tt3_path):
     """ASCII counterpart of test_crop_no_overlap_keeps_full_grid."""
     t = Topography()
@@ -1592,6 +1604,20 @@ def _descriptor_values(text, key):
     return re.findall(rf"^{re.escape(key)}\s*=\s*(.+)$", text, re.MULTILINE)
 
 
+def _file_windows(text, file_lon=(-180.0, 180.0)):
+    """Each entry's longitude window in the file, as Fortran derives it.
+
+    topo.data carries no crop_bounds: Fortran takes the entry's crop_extent,
+    subtracts its lon_wrap_offset and clips to the file.  Returns
+    ``[(lon0, lon1, lat0, lat1), ...]`` in entry order.
+    """
+    crops = [[float(v) for v in line.split("#")[0].split()]
+             for line in text.splitlines() if "# crop_extent" in line]
+    offsets = [float(v) for v in _descriptor_values(text, "lon_wrap_offset")]
+    return [(max(c[0] - off, file_lon[0]), min(c[1] - off, file_lon[1]),
+             c[2], c[3]) for c, off in zip(crops, offsets)]
+
+
 def test_is_remote_url_discriminates_urls_from_paths():
     """The regex must not mistake a Windows drive letter for a URL scheme."""
     from clawpack.geoclaw.netcdf_utils import is_remote_url
@@ -1650,7 +1676,7 @@ def test_cross_seam_crop_writes_two_entries(tmp_path):
 
     Previously raised `crop_bounds lon [...] exceed file extent` even though
     _compute_lon_entries could already cover it.  Must now produce one entry
-    per side of the seam with complementary crop_bounds.
+    per side of the seam, each covering its own part of the file.
     """
     pytest.importorskip("xarray")
     nc = _make_global_nc(tmp_path / "gebco_like.nc")
@@ -1672,11 +1698,12 @@ def test_cross_seam_crop_writes_two_entries(tmp_path):
     offsets = [float(v) for v in _descriptor_values(text, "lon_wrap_offset")]
     assert offsets == [0.0, -360.0]
 
-    bounds = _descriptor_values(text, "crop_bounds")
+    # Both entries carry the crop as written; only the offsets differ.
+    assert "crop_bounds" not in text
     # East side comes from the file as-is; west side is the +170..180 strip
     # read with a -360 shift so Fortran places it at -190..-180.
-    assert bounds[0].split() == ["-180.0", "-120.0", "-60.0", "0.0"]
-    assert bounds[1].split() == ["170.0", "180.0", "-60.0", "0.0"]
+    assert _file_windows(text) == [(-180.0, -120.0, -60.0, 0.0),
+                                   (170.0, 180.0, -60.0, 0.0)]
 
 
 @pytest.mark.netcdf
@@ -1731,8 +1758,8 @@ def test_off_seam_crop_writes_one_entry_with_nonzero_offset(tmp_path):
     assert "1                    =: ntopofiles" in text
     assert [float(v) for v in
             _descriptor_values(text, "lon_wrap_offset")] == [360.0]
-    assert _descriptor_values(text, "crop_bounds")[0].split() == [
-        "-175.0", "-165.0", "-60.0", "0.0"]
+    assert "crop_bounds" not in text
+    assert _file_windows(text) == [(-175.0, -165.0, -60.0, 0.0)]
 
 
 @pytest.mark.netcdf
@@ -1786,7 +1813,8 @@ def test_wrapping_crop_still_checks_latitude(tmp_path):
 
     td = TopographyData()
     td.topofiles = [t]
-    with pytest.raises(ValueError, match="latitude extent"):
+    # The shared crop-coverage message (#760), not a latitude-specific one.
+    with pytest.raises(ValueError, match="not covered by"):
         td.write(out_file=str(tmp_path / "topo.data"))
 
 

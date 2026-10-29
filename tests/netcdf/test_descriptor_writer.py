@@ -2,7 +2,7 @@
 Tests for DescriptorWriter.
 
 Covers: topo descriptor round-trip, met descriptor structure, optional
-fields omitted when not specified, and crop_bounds presence/absence.
+fields omitted when not specified, and crop_bounds never written.
 """
 import io
 import re
@@ -199,8 +199,12 @@ def test_topo_descriptor_crop_bounds_omitted_when_none(topo_file_factory):
     assert "crop_bounds" not in parsed
 
 
-def test_topo_descriptor_crop_bounds_present_when_set(topo_file_factory):
-    """crop_bounds line is written with all four values when specified."""
+def test_topo_descriptor_crop_bounds_not_written_when_set(topo_file_factory):
+    """crop_bounds is not written even when the metadata carries it.
+
+    The crop reaches Fortran only as the entry's crop_extent line; Fortran
+    rejects a crop_bounds line as coming from an older topo.data
+    (dev/design/topo_input_roadmap.md §2.8)."""
     import dataclasses
     meta = _get_topo_meta(topo_file_factory,
                           lon_min=-10.0, lon_max=10.0,
@@ -211,14 +215,7 @@ def test_topo_descriptor_crop_bounds_present_when_set(topo_file_factory):
     DescriptorWriter.write_topo_descriptor(buf, meta)
     parsed = _parse_topo_descriptor(buf.getvalue())
 
-    assert "crop_bounds" in parsed
-    parts = parsed["crop_bounds"].split()
-    assert len(parts) == 4
-    lon0, lon1, lat0, lat1 = map(float, parts)
-    assert lon0 == pytest.approx(-5.0)
-    assert lon1 == pytest.approx(5.0)
-    assert lat0 == pytest.approx(-5.0)
-    assert lat1 == pytest.approx(5.0)
+    assert "crop_bounds" not in parsed
 
 
 def test_descriptor_writes_lon_offset_not_convention(topo_file_factory):
@@ -334,8 +331,9 @@ def test_met_descriptor_crop_bounds_omitted_when_none(met_file_factory):
     assert "crop_bounds" not in parsed["file_info"]
 
 
-def test_met_descriptor_crop_bounds_present_when_set(met_file_factory):
-    """crop_bounds appears in &file_info when crop_bounds are specified."""
+def test_met_descriptor_crop_bounds_not_written_when_set(met_file_factory):
+    """crop_bounds is not written to &file_info even when set: the met crop
+    is the data file's crop_extent line, which is what Fortran reads."""
     import dataclasses
     meta = _get_met_meta(met_file_factory,
                          lon_min=-10.0, lon_max=10.0,
@@ -346,7 +344,7 @@ def test_met_descriptor_crop_bounds_present_when_set(met_file_factory):
     DescriptorWriter.write_met_descriptor(buf, meta)
     parsed = _parse_met_descriptor(buf.getvalue())
 
-    assert "crop_bounds" in parsed["file_info"]
+    assert "crop_bounds" not in parsed["file_info"]
 
 
 def test_met_descriptor_fill_value_omitted_when_none(met_file_factory):
