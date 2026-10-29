@@ -11,6 +11,11 @@ the user docs, is still open); the supersession clean-up is done;
 §1 below the "Landed" table is kept as the record of the plan the merges
 followed.
 
+**Update (2026-10-29):** two proposed items were added to §2, both raised by
+the ETC-NSLT surge ensemble: §2.9 (tile selection with several crop
+rectangles, approach decided) and §2.10 (vertical datums, model datum
+decided).
+
 **Provenance.** Written 2026-09-07 from the branch and PR state at that date,
 and amended later the same day after test-merging the open PRs in order: §1
 (the stack forks at #741; #745 rebased onto it), §2.3 (layout guards, and the
@@ -596,6 +601,181 @@ The windows to document and diagram:
   `crop_indices` then assumes longitude increases steadily. This would
   mis-select crops that straddle 0° on 0–360 files, and domains that cross
   180°.
+
+### 2.9 Tile selection with several crop rectangles
+
+*Status (2026-10-29): proposed, approach decided (C below), not started.
+Extends `select_tiles` on branch `topo-tile-select` (§2.7).*
+
+**Need.** A storm-surge ensemble (ETC-NSLT) wants high-resolution coastal topo
+only around a handful of tide gauges spread along ~400 km of coast. The gauges
+need level-6 cells (~390 m) in water. GEBCO puts the Bridgeport, CT gauge on
+land (+3 m) at every level, and Sandy Hook is +0.1 m at level 5. The 1″
+CRM 2023 `crm_vol1_2023.nc` (12°×7°) covers all eight gauges, and at level 6
+each gauge cell is 73–100% wet in it. One crop around all of them is ~110M
+points; one crop per gauge is ~3M each. `select_tiles(crop)` takes a single
+rectangle, and calling it once per rectangle doesn't work: each call
+overwrites the tile's one `crop_extent`.
+
+**Why deduplication alone is not enough.** Today each tile ends up with exactly
+one `crop_extent`, which is the overlap with the crop, clipped to its cells.
+With several rectangles, one tile (or one large file) can overlap more than
+one, and then needs more than one crop window, not a deduplicated list of
+tiles. Three options were considered:
+
+- **A. One entry per tile, crop = bounding box of its overlaps.** This keeps
+  the one-crop-per-tile behavior. The waste is bounded by the tile size for
+  0.25° CUDEM tiles, but unbounded for a single large file: two far-apart
+  rectangles in CRM vol1 give a box spanning most of the file. Rejected.
+- **B. One entry per (tile, rectangle) overlap.** The same file is listed more
+  than once with different crops. It works, but overlapping rectangles give
+  overlapping entries, which waste memory, and add a priority seam if the
+  entries ever differ (e.g. in `z_shift`).
+- **C. B with rectangles merged per file first. Chosen.** For each tile, the
+  overlaps with each rectangle are grouped. Two overlaps merge when they
+  intersect or abut, or when their bounding box is not much bigger than their
+  total area (`area(bbox) ≤ (1 + α)·Σ areas`). Repeat until stable. There is
+  one entry per group.
+
+**Design (C):**
+
+- `select_tiles(crop_extents)` takes one rectangle (current behavior,
+  unchanged) or a list of rectangles, all in domain coordinates.
+- Per tile, each overlap is computed exactly as now: clipped to cells, and
+  `'none'` when it holds no grid point after `crop_indices` with the tile's
+  `coarsen`/`buffer`/`align`. The overlaps are then merged as in C.
+- The first group reuses the existing entry. Further groups are shallow copies
+  of it (same path, `coarsen`, `buffer`, shifts, `z_shift`), inserted right
+  after it. `_compute_priority_order` is a stable sort, so the copies stay
+  adjacent and equal-resolution priority stays as listed. Copies of one tile
+  can never differ in anything but `crop_extent`.
+- Coverage: `_uncovered_part` runs **per requested rectangle** against every
+  entry used, and the error names the rectangle as well as the uncovered box.
+  Nothing changes on error, as now.
+- Fortran: no change expected. Entries are read by index (`topofname(i)`,
+  `topo_module.f90` read at ~l.255, data at ~l.463), and nothing is keyed on
+  the path. Equal-resolution overlap goes to the last entry listed, and merged
+  groups share at most the one edge row that `CROP_TOL` keeps.
+  `VERIFY:` from reading the code, not tested. A `topo_crop` regression should
+  list one file twice, once with disjoint crops and once with crops sharing an
+  edge.
+- PR B (`value =: key`, §2.8): the copies are ordinary entries, so nothing
+  special is needed.
+
+**Tests:**
+- A one-element list behaves exactly like the single rectangle.
+- Two disjoint rectangles in one file give two entries.
+- Overlapping or abutting rectangles give one merged entry.
+- One rectangle across several tiles works as now.
+- The coverage error names the right rectangle.
+- A hand-set `'none'` is left alone.
+- The merge criterion is checked at the α boundary.
+
+**Open questions:**
+- Is α internal (proposed default 0.25) or a keyword?
+- What happens when `select_tiles` runs on a list it already split: raise,
+  or re-merge from the original entries? This needs the original per-tile
+  entry recorded, or a rule that the input must not already be split.
+- Should the `make data` listing of `'none'` tiles report which rectangles
+  were tried?
+
+### 2.10 Vertical datums
+
+*Status (2026-10-29): proposed, not started. Decided: surge runs take local
+mean sea level (MSL) of the current National Tidal Datum Epoch (NTDE,
+1983–2001) as the model's vertical datum.*
+
+**Problem.** Each topo source has its own vertical datum, and GeoClaw doesn't
+record which one, or what the model's zero means. There is a bulk per-file
+`z_shift` (`topo_module.f90` ~l.1241 applies `topo = topo + z_shift`;
+`data.py` writes it), but nothing tells the user it is needed, so mixing
+sources silently gives seams of centimeters to decimeters. That is small in
+deep water and matters near shore, in the intertidal zone and overland, which
+is where surge and wet/dry gauges live.
+
+The sources in play for the US East Coast:
+
+| Source | Resolution | Vertical datum |
+|---|---|---|
+| GEBCO_2025 | 15″ | nominal MSL, not rigorously defined |
+| NCEI CUDEM tiles (`ncei19_*`) | 1/9″ | NAVD88 |
+| NCEI CRM 2023 | 1″ | EGM2008 (per the dataset's `info.md`) |
+
+NOAA CO-OPS datum sheets (NTDE 1983–2001, fetched 2026-10-29) give MSL −
+NAVD88 at The Battery −0.063, Kings Point −0.096, Montauk −0.101, Bridgeport
+−0.067, Newport −0.093, Sandy Hook −0.073 and Atlantic City −0.122 m (New
+Haven publishes no NAVD88). So NAVD88 tiles need `z_shift ≈ +0.06 to +0.12 m`
+here to be MSL-referenced. The EGM2008 → local MSL offset in this region is
+`VERIFY:` not established. It was guessed at 0.1–0.3 m and must be computed,
+not assumed.
+
+**Principles:**
+
+1. **One model datum per run, and `sea_level` is relative to it.** With local
+   MSL (NTDE) as the datum, `sea_level` is the event-time departure from the
+   epoch: sea-level rise since the epoch midpoint (~1992) plus the monthly
+   anomaly. That matches NOAA's residual (observed minus predicted, with
+   predictions referenced to the epoch), so model and observed residuals share
+   a zero. Comparisons of residuals cancel the station datum; comparisons of
+   total water level do not.
+2. **Correct where depth is small.** Apply datum shifts to the high-resolution
+   coastal sources. A global bathymetry like GEBCO is left as nominal MSL: its
+   near-shore errors are meters, so a datum correction there means nothing.
+3. **MSL is not a level surface; `sea_level` is.** No constant `sea_level`
+   matches MSL along a long coast.
+   - For small crops, a constant `z_shift` per entry from the nearest station's
+     datum sheet is adequate. MSL − NAVD88 varies by only 6 cm across NY Bight
+     to Narragansett Bay.
+   - For large coverage, convert the file once with a spatially varying shift
+     grid and use the converted file as an ordinary topo input. No
+     spatially varying shift in Fortran.
+   - For that conversion, **Transformez**
+     (https://github.com/continuous-dems/transformez, the Continuous DEMs
+     project behind CUDEM) builds and applies vertical transformations between
+     geodetic, tidal and model-based references. It generates shift grids for a
+     region (`transformez.generate_grid(region=..., increment=..., datum_in=...,
+     datum_out=...)`; CLI `build`/`shift`) and continues past VDatum's coastal
+     coverage with global proxies and blending. It is MIT-licensed (©
+     Regents of the University of Colorado), which is compatible with BSD for
+     use as an optional external tool. GeoClaw would call it, not vendor or
+     port it. Its optional engines (NGS HTDP, NOAA VDatum) have their own terms,
+     which need checking before the docs recommend them. `VERIFY:` its support
+     for NAVD88, EGM2008 and NTDE local MSL was not confirmed from the README;
+     test it on the stations above against the CO-OPS numbers before
+     recommending it.
+
+**Proposed Python-side feature (no Fortran change):**
+
+- **Declared datums.**
+  - `Topography.vertical_datum`: a string or `None`, e.g. `'navd88'`,
+    `'egm2008'`, `'lmsl'`; `None` means undeclared.
+  - The model datum is declared once, next to `sea_level`. Where it lives
+    (`geo_data` or `topo_data`) is an open question.
+- **Write-time check.** If the model datum is declared and an entry declares a
+  different datum with `z_shift == 0`, warn (or raise in a strict mode). If the
+  entries declare different datums among themselves with no shifts, warn.
+  Nothing is checked when nothing is declared, which keeps old runs working.
+- **Sign convention.** Document it explicitly: `z_model = z_file + z_shift`,
+  where `z_shift` is the height of the file datum's zero above the model
+  datum's zero. NAVD88 → local MSL at The Battery is `z_shift = +0.063`.
+- **Optional helpers.**
+  - A CO-OPS datum lookup (`station_datum_offset(station, from_, to)`) for
+    constant shifts, alongside the existing `fetch_noaa_tide_data`.
+  - A thin optional wrapper that runs Transformez to write a converted file.
+    Doing that, rather than making it a dependency, is an open question.
+- **Docs.** A short page on what `sea_level` means relative to the model
+  datum, and how to choose it for a historical event.
+
+**Tests:** warning and no-warning cases for the write-time check; the
+`z_shift` sign on a known station; undeclared datums stay silent.
+
+**Open questions:**
+- Where does the model datum attribute live?
+- Warn, or raise in a strict mode?
+- Ship the CO-OPS helper?
+- Should Transformez be an optional dependency, or only a pointer in the docs?
+- Should the same metadata extend to dtopo, which is relative by construction
+  and probably exempt?
 
 ---
 
