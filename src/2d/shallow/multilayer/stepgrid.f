@@ -26,12 +26,10 @@ c      This version of stepgrid, stepgrid_geo.f allows output on
 c      fgout grids specified in fgout_grids.data
 c :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-      use geoclaw_module, only: grav, rho
       use amr_module
       use fgout_module, only: FGOUT_num_grids, FGOUT_fgrids,
      &                        FGOUT_tcfmax, fgout_interp, fgout_grid,
      &                        FGOUT_ttol
-      use multilayer_module, only: num_layers, dry_tolerance
 
       implicit double precision (a-h,o-z)
 
@@ -229,14 +227,9 @@ c            # with capa array.
 
 c 50      continue
 c
-c     # Copied here from b4step2 since need to do before saving to qc1d:
-c     # (This is the only place there's a difference for multilayer case)
-      forall(i=1:mitot, j=1:mjtot, k=1:num_layers,
-     &       q(3*(k-1)+1,i,j) / rho(k) < dry_tolerance(k))
-        q(3*(k-1)+1,i,j) = max(q(3*(k-1)+1,i,j), 0.d0)
-        q(3*(k-1)+2,i,j) = 0.d0
-        q(3*(k-1)+3,i,j) = 0.d0
-      end forall
+c     # Copied here from b4step2 (then moved to fixdry()) since need to do
+c     # before saving to qc1d:
+      call fixdry(meqn, mbc, mx, my, q, maux, aux)
 
 c
       if (method(5).eq.1) then
