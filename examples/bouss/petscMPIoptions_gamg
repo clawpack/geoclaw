@@ -1,0 +1,26 @@
+# ORIGINAL baseline PETSc options: GMRES + algebraic multigrid (GAMG).
+# This is the "as downloaded" configuration, kept as a separate file so you can
+# A/B against the fieldsplit version by switching PETSC_OPTIONS between:
+#     petscMPIoptions_gamg    (this file, original GAMG baseline)
+#     petscMPIoptions         (directional fieldsplit, redundant+lu blocks)
+
+# set min numbers of matrix rows per MPI rank  (default is 10000)
+-mpi_linear_solver_server_minimum_count_per_rank 5000
+-mpi_linear_solver_server
+-mpi_linear_solver_server_view
+-mpi_linear_solver_server_use_shared_memory false
+
+# Krylov linear solver:
+-ksp_type gmres
+-ksp_max_it 200
+-ksp_reuse_preconditioner
+
+# convergence criterion for linear solver (larger than PETSc default):
+-ksp_rtol 1.e-9
+
+# preconditioner:
+-pc_type gamg
+#-pc_type hypre  # requires installing hypre
+
+# print options at end of run:
+-options_view

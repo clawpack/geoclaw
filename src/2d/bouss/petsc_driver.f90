@@ -9,6 +9,8 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
 #include <petsc/finclude/petscksp.h>
 !!#include "petscmat.h"
     use petscksp
+    use bouss_tridiag_module, only: validate_line_solve
+    use bouss_pcshell, only: tridiag_pc_setup, tridiag_pc_apply
     implicit none
     
     integer, intent(in) :: levelBouss, numBoussCells
@@ -36,6 +38,9 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
     Vec y
     PetscInt itnum
     KSPConvergedReason reason
+    PC pc_tri
+    logical :: use_tridiag
+    PetscBool :: set_tri
     !! (moved the following to amr_module)
     !Mat J
     !KSP ksp  ! linear solver ojbect
@@ -45,6 +50,22 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
 #endif
 
     minfo => matrix_info_allLevs(levelBouss)
+
+    ! item-3 validation: once per level, check the per-line tridiagonal
+    ! extraction + Thomas solve on the REAL assembled CRS matrix, via a
+    ! round trip A_block*(A_block^-1 r)==r for each field u,v.  Read-only,
+    ! runs on the main rank.  Disable with tridiag_validate=.false.
+    if (crs) then
+       call validate_line_solve(minfo%rowPtr, minfo%cols, minfo%vals,   &
+                                minfo%numColsTot, 2*numBoussCells, levelBouss)
+    endif
+
+    ! select preconditioner path: -use_tridiag_pc enables the directional
+    ! block Gauss-Seidel PCSHELL (requires crs, and NO -mpi_linear_solver_server)
+    use_tridiag = .false.
+    call PetscOptionsHasName(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER,   &
+                             '-use_tridiag_pc', set_tri, ierr)
+    if (set_tri .and. crs) use_tridiag = .true.
 
     !================   Step 4 Solve matrix system =======================
             
@@ -122,6 +143,19 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
 
           call KSPSetOperators(ksp(levelBouss),Jr(levelBouss),Jr(levelBouss),ierr)
           CHKERRA(ierr)
+
+          if (use_tridiag) then
+             ! install the directional block Gauss-Seidel shell PC
+             ! (overrides any pc_type from the options file)
+             call KSPGetPC(ksp(levelBouss),pc_tri,ierr)
+             CHKERRA(ierr)
+             call PCSetType(pc_tri,PCSHELL,ierr)
+             CHKERRA(ierr)
+             call PCShellSetApply(pc_tri,tridiag_pc_apply,ierr)
+             CHKERRA(ierr)
+             call PCShellSetName(pc_tri,'tridiag_blockGS',ierr)
+             CHKERRA(ierr)
+          endif
       else ! when (.not. newGrids(levelBouss)) .and. topo_finalized
          ! just put in new values, reuse same sparse matrix structure
          ! next line notifies matrix has new vals
@@ -159,6 +193,10 @@ subroutine petsc_driver(soln,rhs_geo,levelBouss,numBoussCells,time,   &
       !call MatView(Jr(levelBouss),PETSC_VIEWER_STDOUT_SELF,ierr)
       !call MatView(Jr(levelBouss),PETSC_VIEWER_BINARY_SELF,ierr)
 
+
+      ! refresh the u,v line decompositions with the current matrix values
+      ! (matrix entries change every step) before the shell PC is applied
+      if (use_tridiag) call tridiag_pc_setup(levelBouss)
 
       call KSPSolve(ksp(levelBouss),rhs,solution,ierr)
       call KSPGetIterationNumber(ksp(levelBouss), itnum,ierr)
