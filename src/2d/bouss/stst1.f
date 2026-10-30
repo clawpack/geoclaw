@@ -112,6 +112,10 @@ c
       timeGrdfit2        = 0
       timeLinSolve       = 0
       timeLinSolveCPU    = 0.d0
+      timeLineDecomp     = 0
+      timeCompress       = 0
+      maxLineLen         = 0
+      maxLineLevel       = 0
       timePrepBuild      = 0
       timePrepBuildCPU    = 0.d0
       timeRegridding     = 0

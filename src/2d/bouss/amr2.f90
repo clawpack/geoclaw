@@ -86,6 +86,9 @@ program amr2
     use amr_module, only: timePrepBuild, timePrepBuildCPU
     use amr_module, only: timeBoundCPU,timeStepGridCPU,timeRegriddingCPU
     use amr_module, only: timeValoutCPU,timeTick,timeTickCPU
+    use amr_module, only: timelinedecomp
+    use amr_module, only: timeCompress
+    use amr_module, only: maxLineLen, maxLineLevel
     use amr_module, only: kcheck, iorder, lendim, lenmax, memsize
 
     use amr_module, only: dprint, eprint, edebug, gprint, nprint, pprint
@@ -761,12 +764,22 @@ program amr2
     write(*,format_string) &
          real(timeLinSolve,kind=8) / real(clock_rate,kind=8), timeLinSolveCPU
 
+    ! of which: serial line-decomposition rebuild (isolver=1 / OpenMP GMRES)
+    format_string="('  line-decomp ',1f15.3)"
+    write(timing_unit,format_string) real(timeLineDecomp,kind=8)/real(clock_rate,kind=8)
+    write(*,format_string) real(timeLineDecomp,kind=8)/real(clock_rate,kind=8)
+
     !preparing/building for Linear Solver
     format_string="('Prep/Build    ',1f15.3,'        ',1f15.3)"
     write(timing_unit,format_string) &
          real(timePrepBuild,kind=8) / real(clock_rate,kind=8), timePrepBuildCPU
     write(*,format_string) &
          real(timePrepBuild,kind=8) / real(clock_rate,kind=8), timePrepBuildCPU
+
+    ! of which: serial compressOut pass
+    format_string="('  compressOut ',1f15.3)"
+    write(timing_unit,format_string) real(timeCompress,kind=8)/real(clock_rate,kind=8)
+    write(*,format_string) real(timeCompress,kind=8)/real(clock_rate,kind=8)
     
     !bound
     format_string="('BC/ghost cells',1f15.3,'        ',1f15.3)"
@@ -800,11 +813,11 @@ program amr2
     write(timing_unit,format_string) real(timeTick,kind=8)/real(clock_rate,kind=8), &
             timeTickCPU
 
-    if (isolver .eq. 3) then
+    if (isolver .eq. 3 .or. isolver .eq. 1) then
        write(*,*)
        write(timing_unit,*)
-       write(*,*)"PETSc was called on this level:    Num Times  Avg Num Iters" 
-       write(timing_unit,*)"PETSc was called on this level:    Num Times  Avg Num Iters" 
+       write(*,*)"Linear solver was called on this level:    Num Times  Avg Num Iters"
+       write(timing_unit,*)"Linear solver was called on this level:    Num Times  Avg Num Iters"
        do level = 1, mxnest
          if (numTimes(level) .gt. 0) then
            write(*,989) level, numTimes(level), real(itcount(level))/real(numTimes(level))
@@ -816,7 +829,13 @@ program amr2
        end do
     endif
 
-    
+    if (isolver .eq. 1) then
+       write(*,991) maxLineLen, maxLineLevel
+       write(timing_unit,991) maxLineLen, maxLineLevel
+ 991   format(' Longest tridiagonal line over run: ',i10,' cells (level ',i3,')')
+    endif
+
+
     format_string="('OpenMP is using',i3,' thread(s)')"
     write(timing_unit,format_string) maxthreads
     write(*,format_string) maxthreads

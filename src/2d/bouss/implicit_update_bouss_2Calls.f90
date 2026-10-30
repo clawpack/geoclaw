@@ -12,7 +12,9 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     use amr_module
     use topo_module, only: aux_finalized
     use bouss_module
-        
+    use bouss_tridiag_module, only: line_decomp_t, build_line_decomp, free_line_decomp
+    use bouss_gmres_module,   only: gmres_solve
+
     implicit none
     
     integer, intent(in) :: nvar, naux, levelBouss, numBoussCells
@@ -32,9 +34,19 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     integer :: nD, nst, ncc, k
     integer(kind=8) :: clock_startBound,clock_finishBound,clock_rate
     integer(kind=8) :: clock_startLinSolve,clock_finishLinSolve
+    integer(kind=8) :: clock_b0,clock_b1
     real(kind=8) cpu_startBound,cpu_finishBound, time 
     real(kind=8) cpu_startLinSolve,cpu_finishLinSolve
     logical :: debug
+    ! OpenMP GMRES (isolver=1) locals.  Rebuild the u,v line decompositions
+    ! every solve: the matrix sparsity (bouss/revert cell pattern, and even
+    ! numBoussCells) changes as the flow evolves, so caching them across steps
+    ! applies a stale, wrong-structured preconditioner (seen as a stall on
+    ! crater_westport).  Cheap structure caching can be added later only with a
+    ! correct structure-change test.
+    type(line_decomp_t) :: gmD0, gmD1
+    integer :: gm_iters, gm_info
+    real(kind=8) :: gm_resid
 
 #ifdef WHERE_AM_I
     write(*,*) "starting implicit_update for level ",levelBouss
@@ -111,11 +123,54 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
     
     !================   Step 4 Solve matrix system =======================
 
-    if (isolver .eq.1) then  ! use gmres
-       write(*,*)" No longer supporting gmres option"
-       write(outunit,*)" No longer supporting gmres option"
-       stop
-            
+    if (isolver .eq.1) then  ! OpenMP GMRES, PETSc-free (block Gauss-Seidel PC)
+       if (.not. crs) then
+          write(*,*)" isolver=1 (OpenMP GMRES) requires CRS matrix format"
+          write(outunit,*)" isolver=1 (OpenMP GMRES) requires CRS matrix format"
+          stop
+       endif
+       if (minfo%numColsTot .gt. 0) then
+          call system_clock(clock_startLinSolve,clock_rate)
+          call cpu_time(cpu_startLinSolve)
+          ! rebuild the u,v line decompositions from the CURRENT matrix
+          ! (timed separately to see the serial rebuild's share of the solve)
+          call system_clock(clock_b0,clock_rate)
+          call build_line_decomp(minfo%rowPtr,minfo%cols,minfo%vals,       &
+                                 minfo%numColsTot,2*numBoussCells,0,gmD0)
+          call build_line_decomp(minfo%rowPtr,minfo%cols,minfo%vals,       &
+                                 minfo%numColsTot,2*numBoussCells,1,gmD1)
+          call system_clock(clock_b1,clock_rate)
+          timeLineDecomp = timeLineDecomp + (clock_b1 - clock_b0)
+          ! track the longest tridiagonal line seen over the run
+          if (gmD0%maxline > maxLineLen) then
+             maxLineLen = gmD0%maxline;  maxLineLevel = levelBouss
+          endif
+          if (gmD1%maxline > maxLineLen) then
+             maxLineLen = gmD1%maxline;  maxLineLevel = levelBouss
+          endif
+          ! right-preconditioned GMRES(50), block G-S PC, rtol=1e-9, <=200 its
+          call gmres_solve(minfo%rowPtr,minfo%cols,minfo%vals,             &
+                           minfo%numColsTot,2*numBoussCells,gmD0,gmD1,     &
+                           .true., rhs,soln, 1.d-9, 50, 4,                 &
+                           gm_iters,gm_resid,gm_info)
+          call free_line_decomp(gmD0)
+          call free_line_decomp(gmD1)
+          call system_clock(clock_finishLinSolve,clock_rate)
+          call cpu_time(cpu_finishLinSolve)
+          timeLinSolve    = timeLinSolve    + clock_finishLinSolve - clock_startLinSolve
+          timeLinSolveCPU = timeLinSolveCPU + cpu_finishLinSolve   - cpu_startLinSolve
+          itcount(levelBouss)  = itcount(levelBouss)  + gm_iters
+          numTimes(levelBouss) = numTimes(levelBouss) + 1
+          if (gm_info .ne. 0) then
+             write(*,900) levelBouss, gm_iters, gm_resid
+             write(outunit,900) levelBouss, gm_iters, gm_resid
+ 900         format(" WARNING: OpenMP GMRES not converged, level ",i3,     &
+                    " iters ",i5," rel resid ",e12.4)
+          endif
+       else
+          go to 99
+       endif
+
     else if (isolver .eq.2) then  ! use pardiso
     
 #ifdef HAVE_PARDISO
@@ -179,8 +234,8 @@ subroutine implicit_update(nvar,naux,levelBouss,numBoussCells,doUpdate,time)
 
 !$OMP  PARALLEL DO PRIVATE(mptr,locnew,locOther,locaux,nx,ny,mitot,mjtot,nb,i,j,levSt),     &
 !$OMP  SHARED(listOfGrids,listStart,alloc,soln,levelBouss,ibouss,crs,         &
-!$OMP         doUpdate,nvar,naux,numgrids,node,dt,possk,nghost,nD,rhs,mxnest),    &  
-!$OMP              SCHEDULE (dynamic,1),                                          &  
+!$OMP         doUpdate,nvar,naux,numgrids,node,dt,possk,nghost,nD,rhs,mxnest),    &
+!$OMP              SCHEDULE (dynamic,1),                                          &
 !$OMP              DEFAULT(none)
     do  nn = 1, numgrids(levelBouss)
         levSt  = listStart(levelBouss)
