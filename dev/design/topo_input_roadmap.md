@@ -11,6 +11,11 @@ the user docs, is still open); the supersession clean-up is done;
 §1 below the "Landed" table is kept as the record of the plan the merges
 followed.
 
+**Update (2026-10-29):** two proposed items were added to §2, both raised by
+the ETC-NSLT surge ensemble: §2.9 (tile selection with several crop
+rectangles, approach decided) and §2.10 (vertical datums, model datum
+decided).
+
 **Provenance.** Written 2026-09-07 from the branch and PR state at that date,
 and amended later the same day after test-merging the open PRs in order: §1
 (the stack forks at #741; #745 rebased onto it), §2.3 (layout guards, and the
@@ -49,6 +54,13 @@ each merge commit from `947f5bde` through `58d0290c`. Before merging, the
 combined tree was tested locally (Python unit tests, the regression suite under
 gcc debug and optimized flags, and `examples/1d_classic/okada_dtopo`); see the
 update to §4's "not verified" note.
+
+### In review / open
+
+| Change | Tracking | Status |
+|---|---|---|
+| coarsen + `align` with no aligned point in the crop: Python `crop_indices` raises `EmptyAlignedCropWindow`; Fortran `apply_align_buffer_coarsen` stops naming the file and axis | clawpack/geoclaw#761 | clawpack/geoclaw#762 (open, branch `crop-align-overshoot`, head `c1ac4691`). Verified 2026-10-19: the new Python tests and the `topo_crop` Fortran regression (types 3 and 4) fail on `0ba4db7b` and pass with the fix; the two sweeps comparing against the old code are unchanged |
+| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | coverage rule + Fortran backstop on branch `topo-crop-coverage` (stacked on #762), ahead of the `crop_bounds` PR. Tile helper `TopographyData.select_tiles` and `crop_extent = 'all'`/`'none'` on branch `topo-tile-select` (stacked on #765), from the #765 review. See §2.7 |
 
 ### Merge order as planned (historical)
 
@@ -157,7 +169,9 @@ the file** — the cell at `-179.9979` relabelled `+180.0021`. That is more than
 #727 implemented, and it needs answers first:
 
 - When is a grid "global enough" to wrap? Exact `360°` span is too strict for
-  cell-centered data; what tolerance, expressed in cells or degrees?
+  cell-centered data; what tolerance, expressed in cells or degrees? §2.8's
+  PR A2 (Python wrap-on-read, required to match Fortran) needs the same
+  answer.
 - Does the rule apply to `coordinate_system == 1` (Cartesian)? Presumably not —
   the wrap gate added in `topo-input-parity` already answers this and should be
   reused rather than re-derived.
@@ -168,7 +182,9 @@ the file** — the cell at `-179.9979` relabelled `+180.0021`. That is more than
 
 **Deferred to mandli/geoclaw#15** ("Complete dtopo crop/wrap parity with topo
 (ASCII + netCDF) in the Fortran reader"), open. `topo-input-parity` brings the
-Python side to parity; the Fortran dtopo reader still lags.
+Python side to parity; the Fortran dtopo reader still lags. Since §2.8's PR A
+dropped `crop_bounds` from `dtopo.data`, #15's plan to parse it no longer
+applies; see §2.8.
 
 ### 2.3 What preprocessing should 1D support?
 
@@ -331,6 +347,445 @@ same refactor also makes the job smaller: `gridded_input`'s docstring already
 states that shared unit handling belongs in the product rather than the reader,
 so the ASCII case falls out of hoisting it instead of being added twice.
 
+### 2.7 Crops that run off a file (clawpack/geoclaw#760)
+
+**Decision (2026-10-19): a crop the file doesn't cover is an error, for every
+topo type, checked in Python at `make data`.** "Covered" allows half a cell
+beyond the outermost grid points.
+
+**Status (2026-10-19): implemented on branch `topo-crop-coverage`**, a PR of its
+own ahead of the `crop_bounds` PR rather than folded into it. Python: one check,
+`data._check_crop_covered`, for types 2/3 (in domain coordinates, after
+`x/y_shift`) and type 4 (in file coordinates until the `crop_bounds` PR, with
+the ±360 shifts allowed when `resolve_wrap` permits). One error message for all
+cases, naming the file, its cell-edge extent and the usable overlap. Fortran:
+type 4 now stops like types 2/3 when a requested crop misses its file. Verified:
+the 22 rejection and tile-edge cases in `tests/test_topo_crop_coverage.py`
+and `test_crop_missing_the_file_stops[4]` fail on `dc6b65d8`, and all 31 cases
+plus both backstop runs pass with the change; full `tests/` passes (669). One example regression,
+`bowl-slosh-netcdf[coarsened]`, caught a round-off in the first version (clipping
+to a point rebuilt as `(x0 - dx/2) + dx/2` dropped the first column). It is now
+pinned by `test_netcdf_crop_at_the_points_keeps_the_outermost_points`.
+
+**Behavior changes:** an ASCII (type 2/3) crop past the file, including across
+the antimeridian, now errors instead of being clipped by Fortran. Type 4's three
+error messages become one.
+
+Behavior on `0ba4db7b`, from a 0.25° cell-centered test tile written as type 3
+and type 4:
+
+| crop vs. file | `Topography.read` | `make data` t3 | `make data` t4 | Fortran t2/3 | Fortran t4 |
+|---|---|---|---|---|---|
+| partly outside | clips and warns | writes it | raises | clips silently | clips silently |
+| entirely outside | returns the whole file | writes it | raises | `stop 1` | 0×0 grid kept in the list |
+| exactly the tile's cell edges | ok | ok | raises | ok | ok |
+
+Points to carry into the implementation:
+
+- The type-4 check (`_validate_crop_bounds`, and the latitude check in
+  `_resolve_topo_records`) compares the crop against the outermost cell
+  *centers*. That is why a crop at a tile's own edges is rejected. The new rule's
+  half-cell allowance fixes it.
+- Type 4 currently raises one of three different errors, depending on which
+  axis is off. When latitude is off, the message blames the antimeridian, even
+  for a regional tile. Use one message that names the file extent and the
+  intersection.
+- Fortran type 4 turns an entry that misses the crop into `mx = my = 0` with
+  extents `(0, 0)` and keeps it in the topo list. Nothing has checked how
+  `topoarea`, `rectintegral` or the `topo0save` overlap test treat such an
+  entry, so stop with a message naming the file instead (done; see Status
+  above). In the one run before the fix
+  (`test_crop_missing_the_file_stops[4]`, domain on the real file) it went
+  through `topoarea` without crashing and only tripped the coverage check.
+  Type 2/3 already stops with "topo_crop_extent does not overlap topo file",
+  printing the file and the crop.
+- The coverage check itself (`topo arrays do not cover domain`,
+  `topo_module.f90` after `topoarea`) ended with a bare `stop`, so the run
+  exited with status 0 and scripts and CI couldn't tell it from success. It is
+  now `stop 1` (2026-10-19, same branch). Only the fatal branch changed: an
+  uncovered area over 1% of the domain stops, while one between 1e-12 and 1%
+  still only warns ("do not quite cover") and continues. GeoClaw never
+  documented an exit status, so nothing is broken by the change.
+  `test_descriptor_crop_without_buffer_does_not_cover_ring` now also asserts
+  the nonzero status.
+- Tile selection: Randy's use case is a long list of tiles, of which only those
+  that intersect the crop should be used. Implemented on branch
+  `topo-tile-select` (stacked on #765) as `TopographyData.select_tiles(crop)`,
+  run over the tiles already in `topofiles` so each keeps its own
+  `coarsen`/`buffer`/shifts (decided 2026-10-28, from the #765 review):
+  - `crop_extent` takes `None` or `'all'` (whole file), `[x1, x2, y1, y2]`
+    (strict coverage rule above), or `'none'` (tile not used). `None` keeps
+    meaning the whole file; it never means "skip". Other strings raise.
+  - Headers only. A tile the crop misses, touches only along an edge, or
+    overlaps without holding a grid point gets `'none'`; the last is decided
+    with `crop_indices` and the tile's `coarsen`/`buffer`/`align`, as Fortran
+    decides its window, so a crop ending less than half a cell into a tile
+    does not produce an entry with no points. Other tiles get the overlap,
+    clipped to their cells. A hand-set `'none'` is left alone.
+  - The tiles used must cover the crop together; a gap (including a sliver
+    left by a pointless tile) raises with the uncovered box, and nothing is
+    changed.
+  - Interim, until the `value =: key` format (§2.8, PR B): `'none'` entries
+    are left out of `topo.data` and listed by `make data` with the reason;
+    their files are never opened. PR B writes `none =: crop_extent  # reason`
+    in place. Fortran (`topo_module.f90`) sizes every topo array by
+    `mtopofiles + num_dtopo`, with dtopo grids in the slots after the topo
+    files, so the PR B reader should read every entry, store the used ones
+    contiguously and set `mtopofiles` to the number used.
+  - A Python read of a crop that misses the file now raises, for every type,
+    as `make data` and Fortran do (it warned and returned the whole file).
+  - Not handled: a tile list across the antimeridian (no wrap), and dtopo.
+  - `kmltools` can then draw the extents actually used.
+- Python and Fortran search for the aligned start from opposite ends of an axis
+  stored descending (e.g. latitude north-to-south). Python works on an
+  ascending view and searches from the south. Fortran works in file-index order
+  and searches from the north. By reasoning, not by test, both pick the same
+  coarse lattice: the `coarsen` candidates cover every residue class whichever
+  end they start from. So they should agree on whether a crop is empty and on
+  which points are kept, except perhaps when `align` sits exactly half-way
+  between lattice points (a tie). The `topo_crop` regressions don't cover align
+  on a descending axis.
+
+### 2.8 Crop windows, `crop_bounds`, and the `topo.data` notation
+
+**Owner: Kyle Mandli; Randy LeVeque reviews every PR, and A is the important
+one. Planned 2026-10-15. PR A implemented 2026-10-21 on branch
+`topo-crop-frame`, stacked on #763; B, A2 and C not started.**
+
+Randy asked two questions about `topo.data`. First, what is the difference
+between the per-file `crop_extent` line and the netCDF descriptor's
+`crop_bounds`? Second, why does one file use three notations
+(`value =: key`, `value # key`, `key = value`)? He also wants to plot
+topography across the antimeridian from Python alone.
+
+**`crop_bounds` is not a duplicate of `crop_extent`.** It is the crop for one
+`topo.data` entry, in that entry's *file* coordinates. For a crop that crosses
+the seam, `topo_entries` writes two entries for one file. Each has its own
+`lon_wrap_offset` and `crop_bounds`, while both repeat the user's
+`crop_extent`. Fortran uses `nc_crop_bounds` first for type 4
+(`topo_module.f90`, "Priority: nc_crop_bounds …"). The dtopo descriptor's
+`crop_bounds` has no parser case, so it only produces an "unknown key"
+warning. The met descriptor's copy is ignored, because met carries its crop on
+its own `crop_extent` line.
+
+**Confirmed bug: netCDF and ASCII crop in different frames when `x_shift` is
+set.** ASCII (types 2/3) crops in domain coordinates, after the shift, as the
+`topotools` "Region terminology" docstring says. netCDF (type 4) crops in file
+coordinates, before the shift, in both Python and Fortran. That docstring also
+says `crop_bounds` subtracts `x_shift`, which the code does not do. Checked
+2026-10-15 against `0ba4db7b`:
+
+- The test file is global in longitude at 1°, with `z = 1000 cos(lon)`, run on
+  the domain `[0, 20] × [-5, 5]` with `crop_extent = [0, 20, -5, 5]`.
+- netCDF with no shift matches the exact cell averages to `2.5e-2`. That is
+  inside the bilinear `O(dx²)` bound of about `3.8e-2`.
+- ASCII with `x_shift = 10` matches the domain-frame field to `2.5e-2` and
+  misses the file-frame field by 44.
+- netCDF with `x_shift = 10` stops with "topo arrays do not cover domain"
+  (overlap 100 of 200), because Fortran loaded file `x ∈ [0, 20]`.
+- In Python, type 4 with `x_shift = 360` and crop `[180, 190]` returns a
+  single column at `x = 540`. A type-4 crop that misses the file entirely
+  returns the whole file. #763 is expected to make that second case an error;
+  check once it merges.
+
+#763's coverage check followed the same frames (ASCII shifted, type 4
+unshifted), so PR A stacks on #763 and changes both sides.
+
+**PR A, as implemented (2026-10-21).** Type 4 crops in domain coordinates in
+Python (`gridded_input` picks the window on shifted axes; `TopographyData`
+checks coverage the same way as ASCII) and in Fortran (the netCDF crop
+always goes through the `topo_crop_extent` branch). `topo.data` has no
+`crop_bounds` for topo, dtopo or met. A hand-built
+`[4, path, TopoMetadata]` entry whose crop is only in its metadata has it
+written as `crop_extent`. Fortran stops with "Regenerate topo.data" on an
+old file that still has a `crop_bounds` line. Verified at the PR's commit:
+`tests/test_topo_crop_frame.py` and the full Python suite, the `topo_crop`
+regressions (including the netCDF + `x_shift` case and the old-file stop),
+`bowl-slosh-netcdf` (including coarsened), `dtopo`, `topo0save`,
+`force_dry`, and `chile2010` (including `lon_360`, the only end-to-end user of
+hand-built entries with a −360 offset). The windows are documented, with a
+diagram, in `topo_crop_windows.md`. Not yet done from the PR A row: the user
+docs.
+
+**ASCII and netCDF (Kyle, 2026-10-22).** The windowing logic and the names
+apply to both formats wherever it makes sense, and any difference has to be
+justified. `topo_crop_windows.md` lists the differences that remain. Three are
+not justified:
+
+- The antimeridian wrap is netCDF-only. This moves into PR B: a per-entry
+  `lon_wrap_offset` line for every type.
+- Fortran computes the window in two separate places.
+- `fort.geo` reports the ASCII header but the netCDF window.
+
+The last two can go in one small Fortran refactor PR, separate from B.
+
+**Crop round-off tolerance (folded into PR A, Kyle 2026-10-21).** Python's
+crop window compared exactly, while Fortran's had a `1e-6·dx` allowance. So a
+crop written on a grid line could keep that line in Fortran and drop it in
+Python, without a warning. Example: crop `[-99.5, -99.0]` on a 0.1° grid
+written by `Topography.write` gave Python five points, x = -99.4 … -99.0. This
+is because the writer stores the spacing as `9.9999999999994e-02` and the
+point read back is `-99.50000000000003`. Over 1,905 grid-line crop edges
+(spacings 0.1° to 1/240°, shifts including 0 and 360), Python and the Fortran
+formula disagreed on 1,017. There is now one constant on each side, used
+everywhere a crop edge meets grid points: `coordinate_tools.CROP_TOL` and the
+Fortran `CROP_TOL` parameter in `topo_module.f90`, both `1e-6` of the spacing.
+`tests/test_crop_tolerance.py` checks that the two values agree, that the
+Python window matches the Fortran index formula on that sweep, and that the
+-99.5 case keeps six points for ASCII and netCDF. Setting the constant to 0
+makes five of those tests fail.
+
+It guards round-off only. A user-facing tolerance, or Randy's earlier ~0.5·dx
+(which snaps crops to cell edges and so changes which points are selected),
+is a separate decision. It would need a `topo.data` line, so it belongs with
+PR B and needs Randy's input. Follow-ups not in PR A:
+
+- `Topography.write` takes `cellsize` from `x[1] - x[0]`, through the `delta`
+  property. `(x[-1] - x[0]) / (n - 1)` would be more accurate, but `delta`
+  feeds crop, align and every ASCII header written, so changing it needs its
+  own check against golden files and regression outputs.
+- The met reader's Fortran `crop_indices` still compares exactly. It should
+  use the same constant in PR C.
+
+**Decided (Kyle, 2026-10-15):**
+
+- Drop `crop_bounds` from the topo, dtopo and met descriptors. Fortran derives
+  each entry's file window as `crop_extent − lon_wrap_offset − shift`, which is
+  the existing `topo_crop_extent` branch. Masking against the file coordinates
+  clips the window to the file.
+- Use `value =: key` everywhere, with an optional trailing `# comment`. This is
+  what clawutil's `data_write(..., description=...)` already writes.
+- Detect old files by checking the key. Fortran still reads values in a fixed
+  order, but it also checks the key after `=:` and stops with "regenerate with
+  `make data`" if it is wrong. Without this check, an old `key = value` line
+  would be misread silently.
+- Python wraps on read and returns one `Topography` across the seam. It must
+  match what Fortran loads: the same points and values, and the same
+  coarsen/align/buffer grid.
+- Durable docs and a diagram of the windows go here in `dev/design/`. The
+  user-facing pages go in the clawpack doc repository.
+
+**PRs, in order:**
+
+| PR | Scope |
+|---|---|
+| A | Document and diagram the windows. Drop `crop_bounds`. Make type 4 crop in domain coordinates in Python and Fortran, including #763's check. Failing test first: netCDF + `x_shift` must equal ASCII + `x_shift` (the setup above). Release note for netCDF users who crop with a shift. |
+| A2 | Python wrap-on-read for geographic longitude axes, gated like `resolve_wrap`. Reuse `_compute_lon_entries`, and keep the seam column once where Fortran stores it twice. Verify with a periodic manufactured field: `Z` equals the exact field, `x` is strictly ascending with uniform `dx` across the seam, and the result equals the union of the Fortran entry windows. |
+| B | `topo.data` and `dtopo.data` to `value =: key`. The descriptor gets a fixed set of lines (`fill_value` always written, plus a flag). The 1D dtopo `read(iunit,*) dtopofname, dtopotype` splits into two reads. Add `TopographyData.read` and a write → read round-trip test. |
+| C | The met storm data file and its `&file_info` block move to the same convention, using B's Fortran helper. |
+
+The windows to document and diagram:
+
+1. The file extent.
+2. `crop_extent`, in domain coordinates.
+3. Each entry's file window (today's `crop_bounds`).
+4. The aligned/buffered/coarsened index window that is actually loaded.
+5. The extent of the loaded arrays.
+6. The computational domain plus ghost cells, which is the fallback when no
+   crop is given.
+
+**Interactions:**
+
+- **§2.1 (seam gap).** A2 runs into the same question. Joining a cell-centred
+  global grid across the seam has no hole: `-179.9979 + 360 = 180.0021` sits
+  one `dx` from `179.9979`. The two Fortran entries still leave the hole. A2
+  is required to match Fortran, so §2.1 must be decided before or alongside
+  A2.
+- **§2.2 / mandli/geoclaw#15.** Its step 5 ("parse `crop_bounds`") becomes
+  "use `crop_extent − lon_wrap_offset`" after A. `DTopoInspector.dtopo_entries`
+  also folds the buffer into `crop_bounds`, which contradicts #15's own note
+  that the buffer is applied in Fortran. Update #15 when it is picked up.
+- **Met (separate PR, reproduction first).** These are suspected from reading
+  the code and have not been reproduced. Fortran shifts a whole 0–360 file
+  to ±180 (`gridded_met_forcing_module.f90`, `lon_wrap == 360`), and
+  `crop_indices` then assumes longitude increases steadily. This would
+  mis-select crops that straddle 0° on 0–360 files, and domains that cross
+  180°.
+
+### 2.9 Tile selection with several crop rectangles
+
+*Status (2026-10-29): proposed, approach decided (C below), not started.
+Extends `select_tiles` on branch `topo-tile-select` (§2.7).*
+
+**Need.** A storm-surge ensemble (ETC-NSLT) wants high-resolution coastal topo
+only around a handful of tide gauges spread along ~400 km of coast. The gauges
+need level-6 cells (~390 m) in water. GEBCO puts the Bridgeport, CT gauge on
+land (+3 m) at every level, and Sandy Hook is +0.1 m at level 5. The 1″
+CRM 2023 `crm_vol1_2023.nc` (12°×7°) covers all eight gauges, and at level 6
+each gauge cell is 73–100% wet in it. One crop around all of them is ~110M
+points; one crop per gauge is ~3M each. `select_tiles(crop)` takes a single
+rectangle, and calling it once per rectangle doesn't work: each call
+overwrites the tile's one `crop_extent`.
+
+**Why deduplication alone is not enough.** Today each tile ends up with exactly
+one `crop_extent`, which is the overlap with the crop, clipped to its cells.
+With several rectangles, one tile (or one large file) can overlap more than
+one, and then needs more than one crop window, not a deduplicated list of
+tiles. Three options were considered:
+
+- **A. One entry per tile, crop = bounding box of its overlaps.** This keeps
+  the one-crop-per-tile behavior. The waste is bounded by the tile size for
+  0.25° CUDEM tiles, but unbounded for a single large file: two far-apart
+  rectangles in CRM vol1 give a box spanning most of the file. Rejected.
+- **B. One entry per (tile, rectangle) overlap.** The same file is listed more
+  than once with different crops. It works, but overlapping rectangles give
+  overlapping entries, which waste memory, and add a priority seam if the
+  entries ever differ (e.g. in `z_shift`).
+- **C. B with rectangles merged per file first. Chosen.** For each tile, the
+  overlaps with each rectangle are grouped. Two overlaps merge when they
+  intersect or abut, or when their bounding box is not much bigger than their
+  total area (`area(bbox) ≤ (1 + α)·Σ areas`). Repeat until stable. There is
+  one entry per group.
+
+**Design (C):**
+
+- `select_tiles(crop_extents)` takes one rectangle (current behavior,
+  unchanged) or a list of rectangles, all in domain coordinates.
+- Per tile, each overlap is computed exactly as now: clipped to cells, and
+  `'none'` when it holds no grid point after `crop_indices` with the tile's
+  `coarsen`/`buffer`/`align`. The overlaps are then merged as in C.
+- The first group reuses the existing entry. Further groups are shallow copies
+  of it (same path, `coarsen`, `buffer`, shifts, `z_shift`), inserted right
+  after it. `_compute_priority_order` is a stable sort, so the copies stay
+  adjacent and equal-resolution priority stays as listed. Copies of one tile
+  can never differ in anything but `crop_extent`.
+- Coverage: `_uncovered_part` runs **per requested rectangle** against every
+  entry used, and the error names the rectangle as well as the uncovered box.
+  Nothing changes on error, as now.
+- Fortran: no change expected. Entries are read by index (`topofname(i)`,
+  `topo_module.f90` read at ~l.255, data at ~l.463), and nothing is keyed on
+  the path. Equal-resolution overlap goes to the last entry listed, and merged
+  groups share at most the one edge row that `CROP_TOL` keeps.
+  `VERIFY:` from reading the code, not tested. A `topo_crop` regression should
+  list one file twice, once with disjoint crops and once with crops sharing an
+  edge.
+- PR B (`value =: key`, §2.8): the copies are ordinary entries, so nothing
+  special is needed.
+
+**Tests:**
+- A one-element list behaves exactly like the single rectangle.
+- Two disjoint rectangles in one file give two entries.
+- Overlapping or abutting rectangles give one merged entry.
+- One rectangle across several tiles works as now.
+- The coverage error names the right rectangle.
+- A hand-set `'none'` is left alone.
+- The merge criterion is checked at the α boundary.
+
+**Open questions:**
+- Is α internal (proposed default 0.25) or a keyword?
+- What happens when `select_tiles` runs on a list it already split: raise,
+  or re-merge from the original entries? This needs the original per-tile
+  entry recorded, or a rule that the input must not already be split.
+- Should the `make data` listing of `'none'` tiles report which rectangles
+  were tried?
+
+### 2.10 Vertical datums
+
+*Status (2026-10-29): proposed, not started. Decided: surge runs take local
+mean sea level (MSL) of the current National Tidal Datum Epoch (NTDE,
+1983–2001) as the model's vertical datum.*
+
+**Problem.** Each topo source has its own vertical datum, and GeoClaw doesn't
+record which one, or what the model's zero means. There is a bulk per-file
+`z_shift` (`topo_module.f90` ~l.1241 applies `topo = topo + z_shift`;
+`data.py` writes it), but nothing tells the user it is needed, so mixing
+sources silently gives seams of centimeters to decimeters. That is small in
+deep water and matters near shore, in the intertidal zone and overland, which
+is where surge and wet/dry gauges live.
+
+Commonly used sources differ in kind, not only in offset: a global bathymetry
+may declare no datum at all (GEBCO: EPSG:5831, "Instantaneous Water Level
+depth"), while regional DEMs use a geodetic datum (NCEI CUDEM tiles in the US:
+NAVD88; NCEI CRM 2023: the EGM2008 geoid). The size of the correction is not
+predictable from the resolution or the provider.
+
+**Motivating example.** For the US Northeast (NY Bight to Narragansett Bay),
+the shift to local MSL is +0.07 to +0.12 m for NAVD88 sources but +0.39 to
++0.47 m for EGM2008 sources. Applying it moves a gauge cell from wet to dry at
+~1 km resolution. Measured per-gauge values, method and checks are recorded in
+the application that needed them (ETC-NSLT-project `README.md`, "Topography and
+vertical datums"); this section keeps only what generalizes.
+
+**Traps (general):**
+- Read the datum from the source file's own metadata, not from a converted
+  copy. Locally converted netCDF files often carry a generic "above mean sea
+  level" label that is not the datum.
+- Never take a NAD83 ↔ WGS 84/EGM2008 height from a PROJ "ballpark" operation:
+  it treats the two frames as identical, about 1.25 m wrong in CONUS. Use
+  VDatum, or an explicit chain (geoid grid → time-dependent Helmert → geoid
+  grid).
+- Check the sign of any shift by comparing two corrected sources where they
+  overlap: corrected sources should agree better than raw ones.
+
+**Principles:**
+
+1. **One model datum per run, and `sea_level` is relative to it.** With local
+   MSL (NTDE) as the datum, `sea_level` is the event-time departure from the
+   epoch: sea-level rise since the epoch midpoint (~1992) plus the monthly
+   anomaly. That matches NOAA's residual (observed minus predicted, with
+   predictions referenced to the epoch), so model and observed residuals share
+   a zero. Comparisons of residuals cancel the station datum; comparisons of
+   total water level do not.
+2. **Correct where depth is small.** Apply datum shifts to the high-resolution
+   coastal sources. A global bathymetry like GEBCO is left as nominal MSL: its
+   near-shore errors are meters, so a datum correction there means nothing.
+3. **MSL is not a level surface; `sea_level` is.** No constant `sea_level`
+   matches MSL along a long coast.
+   - For small crops, a constant `z_shift` per entry from the nearest station's
+     datum sheet is often adequate (in the example above it varies by 6–8 cm
+     across the region).
+   - For large coverage, convert the file once with a spatially varying shift
+     grid and use the converted file as an ordinary topo input. No
+     spatially varying shift in Fortran.
+   - For that conversion, **Transformez**
+     (https://github.com/continuous-dems/transformez, the Continuous DEMs
+     project behind CUDEM) builds and applies vertical transformations between
+     geodetic, tidal and model-based references. It generates shift grids for a
+     region (`transformez.generate_grid(region=..., increment=..., datum_in=...,
+     datum_out=...)`; CLI `build`/`shift`) and continues past VDatum's coastal
+     coverage with global proxies and blending. It is MIT-licensed (©
+     Regents of the University of Colorado), which is compatible with BSD for
+     use as an optional external tool. GeoClaw would call it, not vendor or
+     port it. Its optional engines (NGS HTDP, NOAA VDatum) have their own terms,
+     which need checking before the docs recommend them. `VERIFY:` its support
+     for NAVD88, EGM2008 and NTDE local MSL was not confirmed from the README;
+     test it on a few CO-OPS stations against their datum sheets before
+     recommending it.
+
+**Proposed Python-side feature (no Fortran change):**
+
+- **Declared datums.**
+  - `Topography.vertical_datum`: a string or `None`, e.g. `'navd88'`,
+    `'egm2008'`, `'lmsl'`; `None` means undeclared.
+  - The model datum is declared once, next to `sea_level`. Where it lives
+    (`geo_data` or `topo_data`) is an open question.
+- **Write-time check.** If the model datum is declared and an entry declares a
+  different datum with `z_shift == 0`, warn (or raise in a strict mode). If the
+  entries declare different datums among themselves with no shifts, warn.
+  Nothing is checked when nothing is declared, which keeps old runs working.
+- **Sign convention.** Document it explicitly: `z_model = z_file + z_shift`,
+  where `z_shift` is the height of the file datum's zero above the model
+  datum's zero. For example, NAVD88 → local MSL at The Battery (NY) is
+  `z_shift = +0.063`.
+- **Optional helpers.**
+  - A CO-OPS datum lookup (`station_datum_offset(station, from_, to)`) for
+    constant shifts, alongside the existing `fetch_noaa_tide_data`.
+  - A thin optional wrapper that runs Transformez to write a converted file.
+    Doing that, rather than making it a dependency, is an open question.
+- **Docs.** A short page on what `sea_level` means relative to the model
+  datum, and how to choose it for a historical event.
+
+**Tests:** warning and no-warning cases for the write-time check; the
+`z_shift` sign on a known station; undeclared datums stay silent.
+
+**Open questions:**
+- Where does the model datum attribute live?
+- Warn, or raise in a strict mode?
+- Ship the CO-OPS helper?
+- Should Transformez be an optional dependency, or only a pointer in the docs?
+- Should the same metadata extend to dtopo, which is relative by construction
+  and probably exempt?
+
 ---
 
 ## 3. Correction on record: clawpack/geoclaw#740
@@ -404,6 +859,15 @@ cases.
 author's, and the remote-fetch tests throughout (marked `remote`, skipped).
 Also not re-run after #745's rebase: the other five `examples/1d_classic` cases,
 and any Fortran regression suite (`-m regression`) on the combined tree.
+
+**§2.8 (2026-10-15, against `0ba4db7b`).** The crop-frame results were
+checked by running scratch GeoClaw problems: one level, spherical, built from
+`examples/tsunami/bowl-slosh-netcdf`'s Makefile. The topography each run
+built was read from `fort.a0000` and compared with exact cell averages. The
+Python results came from direct `Topography.read` calls. PR A turns the
+setup into `test_shifted_crop_is_in_domain_coordinates` in
+`tests/regression/topo_crop`; its expected values use the cos(latitude)
+area weighting of the spherical topo integral (`bilinearintegral.f`).
 
 ---
 

@@ -186,7 +186,8 @@ def test_golden_netcdf_cropped(tmp_path):
 
     This is the case the resolve-then-write refactor touches most, and the one
     most likely to change by accident: it must keep emitting exactly one entry,
-    with crop_bounds in file coordinates and lon_wrap_offset 0.0.
+    with lon_wrap_offset 0.0 and no crop_bounds line (the crop is the
+    crop_extent line; dev/design/topo_input_roadmap.md §2.8).
     """
     pytest.importorskip("xarray")
     path = _write_nc(tmp_path / "d.nc")
