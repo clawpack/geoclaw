@@ -813,16 +813,22 @@ program amr2
     write(timing_unit,format_string) real(timeTick,kind=8)/real(clock_rate,kind=8), &
             timeTickCPU
 
+    write(*,*)
+    write(timing_unit,*)
+    if (isolver .eq. 1) then
+       write(*,*)"Linear solver is stand-along GMRES, isolver = 1"
+    else if (isolver .eq. 3) then
+       write(*,*)"Linear solver is PETSc, isolver = 3"
+    endif
+
     if (isolver .eq. 3 .or. isolver .eq. 1) then
-       write(*,*)
-       write(timing_unit,*)
        write(*,*)"Linear solver was called on this level:    Num Times  Avg Num Iters"
        write(timing_unit,*)"Linear solver was called on this level:    Num Times  Avg Num Iters"
        do level = 1, mxnest
          if (numTimes(level) .gt. 0) then
            write(*,989) level, numTimes(level), real(itcount(level))/real(numTimes(level))
            write(timing_unit,989) level, numTimes(level), real(itcount(level))/real(numTimes(level))
- 989       format(18x, i10,2x,i10,3x,f10.2)
+ 989       format(27x, i10,4x,i10,3x,f10.2)
          else
            exit
          endif
@@ -835,12 +841,11 @@ program amr2
  991   format(' Longest tridiagonal line over run: ',i10,' cells (level ',i3,')')
     endif
 
-
+    write(*,*)
+    write(timing_unit,*)
     format_string="('OpenMP is using',i3,' thread(s)')"
     write(timing_unit,format_string) maxthreads
-    write(*,format_string) maxthreads
-    format_string="('MPI    is using',i3,' process(es)')"
-    
+    write(*,format_string) maxthreads    
     
     write(*,*)
     write(timing_unit,*)
