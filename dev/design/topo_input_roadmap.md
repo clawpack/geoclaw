@@ -50,6 +50,13 @@ combined tree was tested locally (Python unit tests, the regression suite under
 gcc debug and optimized flags, and `examples/1d_classic/okada_dtopo`); see the
 update to §4's "not verified" note.
 
+### In review / open
+
+| Change | Tracking | Status |
+|---|---|---|
+| coarsen + `align` with no aligned point in the crop: Python `crop_indices` raises `EmptyAlignedCropWindow`; Fortran `apply_align_buffer_coarsen` stops naming the file and axis | clawpack/geoclaw#761 | clawpack/geoclaw#762 (open, branch `crop-align-overshoot`, head `c1ac4691`). Verified 2026-10-19: the new Python tests and the `topo_crop` Fortran regression (types 3 and 4) fail on `0ba4db7b` and pass with the fix; the two sweeps comparing against the old code are unchanged |
+| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | coverage rule + Fortran backstop on branch `topo-crop-coverage` (stacked on #762), ahead of the `crop_bounds` PR; tile helper next. See §2.7 |
+
 ### Merge order as planned (historical)
 
 The topo stack is linear through #741 and then **forks**: both #745 and #749
@@ -330,6 +337,84 @@ now lives; work written against #741's `if/elif` ladder would be rewritten. The
 same refactor also makes the job smaller: `gridded_input`'s docstring already
 states that shared unit handling belongs in the product rather than the reader,
 so the ASCII case falls out of hoisting it instead of being added twice.
+
+### 2.7 Crops that run off a file (clawpack/geoclaw#760)
+
+**Decision (2026-10-19): a crop the file doesn't cover is an error, for every
+topo type, checked in Python at `make data`.** "Covered" allows half a cell
+beyond the outermost grid points.
+
+**Status (2026-10-19): implemented on branch `topo-crop-coverage`**, a PR of its
+own ahead of the `crop_bounds` PR rather than folded into it. Python: one check,
+`data._check_crop_covered`, for types 2/3 (in domain coordinates, after
+`x/y_shift`) and type 4 (in file coordinates until the `crop_bounds` PR, with
+the ±360 shifts allowed when `resolve_wrap` permits). One error message for all
+cases, naming the file, its cell-edge extent and the usable overlap. Fortran:
+type 4 now stops like types 2/3 when a requested crop misses its file. Verified:
+the 22 rejection and tile-edge cases in `tests/test_topo_crop_coverage.py`
+and `test_crop_missing_the_file_stops[4]` fail on `dc6b65d8`, and all 31 cases
+plus both backstop runs pass with the change; full `tests/` passes (669). One example regression,
+`bowl-slosh-netcdf[coarsened]`, caught a round-off in the first version (clipping
+to a point rebuilt as `(x0 - dx/2) + dx/2` dropped the first column). It is now
+pinned by `test_netcdf_crop_at_the_points_keeps_the_outermost_points`.
+
+**Behavior changes:** an ASCII (type 2/3) crop past the file, including across
+the antimeridian, now errors instead of being clipped by Fortran. Type 4's three
+error messages become one.
+
+Behavior on `0ba4db7b`, from a 0.25° cell-centered test tile written as type 3
+and type 4:
+
+| crop vs. file | `Topography.read` | `make data` t3 | `make data` t4 | Fortran t2/3 | Fortran t4 |
+|---|---|---|---|---|---|
+| partly outside | clips and warns | writes it | raises | clips silently | clips silently |
+| entirely outside | returns the whole file | writes it | raises | `stop 1` | 0×0 grid kept in the list |
+| exactly the tile's cell edges | ok | ok | raises | ok | ok |
+
+Points to carry into the implementation:
+
+- The type-4 check (`_validate_crop_bounds`, and the latitude check in
+  `_resolve_topo_records`) compares the crop against the outermost cell
+  *centers*. That is why a crop at a tile's own edges is rejected. The new rule's
+  half-cell allowance fixes it.
+- Type 4 currently raises one of three different errors, depending on which
+  axis is off. When latitude is off, the message blames the antimeridian, even
+  for a regional tile. Use one message that names the file extent and the
+  intersection.
+- Fortran type 4 turns an entry that misses the crop into `mx = my = 0` with
+  extents `(0, 0)` and keeps it in the topo list. Nothing has checked how
+  `topoarea`, `rectintegral` or the `topo0save` overlap test treat such an
+  entry, so stop with a message naming the file instead (done; see Status
+  above). In the one run before the fix
+  (`test_crop_missing_the_file_stops[4]`, domain on the real file) it went
+  through `topoarea` without crashing and only tripped the coverage check.
+  Type 2/3 already stops with "topo_crop_extent does not overlap topo file",
+  printing the file and the crop.
+- The coverage check itself (`topo arrays do not cover domain`,
+  `topo_module.f90` after `topoarea`) ended with a bare `stop`, so the run
+  exited with status 0 and scripts and CI couldn't tell it from success. It is
+  now `stop 1` (2026-10-19, same branch). Only the fatal branch changed: an
+  uncovered area over 1% of the domain stops, while one between 1e-12 and 1%
+  still only warns ("do not quite cover") and continues. GeoClaw never
+  documented an exit status, so nothing is broken by the change.
+  `test_descriptor_crop_without_buffer_does_not_cover_ring` now also asserts
+  the nonzero status.
+- Tile selection: Randy's use case is a long list of tiles, of which only those
+  that intersect the crop should be used. Give it a helper (working name
+  `topotools.tiles_covering(paths, crop_extent, coarsen=, align=, buffer=)`)
+  that sets each `crop_extent` to the intersection and drops tiles whose kept
+  window is empty. It should decide that with `crop_indices`, so that it agrees
+  with Fortran. That relies on #761 (§1, "In review / open"). `kmltools` can
+  then draw the extents actually used.
+- Python and Fortran search for the aligned start from opposite ends of an axis
+  stored descending (e.g. latitude north-to-south). Python works on an
+  ascending view and searches from the south. Fortran works in file-index order
+  and searches from the north. By reasoning, not by test, both pick the same
+  coarse lattice: the `coarsen` candidates cover every residue class whichever
+  end they start from. So they should agree on whether a crop is empty and on
+  which points are kept, except perhaps when `align` sits exactly half-way
+  between lattice points (a tie). The `topo_crop` regressions don't cover align
+  on a descending axis.
 
 ---
 

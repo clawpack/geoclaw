@@ -258,6 +258,8 @@ def test_descriptor_crop_without_buffer_does_not_cover_ring(
     assert "topo arrays do not cover domain" in out, (
         "buffer=0 should leave the ring outside crop_bounds uncovered; the "
         f"reader appears not to be applying crop_bounds at all.\n{out}")
+    # The coverage failure is fatal and must say so in the exit status.
+    assert rc != 0, out
 
 
 def test_descriptor_crop_inside_window_runs_either_way(
@@ -414,3 +416,147 @@ def test_wrapped_entries_report_shifted_extents(tmp_path, netcdf_xgeoclaw):
     assert all(float(hi) < 0.0 for _lo, hi in windows), (
         f"an entry kept its file longitude instead of the domain one: "
         f"{windows}")
+
+
+# ===========================================================================
+# coarsen + align with no aligned point inside the crop (#761)
+#
+# The align step moves the window start onto the coarse lattice through
+# `align`.  When the crop is narrower than `coarsen` points, that can move the
+# start past the end of the window.  apply_align_buffer_coarsen used to carry
+# on, keeping one point outside the crop (possibly outside the file); it must
+# stop and name the file instead, for both reader paths.
+# ===========================================================================
+
+# Two grid points (-95.0, -94.875) in x.  coarsen=3 aligned to -94.75 keeps
+# ..., -95.125, -94.75, ..., so neither is on the lattice.  y is wide and its
+# align (22.0) lies on the grid, so only x is at fault.
+EMPTY_ALIGN_CROP = (-95.0, -94.875, 22.0, 25.0)
+EMPTY_ALIGN = (-94.75, 22.0)
+EMPTY_ALIGN_COARSEN = 3
+
+
+def _run_empty_align(tmp_path, prebuilt, topo_type):
+    """Run with a crop whose aligned coarse lattice misses it entirely."""
+    nc_path = _write_nc_topo(tmp_path / "topo.nc")
+    if topo_type == 4:
+        topo_path = nc_path
+    else:
+        src = topotools.Topography()
+        src.read(str(nc_path), topo_type=4)
+        topo_path = tmp_path / "topo.tt3"
+        src.write(str(topo_path), topo_type=3)
+
+    runner = gtest.GeoClawTestRunner(tmp_path, test_path=testdir)
+    runner.set_data()
+    cd = runner.rundata.clawdata
+    # The stop comes while reading topo, before the coverage check, so the
+    # domain only needs to be valid.
+    cd.lower = [-96.0, 22.0]
+    cd.upper = [-90.0, 25.0]
+    cd.num_cells = [20, 12]
+    runner.write_data()
+
+    topo = topotools.Topography()
+    topo.path = str(topo_path)
+    topo.topo_type = topo_type
+    topo.crop_extent = list(EMPTY_ALIGN_CROP)
+    topo.coarsen = EMPTY_ALIGN_COARSEN
+    topo.align = list(EMPTY_ALIGN)
+
+    td = TopographyData()
+    td.topofiles = [topo]
+    td.write(out_file=str(tmp_path / "topo.data"))
+
+    shutil.copy(prebuilt, tmp_path / runner.executable_name)
+    (tmp_path / "_output").mkdir(exist_ok=True)
+    proc = subprocess.run([str(tmp_path / runner.executable_name)],
+                          cwd=tmp_path, capture_output=True, text=True)
+    (tmp_path / "run.log").write_text(proc.stdout + proc.stderr)
+    return proc.returncode, proc.stdout + proc.stderr, topo_path
+
+
+@pytest.mark.parametrize("topo_type", [3, 4])
+def test_crop_with_no_aligned_point_stops(tmp_path, netcdf_xgeoclaw,
+                                          topo_type):
+    """The reader stops, naming the file and axis, instead of inventing a
+    point outside the crop.  Python's crop_indices raises for the same crop
+    (EmptyAlignedCropWindow); this pins the Fortran mirror to agree."""
+    rc, out, topo_path = _run_empty_align(tmp_path, netcdf_xgeoclaw,
+                                          topo_type)
+
+    assert rc != 0, out
+    assert "crop contains no point of the coarsened grid" in out, out
+    assert topo_path.name in out, out
+    assert re.search(r"axis\s*=\s*x", out), out
+
+
+# ===========================================================================
+# Fortran backstop: a crop that misses its file (#760)
+#
+# TopographyData.write rejects a crop the file does not cover, so a missing
+# crop only reaches Fortran through a hand-edited or stale topo.data.  Fortran
+# must still stop and name the file.  Types 2/3 already did; type 4 turned the
+# entry into a 0x0 grid with extents (0, 0) and kept it in the topo list.
+# ===========================================================================
+
+# Wholly east of the file (TOPO_X = -100..-80).
+MISSING_CROP = (-70.0, -65.0, 22.0, 25.0)
+
+
+def _run_missing_crop(tmp_path, prebuilt, topo_type):
+    """Write a valid topo.data, then move the crop off the file by editing it,
+    as a stale or hand-edited topo.data would."""
+    nc_path = _write_nc_topo(tmp_path / "topo.nc")
+    if topo_type == 4:
+        topo_path = nc_path
+    else:
+        src = topotools.Topography()
+        src.read(str(nc_path), topo_type=4)
+        topo_path = tmp_path / "topo.tt3"
+        src.write(str(topo_path), topo_type=3)
+
+    runner = gtest.GeoClawTestRunner(tmp_path, test_path=testdir)
+    runner.set_data()
+    cd = runner.rundata.clawdata
+    cd.lower = [-96.0, 22.0]
+    cd.upper = [-90.0, 25.0]
+    cd.num_cells = [20, 12]
+    runner.write_data()
+
+    topo = topotools.Topography()
+    topo.path = str(topo_path)
+    topo.topo_type = topo_type
+    topo.crop_extent = list(CROP)
+    td = TopographyData()
+    td.topofiles = [topo]
+    td.write(out_file=str(tmp_path / "topo.data"))
+
+    missing = " ".join(repr(v) for v in MISSING_CROP)
+    text = (tmp_path / "topo.data").read_text()
+    text, n = re.subn(r"^.*# crop_extent.*$", f"{missing}   # crop_extent",
+                      text, flags=re.M)
+    assert n == 1, text
+    if topo_type == 4:
+        text, n = re.subn(r"^crop_bounds\s*=.*$",
+                          f"crop_bounds    = {missing}", text, flags=re.M)
+        assert n == 1, text
+    (tmp_path / "topo.data").write_text(text)
+
+    shutil.copy(prebuilt, tmp_path / runner.executable_name)
+    (tmp_path / "_output").mkdir(exist_ok=True)
+    proc = subprocess.run([str(tmp_path / runner.executable_name)],
+                          cwd=tmp_path, capture_output=True, text=True)
+    (tmp_path / "run.log").write_text(proc.stdout + proc.stderr)
+    return proc.returncode, proc.stdout + proc.stderr, topo_path
+
+
+@pytest.mark.parametrize("topo_type", [3, 4])
+def test_crop_missing_the_file_stops(tmp_path, netcdf_xgeoclaw, topo_type):
+    """A crop wholly outside its file stops the run, naming the file."""
+    rc, out, topo_path = _run_missing_crop(tmp_path, netcdf_xgeoclaw,
+                                           topo_type)
+
+    assert rc != 0, out
+    assert "does not overlap topo file" in out, out
+    assert topo_path.name in out, out
