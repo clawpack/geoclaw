@@ -37,6 +37,13 @@ module topo_module
     ! NetCDF4 support
     real(kind=4), parameter :: CONVENTION_REQUIREMENT = 1.0
 
+    ! Round-off allowance where a crop edge meets a grid point, as a fraction
+    ! of the grid spacing: a point within CROP_TOL*dx outside a crop edge
+    ! counts as on it.  Guards round-off only; it does not move crop edges.
+    ! Must equal coordinate_tools.CROP_TOL in Python, which selects the same
+    ! window (tests/test_crop_tolerance.py checks this).
+    real(kind=8), parameter :: CROP_TOL = 1.0d-6
+
     ! NetCDF descriptor fields — one slot per topo file, populated from the
     ! key=value block in topo.data by read_netcdf_descriptor (type 4 only).
     character(len=64), allocatable :: nc_var_name(:)     ! topo variable name
@@ -48,9 +55,7 @@ module topo_module
     real(kind=8),      allocatable :: nc_lon_wrap_offset(:) ! longitude 0-360 wrap: x_domain = x_file + lon_wrap_offset
     real(kind=8),      allocatable :: nc_scale_factor(:) ! multiply elevation by this on read (unit conversion -> meters)
     real(kind=8),      allocatable :: nc_fill_value(:)   ! fill/nodata sentinel
-    real(kind=8),      allocatable :: nc_crop_bounds(:,:) ! (4, n): lon0,lon1,lat0,lat1
     logical,           allocatable :: nc_has_fill(:)     ! fill_value was specified
-    logical,           allocatable :: nc_has_crop(:)     ! crop_bounds was specified
 
     ! Per-file preprocessing parameters — read from the 8 new lines in topo.data
     ! for all topo file types (2, 3, 4, 5). Type-1 files are skipped.
@@ -211,8 +216,7 @@ contains
                 allocate(nc_dim_order(mtopofiles), nc_fill_action(mtopofiles))
                 allocate(nc_lon_wrap_offset(mtopofiles), nc_fill_value(mtopofiles))
                 allocate(nc_scale_factor(mtopofiles))
-                allocate(nc_crop_bounds(4, mtopofiles))
-                allocate(nc_has_fill(mtopofiles), nc_has_crop(mtopofiles))
+                allocate(nc_has_fill(mtopofiles))
                 nc_var_name      = ''
                 nc_x_name      = ''
                 nc_y_name      = ''
@@ -222,9 +226,7 @@ contains
                 nc_lon_wrap_offset    = 0.0d0
                 nc_scale_factor  = 1.0d0
                 nc_fill_value    = 0.0d0
-                nc_crop_bounds   = 0.0d0
                 nc_has_fill      = .false.
-                nc_has_crop      = .false.
 
                 allocate(topo_crop_extent(4, mtopofiles), topo_coarsen(mtopofiles))
                 allocate(topo_buffer(mtopofiles), topo_align(2, mtopofiles))
@@ -347,15 +349,15 @@ contains
                                 y1_c = topo_crop_extent(3,i) - topo_y_shift(i)
                                 y2_c = topo_crop_extent(4,i) - topo_y_shift(i)
                                 i_start = max(0, ceiling((x1_c - xlowtopo(i)) &
-                                                / dxtopo(i) - 1.0d-6))
+                                                / dxtopo(i) - CROP_TOL))
                                 i_end   = min(mxtopo(i)-1, &
                                               floor((x2_c - xlowtopo(i)) &
-                                                / dxtopo(i) + 1.0d-6))
+                                                / dxtopo(i) + CROP_TOL))
                                 j_start = max(0, ceiling((y1_c - ylowtopo(i)) &
-                                                / dytopo(i) - 1.0d-6))
+                                                / dytopo(i) - CROP_TOL))
                                 j_end   = min(mytopo(i)-1, &
                                               floor((y2_c - ylowtopo(i)) &
-                                                / dytopo(i) + 1.0d-6))
+                                                / dytopo(i) + CROP_TOL))
                                 if (i_start > i_end .or. j_start > j_end) then
                                     print *, "ERROR: topo_crop_extent does not overlap topo file:"
                                     print *, "  file = ", trim(topofname(i))
@@ -377,12 +379,14 @@ contains
                                 mxtopo(i), xlowtopo(i), dxtopo(i), &
                                 topo_align(1,i) - topo_x_shift(i), &
                                 any(topo_align(:,i) /= 0.0d0), &
-                                max(1, topo_coarsen(i)), topo_buffer(i))
+                                max(1, topo_coarsen(i)), topo_buffer(i), &
+                                topofname(i), 'x')
                             call apply_align_buffer_coarsen(j_start, j_end, &
                                 mytopo(i), ylowtopo(i), dytopo(i), &
                                 topo_align(2,i) - topo_y_shift(i), &
                                 any(topo_align(:,i) /= 0.0d0), &
-                                max(1, topo_coarsen(i)), topo_buffer(i))
+                                max(1, topo_coarsen(i)), topo_buffer(i), &
+                                topofname(i), 'y')
 
                             ! Update stored extents/sizes to the kept lattice
                             ! (still file coords; topo_x_shift is applied below).
@@ -591,7 +595,9 @@ contains
                     write(6,*) '**** topo arrays do not cover domain'
                     write(6,*) '**** area of overlap = ', area
                     write(6,*) '**** area of domain  = ', area_domain
-                    stop
+                    ! Nonzero status so scripts and CI see the failure; a
+                    ! bare stop exits 0.
+                    stop 1
                 else if (abs(area - area_domain) > 1e-12*area_domain) then
                     write(6,*) '**** WARNING'
                     write(6,*) '**** topo arrays do not quite cover domain'
@@ -647,11 +653,18 @@ contains
     !
     !  The kept points are then i_lo + k*c for k = 0..(i_hi-i_lo)/c.
     !
+    !  If the align shift moves i_lo past i_hi, no point of the aligned coarse
+    !  lattice lies inside the window and the run stops, naming fname and axis
+    !  (Python's crop_indices raises EmptyAlignedCropWindow in the same case).
+    !  Continuing would keep a point outside the crop, possibly outside the
+    !  file.
+    !
     !  x0 is the coordinate of file index 0 and dxf the signed spacing in
     !  file index order (negative for descending axes, e.g. N-to-S latitude).
     ! ========================================================================
     subroutine apply_align_buffer_coarsen(i_lo, i_hi, n_avail, x0, dxf, &
-                                          align_val, has_align, c, nbuf)
+                                          align_val, has_align, c, nbuf, &
+                                          fname, axis)
 
         implicit none
 
@@ -659,6 +672,7 @@ contains
         integer, intent(in) :: n_avail, c, nbuf
         real(kind=8), intent(in) :: x0, dxf, align_val
         logical, intent(in) :: has_align
+        character(len=*), intent(in) :: fname, axis
 
         integer :: k, ioff
         real(kind=8) :: dx_new, r, frac, best
@@ -675,6 +689,15 @@ contains
                     ioff = k
                 end if
             end do
+            if (i_lo + ioff > i_hi) then
+                print *, "ERROR: crop contains no point of the coarsened grid:"
+                print *, "  file    = ", trim(fname)
+                print *, "  axis    = ", axis
+                print *, "  coarsen = ", c, "  align = ", align_val
+                print *, "  Widen the crop to at least coarsen grid points,"
+                print *, "  or change align."
+                stop 1
+            end if
             i_lo = i_lo + ioff
             i_hi = i_hi - mod(i_hi - i_lo, c)
         end if
@@ -1500,28 +1523,20 @@ contains
                 dy = abs(ylocs(2) - ylocs(1))
 
                 ! ----------------------------------------------------------------
-                ! Select the subset of the file to load.
-                ! Priority: nc_crop_bounds (file coords) > topo_crop_extent (domain
-                ! coords, converted to file coords) > AMR domain fallback.
+                ! Select the subset of the file to load: topo_crop_extent if
+                ! a crop was requested, else the AMR domain.
                 ! ----------------------------------------------------------------
                 nbuf4 = 0
-                if (present(topo_idx) .and. nc_has_crop(topo_idx)) then
-                    ! nc_crop_bounds are in FILE coordinates; compare against
-                    ! file-coord xlocs before applying lon_wrap_offset.
-                    x_in_dom = (xlocs >= nc_crop_bounds(1, topo_idx)) .and. &
-                               (xlocs <= nc_crop_bounds(2, topo_idx))
-                    y_in_dom = (ylocs >= nc_crop_bounds(3, topo_idx)) .and. &
-                               (ylocs <= nc_crop_bounds(4, topo_idx))
-                    ! buffer applies to a descriptor crop exactly as it does to
-                    ! topo_crop_extent below; leaving nbuf4 = 0 here silently
-                    ! dropped topo_buffer for every file written by
-                    ! TopoInspector.topo_entries(), which always sets crop_bounds.
-                    nbuf4 = topo_buffer(topo_idx)
-                else if (present(topo_idx) .and. &
+                if (present(topo_idx) .and. &
                          any(topo_crop_extent(:,topo_idx) /= 0.0d0)) then
                     ! topo_crop_extent is in domain coordinates (after nc_lon_wrap_offset
-                    ! and topo_x_shift).  Convert to file coordinates for comparison
-                    ! against raw xlocs (which have neither offset applied yet).
+                    ! and topo_x_shift), as for types 2/3.  Convert to file
+                    ! coordinates for comparison against raw xlocs (which have
+                    ! neither offset applied yet).  For one side of a crop split
+                    ! across the antimeridian the converted crop runs past the
+                    ! file, and the masks clip it to this entry's part.  The
+                    ! CROP_TOL allowance, as for types 2/3, keeps an edge point
+                    ! that round-off lands just outside.
                     ! topo_buffer is applied in index space below, mirroring
                     ! Python Topography.crop().
                     x1_c = topo_crop_extent(1,topo_idx) - nc_lon_wrap_offset(topo_idx) &
@@ -1530,8 +1545,10 @@ contains
                            - topo_x_shift(topo_idx)
                     y1_c = topo_crop_extent(3,topo_idx) - topo_y_shift(topo_idx)
                     y2_c = topo_crop_extent(4,topo_idx) - topo_y_shift(topo_idx)
-                    x_in_dom = (xlocs >= x1_c) .and. (xlocs <= x2_c)
-                    y_in_dom = (ylocs >= y1_c) .and. (ylocs <= y2_c)
+                    x_in_dom = (xlocs >= x1_c - CROP_TOL*dx) .and. &
+                               (xlocs <= x2_c + CROP_TOL*dx)
+                    y_in_dom = (ylocs >= y1_c - CROP_TOL*dy) .and. &
+                               (ylocs <= y2_c + CROP_TOL*dy)
                     nbuf4 = topo_buffer(topo_idx)
                 else
                     x_in_dom = (xlocs > (xlower - dx - hxposs(1)*nghost)) .and. &
@@ -1540,8 +1557,8 @@ contains
                                (ylocs < (yupper + dy + hyposs(1)*nghost))
                 end if
 
-                ! Apply lon_wrap_offset AFTER crop_bounds selection: converts file
-                ! coordinates to domain coordinates.  crop_bounds above were
+                ! Apply lon_wrap_offset AFTER the crop selection: converts file
+                ! coordinates to domain coordinates.  The crop above was
                 ! compared against file-coord xlocs; xll/xhi below will be in
                 ! domain coordinates as GeoClaw expects.
                 if (present(topo_idx)) then
@@ -1551,8 +1568,22 @@ contains
                 end if
 
                 if (count(x_in_dom) == 0 .or. count(y_in_dom) == 0) then
-                    ! No overlap with the requested region: report an empty
-                    ! topo; read_topo_file skips loading when mx/my = 0.
+                    ! A requested crop that misses the file is an error, as
+                    ! for types 2/3 (#760).  TopographyData.write rejects it,
+                    ! so it only gets here from a stale or hand-edited
+                    ! topo.data; an empty entry would otherwise stay in the
+                    ! topo list with extents (0, 0).
+                    if (present(topo_idx)) then
+                        if (any(topo_crop_extent(:,topo_idx) /= 0.0d0)) then
+                            print *, "ERROR: topo_crop_extent does not overlap topo file:"
+                            print *, "  file = ", trim(fname)
+                            print *, "  crop = ", topo_crop_extent(:,topo_idx)
+                            stop 1
+                        end if
+                    end if
+                    ! No crop requested and no overlap with the AMR domain:
+                    ! report an empty topo; read_topo_file skips loading when
+                    ! mx/my = 0.
                     mx = 0
                     my = 0
                     xll = 0.0d0
@@ -1598,10 +1629,10 @@ contains
 
                     call apply_align_buffer_coarsen(i_lo4, i_hi4, mx, &
                         xlocs(1), xlocs(2) - xlocs(1), al_x4, has_al4, &
-                        cf4, nbuf4)
+                        cf4, nbuf4, fname, 'x')
                     call apply_align_buffer_coarsen(j_lo4, j_hi4, my, &
                         ylocs(1), ylocs(2) - ylocs(1), al_y4, has_al4, &
-                        cf4, nbuf4)
+                        cf4, nbuf4, fname, 'y')
 
                     ! Kept-lattice extents from the actual coordinate values
                     ! (min/max handles descending axes).  Spacings become the
@@ -2508,9 +2539,11 @@ contains
     !   dim_order       = y,x
     !   fill_value      = -9999.0
     !   fill_action     = abort
-    !   crop_bounds    = -180.0 180.0 -90.0 90.0
     !
-    ! Unknown keys produce a warning and are skipped.
+    ! Unknown keys produce a warning and are skipped.  crop_bounds, written by
+    ! older versions, is an error: the crop now comes only from the entry's
+    ! crop_extent line, and an old file whose crop was carried by crop_bounds
+    ! alone would otherwise load the wrong window without a message.
     ! ========================================================================
     subroutine read_netcdf_descriptor(iunit, idx)
 
@@ -2565,9 +2598,13 @@ contains
                 case ('fill_action')
                     nc_fill_action(idx) = trim(val)
                 case ('crop_bounds')
-                    read(val, *) nc_crop_bounds(1, idx), nc_crop_bounds(2, idx), &
-                                 nc_crop_bounds(3, idx), nc_crop_bounds(4, idx)
-                    nc_has_crop(idx) = .true.
+                    print *, "ERROR: topo.data was written by an older GeoClaw: ", &
+                        "the NetCDF descriptor for"
+                    print *, "  ", trim(topofname(idx))
+                    print *, "  has a crop_bounds line, which is no longer used ", &
+                        "(the crop is crop_extent)."
+                    print *, "  Regenerate topo.data with 'make data'."
+                    stop 1
                 case default
                     write(GEO_PARM_UNIT, *) 'WARNING: Unknown NetCDF descriptor key: ', &
                         trim(key)
@@ -2585,8 +2622,6 @@ contains
         write(GEO_PARM_UNIT, *) '    fill_action     = ', trim(nc_fill_action(idx))
         if (nc_has_fill(idx)) &
             write(GEO_PARM_UNIT, *) '    fill_value     = ', nc_fill_value(idx)
-        if (nc_has_crop(idx)) &
-            write(GEO_PARM_UNIT, *) '    crop_bounds    = ', nc_crop_bounds(:, idx)
 
     end subroutine read_netcdf_descriptor
 

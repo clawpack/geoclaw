@@ -288,8 +288,10 @@ def test_dtopo_entries_no_crop_single_entry(tmp_path):
     assert entries[0][2].lon_wrap_offset == 0.0
 
 
-def test_write_dtopo_descriptor_emits_crop_bounds(tmp_path):
-    """write_dtopo_descriptor emits crop_bounds when the metadata carries them."""
+def test_write_dtopo_descriptor_omits_crop_bounds(tmp_path):
+    """write_dtopo_descriptor does not write crop_bounds, as for topo: a dtopo
+    crop belongs on the crop_extent line (dev/design/topo_input_roadmap.md
+    §2.8).  The entry still carries its lon_wrap_offset."""
     from clawpack.geoclaw.netcdf_utils import DescriptorWriter
     path = write_dataset(_geographic_dtopo(-180.0, 180.0), tmp_path / "dt.nc")
     with DTopoInspector(path, crop_bounds=(-170.0, -150.0, -3.0, 3.0)) as insp:
@@ -297,5 +299,6 @@ def test_write_dtopo_descriptor_emits_crop_bounds(tmp_path):
     buf = io.StringIO()
     DescriptorWriter.write_dtopo_descriptor(buf, entries[0][2])
     text = buf.getvalue()
-    assert "crop_bounds" in text
+    assert entries[0][2].crop_bounds is not None
+    assert "crop_bounds" not in text
     assert "lon_wrap_offset" in text
