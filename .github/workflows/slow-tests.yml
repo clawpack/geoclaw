@@ -25,15 +25,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TEMPORARY PIN (see geoclaw issue #TBD): ubuntu-latest is now 26.04, whose
-        # apt libnetcdff-dev ships a netcdf.mod built by a newer gfortran than the
-        # gcc-14 toolchain below, so every NetCDF build fails.  Unpin back to
-        # ubuntu-latest when that issue is resolved.
-        os: [ubuntu-24.04]
+        # Linux gcc must match the gfortran that built apt's netcdf.mod
+        # (gfortran 15 on ubuntu-26.04); see clawpack/geoclaw#775.
+        os: [ubuntu-latest]
         build: [opt]
         python-version: ['3.12']
         toolchain:
-          - {compiler: gcc, version: 14}
+          - {compiler: gcc, version: 15}
 
     steps:
     - name: Install system dependencies
@@ -47,7 +45,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -111,13 +109,11 @@ jobs:
             build: opt
             toolchain: {compiler: gcc, version: 15}
             markers: "regression and not slow and not adjoint"
-          # TEMPORARY PIN (see geoclaw issue #TBD): ubuntu-latest is now 26.04, whose
-          # apt libnetcdff-dev ships a netcdf.mod built by a newer gfortran than the
-          # gcc-14 toolchain below, so every NetCDF build fails.  Unpin back to
-          # ubuntu-latest when that issue is resolved.
-          - os: ubuntu-24.04
+          # Linux gcc must match the gfortran that built apt's netcdf.mod
+          # (gfortran 15 on ubuntu-26.04); see clawpack/geoclaw#775.
+          - os: ubuntu-latest
             build: opt
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
             markers: "regression and remote and not slow and not adjoint"
 
     steps:
@@ -137,7 +133,7 @@ jobs:
         python-version: '3.12'
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -203,7 +199,7 @@ jobs:
           - os: ubuntu-latest
             python-version: '3.12'
             markers: "python and remote"
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
 
     steps:
     - name: Set up Python ${{ matrix.python-version }}
@@ -216,7 +212,7 @@ jobs:
     # tests themselves are pure Python.  ubuntu-latest ships gfortran, but macOS
     # runners do not, so set one up explicitly.
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
