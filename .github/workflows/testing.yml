@@ -42,10 +42,10 @@ jobs:
         include:
           - os: ubuntu-latest
             python-version: '3.12'
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
           - os: ubuntu-latest
             python-version: '3.13'
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
 
     steps:
     # The tests themselves are pure Python (-m "python"), but installing the
@@ -59,7 +59,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -110,15 +110,13 @@ jobs:
       matrix:
         # Linux only on the per-PR path; macOS regression runs nightly
         # (slow-tests.yml) where its 10x minute multiplier is paid once a day.
-        # TEMPORARY PIN (see geoclaw issue #TBD): ubuntu-latest is now 26.04, whose
-        # apt libnetcdff-dev ships a netcdf.mod built by a newer gfortran than the
-        # gcc-14 toolchain below, so every NetCDF build fails.  Unpin back to
-        # ubuntu-latest when that issue is resolved.
-        os: [ubuntu-24.04]
+        # Linux gcc must match the gfortran that built apt's netcdf.mod
+        # (gfortran 15 on ubuntu-26.04); see clawpack/geoclaw#775.
+        os: [ubuntu-latest]
         build: [debug, opt]
         python-version: ['3.12']
         toolchain:
-          - {compiler: gcc, version: 14}
+          - {compiler: gcc, version: 15}
 
     steps:
     - name: Install system dependencies
@@ -132,7 +130,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
