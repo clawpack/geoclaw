@@ -1036,9 +1036,12 @@ class TopoInspector(NetCDFInspector):
         different lon_wrap_offset and crop_bounds values.
 
         crop_bounds on the inspector are in domain coordinates; this method
-        converts them to file coordinates before storing in the returned
-        metadata. Fortran can then use crop_bounds directly against file
-        coordinate arrays before applying lon_wrap_offset.
+        converts them to each entry's file coordinates before storing in the
+        returned metadata.  That per-entry crop_bounds is for Python only and
+        is not written to topo.data.  ``TopographyData.write`` turns it back
+        into the entry's ``crop_extent`` when the entry has none, and Fortran
+        recovers the window in the file from ``crop_extent`` minus
+        ``lon_wrap_offset``.
 
         *fill_scan* is forwarded to :meth:`inspect_topo`.  Note that the
         inspection below runs with ``crop_bounds`` unset -- it has to, because
@@ -2041,8 +2044,11 @@ class DescriptorWriter:
         # Fortran adds lon_wrap_offset to all file coordinate values after
         # reading:
         #   x_domain = x_file + lon_wrap_offset
-        # crop_bounds written here are in FILE coordinates (converted from
-        # domain coordinates by topo_entries()).
+        # meta.crop_bounds is deliberately not written.  The crop reaches
+        # Fortran once, as the entry's crop_extent line (domain coordinates);
+        # Fortran gets this entry's window in the file from crop_extent minus
+        # lon_wrap_offset and the shift (dev/design/topo_input_roadmap.md
+        # §2.8).
         f.write(f"var_name       = {meta.var_name}\n")
         f.write(f"x_name         = {meta.x_name}\n")
         f.write(f"y_name         = {meta.y_name}\n")
@@ -2053,9 +2059,6 @@ class DescriptorWriter:
         if meta.fill_value is not None:
             f.write(f"fill_value     = {meta.fill_value!r}\n")
         f.write(f"fill_action    = {meta.fill_action}\n")
-        if meta.crop_bounds is not None:
-            x0, x1, y0, y1 = meta.crop_bounds
-            f.write(f"crop_bounds    = {x0} {x1} {y0} {y1}\n")
         f.write("\n")  # blank line terminates block for Fortran parser
 
     @staticmethod
@@ -2085,12 +2088,9 @@ class DescriptorWriter:
         f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
         f.write(f"t0             = {meta.t0!r}\n")
         f.write(f"dt             = {meta.dt!r}\n")
-        # crop_bounds are in FILE coordinates (converted from domain coords by
-        # dtopo_entries), so Fortran compares them directly against the file's
-        # coordinate arrays before applying lon_wrap_offset.  Mirrors topo.
-        if meta.crop_bounds is not None:
-            x0, x1, y0, y1 = meta.crop_bounds
-            f.write(f"crop_bounds    = {x0} {x1} {y0} {y1}\n")
+        # meta.crop_bounds is not written, as for topo: a dtopo crop belongs
+        # on the crop_extent line.  (Fortran has no dtopo crop yet; see
+        # mandli/geoclaw#15.)
         f.write("\n")  # blank line terminates block for Fortran parser
 
     @staticmethod
@@ -2125,9 +2125,8 @@ class DescriptorWriter:
         f.write(f"  fill_action    = {meta.fill_action}\n")
         f.write(f"  time_offset    = {meta.time_offset!r}\n")
         f.write(f"  time_scale     = {meta.time_scale!r}\n")
-        if meta.crop_bounds is not None:
-            x0, x1, y0, y1 = meta.crop_bounds
-            f.write(f"  crop_bounds    = {x0} {x1} {y0} {y1}\n")
+        # meta.crop_bounds is not written: the met crop is the data file's
+        # own crop_extent line, which is what Fortran reads.
         f.write("/\n")
         for var in meta.variables:
             f.write(

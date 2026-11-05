@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 470" width="800" height="470" font-family="Helvetica, Arial, sans-serif" font-size="12">
+  <title>Topo crop windows for one NetCDF file cropped across the antimeridian</title>
+  <!-- Opaque background so the figure reads in dark mode too. -->
+  <rect x="0" y="0" width="800" height="470" fill="#ffffff"/>
+  <defs>
+    <pattern id="ghost" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#15803d" stroke-width="1.5"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+
+  <!-- Scale: px = 80 + (x_domain + 195) * 12.8 -->
+  <text x="20" y="26" font-size="15" font-weight="bold" fill="#111827">Crop windows: one NetCDF file, cropped across the antimeridian</text>
+  <text x="20" y="45" fill="#374151">Global file on lon [-180, 180] at 0.25°, crop_extent = [-190, -150], buffer = 2, x_shift = 0. Longitude only; latitude never wraps.</text>
+
+  <!-- Seam -->
+  <line x1="272" y1="62" x2="272" y2="316" stroke="#6b7280" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="276" y="72" fill="#6b7280">antimeridian</text>
+
+  <!-- Domain-coordinate axis -->
+  <text x="20" y="96" font-weight="bold" fill="#111827">Domain coordinates</text>
+  <line x1="110" y1="104" x2="730" y2="104" stroke="#111827" stroke-width="1"/>
+  <g fill="#111827" text-anchor="middle">
+    <line x1="144" y1="100" x2="144" y2="108" stroke="#111827"/><text x="144" y="120">-190</text>
+    <line x1="208" y1="100" x2="208" y2="108" stroke="#111827"/><text x="208" y="120">-185</text>
+    <line x1="272" y1="100" x2="272" y2="108" stroke="#111827"/><text x="272" y="120">-180</text>
+    <line x1="592" y1="100" x2="592" y2="108" stroke="#111827"/><text x="592" y="120">-155</text>
+    <line x1="656" y1="100" x2="656" y2="108" stroke="#111827"/><text x="656" y="120">-150</text>
+  </g>
+
+  <!-- (2) crop_extent -->
+  <rect x="144" y="130" width="512" height="18" fill="#f3f4f6" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="400" y="143" text-anchor="middle" fill="#111827">(2) crop_extent [-190, -150]: what setrun writes, in domain coordinates</text>
+
+  <!-- (6) domain + ghost cells -->
+  <rect x="169.6" y="156" width="460.8" height="18" fill="url(#ghost)" stroke="#15803d" stroke-width="1"/>
+  <rect x="208" y="156" width="384" height="18" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/>
+  <text x="400" y="169" text-anchor="middle" fill="#14532d">(6) computational domain [-185, -155]; hatched = ghost cells</text>
+
+  <!-- (4)/(5) loaded windows, one per topo.data entry -->
+  <rect x="137.6" y="202" width="134.4" height="22" fill="#fed7aa" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="205" y="217" text-anchor="middle" fill="#7c2d12">entry 2: [-190.5, -180]</text>
+  <rect x="272" y="202" width="390.4" height="22" fill="#bfdbfe" stroke="#1d4ed8" stroke-width="1.5"/>
+  <text x="467" y="217" text-anchor="middle" fill="#1e3a8a">entry 1: [-180, -149.5]</text>
+  <text x="400" y="194" text-anchor="middle" fill="#111827">(4)/(5) loaded windows = array extents, after buffer; each clamped at its own end of the file</text>
+
+  <!-- Mapping arrows file -> domain -->
+  <line x1="205" y1="300" x2="205" y2="230" stroke="#374151" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="211" y="268" fill="#7c2d12">+ lon_wrap_offset (-360)</text>
+  <line x1="467" y1="300" x2="467" y2="230" stroke="#374151" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="473" y="268" fill="#1e3a8a">+ lon_wrap_offset (0)</text>
+
+  <!-- File-coordinate axis: the two ends of the file, placed under where they land -->
+  <text x="20" y="318" font-weight="bold" fill="#111827">File coordinates</text>
+  <rect x="137.6" y="304" width="134.4" height="10" fill="#fed7aa" stroke="#c2410c"/>
+  <rect x="272" y="304" width="390.4" height="10" fill="#bfdbfe" stroke="#1d4ed8"/>
+  <line x1="110" y1="322" x2="272" y2="322" stroke="#111827" stroke-width="1"/>
+  <line x1="272" y1="322" x2="730" y2="322" stroke="#111827" stroke-width="1"/>
+  <g fill="#111827" text-anchor="middle">
+    <line x1="144" y1="318" x2="144" y2="326" stroke="#111827"/><text x="144" y="338">170</text>
+    <line x1="208" y1="318" x2="208" y2="326" stroke="#111827"/><text x="208" y="338">175</text>
+    <line x1="272" y1="318" x2="272" y2="326" stroke="#111827"/><text x="272" y="338">±180</text>
+    <line x1="592" y1="318" x2="592" y2="326" stroke="#111827"/><text x="592" y="338">-155</text>
+    <line x1="656" y1="318" x2="656" y2="326" stroke="#111827"/><text x="656" y="338">-150</text>
+  </g>
+  <text x="190" y="356" text-anchor="middle" fill="#7c2d12">(3) east end of the file</text>
+  <text x="467" y="356" text-anchor="middle" fill="#1e3a8a">(3) west end of the file; [-149.5, 169.5] is not read</text>
+
+  <!-- Formula -->
+  <rect x="20" y="378" width="740" height="80" fill="#f9fafb" stroke="#d1d5db"/>
+  <text x="32" y="398" fill="#111827">(1) file extent: the whole file, lon [-180, 180]. Not drawn to scale.</text>
+  <text x="32" y="418" fill="#111827">(3) each entry's window in the file = crop_extent − lon_wrap_offset − x_shift, clipped to the file,</text>
+  <text x="32" y="436" fill="#111827">      with a round-off allowance of CROP_TOL·dx. Then align, buffer and coarsen are applied in index space.</text>
+  <text x="32" y="452" fill="#6b7280" font-size="11">Numbers from tests/regression/topo_crop (wrapped case, buffer = 2), read from fort.geo.</text>
+</svg>
