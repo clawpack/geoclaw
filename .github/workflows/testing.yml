@@ -110,7 +110,11 @@ jobs:
       matrix:
         # Linux only on the per-PR path; macOS regression runs nightly
         # (slow-tests.yml) where its 10x minute multiplier is paid once a day.
-        os: [ubuntu-latest]
+        # TEMPORARY PIN (see geoclaw issue #TBD): ubuntu-latest is now 26.04, whose
+        # apt libnetcdff-dev ships a netcdf.mod built by a newer gfortran than the
+        # gcc-14 toolchain below, so every NetCDF build fails.  Unpin back to
+        # ubuntu-latest when that issue is resolved.
+        os: [ubuntu-24.04]
         build: [debug, opt]
         python-version: ['3.12']
         toolchain:
