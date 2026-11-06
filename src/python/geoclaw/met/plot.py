@@ -289,6 +289,69 @@ def water_speed(current_data):
     return np.sqrt(u**2+v**2)
 
 
+def _derivative(f, delta, axis):
+    """Derivative of f along axis using only values on this patch.
+
+    Second-order central differences in the interior and second-order
+    one-sided differences at the patch edges (`numpy.gradient` with
+    `edge_order=2`), so no ghost cells are needed and any output format works.
+    Falls back to first order for a patch 2 cells wide, NaN for 1 cell wide.
+    """
+    num_cells = f.shape[axis]
+    if num_cells < 2:
+        return np.full(f.shape, np.nan)
+    edge_order = 2 if num_cells >= 3 else 1
+    return np.gradient(f, delta, axis=axis, edge_order=edge_order)
+
+
+def _stencil_touches(mask, axis):
+    """True where the `_derivative` stencil along axis includes a masked cell.
+
+    The cell itself is included.  Interior cells use their two neighbors,
+    edge cells use the two cells inward of the edge.
+    """
+    m = np.moveaxis(mask, axis, 0)
+    touched = m.copy()
+    if m.shape[0] < 3:
+        touched[...] = m.any(axis=0)
+    else:
+        touched[1:-1] |= m[:-2] | m[2:]
+        touched[0] |= m[1] | m[2]
+        touched[-1] |= m[-2] | m[-3]
+    return np.moveaxis(touched, 0, axis)
+
+
+def extract_vorticity(delta, u, v, dry=None):
+    r"""Vorticity :math:`\omega = v_x - u_y` on one patch.
+
+    Uses only the patch's own cells (see `_derivative`), with second-order
+    one-sided differences at the patch edges.  Values at patch edges are
+    therefore not identical to those computed from a neighboring patch.
+
+    :Input:
+     - *delta* (list) Grid spacing [dx, dy].
+     - *u*, *v* (ndarray) Velocities indexed [x, y].
+     - *dry* (ndarray of bool) Optional dry-cell mask.  Velocities in dry
+       cells are not meaningful, so any cell whose stencil touches a dry cell
+       is set to NaN.
+
+    :Output:
+     - (ndarray) Vorticity, same shape as *u*.
+    """
+    omega = _derivative(v, delta[0], 0) - _derivative(u, delta[1], 1)
+    if dry is not None:
+        omega[_stencil_touches(dry, 0) | _stencil_touches(dry, 1)] = np.nan
+    return omega
+
+
+def water_vorticity(cd, DRY_TOL=1e-8):
+    """Vorticity of the depth averaged velocity, NaN near dry cells."""
+    h = cd.q[0, :, :]
+    dry = np.isnan(h) | ~(np.abs(h) > DRY_TOL)
+    return extract_vorticity([cd.dx, cd.dy], water_u(cd), water_v(cd),
+                             dry=dry)
+
+
 # ========================================================================
 #  Plot items
 # ========================================================================
@@ -352,6 +415,9 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
         plotitem.amr_patchedges_show = [1, 1, 1, 1, 0, 0, 0]
         plotitem.amr_contour_colors = 'k'
 
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
+
 
 def add_speed(plotaxes, plot_type='pcolor', bounds=None,  contours=None,
               shrink=1.0):
@@ -409,6 +475,34 @@ def add_speed(plotaxes, plot_type='pcolor', bounds=None,  contours=None,
         plotitem.amr_patchedges_show = [1, 1, 1, 1, 1, 0, 0]
         plotitem.amr_contour_colors = 'k'
 
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
+
+
+def add_vorticity(plotaxes, plot_type='pcolor', bounds=None, shrink=1.0):
+    """Add plotitem for the vorticity of the water (see `water_vorticity`).
+
+    Vorticity is signed, so a diverging colormap is used; pass *bounds*
+    symmetric about zero to center it.
+    """
+
+    if plot_type == 'pcolor' or plot_type == 'imshow':
+        plotitem = plotaxes.new_plotitem(name='vorticity',
+                                         plot_type='2d_pcolor')
+        plotitem.plot_var = water_vorticity
+        plotitem.pcolor_cmap = plt.get_cmap('PRGn')
+        if bounds is not None:
+            plotitem.pcolor_cmin = bounds[0]
+            plotitem.pcolor_cmax = bounds[1]
+        plotitem.add_colorbar = True
+        plotitem.colorbar_shrink = shrink
+        plotitem.colorbar_label = "Vorticity (1/s)"
+        plotitem.amr_celledges_show = [0] * 10
+        plotitem.amr_patchedges_show = [1, 1, 1, 0, 0, 0, 0]
+
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
+
 
 def add_friction(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
     """Add plotitem for the friction field"""
@@ -427,6 +521,9 @@ def add_friction(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
         plotitem.colorbar_label = "Manning's-$n$ Coefficient"
         plotitem.amr_celledges_show = [0] * 10
         plotitem.amr_patchedges_show = [0] * 10
+
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_wind(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
@@ -452,6 +549,9 @@ def add_wind(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
         plotitem.countour_min = surge_data.wind_refine[0]
         plotitem.patchedges_show = 1
 
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
+
 
 def add_pressure(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
     """Add plotitem for the pressure field."""
@@ -470,8 +570,9 @@ def add_pressure(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
         plotitem.colorbar_label = "Pressure (mbar)"
         plotitem.amr_celledges_show = [0] * 10
         plotitem.amr_patchedges_show = [1, 1, 1, 1, 1, 0, 0]
-    elif plot_type == 'contour':
-        pass
+
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_land(plotaxes, plot_type='pcolor', bounds=[0, 50]):
@@ -498,6 +599,9 @@ def add_land(plotaxes, plot_type='pcolor', bounds=[0, 50]):
         plotitem.amr_patch_bgcolor = ['#ffeeee', '#eeeeff', '#eeffee']
         plotitem.celledges_show = 0
         plotitem.patchedges_show = 0
+
+    else:
+        raise ValueError(f"Unhandled plot type given {plot_type}.")
 
 
 def add_bathy_contours(plotaxes, contour_levels=None, color='k'):
