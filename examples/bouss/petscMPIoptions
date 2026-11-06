@@ -18,18 +18,83 @@
 # Krylov linear solver:
 -ksp_type gmres
 -ksp_max_it 200
+
+# -ksp_reuse_preconditioner: now ON as an optimization.  It was OFF while we
+# established the iteration-count floor for a fair comparison.  Now that
+# fieldsplit is the winner, reuse amortizes the (expensive) redundant-LU
+# factorization across timesteps: levels 2+ factor once per grid configuration
+# and reuse the factors until the next regrid, instead of refactoring on every
+# solve.  The code forces level 1 to always rebuild (petsc_driver.f90:116),
+# which is fine since level 1 is cheap.
+#   RISK: stale factors (matrix values change as h evolves) raise iteration
+#   counts somewhat.  If a solve fails to converge within -ksp_max_it it becomes
+#   a HARD ERROR (KSPSetErrorIfNotConverged is TRUE, petsc_driver.f90:108).  If
+#   that happens, raise -ksp_max_it or comment this back out.
 -ksp_reuse_preconditioner
 
 # convergence criterion for linear solver (larger than PETSc default):
 -ksp_rtol 1.e-9
 
-# preconditioner:
--pc_type gamg
+# ===================== preconditioner =====================
+# ---- ORIGINAL: algebraic multigrid (baseline in NOTES) ----
+#-pc_type gamg
 #-pc_type hypre  # requires installing hypre
+
+# ---- fieldsplit: split the 2x2 blocks into u (x-eqns) and v (y-eqns) -------
+# The matrix has block size 2 with unknowns interleaved u0,v0,u1,v1,...
+# PCFIELDSPLIT with block size 2 makes  field 0 = u  and  field 1 = v.
+#   I-D11 (u<->u) is tridiagonal in x, I-D22 (v<->v) is tridiagonal in y.
+#   -D12,-D21 are the cross-derivative coupling between the fields.
+# Each field block is a direct sum of independent 1D tridiagonals, so an EXACT
+# block solve via redundant+LU is cheap and needs no MUMPS.
+-pc_type fieldsplit
+-pc_fieldsplit_block_size 2
+
+# ---- coupling strategy between the u and v fields ----
+# CURRENT: multiplicative = block Gauss-Seidel (solve u, update, solve v; outer
+#   GMRES handles the residual coupling).  This is the WINNER (230s w/ reuse,
+#   iters 3/5/7.6/10/12) because it keeps BOTH blocks as cheap independent 1D
+#   tridiagonals.
+-pc_fieldsplit_type multiplicative
+# REJECTED: Schur complement.  Tested and it was ~30x SLOWER (6619s) despite
+#   slightly fewer iterations (2.2/3.4/6.3/8.8/11.0).  Reason: selfp forms
+#   Sp = A11 - A10 inv(diag A00) A01, and the A10/A01 cross-coupling makes Sp a
+#   wide-band 2D-coupled operator (bandwidth ~nx), NOT tridiagonal.  redundant+lu
+#   on that has ~N*nx fill, replicated per rank -> per-iteration cost explodes.
+#   The whole advantage here is keeping the blocks as 1D tridiagonals; Schur
+#   destroys exactly that.  Do not re-enable.
+#-pc_fieldsplit_type schur
+#-pc_fieldsplit_schur_fact_type full
+#-pc_fieldsplit_schur_precondition selfp
+
+# ---- how each field block is solved (shared by schur and multiplicative) ----
+# EXACT via redundant+lu: correct at any rank count, but replicates the block on
+#   every rank and factors SERIALLY (does not parallelize; wall ~= cpu).  With
+#   -ksp_reuse_preconditioner ON the factorization is amortized across timesteps.
+# field 0 = u  (x-direction tridiagonal block)
+-fieldsplit_0_ksp_type preonly
+-fieldsplit_0_pc_type redundant
+-fieldsplit_0_redundant_pc_type lu
+# field 1 = v: under schur this KSP solves the (approximate) Schur complement,
+#   not A11 -- redundant+lu handles either sparsity pattern.
+-fieldsplit_1_ksp_type preonly
+-fieldsplit_1_pc_type redundant
+-fieldsplit_1_redundant_pc_type lu
+
+# ---- FUTURE (needs MUMPS linked): distributed LU that actually parallelizes.
+#      Replace the two redundant blocks above with these:
+#-fieldsplit_0_pc_type lu
+#-fieldsplit_0_pc_factor_mat_solver_type mumps
+#-fieldsplit_1_pc_type lu
+#-fieldsplit_1_pc_factor_mat_solver_type mumps
+# ==========================================================
 
 
 # debug options:
 #-fp_trap off
+# NOTE: -log_view appears to crash at finalize under -mpi_linear_solver_server,
+# so leave it OFF.  The code's own "Linear solve time" report gives wall/cpu
+# timing already, which is enough for comparing preconditioners.
 #-log_view
 #-start_in_debugger -debugger_rank 0
 #-ksp_monitor
@@ -40,4 +105,6 @@
 -options_view
 
 # test if any options are not used:
-#-options_left
+# (leave ON while experimenting with fieldsplit: any option listed as "not used"
+#  means PETSc ignored it -- a typo or the mpi server didn't honor it)
+-options_left

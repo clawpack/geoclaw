@@ -501,7 +501,7 @@ def setgeo(rundata):
     rundata.bouss_data.bouss_min_level = 1    # coarsest level to apply bouss
     rundata.bouss_data.bouss_max_level = 10   # finest level to apply bouss
     rundata.bouss_data.bouss_min_depth = 1.  # depth to switch to SWE
-    rundata.bouss_data.bouss_solver = 3       # 1=GMRES, 2=Pardiso, 3=PETSc
+    rundata.bouss_data.bouss_solver = 1       # 1=GMRES, 2=Pardiso, 3=PETSc
     rundata.bouss_data.bouss_tstart = 0.      # time to switch from SWE
 
     return rundata

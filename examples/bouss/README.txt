@@ -14,16 +14,33 @@ which are described in the paper found at:
     by Marsha J. Berger and Randall J. LeVeque, submitted, 2023
     Preprint: https://arxiv.org/abs/2307.05816
 
-Running these codes requires PETSc  Version 3.20 (or later) in order to use
+**Update for v5.15.0**
+
+PETSc and MPI are no longer required to use the 2D Boussinesq codes
+(although that code is still available as an option).  
+
+To use the new version: Modify setrun.py to set
+    rundata.bouss_data.bouss_solver = 1 
+In this case a standard GeoClaw Makefile can be used to compile.
+
+
+To use the original PETSc / MPI version: 
+
+Set:
+    rundata.bouss_data.bouss_solver = 3 
+In this case a nonstandard Makefile must be used to compile, as in previous
+versions, e.g. in the radial_flat example you must use:
+    make new -f Makefile_petsc
+    make .output -f Makefile_petsc
+to compile and run.
+
+Running these codes requires PETSc  Version 3.23 (or later) in order to use
 OpenMP along with MPI.  Some flags have to be set as environment variables
 or directly in the application Makefile.
 
 For more information on installing PETSc and setting these environment
 variables properly, see:
   https://www.clawpack.org/bouss2d.html
-
-
-**Update:** Clawpack 5.12.0 now requires PETSc Version 3.23 (or later).
 
 The file setenv.sh illustrates how you might set some environment
 variables for the bash shell.
@@ -39,7 +56,7 @@ point to the sample petscMPIoptions file included in this directory.
 **Check:**
 
 The example Makefile in
-    $CLAW/geoclaw/examples/bouss/radial_flat/Makefile
+    $CLAW/geoclaw/examples/bouss/radial_flat/Makefile_petsc
 contains an option so that you can do 
     $ make check
 at the command line to see how various options are set and to check that

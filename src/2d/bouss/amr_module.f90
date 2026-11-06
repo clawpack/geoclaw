@@ -259,6 +259,12 @@ module amr_module
     integer(kind=8) :: timeRegridding, timeUpdating, timeValout
     integer(kind=8) :: timeFlglvl,timeGrdfit2,timeGrdfit3,timeGrdfitAll
     integer(kind=8) :: timeBound,timeStepgrid,timeLinSolve,timePrepBuild
+    integer(kind=8) :: timeLineDecomp
+    integer(kind=8) :: timeCompress
+    ! longest tridiagonal line seen over the whole run (isolver=1 GMRES path),
+    ! and the level it occurred on -- diagnostic for very long lines (e.g. a
+    ! globe-spanning connected region).
+    integer :: maxLineLen, maxLineLevel
     integer(kind=8) :: timeFlagger, timeBufnst,timeTick, tick_clock_start
     integer(kind=8) :: maxIterRef,countIterRef
     real(kind=8) :: avgIterRef
