@@ -94,7 +94,7 @@ module topo_module
     real(kind=8) :: dt_max_dtopo
 
     ! File data parameters
-    character (len=150), allocatable :: dtopofname(:)
+    character(len=512), allocatable :: dtopofname(:)
     real(kind=8), allocatable :: xlowdtopo(:),ylowdtopo(:),xhidtopo(:)
     real(kind=8), allocatable :: yhidtopo(:),t0dtopo(:),tfdtopo(:)
     real(kind=8), allocatable :: dxdtopo(:),dydtopo(:),dtdtopo(:)
@@ -1694,7 +1694,7 @@ contains
         implicit none
 
         ! Input arguments
-        character (len=25), optional, intent(in) :: file_name
+        character(len=*), optional, intent(in) :: file_name
 
         ! Locals
         integer, parameter :: iunit = 79
@@ -1804,7 +1804,7 @@ contains
                 end if
             end if
 
-            write(GEO_PARM_UNIT,*) '   fname:',dtopofname(i)
+            write(GEO_PARM_UNIT,*) '   fname:',trim(dtopofname(i))
             write(GEO_PARM_UNIT,*) '   topo type:',dtopotype(i)
 
             ! Read in header data
@@ -1899,7 +1899,7 @@ contains
 
       ! Arguments
       integer, intent(in) :: mx,my,mt,dtopo_type
-      character (len=150), intent(in) :: fname
+      character(len=*), intent(in) :: fname
       real(kind=8), intent(inout) :: dtopo(1:int(mx, 8)*int(my, 8)*int(mt, 8))
       integer, intent(in), optional :: dtopo_idx
 
@@ -2039,7 +2039,7 @@ contains
 #else
             print *, "ERROR:  NetCDF library was not included in this"
             print *, "  build of GeoClaw.  Cannot read dtopo file:"
-            print *, '   ', fname
+            print *, '   ', trim(fname)
             stop 1
 #endif
       end select
@@ -2074,7 +2074,7 @@ contains
         implicit none
 
         ! Input Arguments
-        character (len=150), intent(in) :: fname
+        character(len=*), intent(in) :: fname
         integer, intent(in) :: topo_type
         integer, intent(in), optional :: dtopo_idx
 
@@ -2100,7 +2100,7 @@ contains
         inquire(file=fname,exist=found_file)
         if (.not.found_file) then
             print *, 'Missing dtopo file:'
-            print *, '    ', fname
+            print *, '    ', trim(fname)
             stop
         endif
         if (abs(topo_type) /= 4) then
@@ -2138,7 +2138,7 @@ contains
 
 
                 if (status > 0) then
-                    print *, "IO error occured in ",fname,", aborting!"
+                    print *, "IO error occured in ",trim(fname),", aborting!"
                     stop
                 endif
 
@@ -2255,7 +2255,7 @@ contains
 #else
                 print *, "ERROR:  NetCDF library was not included in this"
                 print *, "  build of GeoClaw.  Cannot read dtopo file:"
-                print *, '   ', fname
+                print *, '   ', trim(fname)
                 stop 1
 #endif
 
@@ -2263,7 +2263,7 @@ contains
                 print *, 'ERROR:  Unrecognized topography type'
                 print *, '    topo_type = ',topo_type
                 print *, '  for dtopo file:'
-                print *, '   ', fname
+                print *, '   ', trim(fname)
                 stop
         end select
 
