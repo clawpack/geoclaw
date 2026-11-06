@@ -150,7 +150,7 @@ def b(current_data):
 
 def extract_velocity(h, hu, DRY_TOL=10**-8):
     u = numpy.ones(hu.shape) * numpy.nan
-    index = numpy.nonzero((numpy.abs(h) > DRY_TOL) * (h != numpy.nan))
+    index = numpy.nonzero((numpy.abs(h) > DRY_TOL) & ~numpy.isnan(h))
     u[index[0], index[1]] = hu[index[0], index[1]] / h[index[0], index[1]]
     return u
 
