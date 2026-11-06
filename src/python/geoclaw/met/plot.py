@@ -258,14 +258,14 @@ def b(cd):
 
 
 def extract_eta(h, eta, DRY_TOL=1e-3):
-    index = np.nonzero((np.abs(h) < DRY_TOL) + (h == np.nan))
+    index = np.nonzero((np.abs(h) < DRY_TOL) | np.isnan(h))
     eta[index[0], index[1]] = np.nan
     return eta
 
 
 def extract_velocity(h, hu, DRY_TOL=1e-8):
     u = np.zeros(hu.shape)
-    index = np.nonzero((np.abs(h) > DRY_TOL) * (h != np.nan))
+    index = np.nonzero((np.abs(h) > DRY_TOL) & ~np.isnan(h))
     u[index[0], index[1]] = hu[index[0], index[1]] / h[index[0], index[1]]
     return u
 
