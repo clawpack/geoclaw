@@ -570,6 +570,175 @@ def test_dtopo_shift_applied(tmp_path, attr, axis):
     np.testing.assert_allclose(dtopo.dZ, ref.dZ)
 
 
+# ---------------------------------------------------------------------------
+# extent / delta: read_header for every gridded type, and set by read()
+# ---------------------------------------------------------------------------
+
+def _make_rectangular_dtopo():
+    """A three-frame DTopography whose x and y differ in range and spacing,
+    so a swapped axis or a dx/dy mix-up cannot pass.  The spacings are powers
+    of two, so every coordinate is exact in binary and in text."""
+    x = 10.0 + 0.25 * np.arange(9)      # [10, 12], dx = 0.25
+    y = -5.0 + 0.125 * np.arange(9)     # [-5, -4], dy = 0.125
+    X, Y = np.meshgrid(x, y)
+    dtopo = dtopotools.DTopography()
+    dtopo.x, dtopo.y, dtopo.X, dtopo.Y = x, y, X, Y
+    dtopo.times = [0.0, 0.5, 1.0]
+    bump = np.exp(-((X - 11.0)**2 + (Y + 4.5)**2) / 0.1)
+    dtopo.dZ = np.array([0.0 * bump, 0.5 * bump, bump])
+    return dtopo
+
+
+def _write_rectangular(tmp_path, dtopo_type):
+    """Write the rectangular dtopo as *dtopo_type*; return its path."""
+    if dtopo_type == 4:
+        pytest.importorskip("netCDF4")
+        path = tmp_path / "rect.nc"
+        _make_rectangular_dtopo().write(path, dtopo_type=4,
+                                        dz_dtype="float64")
+    else:
+        path = tmp_path / f"rect.tt{dtopo_type}"
+        _make_rectangular_dtopo().write(path, dtopo_type=dtopo_type,
+                                        dZ_format="%.12e")
+    return path
+
+
+RECT_EXTENT = [10.0, 12.0, -5.0, -4.0]
+RECT_DELTA = (0.25, 0.125)
+RECT_SHAPE = (9, 9, 3)    # (mx, my, mt)
+
+
+@pytest.mark.python
+@pytest.mark.parametrize("dtopo_type", [3, pytest.param(4, marks=pytest.mark.netcdf)])
+def test_dtopo_read_header_every_gridded_type(tmp_path, dtopo_type):
+    r"""read_header() gives the same extent, delta and (mx, my, mt) for an
+    ASCII and a NetCDF file holding the same deformation (#765 review: type 4
+    raised).  The extent is in file coordinates, as in
+    Topography.read_header."""
+    path = _write_rectangular(tmp_path, dtopo_type)
+
+    d = dtopotools.DTopography()
+    shape = d.read_header(path=path, dtopo_type=dtopo_type)
+
+    assert tuple(shape) == RECT_SHAPE
+    np.testing.assert_allclose(d.extent, RECT_EXTENT, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(d.delta, RECT_DELTA, rtol=0, atol=1e-12)
+    assert d.dZ is None
+
+
+@pytest.mark.python
+@pytest.mark.parametrize("dtopo_type", [3, pytest.param(4, marks=pytest.mark.netcdf)])
+def test_dtopo_read_header_extent_ignores_shift(tmp_path, dtopo_type):
+    r"""read_header() reports the file as stored: x/y_shift set on the
+    object do not move it.  read() does apply them, so the two extents differ
+    by exactly the shift.  Topography.read_header behaves the same way, and
+    data.py relies on it (_file_cell_edges adds the shift itself), so a
+    caller drawing a box from the header -- e.g. kmltools -- must add
+    x_shift/y_shift."""
+    path = _write_rectangular(tmp_path, dtopo_type)
+    xs, ys = 360.0, 0.5
+
+    header = dtopotools.DTopography()
+    header.x_shift, header.y_shift = xs, ys
+    header.read_header(path=path, dtopo_type=dtopo_type)
+    np.testing.assert_allclose(header.extent, RECT_EXTENT, rtol=0, atol=1e-12)
+
+    loaded = dtopotools.DTopography()
+    loaded.x_shift, loaded.y_shift = xs, ys
+    loaded.read(path=path, dtopo_type=dtopo_type)
+    np.testing.assert_allclose(
+        loaded.extent,
+        [header.extent[0] + xs, header.extent[1] + xs,
+         header.extent[2] + ys, header.extent[3] + ys],
+        rtol=0, atol=1e-12)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_read_header_netcdf_north_to_south(tmp_path):
+    r"""A NetCDF file stored north-to-south still gives a south-to-north
+    extent and a positive dy, matching what read() loads."""
+    xr = pytest.importorskip("xarray")
+    path = _write_rectangular(tmp_path, 4)
+    with xr.open_dataset(path, decode_times=False) as ds:
+        lat = next(n for n in ds.coords
+                   if ds[n].attrs.get("standard_name") == "latitude")
+        flipped = ds.isel({lat: slice(None, None, -1)}).load()
+    flipped_path = tmp_path / "rect_n2s.nc"
+    flipped.to_netcdf(flipped_path)
+
+    d = dtopotools.DTopography()
+    d.read_header(path=flipped_path, dtopo_type=4)
+    np.testing.assert_allclose(d.extent, RECT_EXTENT, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(d.delta, RECT_DELTA, rtol=0, atol=1e-12)
+
+    full = dtopotools.DTopography(flipped_path, dtopo_type=4)
+    np.testing.assert_allclose(full.y, _make_rectangular_dtopo().y)
+
+
+@pytest.mark.python
+@pytest.mark.netcdf
+def test_dtopo_read_header_netcdf_does_not_load_data(tmp_path, monkeypatch):
+    r"""The type-4 header reads coordinates only: a large deformation file
+    must not be loaded just to learn its extent (the make-data topo bug in
+    the #765 review, here for dtopo)."""
+    path = _write_rectangular(tmp_path, 4)
+
+    def no_full_read(self, *args, **kwargs):
+        raise AssertionError("dtopo data read by read_header")
+
+    monkeypatch.setattr(dtopotools.DTopography, "read", no_full_read)
+    monkeypatch.setattr(dtopotools.DTopography, "_read_netcdf", no_full_read)
+
+    d = dtopotools.DTopography()
+    d.read_header(path=path, dtopo_type=4)
+    assert d.dZ is None
+
+
+@pytest.mark.python
+@pytest.mark.parametrize("dtopo_type",
+                         [1, 3, pytest.param(4, marks=pytest.mark.netcdf)])
+def test_dtopo_read_sets_extent(tmp_path, dtopo_type):
+    r"""read() sets extent and delta for every type, not only when a crop
+    is applied (#765 review: extent stayed None after a plain read)."""
+    path = _write_rectangular(tmp_path, dtopo_type)
+
+    d = dtopotools.DTopography()
+    d.read(path=path, dtopo_type=dtopo_type)
+
+    assert d.extent is not None
+    np.testing.assert_allclose(d.extent, RECT_EXTENT, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(d.delta, RECT_DELTA, rtol=0, atol=1e-12)
+
+
+@pytest.mark.python
+@pytest.mark.parametrize("crop", [None, [10.5, 11.5, -4.75, -4.25]],
+                         ids=["no_crop", "crop"])
+@pytest.mark.parametrize("dtopo_type", [3, pytest.param(4, marks=pytest.mark.netcdf)])
+def test_dtopo_read_extent_is_in_domain_coordinates(tmp_path, dtopo_type,
+                                                    crop):
+    r"""After read(), extent bounds the loaded x/y, which carry x/y_shift --
+    the meaning of Topography.extent.  With a crop, _apply_crop set extent
+    before the shift was added, leaving it in file coordinates."""
+    path = _write_rectangular(tmp_path, dtopo_type)
+    xs, ys = 360.0, 0.5
+
+    d = dtopotools.DTopography()
+    d.x_shift, d.y_shift = xs, ys
+    if crop is not None:
+        d.crop_extent = [crop[0] + xs, crop[1] + xs,
+                         crop[2] + ys, crop[3] + ys]
+    d.read(path=path, dtopo_type=dtopo_type)
+
+    expected = RECT_EXTENT if crop is None else crop
+    expected = [expected[0] + xs, expected[1] + xs,
+                expected[2] + ys, expected[3] + ys]
+    np.testing.assert_allclose(d.extent, expected, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(d.extent,
+                               [d.x[0], d.x[-1], d.y[0], d.y[-1]],
+                               rtol=0, atol=1e-12)
+
+
 @pytest.mark.python
 def test_geometry():
     r"""Test subfault geometry calculation."""
