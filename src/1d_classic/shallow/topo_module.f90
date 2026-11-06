@@ -198,7 +198,7 @@ contains
 
     ! Locals
     integer, parameter :: iunit = 7
-    character (len=150) :: dtopofname
+    character(len=512) :: dtopofname
     integer :: ndtopofiles, dtopotype
 
     if (present(file_name)) then

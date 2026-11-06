@@ -91,6 +91,7 @@ Independent of the stack, all off `master`:
 | clawpack/geoclaw#744 | `fix-isaac-setplot-storm-format` | isaac `setplot` hard-coded the storm file format |
 | clawpack/clawutil#208 | `fix-1d-topo-data-format` | passes `num_dim` to `TopographyData` / `DTopoData` |
 | clawpack/geoclaw#756 | `fix-geotiff-reader` | type 5 (GeoTIFF) reader: dead `import gdal` replaced by rasterio → `osgeo` fallback; swapped row/column counts; pixel-corner origin read as a grid point; nodata not mapped to NaN; `read_header` type 5 branch raised `NameError` |
+| clawpack/geoclaw (PR pending) | `fix-dtopofname-length` | `dtopofname` was `len=150` (topo paths are `len=512`) in the 2D and 1D `topo_module.f90`; `dtopo.data` stores absolute paths, so deep run directories were truncated and GeoClaw stopped with "Missing dtopo file". Now `len=512`, dtopo reader arguments `len=*`. Verified by `test_long_dtopo_path` in `tests/regression/topo0save/`, which fails on `091b28d1` and passes with the fix |
 
 **Merge geoclaw#745 before clawutil#208.** #745 defaults to `num_dim=2` and is
 inert alone; clawutil landing first against an older geoclaw would break every
