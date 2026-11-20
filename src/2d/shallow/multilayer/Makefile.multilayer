@@ -187,4 +187,5 @@ COMMON_SOURCES += \
   $(GEOLIB)/multilayer/filpatch.f90 \
   $(GEOLIB)/multilayer/step2.f90 \
   $(GEOLIB)/multilayer/stepgrid.f \
+  $(GEOLIB)/multilayer/fixdry.f90 \
   $(GEOLIB)/multilayer/src2.f90

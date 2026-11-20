@@ -25,11 +25,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Linux gcc must match the gfortran that built apt's netcdf.mod
+        # (gfortran 15 on ubuntu-26.04); see clawpack/geoclaw#775.
         os: [ubuntu-latest]
         build: [opt]
         python-version: ['3.12']
         toolchain:
-          - {compiler: gcc, version: 14}
+          - {compiler: gcc, version: 15}
 
     steps:
     - name: Install system dependencies
@@ -38,12 +40,12 @@ jobs:
         sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7.0.0
+      uses: actions/setup-python@v7.1.0
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -107,29 +109,31 @@ jobs:
             build: opt
             toolchain: {compiler: gcc, version: 15}
             markers: "regression and not slow and not adjoint"
+          # Linux gcc must match the gfortran that built apt's netcdf.mod
+          # (gfortran 15 on ubuntu-26.04); see clawpack/geoclaw#775.
           - os: ubuntu-latest
             build: opt
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
             markers: "regression and remote and not slow and not adjoint"
 
     steps:
     - name: Install system dependencies
       run: |
-        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+        if [ "${{ runner.os }}" == "Linux" ]; then
           sudo apt-get update
           sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
-        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+        elif [ "${{ runner.os }}" == "macOS" ]; then
           brew update
           brew install netcdf-fortran
         fi
 
     - name: Set up Python 3.12
-      uses: actions/setup-python@v7.0.0
+      uses: actions/setup-python@v7.1.0
       with:
         python-version: '3.12'
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -195,11 +199,11 @@ jobs:
           - os: ubuntu-latest
             python-version: '3.12'
             markers: "python and remote"
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
 
     steps:
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7.0.0
+      uses: actions/setup-python@v7.1.0
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -208,7 +212,7 @@ jobs:
     # tests themselves are pure Python.  ubuntu-latest ships gfortran, but macOS
     # runners do not, so set one up explicitly.
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}

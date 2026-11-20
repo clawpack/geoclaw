@@ -42,10 +42,10 @@ jobs:
         include:
           - os: ubuntu-latest
             python-version: '3.12'
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
           - os: ubuntu-latest
             python-version: '3.13'
-            toolchain: {compiler: gcc, version: 14}
+            toolchain: {compiler: gcc, version: 15}
 
     steps:
     # The tests themselves are pure Python (-m "python"), but installing the
@@ -54,12 +54,12 @@ jobs:
     # rather than relying on the runner image shipping gfortran.  netcdf-fortran
     # is not needed here (no GeoClaw build), so it is omitted.
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7.0.0
+      uses: actions/setup-python@v7.1.0
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}
@@ -110,11 +110,13 @@ jobs:
       matrix:
         # Linux only on the per-PR path; macOS regression runs nightly
         # (slow-tests.yml) where its 10x minute multiplier is paid once a day.
+        # Linux gcc must match the gfortran that built apt's netcdf.mod
+        # (gfortran 15 on ubuntu-26.04); see clawpack/geoclaw#775.
         os: [ubuntu-latest]
         build: [debug, opt]
         python-version: ['3.12']
         toolchain:
-          - {compiler: gcc, version: 14}
+          - {compiler: gcc, version: 15}
 
     steps:
     - name: Install system dependencies
@@ -123,12 +125,12 @@ jobs:
         sudo apt-get install -y libblas-dev liblapack-dev libnetcdf-dev libnetcdff-dev pkg-config
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7.0.0
+      uses: actions/setup-python@v7.1.0
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up compilers
-      uses: fortran-lang/setup-fortran@v1.10.0
+      uses: fortran-lang/setup-fortran@v1.11.0
       id: setup-fortran
       with:
         compiler: ${{ matrix.toolchain.compiler }}

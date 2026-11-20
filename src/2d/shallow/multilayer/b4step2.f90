@@ -54,10 +54,7 @@ subroutine b4step2(mbc, mx, my, meqn, q, xlower, ylower, dx, dy, t, dt,        &
     ! check for h < 0 and reset to zero
     ! check for h < drytolerance
     ! set hu = hv = 0 in all these cells
-    forall(i=1-mbc:mx+mbc, j=1-mbc:my+mbc, k=1:num_layers, &
-           q(3*(k-1)+1,i,j) / rho(k) < dry_tolerance(k))
-        q(3*(k-1)+2:3*(k-1)+3,i,j) = 0.d0
-    end forall
+    call fixdry(meqn, mbc, mx, my, q, maux, aux)
 
     ! Move the topography if needed
     if (aux_finalized < 2 .and. actualstep) then

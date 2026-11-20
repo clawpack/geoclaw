@@ -13,7 +13,6 @@ subroutine b4step2(mbc, mx, my, meqn, q, xlower, ylower, dx, dy, t, dt,        &
 !
 ! Also calls movetopo if topography might be moving.
 
-    use geoclaw_module, only: dry_tolerance
     use geoclaw_module, only: g => grav
     use geoclaw_module, only: speed_limit
     use topo_module, only: num_dtopo,topotime
@@ -49,10 +48,7 @@ subroutine b4step2(mbc, mx, my, meqn, q, xlower, ylower, dx, dy, t, dt,        &
     ! check for h < 0 and reset to zero
     ! check for h < drytolerance
     ! set hu = hv = 0 in all these cells
-    forall(i=1-mbc:mx+mbc, j=1-mbc:my+mbc,q(1,i,j) < dry_tolerance)
-        q(1,i,j) = max(q(1,i,j),0.d0)
-        q(2:3,i,j) = 0.d0
-    end forall
+    call fixdry(meqn, mbc, mx, my, q, maux, aux)
 
     ! Check for fluid speed sqrt(u**2 + v**2) > speed_limit
     ! and reset by scaling (u,v) down to this value (preserving direction)
