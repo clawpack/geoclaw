@@ -1299,12 +1299,11 @@ class SurgeData(clawpack.clawutil.data.ClawData):
             self.t_ramp_on = float(data_file.readline().split("=:")[0])
             self.t_ramp_off = float(data_file.readline().split("=:")[0])
             data_file.readline()
-            data_file.readline() # TODO: Extra empty line, should fix
 
             # AMR parameters
             self.wind_refine = self._parse_value(data_file.readline().split("=:")[0])
             self.R_refine = self._parse_value(data_file.readline().split("=:")[0])
-            # data_file.readline()
+            data_file.readline()
 
             # Storm / met-forcing selection (family + subtype tokens).
             self.storm_family = data_file.readline().split("=:")[0].strip()[1:-1]
@@ -1366,14 +1365,14 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         if isinstance(self.R_refine, bool):
             if not self.R_refine:
                 self.R_refine = None
-        self.data_write()
-        
+
         if isinstance(self.wind_refine, float):
             self.wind_refine = [self.wind_refine]
         self.data_write('wind_refine', description='(Wind speed refinement criteria)')
         if isinstance(self.R_refine, float):
             self.R_refine = [self.R_refine]
         self.data_write('R_refine', description='(Wind speed refinement criteria)')
+        self.data_write()
 
         # Storm / met-forcing selection.
         #
