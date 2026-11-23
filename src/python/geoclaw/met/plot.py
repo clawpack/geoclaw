@@ -330,7 +330,7 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
                                          plot_type='2d_contourf')
         plotitem.plot_var = geoplot.surface_or_depth
         if bounds is not None:
-            contours = numpy.linspace(bounds[0], bounds[1], 11)
+            contours = np.linspace(bounds[0], bounds[1], 11)
             plotitem.contour_levels = contours
             plotitem.fill_cmin = bounds[0]
             plotitem.fill_cmax = bounds[1]
@@ -344,7 +344,8 @@ def add_surface_elevation(plotaxes, plot_type='pcolor', bounds=None,
         plotitem.colorbar_shrink = shrink
         plotitem.colorbar_label = "Surface Height (m)"
         plotitem.fill_cmap = plt.get_cmap('OrRd')
-        if any((value < 0 for value in plotitem.contour_levels)):
+        if (plotitem.contour_levels is not None
+                and any(value < 0 for value in plotitem.contour_levels)):
             plotitem.fill_cmap = surface_cmap
 
         plotitem.amr_contour_show = [1] * 10
@@ -391,9 +392,9 @@ def add_speed(plotaxes, plot_type='pcolor', bounds=None,  contours=None,
         plotitem.colorbar_shrink = shrink
         plotitem.fill_cmap = plt.get_cmap('PuBu')
         if bounds is not None:
-            plotitem.contour_levels = numpy.linspace(bounds[0], bounds[1], 11)
+            plotitem.contour_levels = np.linspace(bounds[0], bounds[1], 11)
             plotitem.fill_cmin = bounds[0]
-            plotitem.fill_cmap = bounds[1]
+            plotitem.fill_cmax = bounds[1]
         elif contours is not None:
             plotitem.contour_levels = contours
             plotitem.fill_cmin = min(contours)
@@ -448,8 +449,8 @@ def add_wind(plotaxes, bounds=None, plot_type='pcolor', shrink=1.0):
     elif plot_type == 'contour':
         plotitem = plotaxes.new_plotitem(name='wind', plot_type='2d_contour')
         plotitem.plot_var = wind_speed
-        plotitem.contour_nlevels = len(surge_data.wind_refine)
-        plotitem.countour_min = surge_data.wind_refine[0]
+        # Contour at the wind speed refinement thresholds
+        plotitem.contour_levels = list(surge_data.wind_refine)
         plotitem.patchedges_show = 1
 
 
