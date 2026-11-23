@@ -1371,7 +1371,7 @@ class SurgeData(clawpack.clawutil.data.ClawData):
         self.data_write('wind_refine', description='(Wind speed refinement criteria)')
         if isinstance(self.R_refine, float):
             self.R_refine = [self.R_refine]
-        self.data_write('R_refine', description='(Wind speed refinement criteria)')
+        self.data_write('R_refine', description='(Distance-to-center refinement criteria)')
         self.data_write()
 
         # Storm / met-forcing selection.
