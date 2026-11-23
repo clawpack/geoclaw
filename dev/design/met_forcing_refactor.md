@@ -227,6 +227,15 @@ The maintainer owns storm forcing, so the automated verification gate carries th
 
 4. **`surge.data` format and `SurgeData` writer, in lockstep.** The `storm_specification_type` integer encoding lives on this wire. The Python writer and the Fortran reader change together or not at all. Keeping the legacy encoding as an alias is what protects this during the config split.
 
+   > **Status [2026-11-23]:** this lockstep was broken by #676 (pre-refactor,
+   > merged 2025-09-10). It moved a blank record in `SurgeData.write` and dropped
+   > the Fortran `read`s of `wind_refine`/`R_refine`, so the thresholds from
+   > `setrun` were silently ignored, and storm refinement (seam 2) never
+   > triggered. Restored by #784 (issue #783), which re-aligned the writer,
+   > `SurgeData.read`, and the Fortran reader and added
+   > `test_refine_thresholds_read` to check the round-trip from `setrun` through
+   > `fort.surge`. Verified against #784 head `432b9557`.
+
 5. **`SurgeData` public surface and import paths.** Every surge `setrun.py` sets `SurgeData` attributes, and import paths (`from clawpack.geoclaw.surge.storm import Storm`, the `SurgeData` location) are themselves a compatibility contract. Module splits must keep those paths importable via shims. Treat the `SurgeData` surface and import paths as first-class must-keep, alongside the `Storm` class.
 
 6. **Rename blast radius.** Every `use storm_module` / `use model_storm_module` / `use data_storm_module` site across the whole tree breaks on the rename, not just files under `surge/`. Enumerate them up front so the radius is known rather than discovered at link time.

@@ -258,7 +258,7 @@ def _netcdf_build_vars():
     return {"USE_NETCDF": "1", "NETCDF_FFLAGS": fflags, "NETCDF_LFLAGS": flibs}
 
 
-def _run_case(tmp_path, forcing, prebuilt, return_path=False):
+def _run_case(tmp_path, forcing, prebuilt, return_path=False, **setrun_kwargs):
     """Generate inputs, install the shared build, run, return the aux arrays."""
     topo_path = tmp_path / "flat.tt3"
     _flat_topo(topo_path)
@@ -277,7 +277,7 @@ def _run_case(tmp_path, forcing, prebuilt, return_path=False):
 
     runner = gtest.GeoClawTestRunner(tmp_path, test_path=testdir)
     runner.set_data(forcing=forcing, topo_path=str(topo_path),
-                    storm_path=str(storm_path))
+                    storm_path=str(storm_path), **setrun_kwargs)
     runner.write_data()
     _install_executable(runner, prebuilt)
     runner.run_code()
@@ -370,6 +370,34 @@ def test_willoughby_field_shape(tmp_path, plain_xgeoclaw):
     steps = np.abs(np.diff(profile))
     assert steps.max() < 0.5 * profile.max(), (
         "the sectionally-continuous profile must not jump")
+
+
+def _fort_surge_thresholds(path):
+    """Return the wind_refine and R_refine values logged in fort.surge."""
+    lines = Path(path).read_text().splitlines()
+    values = {}
+    for line in lines[:2]:
+        name, _, rest = line.partition("=")
+        values[name.strip()] = [float(v) for v in rest.split()]
+    return values["Wind Nesting"], values["R Nesting"]
+
+
+@pytest.mark.regression
+@pytest.mark.storm
+@pytest.mark.parametrize("wind_refine, R_refine", [
+    pytest.param([8.0, 16.0], [100.0e3, 50.0e3], id="set"),
+    pytest.param(None, None, id="disabled"),
+])
+def test_refine_thresholds_read(tmp_path, plain_xgeoclaw, wind_refine, R_refine):
+    """wind_refine and R_refine set in setrun reach the Fortran reader, both
+    set and disabled (#783).
+    """
+    _, run_path = _run_case(tmp_path, "holland80", plain_xgeoclaw,
+                            return_path=True, amr_levels_max=2,
+                            wind_refine=wind_refine, R_refine=R_refine)
+    wind, radius = _fort_surge_thresholds(run_path / "fort.surge")
+    np.testing.assert_array_equal(wind, wind_refine or [])
+    np.testing.assert_array_equal(radius, R_refine or [])
 
 
 @pytest.mark.regression
