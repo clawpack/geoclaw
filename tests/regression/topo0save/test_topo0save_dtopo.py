@@ -208,3 +208,31 @@ def test_two_topo_files_match_single_file_control(tmp_path, xgeoclaw, half):
 
     assert _bathymetry_over(split_state, split_bathy, half) == pytest.approx(
         _bathymetry_over(ctl_state, ctl_bathy, half), abs=1e-6)
+
+
+# Filename buffer length for dtopo paths in topo_module.f90, which previously
+# was only 150 characters (topo paths were already 512).
+OLD_DTOPO_FNAME_LEN = 150
+
+
+@pytest.mark.regression
+def test_long_dtopo_path(tmp_path, xgeoclaw):
+    """A dtopo path longer than the old 150 character buffer must be read.
+
+    ``dtopo.data`` holds the absolute path, so deep run directories exceed
+    150 characters easily.  ``dtopofname`` was declared ``len=150``, which
+    truncated the path when read and failed to find the file.
+    """
+    long_dir = tmp_path.joinpath(*(["long_dtopo_directory_name_" + "x" * 30]
+                                   * 4))
+    long_dir.mkdir(parents=True)
+    dtopo_path = _write_dtopo(long_dir, "west").resolve()
+    assert len(str(dtopo_path)) > OLD_DTOPO_FNAME_LEN + 50
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    state, bathy = _run(run_dir, _write_full_topo(run_dir), dtopo_path,
+                        xgeoclaw)
+
+    assert _bathymetry_over(state, bathy, "west") == pytest.approx(
+        BASE_DEPTH + UPLIFT, abs=1e-6)
