@@ -343,7 +343,7 @@ class DTopography(object):
         self.X = None
         self.Y = None
         self.delta = None
-        self.extent = None          # [x1,x2,y1,y2]; set by read/read_header/crop
+        self.extent = None          # [x1,x2,y1,y2]; set by read/read_header
         self.path = path
         self.dtopo_type = dtopo_type
 
@@ -378,15 +378,18 @@ class DTopography(object):
 
 
     def read_header(self, path=None, dtopo_type=None):
-        r"""Read only the grid header of a gridded dtopo file (types 2/3).
+        r"""Read only the grid header of a gridded dtopo file (types 2/3/4).
 
         Populates ``self.extent`` = ``[x1, x2, y1, y2]`` and ``self.delta`` =
         ``(dx, dy)`` in file coordinates without reading the deformation array,
         so ``DTopoData.write()`` can size the antimeridian split cheaply
-        (mirrors ``topotools.Topography.read_header``).  The gridded dtopo
-        header is nine numeric lines: ``mx, my, mt, xlower, ylower, t0, dx, dy,
-        dt``.  Type 1 (column format) has no header and type 4 carries its
-        geometry in NetCDF metadata; both raise here.
+        (mirrors ``topotools.Topography.read_header``), and returns
+        ``(mx, my, mt)``.  The ASCII gridded header is nine numeric lines:
+        ``mx, my, mt, xlower, ylower, t0, dx, dy, dt``.  For NetCDF (type 4)
+        only the longitude, latitude and time coordinates are read, and the
+        extent is reported south to north whatever the file's storage order,
+        as ``read()`` loads it.  Type 1 (column format) has no header and
+        raises here.
         """
         if path is not None:
             self.path = path
@@ -397,11 +400,34 @@ class DTopography(object):
             dtopo_type = topotools.determine_topo_type(self.path, default=3)
             self.dtopo_type = dtopo_type
 
+        if abs(dtopo_type) == 4:
+            from clawpack.geoclaw.netcdf_utils import DTopoInspector
+
+            with DTopoInspector(self.path) as inspector:
+                ds = inspector.ds
+                x = numpy.asarray(ds[inspector._find_x_name()].values,
+                                  dtype=numpy.float64)
+                y_name = inspector._find_y_name()
+                y = numpy.asarray(ds[y_name].values, dtype=numpy.float64)
+                if not inspector._detect_y_increasing(y_name):
+                    y = y[::-1]
+                time_name = inspector._find_time_name()
+                if time_name is None:
+                    raise ValueError(
+                        "No time axis found in NetCDF dtopo file %s"
+                        % self.path)
+                mt = int(ds.sizes[time_name])
+
+            self.delta = (float(x[1] - x[0]), float(y[1] - y[0]))
+            self.extent = [float(x[0]), float(x[-1]),
+                           float(y[0]), float(y[-1])]
+            return len(x), len(y), mt
+
         if abs(dtopo_type) not in (2, 3):
             raise ValueError(
-                "read_header() is only defined for gridded dtopo types 2 and "
-                "3; got dtopo_type=%s (type 1 has no header, type 4 carries "
-                "geometry in NetCDF metadata)." % dtopo_type)
+                "read_header() is only defined for gridded dtopo types 2, 3 "
+                "and 4; got dtopo_type=%s (type 1 has no header)."
+                % dtopo_type)
 
         with open(self.path) as fid:
             mx = int(fid.readline().split()[0])
@@ -472,9 +498,6 @@ class DTopography(object):
         # for every time slice.
         self.dZ = self.dZ[:, jlower:jupper:coarsen, ilower:iupper:coarsen]
         self.X, self.Y = numpy.meshgrid(self.x, self.y)
-        self.delta = (dx * coarsen, dy * coarsen)
-        self.extent = [float(self.x[0]), float(self.x[-1]),
-                       float(self.y[0]), float(self.y[-1])]
 
     def read(self, path=None, dtopo_type=None, verbose=False,
              time_reference=None, assume_units=None):
@@ -661,6 +684,16 @@ class DTopography(object):
                 self.y = self.y + self.y_shift
             if self.Y is not None:
                 self.Y = self.Y + self.y_shift
+
+        # Bounds and spacing of what was loaded: after crop/coarsen and the
+        # shift, so in domain coordinates, as for Topography.extent.
+        # (read_header() reports the file's own extent instead.)
+        if self.x is not None and self.y is not None:
+            self.extent = [float(numpy.min(self.x)), float(numpy.max(self.x)),
+                           float(numpy.min(self.y)), float(numpy.max(self.y))]
+            if len(self.x) > 1 and len(self.y) > 1:
+                self.delta = (float(abs(self.x[1] - self.x[0])),
+                              float(abs(self.y[1] - self.y[0])))
 
 
     def write(self, path=None, dtopo_type=None, dZ_format="%.3f",
