@@ -46,6 +46,7 @@ import numpy as np
 from numpy import ma
 from matplotlib import pyplot as plt
 import os
+import warnings
 
 def f2s(x, num_digits=6):
     r"""
@@ -932,17 +933,23 @@ def kml_timespan(t1,t2,event_time=None,tz=None,tscale=1):
 
     return timestrbegin,timestrend
 
-def topo2kml(topo_file_name, topo_type, color='00FF00'):
+def topo2kml(topo_file_name, topo_type, color='00FF00', extent=None):
     """
     Create a kml file putting a box around the region covered by a topofile.
     Color is green by default.
+
+    If *extent* ([x1, x2, y1, y2]) is given, the box is drawn there instead
+    of at the file's extent, e.g. the crop_extent of a cropped topofile.
     """
 
     import os
     from clawpack.geoclaw import topotools
-    topo = topotools.Topography(topo_file_name, topo_type=topo_type)
-    topo.read_header()
-    xy = topo.extent
+    if extent is None:
+        topo = topotools.Topography(topo_file_name, topo_type=topo_type)
+        topo.read_header()
+        xy = topo.extent
+    else:
+        xy = tuple(extent)
     name = os.path.splitext(os.path.split(topo_file_name)[-1])[0]
     file_name = '%s.kml' % name
     box2kml(xy, file_name, name, color)
@@ -1078,6 +1085,35 @@ def fgout2kml(rundata=None,fname='fgout_grids.kml',verbose=True,combined=False):
         box2kml(xy, kml_file, fname_root, color='8888FF')
 
 
+def _topo_region_used(topo):
+    """The [x1, x2, y1, y2] of *topo* that GeoClaw uses, in domain coordinates.
+
+    That is the crop_extent when one is set; TopographyData.write has already
+    checked it lies within the file (#760).  For a topo_entries() descriptor
+    entry it is the descriptor's crop_bounds moved by its lon_wrap_offset.
+    Otherwise it is the file's extent moved by x_shift/y_shift, or None when
+    there is no shift, so topo2kml reads the file's own extent.
+    """
+    if getattr(topo, 'crop_extent', None) is not None:
+        return list(topo.crop_extent)
+
+    meta = getattr(topo, '_netcdf_meta', None)
+    if meta is not None and getattr(meta, 'crop_bounds', None) is not None:
+        x1, x2, y1, y2 = meta.crop_bounds
+        offset = float(getattr(meta, 'lon_wrap_offset', 0.0) or 0.0)
+        return [x1 + offset, x2 + offset, y1, y2]
+
+    x_shift = float(getattr(topo, 'x_shift', 0.0) or 0.0)
+    y_shift = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+    if x_shift == 0.0 and y_shift == 0.0:
+        return None
+    from clawpack.geoclaw import topotools
+    t = topotools.Topography(topo.path, topo_type=topo.topo_type)
+    t.read_header()
+    x1, x2, y1, y2 = t.extent
+    return [x1 + x_shift, x2 + x_shift, y1 + y_shift, y2 + y_shift]
+
+
 def make_input_data_kmls(rundata=None, combined=False, dtopo_contours=False):
     """
     Produce kml files for the computational domain, all gauges and regions
@@ -1111,13 +1147,21 @@ def make_input_data_kmls(rundata=None, combined=False, dtopo_contours=False):
     fgmax2kml(rundata)
     fgout2kml(rundata)
 
-    topofiles = rundata.topo_data.topofiles
-    for f in topofiles:
-        topo_file_name = f[-1]
-        topo_type = f[0]
+    # Normalize to Topography / DTopography objects, accepting the legacy
+    # [type, path] lists as well.  Their deprecation warnings are for
+    # TopographyData.write to give at make data, not to repeat here.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DeprecationWarning)
+        topofiles = rundata.topo_data._normalize_topofiles()
+        dtopofiles = rundata.dtopo_data._normalize_dtopofiles()
+
+    for topo in topofiles:
+        topo_file_name = topo.path
+        topo_type = topo.topo_type
         if os.path.isfile(topo_file_name):
             try:
-                topo2kml(topo_file_name, topo_type)
+                topo2kml(topo_file_name, topo_type,
+                         extent=_topo_region_used(topo))
             except:
                 print('*** problem reading topofile, proper topo_type?')
                 print('    ', topo_file_name)
@@ -1125,10 +1169,9 @@ def make_input_data_kmls(rundata=None, combined=False, dtopo_contours=False):
             print('*** topo file not found, not making kml for: ')
             print('    ', topo_file_name)
 
-    dtopofiles = rundata.dtopo_data.dtopofiles
-    for f in dtopofiles:
-        dtopo_file_name = f[-1]
-        dtopo_type = f[0]
+    for dtopo in dtopofiles:
+        dtopo_file_name = dtopo.path
+        dtopo_type = dtopo.dtopo_type
         if os.path.isfile(dtopo_file_name):
             try:
                 dtopo2kml(dtopo_file_name, dtopo_type)
