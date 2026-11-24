@@ -52,3 +52,7 @@ lost. Several of these docs *were* lost that way (they lived in a gitignored
   merge order for the linear PR stack, superseded branches and what replaced
   them, and the deferred items (antimeridian seam gap, dtopo Fortran parity,
   1D preprocessing scope, build-flag hygiene, units-policy ASCII coverage).
+- `topo\_crop\_windows.md` (+ `topo_crop_windows.svg`) — reference for the
+  crop windows (file extent, `crop_extent`, each entry's window in the file,
+  loaded window, array extent, domain), their coordinate frames, and how a
+  crop is applied, including across the antimeridian.
