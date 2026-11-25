@@ -232,20 +232,16 @@ def test_dtopo_preprocessing_attributes(tmp_path):
     plain.read(path=path, dtopo_type=3)
 
     negated = dtopotools.DTopography()
-    negated.negate_z = True
-    negated.read(path=path, dtopo_type=3)
+    negated.read(path=path, dtopo_type=3, negate_z=True)
     assert np.allclose(negated.dZ, -plain.dZ)
 
     shifted = dtopotools.DTopography()
-    shifted.z_shift = 0.5
-    shifted.read(path=path, dtopo_type=3)
+    shifted.read(path=path, dtopo_type=3, z_shift=0.5)
     assert np.allclose(shifted.dZ, plain.dZ + 0.5)
 
     # Order matches topotools: negate first, then shift.
     both = dtopotools.DTopography()
-    both.negate_z = True
-    both.z_shift = 0.5
-    both.read(path=path, dtopo_type=3)
+    both.read(path=path, dtopo_type=3, negate_z=True, z_shift=0.5)
     assert np.allclose(both.dZ, -plain.dZ + 0.5)
 
 
@@ -270,9 +266,7 @@ def test_dtopo_netcdf_roundtrip(tmp_path):
 
     # Preprocessing attributes also apply on the NetCDF read path.
     shifted = dtopotools.DTopography()
-    shifted.negate_z = True
-    shifted.z_shift = 0.5
-    shifted.read(path=path)
+    shifted.read(path=path, negate_z=True, z_shift=0.5)
     assert np.allclose(shifted.dZ, -base.dZ + 0.5)
 
 
@@ -483,9 +477,8 @@ def test_dtopo_type1_preprocessing_unsupported(tmp_path, attr, value):
     _make_synthetic_dtopo().write(path, dtopo_type=1, dZ_format="%.12e")
 
     dtopo = dtopotools.DTopography()
-    setattr(dtopo, attr, value)
     with pytest.raises(NotImplementedError, match=attr):
-        dtopo.read(path=path, dtopo_type=1)
+        dtopo.read(path=path, dtopo_type=1, **{attr: value})
 
 
 @pytest.mark.python
@@ -500,8 +493,7 @@ def test_dtopo_crop_on_read_equivalence(tmp_path, dtopo_type):
     full = dtopotools.DTopography(path, dtopo_type=dtopo_type)
     crop = [0.25, 0.75, 0.25, 0.75]
     cropped = dtopotools.DTopography()
-    cropped.crop_extent = list(crop)
-    cropped.read(path=path, dtopo_type=dtopo_type)
+    cropped.read(path=path, dtopo_type=dtopo_type, crop_extent=list(crop))
 
     xm = (full.x >= crop[0]) & (full.x <= crop[1])
     ym = (full.y >= crop[2]) & (full.y <= crop[3])
@@ -520,8 +512,7 @@ def test_dtopo_coarsen_on_read(tmp_path):
 
     full = dtopotools.DTopography(path, dtopo_type=3)
     coarse = dtopotools.DTopography()
-    coarse.coarsen = 2
-    coarse.read(path=path, dtopo_type=3)
+    coarse.read(path=path, dtopo_type=3, coarsen=2)
 
     np.testing.assert_allclose(coarse.x, full.x[::2])
     np.testing.assert_allclose(coarse.y, full.y[::2])
@@ -555,8 +546,7 @@ def test_dtopo_shift_applied(tmp_path, attr, axis):
 
     shift = 0.5
     dtopo = dtopotools.DTopography()
-    setattr(dtopo, attr, shift)
-    dtopo.read(path=path, dtopo_type=3)  # must NOT raise
+    dtopo.read(path=path, dtopo_type=3, **{attr: shift})  # must NOT raise
 
     if axis == "x":
         np.testing.assert_allclose(dtopo.x, ref.x + shift)
@@ -629,8 +619,8 @@ def test_dtopo_read_header_every_gridded_type(tmp_path, dtopo_type):
 @pytest.mark.python
 @pytest.mark.parametrize("dtopo_type", [3, pytest.param(4, marks=pytest.mark.netcdf)])
 def test_dtopo_read_header_extent_ignores_shift(tmp_path, dtopo_type):
-    r"""read_header() reports the file as stored: x/y_shift set on the
-    object do not move it.  read() does apply them, so the two extents differ
+    r"""read_header() reports the file as stored: x/y_shift on the
+    entry do not move it.  read() does apply them, so the two extents differ
     by exactly the shift.  Topography.read_header behaves the same way, and
     data.py relies on it (_file_cell_edges adds the shift itself), so a
     caller drawing a box from the header -- e.g. kmltools -- must add
@@ -638,14 +628,12 @@ def test_dtopo_read_header_extent_ignores_shift(tmp_path, dtopo_type):
     path = _write_rectangular(tmp_path, dtopo_type)
     xs, ys = 360.0, 0.5
 
-    header = dtopotools.DTopography()
-    header.x_shift, header.y_shift = xs, ys
-    header.read_header(path=path, dtopo_type=dtopo_type)
+    entry = dtopotools.DTopoFile(str(path), dtopo_type, x_shift=xs,
+                                 y_shift=ys)
+    header = entry.read_header()
     np.testing.assert_allclose(header.extent, RECT_EXTENT, rtol=0, atol=1e-12)
 
-    loaded = dtopotools.DTopography()
-    loaded.x_shift, loaded.y_shift = xs, ys
-    loaded.read(path=path, dtopo_type=dtopo_type)
+    loaded = entry.read()
     np.testing.assert_allclose(
         loaded.extent,
         [header.extent[0] + xs, header.extent[1] + xs,
@@ -723,12 +711,12 @@ def test_dtopo_read_extent_is_in_domain_coordinates(tmp_path, dtopo_type,
     path = _write_rectangular(tmp_path, dtopo_type)
     xs, ys = 360.0, 0.5
 
-    d = dtopotools.DTopography()
-    d.x_shift, d.y_shift = xs, ys
+    entry = dtopotools.DTopoFile(str(path), dtopo_type, x_shift=xs,
+                                 y_shift=ys)
     if crop is not None:
-        d.crop_extent = [crop[0] + xs, crop[1] + xs,
-                         crop[2] + ys, crop[3] + ys]
-    d.read(path=path, dtopo_type=dtopo_type)
+        entry.crop_extent = [crop[0] + xs, crop[1] + xs,
+                             crop[2] + ys, crop[3] + ys]
+    d = entry.read()
 
     expected = RECT_EXTENT if crop is None else crop
     expected = [expected[0] + xs, expected[1] + xs,

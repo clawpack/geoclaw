@@ -45,7 +45,8 @@ module topo_module
     real(kind=8), parameter :: CROP_TOL = 1.0d-6
 
     ! NetCDF descriptor fields — one slot per topo file, populated from the
-    ! key=value block in topo.data by read_netcdf_descriptor (type 4 only).
+    ! descriptor lines in topo.data by read_netcdf_descriptor (type 4 only;
+    ! nc_lon_wrap_offset is read with each entry's settings, for every type).
     character(len=64), allocatable :: nc_var_name(:)     ! topo variable name
     character(len=64), allocatable :: nc_x_name(:)     ! x coordinate variable name
     character(len=64), allocatable :: nc_y_name(:)     ! y coordinate variable name
@@ -62,7 +63,8 @@ module topo_module
     real(kind=8), allocatable :: topo_crop_extent(:,:)  ! (4,n): x1,x2,y1,y2 domain coords; all-zero=no crop
     integer,      allocatable :: topo_coarsen(:)         ! subsampling factor (1=none)
     integer,      allocatable :: topo_buffer(:)          ! buffer cells (grid points) around crop region
-    real(kind=8), allocatable :: topo_align(:,:)         ! (2,n): align offset; all-zero=none
+    real(kind=8), allocatable :: topo_align(:,:)         ! (2,n): align point (valid when topo_has_align)
+    logical, allocatable :: topo_has_align(:)            ! align given (None in topo.data = not given)
     real(kind=8), allocatable :: topo_x_shift(:)         ! x coordinate registration offset
     real(kind=8), allocatable :: topo_y_shift(:)         ! y coordinate registration offset
     real(kind=8), allocatable :: topo_z_shift(:)         ! bulk datum offset
@@ -84,7 +86,7 @@ module topo_module
     logical,      allocatable :: dtopo_negate_z(:)
 
     ! NetCDF descriptor values for type-4 dtopo files, parsed from the
-    ! key=value block in dtopo.data by read_dtopo_netcdf_descriptor.  The
+    ! descriptor lines in dtopo.data by read_dtopo_netcdf_descriptor.  The
     ! time axis is carried as (t0, dt) in simulation seconds — computed by
     ! Python's DTopoInspector — so Fortran never parses CF time metadata.
     character(len=64), allocatable :: dnc_var_name(:), dnc_x_name(:), &
@@ -144,6 +146,7 @@ contains
     subroutine read_topo_settings(restart,file_name)
 
         use geoclaw_module
+        use utility_module, only: read_keyed_line, is_none
 
         implicit none
 
@@ -159,6 +162,9 @@ contains
         ! Crop index locals (types 2/3 only)
         integer :: i_start, i_end, j_start, j_end
         real(kind=8) :: x1_c, x2_c, y1_c, y2_c
+        ! topo.data reading: every line is `value =: key` (read_keyed_line)
+        character(len=256) :: data_file
+        character(len=4096) :: val
         if (.not.module_setup) then
 
             ! Open and begin parameter file output
@@ -169,19 +175,23 @@ contains
 
 
             if (present(file_name)) then
-                call opendatafile(iunit, file_name)
+                data_file = file_name
             else
-                call opendatafile(iunit, 'topo.data')
+                data_file = 'topo.data'
             endif
+            call opendatafile(iunit, trim(data_file))
             ! Read in value to use in place of no_data_value in topofile
-            read(iunit,*) topo_missing
+            call read_keyed_line(iunit, data_file, 'topo_missing', val)
+            read(val,*) topo_missing
 
             ! Read in topography specification type
-            read(iunit,"(i1)") test_topography
+            call read_keyed_line(iunit, data_file, 'test_topography', val)
+            read(val,*) test_topography
 
             ! Primary topography type, read in topography files specified
             if (test_topography == 0) then
-                read(iunit,*) mtopofiles
+                call read_keyed_line(iunit, data_file, 'ntopofiles', val)
+                read(val,*) mtopofiles
 
                 if (mtopofiles == 0) then
                     write(GEO_PARM_UNIT,*) '   mtopofiles = 0'
@@ -230,6 +240,7 @@ contains
 
                 allocate(topo_crop_extent(4, mtopofiles), topo_coarsen(mtopofiles))
                 allocate(topo_buffer(mtopofiles), topo_align(2, mtopofiles))
+                allocate(topo_has_align(mtopofiles))
                 allocate(topo_x_shift(mtopofiles), topo_y_shift(mtopofiles))
                 allocate(topo_z_shift(mtopofiles))
                 allocate(topo_negate_z(mtopofiles))
@@ -237,6 +248,7 @@ contains
                 topo_coarsen     = 1
                 topo_buffer      = 0
                 topo_align       = 0.0d0
+                topo_has_align   = .false.
                 topo_x_shift     = 0.0d0
                 topo_y_shift     = 0.0d0
                 topo_z_shift     = 0.0d0
@@ -252,8 +264,10 @@ contains
                 mtopofiles = mtopofiles - num_dtopo  ! decrement after allocates
 
                 do i=1,mtopofiles
-                    read(iunit,*) topofname(i)
-                    read(iunit,*) itopotype(i)
+                    call read_keyed_line(iunit, data_file, 'topo_path', val)
+                    read(val,*) topofname(i)
+                    call read_keyed_line(iunit, data_file, 'topo_type', val)
+                    read(val,*) itopotype(i)
 
                     ! Deprecation warning for topo_type=1 (unstructured).
                     if (abs(itopotype(i)) == 1) then
@@ -262,24 +276,44 @@ contains
                         print *, "  not supported and will produce incorrect results."
                     end if
 
-                    ! Read the 8 new preprocessing parameter lines present in
-                    ! topo.data for ALL file types (written by TopographyData.write()).
-                    read(iunit,*) topo_crop_extent(1,i), topo_crop_extent(2,i), &
-                                  topo_crop_extent(3,i), topo_crop_extent(4,i)
-                    read(iunit,*) topo_coarsen(i)
-                    read(iunit,*) topo_buffer(i)
-                    read(iunit,*) topo_align(1,i), topo_align(2,i)
-                    read(iunit,*) topo_x_shift(i)
-                    read(iunit,*) topo_y_shift(i)
-                    read(iunit,*) topo_z_shift(i)
-                    read(iunit,*) topo_negate_z(i)
+                    ! The per-file settings lines, present for ALL file types
+                    ! (written by TopographyData.write()).  An unset crop or
+                    ! align is None; an unset crop is kept as the all-zero
+                    ! sentinel (never a valid crop, which needs x1 < x2), and
+                    ! align has its own flag because [0, 0] is a valid align.
+                    call read_keyed_line(iunit, data_file, 'crop_extent', val)
+                    if (.not. is_none(val)) read(val,*) topo_crop_extent(:,i)
+                    call read_keyed_line(iunit, data_file, 'coarsen', val)
+                    read(val,*) topo_coarsen(i)
+                    call read_keyed_line(iunit, data_file, 'buffer', val)
+                    read(val,*) topo_buffer(i)
+                    call read_keyed_line(iunit, data_file, 'align', val)
+                    topo_has_align(i) = .not. is_none(val)
+                    if (topo_has_align(i)) read(val,*) topo_align(:,i)
+                    call read_keyed_line(iunit, data_file, 'x_shift', val)
+                    read(val,*) topo_x_shift(i)
+                    call read_keyed_line(iunit, data_file, 'y_shift', val)
+                    read(val,*) topo_y_shift(i)
+                    call read_keyed_line(iunit, data_file, 'z_shift', val)
+                    read(val,*) topo_z_shift(i)
+                    call read_keyed_line(iunit, data_file, 'negate_z', val)
+                    read(val,*) topo_negate_z(i)
+                    call read_keyed_line(iunit, data_file, 'lon_wrap_offset', val)
+                    read(val,*) nc_lon_wrap_offset(i)
+                    if (abs(itopotype(i)) /= 4 .and. &
+                            nc_lon_wrap_offset(i) /= 0.0d0) then
+                        print *, "ERROR in read_topo_settings: lon_wrap_offset ", &
+                            "is only implemented for NetCDF (topo_type 4); ", &
+                            trim(topofname(i)), " has type ", itopotype(i)
+                        stop 1
+                    end if
 
                     ! Preprocessing is not supported for topo_type=1.
                     if (abs(itopotype(i)) == 1 .and. ( &
                             any(topo_crop_extent(:,i) /= 0.0d0) .or. &
                             topo_coarsen(i) > 1 .or. &
                             topo_buffer(i) /= 0 .or. &
-                            any(topo_align(:,i) /= 0.0d0) .or. &
+                            topo_has_align(i) .or. &
                             topo_negate_z(i) .or. &
                             topo_x_shift(i) /= 0.0d0 .or. &
                             topo_y_shift(i) /= 0.0d0 .or. &
@@ -289,10 +323,10 @@ contains
                         stop 1
                     end if
 
-                    ! For NetCDF files, read the optional key=value descriptor
-                    ! block that follows the preprocessing lines.
+                    ! For NetCDF files, read the descriptor lines that follow
+                    ! the settings lines.
                     if (abs(itopotype(i)) == 4) then
-                        call read_netcdf_descriptor(iunit, i)
+                        call read_netcdf_descriptor(iunit, i, data_file)
 
                         ! Authoritative coordinate-system gate: antimeridian
                         ! longitude wrapping is only meaningful on a lon-lat
@@ -378,13 +412,13 @@ contains
                             call apply_align_buffer_coarsen(i_start, i_end, &
                                 mxtopo(i), xlowtopo(i), dxtopo(i), &
                                 topo_align(1,i) - topo_x_shift(i), &
-                                any(topo_align(:,i) /= 0.0d0), &
+                                topo_has_align(i), &
                                 max(1, topo_coarsen(i)), topo_buffer(i), &
                                 topofname(i), 'x')
                             call apply_align_buffer_coarsen(j_start, j_end, &
                                 mytopo(i), ylowtopo(i), dytopo(i), &
                                 topo_align(2,i) - topo_y_shift(i), &
-                                any(topo_align(:,i) /= 0.0d0), &
+                                topo_has_align(i), &
                                 max(1, topo_coarsen(i)), topo_buffer(i), &
                                 topofname(i), 'y')
 
@@ -610,19 +644,28 @@ contains
             ! Simple jump discontinuity in bathymetry
             else if (test_topography == 1) then
                 topo_finalized = .true.
-                read(iunit,"(d16.8)") topo_location
-                read(iunit,"(d16.8)") topo_left
-                read(iunit,"(d16.8)") topo_right
+                call read_keyed_line(iunit, data_file, 'topo_location', val)
+                read(val,*) topo_location
+                call read_keyed_line(iunit, data_file, 'topo_left', val)
+                read(val,*) topo_left
+                call read_keyed_line(iunit, data_file, 'topo_right', val)
+                read(val,*) topo_right
 
             ! Idealized ocean shelf
             else if (test_topography == 2 .or. test_topography == 3) then
                 topo_finalized = .true.
-                read(iunit,"(d16.8)") topo_x0
-                read(iunit,"(d16.8)") topo_x1
-                read(iunit,"(d16.8)") topo_x2
-                read(iunit,"(d16.8)") topo_basin_depth
-                read(iunit,"(d16.8)") topo_shelf_depth
-                read(iunit,"(d16.8)") topo_beach_slope
+                call read_keyed_line(iunit, data_file, 'x0', val)
+                read(val,*) topo_x0
+                call read_keyed_line(iunit, data_file, 'x1', val)
+                read(val,*) topo_x1
+                call read_keyed_line(iunit, data_file, 'x2', val)
+                read(val,*) topo_x2
+                call read_keyed_line(iunit, data_file, 'basin_depth', val)
+                read(val,*) topo_basin_depth
+                call read_keyed_line(iunit, data_file, 'shelf_depth', val)
+                read(val,*) topo_shelf_depth
+                call read_keyed_line(iunit, data_file, 'beach_slope', val)
+                read(val,*) topo_beach_slope
                 topo_shelf_slope = (topo_basin_depth - topo_shelf_depth) &
                                             / (topo_x0 - topo_x1)
             else
@@ -1597,7 +1640,7 @@ contains
                     ! runs, so first/last true bound the window.
                     if (present(topo_idx)) then
                         cf4 = max(1, topo_coarsen(topo_idx))
-                        has_al4 = any(topo_align(:,topo_idx) /= 0.0d0)
+                        has_al4 = topo_has_align(topo_idx)
                         ! Align targets are in domain coordinates; xlocs now
                         ! include lon_wrap_offset but not topo_x_shift, so shift the
                         ! x target into the same frame.
@@ -1721,6 +1764,7 @@ contains
     subroutine read_dtopo_settings(file_name)
 
         use geoclaw_module
+        use utility_module, only: read_keyed_line, is_none
 
         implicit none
 
@@ -1735,6 +1779,10 @@ contains
         ! Unsupported preprocessing values: read, guarded, then discarded
         real(kind=8) :: dtopo_crop(4), dtopo_align_v(2)
         integer :: dtopo_coarsen_v, dtopo_buffer_v
+        logical :: dtopo_has_crop, dtopo_has_align
+        ! dtopo.data reading: every line is `value =: key` (read_keyed_line)
+        character(len=256) :: data_file
+        character(len=4096) :: val
 
         write(GEO_PARM_UNIT,*) ' '
         write(GEO_PARM_UNIT,*) '--------------------------------------------'
@@ -1742,12 +1790,14 @@ contains
         write(GEO_PARM_UNIT,*) '-------------'
 
         if (present(file_name)) then
-            call opendatafile(iunit,file_name)
+            data_file = file_name
         else
-            call opendatafile(iunit,'dtopo.data')
+            data_file = 'dtopo.data'
         endif
+        call opendatafile(iunit, trim(data_file))
 
-        read(iunit,*) num_dtopo
+        call read_keyed_line(iunit, data_file, 'mdtopofiles', val)
+        read(val,*) num_dtopo
         write(GEO_PARM_UNIT,*) '   num dtopo files = ',num_dtopo
         if (num_dtopo == 0) then
             return
@@ -1788,34 +1838,55 @@ contains
         dnc_has_descriptor = .false.
 
         do i=1,num_dtopo
-            read(iunit,*) dtopofname(i)
-            read(iunit,*) dtopotype(i)
+            call read_keyed_line(iunit, data_file, 'dtopo_path', val)
+            read(val,*) dtopofname(i)
+            call read_keyed_line(iunit, data_file, 'dtopo_type', val)
+            read(val,*) dtopotype(i)
 
-            ! Read the 8 preprocessing lines (same per-file block as
-            ! topo.data, written by DTopoData.write()).  x_shift, y_shift,
-            ! z_shift and negate_z are implemented for dtopography; fail
-            ! loudly on the rest rather than silently ignoring them.
-            read(iunit,*) dtopo_crop(1), dtopo_crop(2), dtopo_crop(3), dtopo_crop(4)
-            read(iunit,*) dtopo_coarsen_v
-            read(iunit,*) dtopo_buffer_v
-            read(iunit,*) dtopo_align_v(1), dtopo_align_v(2)
-            read(iunit,*) dtopo_x_shift(i)
-            read(iunit,*) dtopo_y_shift(i)
-            read(iunit,*) dtopo_z_shift(i)
-            read(iunit,*) dtopo_negate_z(i)
+            ! The per-file settings lines (same as topo.data, written by
+            ! DTopoData.write()).  x_shift, y_shift, z_shift and negate_z are
+            ! implemented for dtopography; fail loudly on the rest rather
+            ! than silently ignoring them (mandli/geoclaw#15).
+            call read_keyed_line(iunit, data_file, 'crop_extent', val)
+            dtopo_has_crop = .not. is_none(val)
+            if (dtopo_has_crop) read(val,*) dtopo_crop
+            call read_keyed_line(iunit, data_file, 'coarsen', val)
+            read(val,*) dtopo_coarsen_v
+            call read_keyed_line(iunit, data_file, 'buffer', val)
+            read(val,*) dtopo_buffer_v
+            call read_keyed_line(iunit, data_file, 'align', val)
+            dtopo_has_align = .not. is_none(val)
+            if (dtopo_has_align) read(val,*) dtopo_align_v
+            call read_keyed_line(iunit, data_file, 'x_shift', val)
+            read(val,*) dtopo_x_shift(i)
+            call read_keyed_line(iunit, data_file, 'y_shift', val)
+            read(val,*) dtopo_y_shift(i)
+            call read_keyed_line(iunit, data_file, 'z_shift', val)
+            read(val,*) dtopo_z_shift(i)
+            call read_keyed_line(iunit, data_file, 'negate_z', val)
+            read(val,*) dtopo_negate_z(i)
+            call read_keyed_line(iunit, data_file, 'lon_wrap_offset', val)
+            read(val,*) dnc_lon_wrap_offset(i)
 
-            if (any(dtopo_crop /= 0.0d0) .or. dtopo_coarsen_v > 1 .or. &
-                    dtopo_buffer_v /= 0 .or. any(dtopo_align_v /= 0.0d0)) then
+            if (dtopo_has_crop .or. dtopo_coarsen_v > 1 .or. &
+                    dtopo_buffer_v /= 0 .or. dtopo_has_align) then
                 print *, "ERROR: only x_shift, y_shift, z_shift and negate_z"
-                print *, "  preprocessing are implemented for dtopography files."
+                print *, "  preprocessing are implemented for dtopography files"
+                print *, "  (crop/coarsen: mandli/geoclaw#15)."
                 print *, "  Unsupported attribute set for file: ", trim(dtopofname(i))
                 stop 1
             end if
+            if (abs(dtopotype(i)) /= 4 .and. dnc_lon_wrap_offset(i) /= 0.0d0) then
+                print *, "ERROR in read_dtopo_settings: lon_wrap_offset is ", &
+                    "only implemented for NetCDF dtopo (type 4); ", &
+                    trim(dtopofname(i)), " has type ", dtopotype(i)
+                stop 1
+            end if
 
-            ! For NetCDF files, read the key=value descriptor block that
-            ! follows the preprocessing lines (written by DTopoData.write()).
+            ! For NetCDF files, read the descriptor lines that follow the
+            ! settings lines (written by DTopoData.write()).
             if (abs(dtopotype(i)) == 4) then
-                call read_dtopo_netcdf_descriptor(iunit, i)
+                call read_dtopo_netcdf_descriptor(iunit, i, data_file)
 
                 ! Authoritative coordinate-system gate (mirrors the topo gate in
                 ! read_topo_settings): antimeridian longitude wrapping is only
@@ -1858,7 +1929,8 @@ contains
             end if
         enddo
 
-        read(iunit,*) dt_max_dtopo  
+        call read_keyed_line(iunit, data_file, 'dt_max_dtopo', val)
+        read(val,*) dt_max_dtopo
         !  largest allowable dt while dtopo is moving
 
 
@@ -2523,93 +2595,55 @@ contains
 #endif
 
     ! ========================================================================
-    ! subroutine read_netcdf_descriptor(iunit, idx)
+    ! subroutine read_netcdf_descriptor(iunit, idx, data_file)
     !
-    ! Read the optional key=value block that follows the topo_type line in
-    ! topo.data for a type-4 (NetCDF) entry.  Lines are consumed until either
-    ! a blank line or EOF is reached.  Parsed values are stored in the module-
-    ! level nc_* arrays at position idx.
+    ! Read the descriptor lines that follow the settings lines of a type-4
+    ! (NetCDF) entry in topo.data, in this order, checking each key:
     !
-    ! Format (Python DescriptorWriter output):
-    !   var_name        = z
-    !   x_name          = longitude
-    !   y_name          = latitude
-    !   lon_wrap_offset = 0.0
-    !   y_increasing    = False
-    !   dim_order       = y,x
-    !   fill_value      = -9999.0
-    !   fill_action     = abort
+    !   'z'                  =: var_name
+    !   'lon'                =: x_name
+    !   'lat'                =: y_name
+    !   T                    =: y_increasing
+    !   'y,x'                =: dim_order
+    !   1.0                  =: scale_factor
+    !   None                 =: fill_value      (None: the file has none)
+    !   'abort'              =: fill_action
     !
-    ! Unknown keys produce a warning and are skipped.  crop_bounds, written by
-    ! older versions, is an error: the crop now comes only from the entry's
-    ! crop_extent line, and an old file whose crop was carried by crop_bounds
-    ! alone would otherwise load the wrong window without a message.
+    ! Parsed values are stored in the module-level nc_* arrays at position
+    ! idx.  The entry's lon_wrap_offset is read with the settings lines.  A
+    ! file from an older GeoClaw (a key = value block, possibly with the
+    ! crop_bounds line Fortran once preferred to crop_extent) stops in
+    ! read_keyed_line.
     ! ========================================================================
-    subroutine read_netcdf_descriptor(iunit, idx)
+    subroutine read_netcdf_descriptor(iunit, idx, data_file)
 
         use geoclaw_module, only: GEO_PARM_UNIT
+        use utility_module, only: read_keyed_line, is_none
 
         implicit none
 
         integer, intent(in) :: iunit, idx
+        character(len=*), intent(in) :: data_file
 
-        character(len=512) :: line, key, val
-        integer :: eq_pos, comment_pos, ios
+        character(len=4096) :: val
 
-        do
-            read(iunit, '(a)', iostat=ios) line
-            if (ios /= 0) exit          ! EOF
-
-            ! Strip inline comment (! character)
-            comment_pos = index(line, '!')
-            if (comment_pos > 0) line = line(1:comment_pos-1)
-            line = adjustl(trim(line))
-
-            ! Blank line terminates the descriptor block
-            if (len_trim(line) == 0) exit
-
-            ! Skip lines without an '=' sign
-            eq_pos = index(line, '=')
-            if (eq_pos == 0) cycle
-
-            key = adjustl(trim(line(1:eq_pos-1)))
-            val = adjustl(trim(line(eq_pos+1:)))
-
-            select case (trim(key))
-                case ('var_name')
-                    nc_var_name(idx) = trim(val)
-                case ('x_name')
-                    nc_x_name(idx) = trim(val)
-                case ('y_name')
-                    nc_y_name(idx) = trim(val)
-                case ('lon_wrap_offset')
-                    read(val, *) nc_lon_wrap_offset(idx)
-                case ('scale_factor')
-                    read(val, *) nc_scale_factor(idx)
-                case ('y_increasing')
-                    ! Python writes the bool as 'True'/'False'; list-directed
-                    ! logical read accepts the leading T/F.  Logged only.
-                    read(val, *) nc_y_increasing(idx)
-                case ('dim_order')
-                    nc_dim_order(idx) = trim(val)
-                case ('fill_value')
-                    read(val, *) nc_fill_value(idx)
-                    nc_has_fill(idx) = .true.
-                case ('fill_action')
-                    nc_fill_action(idx) = trim(val)
-                case ('crop_bounds')
-                    print *, "ERROR: topo.data was written by an older GeoClaw: ", &
-                        "the NetCDF descriptor for"
-                    print *, "  ", trim(topofname(idx))
-                    print *, "  has a crop_bounds line, which is no longer used ", &
-                        "(the crop is crop_extent)."
-                    print *, "  Regenerate topo.data with 'make data'."
-                    stop 1
-                case default
-                    write(GEO_PARM_UNIT, *) 'WARNING: Unknown NetCDF descriptor key: ', &
-                        trim(key)
-            end select
-        end do
+        call read_keyed_line(iunit, data_file, 'var_name', val)
+        read(val,*) nc_var_name(idx)
+        call read_keyed_line(iunit, data_file, 'x_name', val)
+        read(val,*) nc_x_name(idx)
+        call read_keyed_line(iunit, data_file, 'y_name', val)
+        read(val,*) nc_y_name(idx)
+        call read_keyed_line(iunit, data_file, 'y_increasing', val)
+        read(val,*) nc_y_increasing(idx)
+        call read_keyed_line(iunit, data_file, 'dim_order', val)
+        read(val,*) nc_dim_order(idx)
+        call read_keyed_line(iunit, data_file, 'scale_factor', val)
+        read(val,*) nc_scale_factor(idx)
+        call read_keyed_line(iunit, data_file, 'fill_value', val)
+        nc_has_fill(idx) = .not. is_none(val)
+        if (nc_has_fill(idx)) read(val,*) nc_fill_value(idx)
+        call read_keyed_line(iunit, data_file, 'fill_action', val)
+        read(val,*) nc_fill_action(idx)
 
         ! Log what was parsed
         write(GEO_PARM_UNIT, *) '  NetCDF descriptor for topo file ', idx, ':'
@@ -2626,86 +2660,56 @@ contains
     end subroutine read_netcdf_descriptor
 
     ! ========================================================================
-    ! subroutine read_dtopo_netcdf_descriptor(iunit, idx)
+    ! subroutine read_dtopo_netcdf_descriptor(iunit, idx, data_file)
     !
-    ! Read the key=value block that follows the preprocessing lines in
-    ! dtopo.data for a type-4 (NetCDF) entry.  Same parser contract as
-    ! read_netcdf_descriptor: lines are consumed until a blank line or EOF.
-    ! Parsed values are stored in the module-level dnc_* arrays at idx.
+    ! Read the descriptor lines that follow the settings lines of a type-4
+    ! (NetCDF) entry in dtopo.data, in this order, checking each key:
     !
-    ! Format (Python DescriptorWriter.write_dtopo_descriptor output):
-    !   var_name        = dz
-    !   x_name          = lon
-    !   y_name          = lat
-    !   time_name       = time
-    !   lon_wrap_offset = 0.0
-    !   y_increasing    = True
-    !   dim_order       = time,y,x
-    !   t0              = 0.0
-    !   dt              = 0.5
+    !   'dz'                 =: var_name
+    !   'lon'                =: x_name
+    !   'lat'                =: y_name
+    !   'time'               =: time_name
+    !   T                    =: y_increasing
+    !   'time,y,x'           =: dim_order
+    !   1.0                  =: scale_factor
+    !   0.0                  =: t0
+    !   0.5                  =: dt
     !
-    ! t0/dt are in simulation seconds (computed by Python's DTopoInspector,
-    ! which also validates uniform time spacing), so Fortran never parses
-    ! the file's time variable.  time_name and y_increasing are informational:
-    ! the y-axis direction is detected from the coordinates at read time.
+    ! Parsed values are stored in the module-level dnc_* arrays at idx.  The
+    ! entry's lon_wrap_offset is read with the settings lines.  t0/dt are in
+    ! simulation seconds (computed by Python's DTopoInspector, which also
+    ! validates uniform time spacing), so Fortran never parses the file's
+    ! time variable.  time_name and y_increasing are informational: the
+    ! y-axis direction is detected from the coordinates at read time.
     ! ========================================================================
-    subroutine read_dtopo_netcdf_descriptor(iunit, idx)
+    subroutine read_dtopo_netcdf_descriptor(iunit, idx, data_file)
 
         use geoclaw_module, only: GEO_PARM_UNIT
+        use utility_module, only: read_keyed_line
 
         implicit none
 
         integer, intent(in) :: iunit, idx
+        character(len=*), intent(in) :: data_file
 
-        character(len=512) :: line, key, val
-        integer :: eq_pos, comment_pos, ios
+        character(len=4096) :: val
 
-        do
-            read(iunit, '(a)', iostat=ios) line
-            if (ios /= 0) exit          ! EOF
-
-            ! Strip inline comment (! character)
-            comment_pos = index(line, '!')
-            if (comment_pos > 0) line = line(1:comment_pos-1)
-            line = adjustl(trim(line))
-
-            ! Blank line terminates the descriptor block
-            if (len_trim(line) == 0) exit
-
-            ! Skip lines without an '=' sign
-            eq_pos = index(line, '=')
-            if (eq_pos == 0) cycle
-
-            key = adjustl(trim(line(1:eq_pos-1)))
-            val = adjustl(trim(line(eq_pos+1:)))
-
-            select case (trim(key))
-                case ('var_name')
-                    dnc_var_name(idx) = trim(val)
-                case ('x_name')
-                    dnc_x_name(idx) = trim(val)
-                case ('y_name')
-                    dnc_y_name(idx) = trim(val)
-                case ('time_name')
-                    continue    ! informational; t0/dt carried directly
-                case ('lon_wrap_offset')
-                    read(val, *) dnc_lon_wrap_offset(idx)
-                case ('scale_factor')
-                    read(val, *) dnc_scale_factor(idx)
-                case ('y_increasing')
-                    continue    ! detected from coordinates at read time
-                case ('dim_order')
-                    dnc_dim_order(idx) = trim(val)
-                case ('t0')
-                    read(val, *) dnc_t0(idx)
-                case ('dt')
-                    read(val, *) dnc_dt(idx)
-                case default
-                    write(GEO_PARM_UNIT, *) &
-                        'WARNING: Unknown dtopo NetCDF descriptor key: ', &
-                        trim(key)
-            end select
-        end do
+        call read_keyed_line(iunit, data_file, 'var_name', val)
+        read(val,*) dnc_var_name(idx)
+        call read_keyed_line(iunit, data_file, 'x_name', val)
+        read(val,*) dnc_x_name(idx)
+        call read_keyed_line(iunit, data_file, 'y_name', val)
+        read(val,*) dnc_y_name(idx)
+        call read_keyed_line(iunit, data_file, 'time_name', val)
+        call read_keyed_line(iunit, data_file, 'y_increasing', val)
+        call read_keyed_line(iunit, data_file, 'dim_order', val)
+        read(val,*) dnc_dim_order(idx)
+        call read_keyed_line(iunit, data_file, 'scale_factor', val)
+        read(val,*) dnc_scale_factor(idx)
+        call read_keyed_line(iunit, data_file, 't0', val)
+        read(val,*) dnc_t0(idx)
+        call read_keyed_line(iunit, data_file, 'dt', val)
+        read(val,*) dnc_dt(idx)
 
         dnc_has_descriptor(idx) = .true.
 

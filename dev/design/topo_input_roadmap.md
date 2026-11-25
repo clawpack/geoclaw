@@ -11,6 +11,15 @@ the user docs, is still open); the supersession clean-up is done;
 §1 below the "Landed" table is kept as the record of the plan the merges
 followed.
 
+**Update (2026-11-25):** the crop stack from #760 landed on 2026-11-24
+(#765, carrying #762 and #763, merged as `5fc5e7cc`; #769 as `ea0f7df8`).
+v5.15 is to be cut before AGU (week of 2026-12-07). Still to land before it:
+the recipe split (#768, `dev/design/topo_recipe.md`) and then PR B (§2.8).
+The units decision (#782) and the shared input checks for met forcing (§2.9)
+should land before it too.
+Tile selection (#770) was deferred at the 2026-11-24 meeting, to be turned
+into an issue and redesigned.
+
 **Provenance.** Written 2026-09-07 from the branch and PR state at that date,
 and amended later the same day after test-merging the open PRs in order: §1
 (the stack forks at #741; #745 rebased onto it), §2.3 (layout guards, and the
@@ -40,6 +49,10 @@ meteorological side of the same input-handling effort.
 | `num_dim` passed to the data classes | clawpack/clawutil#208 | `3236167e` |
 | Input parity (order 3b) | clawpack/geoclaw#749 | `1687a021` |
 | Units policy, ASCII coverage (§2.6) | clawpack/geoclaw#755 | `58d0290c` |
+| coarsen + `align` with no aligned point: raise in Python, stop in Fortran (#761) | clawpack/geoclaw#762 | in `5fc5e7cc` |
+| One crop-coverage rule for every topo type (§2.7, #760) | clawpack/geoclaw#763 | in `5fc5e7cc` |
+| Type-4 crop in domain coordinates; `crop_bounds` dropped from `topo.data` (§2.8 PR A) | clawpack/geoclaw#765 | `5fc5e7cc` |
+| `DTopography.read_header()` for netCDF; `read()` sets `extent` | clawpack/geoclaw#769 | `ea0f7df8` |
 
 Merged 2026-10-08 in Randy LeVeque's order (#748, #739, #741, #742, #743,
 #745, then clawutil#208 after #745 as required below), followed by #749 and
@@ -54,8 +67,11 @@ update to §4's "not verified" note.
 
 | Change | Tracking | Status |
 |---|---|---|
-| coarsen + `align` with no aligned point in the crop: Python `crop_indices` raises `EmptyAlignedCropWindow`; Fortran `apply_align_buffer_coarsen` stops naming the file and axis | clawpack/geoclaw#761 | clawpack/geoclaw#762 (open, branch `crop-align-overshoot`, head `c1ac4691`). Verified 2026-10-19: the new Python tests and the `topo_crop` Fortran regression (types 3 and 4) fail on `0ba4db7b` and pass with the fix; the two sweeps comparing against the old code are unchanged |
-| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | coverage rule + Fortran backstop on branch `topo-crop-coverage` (stacked on #762), ahead of the `crop_bounds` PR; tile helper next. See §2.7 |
+| Per-file recipes: `TopoFile`/`DTopoFile` carry the settings; `Topography`/`DTopography` hold data only | clawpack/geoclaw#768 | branch `topo-recipe-768` off `5fc5e7cc`; design and verification in `dev/design/topo_recipe.md`. Must land before v5.15: none of the settings attributes are in v5.14.0, so they can move without deprecation now |
+| `topo.data`/`dtopo.data` to `value =: key` (§2.8 PR B) | §2.8 | implemented on branch `topo-data-format`, stacked on #768 (PR #786); end-to-end results bitwise identical (§2.8) |
+| Missing vertical units for topo/dtopo: assume meters (warn where the format could have declared them) | clawpack/geoclaw#782 | proposal posted for Randy's review (table in the issue); a v5.14 → v5.15 regression, so before v5.15 |
+| Met forcing uses the same input checks as `TopoFile`/`DTopoFile` | §2.9 | **should land before v5.15**; not started |
+| Tile selection from a predefined list; `crop_extent = 'all'`/`'none'` | clawpack/geoclaw#770 | deferred (2026-11-24 meeting): to become an issue and be redesigned, since it drops every file the crop misses, including coarse ones that should always be kept. A redesign works on `TopoFile` entries |
 
 ### Merge order as planned (historical)
 
@@ -349,6 +365,9 @@ so the ASCII case falls out of hoisting it instead of being added twice.
 topo type, checked in Python at `make data`.** "Covered" allows half a cell
 beyond the outermost grid points.
 
+**Merged 2026-11-24** as #763, in `5fc5e7cc` (with #765). The tile-selection
+helper (#770) is deferred; see §1.
+
 **Status (2026-10-19): implemented on branch `topo-crop-coverage`**, a PR of its
 own ahead of the `crop_bounds` PR rather than folded into it. Python: one check,
 `data._check_crop_covered`, for types 2/3 (in domain coordinates, after
@@ -424,8 +443,10 @@ Points to carry into the implementation:
 ### 2.8 Crop windows, `crop_bounds`, and the `topo.data` notation
 
 **Owner: Kyle Mandli; Randy LeVeque reviews every PR, and A is the important
-one. Planned 2026-10-15. PR A implemented 2026-10-21 on branch
-`topo-crop-frame`, stacked on #763; B, A2 and C not started.**
+one. Planned 2026-10-15. PR A merged 2026-11-24 (#765, `5fc5e7cc`). B is
+next, after #768 (2026-11-24 meeting: both before v5.15); A2 and C not
+started.** With #768 the per-file block in `topo.data` is written from a
+`TopoFile`, so PR B changes one writer, not the `Topography` attributes.
 
 Randy asked two questions about `topo.data`. First, what is the difference
 between the per-file `crop_extent` line and the netCDF descriptor's
@@ -481,6 +502,73 @@ regressions (including the netCDF + `x_shift` case and the old-file stop),
 hand-built entries with a −360 offset). The windows are documented, with a
 diagram, in `topo_crop_windows.md`. Not yet done from the PR A row: the user
 docs.
+
+**PR B as built (2026-11-25, branch `topo-data-format`, stacked on #768;
+failing tests `adb69346`).**
+
+- **One notation.** Every value line in `topo.data` and `dtopo.data` is
+  `value =: key`, optionally followed by `# comment`, in the column layout
+  clawutil's `data_write` uses. The netCDF descriptor is no longer a
+  `key = value` block ended by a blank line; it is a fixed set of keyed lines
+  after the entry's settings. Topo: `var_name`, `x_name`, `y_name`,
+  `y_increasing`, `dim_order`, `scale_factor`, `fill_value`, `fill_action`.
+  Dtopo: `var_name`, `x_name`, `y_name`, `time_name`, `y_increasing`,
+  `dim_order`, `scale_factor`, `t0`, `dt`.
+- **Fortran checks every key.** One helper reads the next keyed line,
+  skipping blank and `#` lines, and stops if the line has no `=:` or a
+  different key: "Regenerate topo.data with 'make data'". The helper takes
+  the unit and file name as arguments and uses no geoclaw module, so it can
+  move unchanged to other Clawpack repositories (§2.10). A file from an older
+  GeoClaw stops at its first old-style line, which also retires the separate
+  `crop_bounds` check from #765.
+- **Unset values are `None`,** the convention `surge.data` already uses
+  (`get_value_count` treats `None` as no values), for `crop_extent`, `align`
+  and an absent netCDF `fill_value`. This fixes a real bug: the old all-zero
+  sentinel could not tell "no align" from `align = [0, 0]`, so for a netCDF
+  file Fortran dropped an align through the origin that Python applied
+  (window start -95.125 in Fortran, -95.0 in Python, reproduced on
+  `e3bd0ec5`). Fortran now keeps a separate "align set" flag per entry.
+- **Strings are quoted, logicals are `T`/`F`.** A quoted string survives a
+  list-directed read, so `dim_order = 'y,x'` keeps its comma; a quote inside a
+  path is doubled.
+- **`lon_wrap_offset` is a per-entry line for every type,** after
+  `negate_z`, instead of a descriptor key: 0 for ASCII (Fortran stops on a
+  nonzero value for ASCII, which is not implemented yet) and the split
+  entry's offset for netCDF. ASCII wrap can then be added without changing
+  the format again.
+- **1D** keeps its own layout (no per-file settings), in the same notation.
+  Its reader reads list-directed, which ignores the trailing `=: key`. The
+  dtopo path and type, read with one statement before, are read separately.
+  1D does not check keys: it reads one file with no settings, so an old 1D
+  file is read the same either way.
+- **Python reads both files back:** `TopographyData.read` (new) and
+  `DTopoData.read` return the entries, and a write -> read round trip gives
+  equal `TopoFile`/`DTopoFile` entries.
+- **Not in PR B:** a user-facing crop tolerance or Randy's 0.5 dx snap (needs
+  his input), `crop_extent = 'all'`/`'none'` (#770, deferred), and the met
+  storm file (PR C).
+- **Verification:** Python writes and Fortran reads together hold results
+  fixed.
+  - *End to end, 2D:* 11 cases (ASCII and netCDF topo with crop, coarsen,
+    buffer, align, shifts and `negate_z`; two files by priority; a
+    cross-seam split, written with offsets 0 and 360; dtopo types 1, 3 and 4
+    with shifts) run on `e3bd0ec5` and on this branch, each with its own
+    Python writer and netCDF build: the `fort.q`, `fort.a` and `fort.t` files
+    are **bitwise identical in all 11**.
+  - *End to end, 1D:* `examples/1d_classic/okada_dtopo` run with the new
+    `dtopo.data` and with the same file in the old layout, on the new
+    executable: all 122 output files bitwise identical.
+  - *Goldens:* the five byte-exact `topo.data` goldens were regenerated
+    deliberately; parsing the old goldens in the old layout and the new ones
+    with `TopographyData.read`'s parser gives the same value for every key.
+    The only additions are `lon_wrap_offset` (0) and an explicit `None` for
+    an absent netCDF fill value.
+  - *The one intended change:* `align = [0, 0]` for netCDF topo now reaches
+    Fortran (`test_align_through_the_origin_reaches_fortran`: Fortran's
+    window starts at Python's -95.0, not -95.125).
+  - *Old files:* a pre-PR-B `topo.data` (with the old `crop_bounds` line) and
+    `dtopo.data` stop, naming the expected key and asking for
+    `make data`; so does a file with two lines swapped.
 
 **ASCII and netCDF (Kyle, 2026-10-22).** The windowing logic and the names
 apply to both formats wherever it makes sense, and any difference has to be
@@ -578,6 +666,78 @@ The windows to document and diagram:
   180°.
 
 ---
+
+### 2.9 Met forcing: the same input checks as topo and dtopo
+
+*Status (2026-11-25): agreed (Kyle) as something that **should** land before
+v5.15; not started. Not a hard deadline: nothing is moved or renamed, so doing
+it after the release would only break code that is already wrong.*
+
+**Why.** #768 gave topo and dtopo one entry class each, with shared checks:
+a misspelled setting raises instead of being stored and ignored, and
+`crop_extent` and the shifts are validated when set. Met forcing already
+separates settings from data (`GriddedMetForcing` holds paths, format,
+`crop_extent`, `x_shift`/`y_shift`, `ramp_width`, `scaling`,
+`storm_time_scale` and the `met_*` netCDF names; the fields live in
+`OWIData` or are never loaded for netCDF), and the shared names match. But it
+has none of the checks: `storm.crop_exent = [...]` is stored and ignored
+(`Storm` forwards these settings to `GriddedMetForcing` through properties),
+and a descending or wrong-length crop is caught late or not at all. If the
+three input types drift apart now, the interface is harder to keep consistent
+later.
+
+**Plan.**
+
+- Split the checking part of `coordinate_tools.InputRecipe` into a mixin that
+  takes a field list: `__setattr__` validation, unknown names refused, and the
+  shared checks for `crop_extent` and the shifts.
+- `TopoFile`/`DTopoFile` keep using it unchanged. `GriddedMetForcing` uses it
+  with its own fields. `Storm`'s forwarding properties then get the checks
+  without changes.
+- Not included: `coarsen`/`buffer`/`align` for met (Fortran does not
+  support them), restructuring `Storm` (it still holds the track data and
+  forwards the gridded settings), and the met file format (§2.8 PR C).
+
+**Verification.** A refactor with the output held fixed: the met `.data`
+and storm files written by the isaac and ike examples and by the met tests
+are byte-identical before and after. New tests: a misspelled setting raises on
+`GriddedMetForcing` and on `Storm`, and invalid crops and shifts raise when
+set.
+
+### 2.10 Key-checked `.data` files across Clawpack
+
+*Status (2026-11-25): agreed (Kyle) as a follow-up after v5.15, in separate
+PRs per repository. Nothing in PR B depends on it.*
+
+**Why.** clawutil's `data_write` already writes every `ClawData` file
+(`claw.data`, `amr.data`, `regions.data`, ...) as `value =: key`, and
+`ClawData.read` parses by key. But no Fortran reader checks the keys:
+amrclaw and classic read by position (e.g. `read(inunit,*) xlower, ylower`
+in `amr2.f90`). If a release adds or reorders a parameter and a run pairs a
+new `.data` file with an old executable, or the reverse, every value after
+the change shifts by a line and is misread without a message. PR B (§2.8)
+closes this for `topo.data` and `dtopo.data`; the same check applies
+everywhere.
+
+**Plan.**
+
+- Use PR B's key-check helper in the amrclaw and classic readers, one data
+  file per PR, starting with `claw.data` and `amr.data`, which every run
+  reads.
+- Adopt the `None` convention for unset values at the same time.
+  `data_write` already writes Python `None` as the text `None`, which today's
+  positional readers would misread or fail on, so the two belong together.
+- Decide where the helper lives (Kyle and Randy). There is no shared
+  Fortran library: clawutil ships Python and the Makefiles only, and amrclaw
+  and classic each have their own `opendatafile` (classic already carries a
+  copy of geoclaw's `get_value_count`). Options: a copy per repository (the
+  current pattern), or one Fortran source in clawutil that `Makefile.common`
+  compiles for every build, which avoids copies but changes the build across
+  repositories.
+
+**Verification.** As for PR B: results bitwise identical end to end before
+and after each reader change, and a test that a file in the old layout
+stops with a message to regenerate it.
 
 ## 3. Correction on record: clawpack/geoclaw#740
 

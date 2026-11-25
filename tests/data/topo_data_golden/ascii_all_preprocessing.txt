@@ -8,13 +8,14 @@
 0                    =: test_topography      # (Type topography specification) 
 1                    =: ntopofiles          
 
-'<TMP>/b.tt3'   # topo_path
-  3   # topo_type
--98.25 -92.75 22.5 27.5   # crop_extent [x1 x2 y1 y2]
-2   # coarsen
-3   # buffer
--100.0 20.0   # align [x y]
-0.125   # x_shift
--0.25   # y_shift
-1.5   # z_shift
-T   # negate_z
+'<TMP>/b.tt3' =: topo_path
+3                    =: topo_type
+-98.25 -92.75 22.5 27.5 =: crop_extent          # [x1 x2 y1 y2], domain coordinates
+2                    =: coarsen
+3                    =: buffer               # grid points
+-100.0 20.0          =: align                # [x y]
+0.125                =: x_shift
+-0.25                =: y_shift
+1.5                  =: z_shift
+T                    =: negate_z
+0.0                  =: lon_wrap_offset

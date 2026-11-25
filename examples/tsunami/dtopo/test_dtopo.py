@@ -162,7 +162,7 @@ def test_dtopo_preprocessing_identity(tmp_path: Path) -> None:
     path_a = tmp_path / "a"
     path_a.mkdir()
     dtopo.write(path_a / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
     runner_a = _run_single_dtopo(path_a, example_dir, entry,
@@ -175,7 +175,7 @@ def test_dtopo_preprocessing_identity(tmp_path: Path) -> None:
     transformed = _make_dtopo1(example_dir)
     transformed.dZ = z_shift - dtopo.dZ
     transformed.write(path_b / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
     entry.negate_z = True
@@ -224,7 +224,7 @@ def test_dtopo_shift_identity(tmp_path: Path) -> None:
     path_a.mkdir()
     dtopo = _make_dtopo1(example_dir)
     dtopo.write(path_a / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
     runner_a = _run_single_dtopo(path_a, example_dir, entry,
@@ -239,7 +239,7 @@ def test_dtopo_shift_identity(tmp_path: Path) -> None:
     X, Y = np.meshgrid(shifted.x, shifted.y)
     shifted.X, shifted.Y = X, Y
     shifted.write(path_b / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
     entry.x_shift = delta
@@ -282,7 +282,7 @@ def test_dtopo_netcdf_identity(tmp_path: Path) -> None:
     path_a = tmp_path / "a"
     path_a.mkdir()
     dtopo.write(path_a / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
     runner_a = _run_single_dtopo(path_a, example_dir, entry,
@@ -292,7 +292,7 @@ def test_dtopo_netcdf_identity(tmp_path: Path) -> None:
     path_b = tmp_path / "b"
     path_b.mkdir()
     dtopo.write(path_b / "dtopo1.nc", dtopo_type=4)
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = "dtopo1.nc"
     entry.dtopo_type = 4
     runner_b = _run_single_dtopo(path_b, example_dir, entry,
@@ -335,7 +335,7 @@ def test_dtopo_unsupported_preprocessing_guard(tmp_path: Path) -> None:
     _make_topography_files(run_path)
     dtopo.write(run_path / "dtopo1.tt3", dtopo_type=3, dZ_format="%.12e")
 
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = "dtopo1.tt3"
     entry.dtopo_type = 3
 
@@ -343,11 +343,12 @@ def test_dtopo_unsupported_preprocessing_guard(tmp_path: Path) -> None:
     runner.rundata.dtopo_data.dtopofiles = [entry]
     runner.write_data()
 
+    import re
     data_path = run_path / "dtopo.data"
     text = data_path.read_text()
-    assert "0   # buffer" in text
-    data_path.write_text(text.replace("0   # buffer",
-                                      "2   # buffer"))
+    text, n = re.subn(r"^0(\s+=:\s+buffer\b)", r"2\1", text, flags=re.M)
+    assert n == 1, text
+    data_path.write_text(text)
 
     # Full rebuild: a preceding test may have left objects compiled with
     # different preprocessor flags (e.g. -DNETCDF), which "exe" would link.

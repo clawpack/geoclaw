@@ -4,6 +4,7 @@
 """Tests for reading and writing GeoClaw data files."""
 
 
+import re
 from pathlib import Path
 import numpy as np
 import pytest
@@ -133,7 +134,7 @@ def test_dtopo_data_roundtrip(tmp_path):
 
     data_file = tmp_path / "dtopo.data"
 
-    d1 = dtopotools.DTopography()
+    d1 = dtopotools.DTopoFile()
     d1.path = "dtopo_one.tt3"
     d1.dtopo_type = 3
     d1.x_shift = 1.5
@@ -178,11 +179,11 @@ def test_dtopo_data_datum_mismatch_warns(tmp_path):
     r"""DTopoData.write warns when dtopo files carry different datums."""
     import clawpack.geoclaw.dtopotools as dtopotools
 
-    a = dtopotools.DTopography()
+    a = dtopotools.DTopoFile()
     a.path = "a.tt3"
     a.dtopo_type = 3
     a.datum = "NAVD88"
-    b = dtopotools.DTopography()
+    b = dtopotools.DTopoFile()
     b.path = "b.tt3"
     b.dtopo_type = 3
     b.datum = "MSL"
@@ -198,11 +199,11 @@ def test_dtopo_data_no_datum_warning_when_consistent(tmp_path, recwarn):
     r"""No datum warning when dtopo datums agree or only one is set."""
     import clawpack.geoclaw.dtopotools as dtopotools
 
-    a = dtopotools.DTopography()
+    a = dtopotools.DTopoFile()
     a.path = "a.tt3"
     a.dtopo_type = 3
     a.datum = "MSL"
-    b = dtopotools.DTopography()
+    b = dtopotools.DTopoFile()
     b.path = "b.tt3"
     b.dtopo_type = 3            # datum stays None -> single distinct datum
 
@@ -231,7 +232,7 @@ def test_dtopo_data_netcdf_descriptor(tmp_path):
     nc_path = tmp_path / "dt.nc"
     src.write(nc_path, dtopo_type=4)
 
-    entry = dtopotools.DTopography()
+    entry = dtopotools.DTopoFile()
     entry.path = str(nc_path)
     entry.dtopo_type = 4
 
@@ -241,11 +242,15 @@ def test_dtopo_data_netcdf_descriptor(tmp_path):
     dtopo_data.write(out_file=data_file)
 
     text = _read_text(data_file)
-    assert "var_name       = dz" in text
-    assert "x_name         = lon" in text
-    assert "y_name         = lat" in text
-    assert "t0             = 0.0" in text
-    assert "dt             = 0.5" in text
+    def value(key):
+        m = re.search(r"^(.*?)\s+=:\s+%s\b" % key, text, flags=re.M)
+        assert m, key
+        return m.group(1).strip()
+    assert value("var_name") == "'dz'"
+    assert value("x_name") == "'lon'"
+    assert value("y_name") == "'lat'"
+    assert float(value("t0")) == 0.0
+    assert float(value("dt")) == 0.5
 
     # The reader still parses the file (descriptor lines are skipped).
     read_back = clawpack.geoclaw.data.DTopoData()
@@ -259,7 +264,7 @@ def test_dtopo_data_unsupported_preprocessing(tmp_path):
     r"""Unsupported dtopo preprocessing attributes fail loudly at write."""
     import clawpack.geoclaw.dtopotools as dtopotools
 
-    d = dtopotools.DTopography()
+    d = dtopotools.DTopoFile()
     d.path = "dtopo.tt3"
     d.dtopo_type = 3
     d.crop_extent = [0.0, 1.0, 0.0, 1.0]
@@ -412,7 +417,7 @@ def test_topo_data_1d_uses_legacy_layout(tmp_path):
     r"""1D topo.data carries override_order and no preprocessing block."""
     import clawpack.geoclaw.topotools as topotools
 
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = "celledges.data"
     topo.topo_type = 1
 
@@ -450,10 +455,7 @@ def test_topo_data_1d_override_order_written_once_for_multiple_files(tmp_path):
 
     topos = []
     for name in ("coarse.tt3", "fine.tt3"):
-        topo = topotools.Topography()
-        topo.path = name
-        topo.topo_type = 3
-        topos.append(topo)
+        topos.append(topotools.TopoFile(name, 3))
 
     topo_data = clawpack.geoclaw.data.TopographyData(num_dim=1)
     topo_data.topofiles = topos
@@ -473,7 +475,7 @@ def test_topo_data_2d_layout_unchanged_by_1d_support(tmp_path):
     r"""The default (2D) topo.data still carries the full block."""
     import clawpack.geoclaw.topotools as topotools
 
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = "topo.tt3"
     topo.topo_type = 3
 
@@ -491,16 +493,19 @@ def test_topo_data_2d_layout_unchanged_by_1d_support(tmp_path):
 
 
 @pytest.mark.python
-def test_dtopo_data_1d_path_line_has_no_trailing_comment(tmp_path):
-    r"""1D dtopo.data path line must be bare, and carry no preprocessing block.
+def test_dtopo_data_1d_path_line_is_keyed_and_has_no_settings(tmp_path):
+    r"""1D dtopo.data: path, type and dt_max_dtopo as ``value =: key`` lines,
+    and no settings block.
 
-    ``read(iunit,*) dtopofname, dtopotype`` spans records, so the type may sit
-    on the following line -- but a trailing comment on the path line is
-    consumed as item 2 and aborts with "Bad integer for item 2 in list input".
+    The 1D reader reads the path, the type and dt_max_dtopo with one
+    list-directed read each, which takes the value and ignores ``=: key``.
+    (It used to read path and type with one statement spanning both lines,
+    which would read "=:" as the type.)  dt_max_dtopo must be the next value
+    after the type, so no settings lines may sit in between.
     """
     import clawpack.geoclaw.dtopotools as dtopotools
 
-    d = dtopotools.DTopography()
+    d = dtopotools.DTopoFile()
     d.path = "dtopo_okada.dtt1"
     d.dtopo_type = 1
 
@@ -513,8 +518,8 @@ def test_dtopo_data_1d_path_line_has_no_trailing_comment(tmp_path):
     lines = _payload(out)
     # mdtopofiles, path, dtopo_type, dt_max_dtopo
     assert len(lines) == 4, lines
-    assert lines[1].rstrip().endswith("'"), (
-        "path line must not carry a trailing comment: %r" % lines[1])
+    assert re.match(r"^'[^']*dtopo_okada\.dtt1'\s+=:\s+dtopo_path\b",
+                    lines[1].strip()), lines[1]
     assert "dtopo_type" in lines[2]
     assert "dt_max_dtopo" in lines[3]
     assert "crop_extent" not in Path(out).read_text()
@@ -525,7 +530,7 @@ def test_1d_preprocessing_request_warns(tmp_path):
     r"""Preprocessing asked for in 1D is reported, not silently dropped."""
     import clawpack.geoclaw.topotools as topotools
 
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = "celledges.data"
     topo.topo_type = 1
     topo.coarsen = 4
