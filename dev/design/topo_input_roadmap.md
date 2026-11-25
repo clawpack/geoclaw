@@ -515,7 +515,9 @@ docs.
   `dim_order`, `scale_factor`, `t0`, `dt`.
 - **Fortran checks every key.** One helper reads the next keyed line,
   skipping blank and `#` lines, and stops if the line has no `=:` or a
-  different key: "Regenerate topo.data with 'make data'". A file from an older
+  different key: "Regenerate topo.data with 'make data'". The helper takes
+  the unit and file name as arguments and uses no geoclaw module, so it can
+  move unchanged to other Clawpack repositories (§2.10). A file from an older
   GeoClaw stops at its first old-style line, which also retires the separate
   `crop_bounds` check from #765.
 - **Unset values are `None`,** the convention `surge.data` already uses
@@ -685,6 +687,41 @@ and storm files written by the isaac and ike examples and by the met tests
 are byte-identical before and after. New tests: a misspelled setting raises on
 `GriddedMetForcing` and on `Storm`, and invalid crops and shifts raise when
 set.
+
+### 2.10 Key-checked `.data` files across Clawpack
+
+*Status (2026-11-25): agreed (Kyle) as a follow-up after v5.15, in separate
+PRs per repository. Nothing in PR B depends on it.*
+
+**Why.** clawutil's `data_write` already writes every `ClawData` file
+(`claw.data`, `amr.data`, `regions.data`, ...) as `value =: key`, and
+`ClawData.read` parses by key. But no Fortran reader checks the keys:
+amrclaw and classic read by position (e.g. `read(inunit,*) xlower, ylower`
+in `amr2.f90`). If a release adds or reorders a parameter and a run pairs a
+new `.data` file with an old executable, or the reverse, every value after
+the change shifts by a line and is misread without a message. PR B (§2.8)
+closes this for `topo.data` and `dtopo.data`; the same check applies
+everywhere.
+
+**Plan.**
+
+- Use PR B's key-check helper in the amrclaw and classic readers, one data
+  file per PR, starting with `claw.data` and `amr.data`, which every run
+  reads.
+- Adopt the `None` convention for unset values at the same time.
+  `data_write` already writes Python `None` as the text `None`, which today's
+  positional readers would misread or fail on, so the two belong together.
+- Decide where the helper lives (Kyle and Randy). There is no shared
+  Fortran library: clawutil ships Python and the Makefiles only, and amrclaw
+  and classic each have their own `opendatafile` (classic already carries a
+  copy of geoclaw's `get_value_count`). Options: a copy per repository (the
+  current pattern), or one Fortran source in clawutil that `Makefile.common`
+  compiles for every build, which avoids copies but changes the build across
+  repositories.
+
+**Verification.** As for PR B: results bitwise identical end to end before
+and after each reader change, and a test that a file in the old layout
+stops with a message to regenerate it.
 
 ## 3. Correction on record: clawpack/geoclaw#740
 
