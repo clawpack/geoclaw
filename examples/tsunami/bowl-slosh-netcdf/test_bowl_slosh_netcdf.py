@@ -221,7 +221,7 @@ def test_bowl_slosh_netcdf(tmp_path: Path, save: bool, variant: str,
     runner.rundata.gaugedata.gauges.append([1, 0.5, 0.5, 0.0, 1e10])
 
     if variant == "coarsened":
-        topo_entry = topotools.Topography()
+        topo_entry = topotools.TopoFile()
         topo_entry.path = "bowl.nc"
         topo_entry.topo_type = 4
         topo_entry.coarsen = 2

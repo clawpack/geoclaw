@@ -106,13 +106,8 @@ def _write_fine_corrupt_file(path, x, y):
 
 
 def _topo_entry(path, topo_type=2, **attrs):
-    """Construct a Topography topofiles entry with preprocessing attributes."""
-    t = topotools.Topography()
-    t.path = path
-    t.topo_type = topo_type
-    for name, value in attrs.items():
-        setattr(t, name, value)
-    return t
+    """Construct a TopoFile topofiles entry with preprocessing attributes."""
+    return topotools.TopoFile(path, topo_type, **attrs)
 
 
 def _setup_baseline(temp_path):

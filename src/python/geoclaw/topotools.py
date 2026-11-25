@@ -29,6 +29,7 @@ topography (bathymetry) files.
 """
 
 import os
+import types
 import warnings
 
 import numpy
@@ -429,11 +430,6 @@ def swapheader(inputfile, outputfile):
 # is needed to tell "not passed" apart from "passed None".
 _CROP_EXTENT_UNSET = object()
 
-# Sentinel for read()'s align= kwarg.  align=None is a valid user value ("no
-# phase snap"), and callers such as fetch_remote_topo set the self.align
-# attribute *before* calling read(); a distinct sentinel lets read() tell "not
-# passed" (leave self.align alone) apart from "passed None" (override it).
-_ALIGN_UNSET = object()
 
 
 def _resolve_crop_extent(crop_extent, deprecated):
@@ -494,7 +490,7 @@ class Topography(object):
 
     :Region terminology:
 
-    Several attributes/arguments describe rectangular regions, all ordered
+    Several names describe rectangular regions, all ordered
     ``[x1, x2, y1, y2]`` (x-pair then y-pair).  Two axes distinguish them:
     *role* (a derived result vs. a requested crop) and *coordinate frame*
     (domain vs. file).
@@ -503,11 +499,11 @@ class Topography(object):
       coordinates.  A read-only, lazily-computed :func:`property` (a *result*,
       not an input); see :attr:`extent`.
     - ``crop_extent`` -- the *requested* crop rectangle, in DOMAIN coordinates.
-      This is the single canonical name for the request: it is both a persisted
-      attribute (default ``None`` = no crop) and the argument name accepted by
-      :meth:`read`, :meth:`crop`, :meth:`interp_unstructured`, and
-      :func:`fetch_remote_topo`.  ``read(crop_extent=r)`` is equivalent to
-      setting the attribute and then reading.  Mirrors Fortran
+      This is the single canonical name for the request: it is the setting on
+      a :class:`TopoFile` (default ``None`` = no crop) and the argument name
+      accepted by :meth:`read`, :meth:`crop`, :meth:`interp_unstructured`, and
+      :func:`fetch_remote_topo`.  It is not stored on a Topography, which
+      holds data only (clawpack/geoclaw#768).  Mirrors Fortran
       ``topo_crop_extent``.  (The older argument spellings ``filter_region`` and
       ``extent=`` are deprecated aliases.)
       It is in domain coordinates for every topo type: the shifts are applied
@@ -554,8 +550,8 @@ class Topography(object):
          Fortran clips each to its side of the file and reassembles them into
          a single continuous region.
 
-       So a cross-seam crop works from ordinary setrun code -- set
-       ``crop_extent`` and append the ``Topography`` -- with no descriptor
+       So a cross-seam crop works from ordinary setrun code -- append a
+       :class:`TopoFile` with that ``crop_extent`` -- with no descriptor
        handling by the caller.  ``buffer``, ``coarsen``, ``align`` and the
        shifts are carried onto every entry.
 
@@ -723,6 +719,18 @@ class Topography(object):
         return self._delta
 
 
+    def __setattr__(self, name, value):
+        # The preprocessing settings moved off this class (#768).  Refuse
+        # them by name: as plain attributes they would be stored and then
+        # silently ignored by read().
+        if name in coordinate_tools.InputRecipe._settings:
+            raise AttributeError(
+                f"Topography has no setting {name!r}: pass {name}= to "
+                f"Topography.read(), or list the file as a "
+                f"topotools.TopoFile "
+                f"with {name}=... in setrun.py.")
+        object.__setattr__(self, name, value)
+
     def __init__(self, path=None, topo_type=None, topo_func=None,
                        unstructured=False, **kwargs):
         r"""Topography initialization routine.
@@ -761,22 +769,10 @@ class Topography(object):
 
         self.coordinate_transform = lambda x,y: (x,y)
 
-        # Preprocessing attributes — applied by read() after data is loaded.
-        # See the "Region terminology" section of the class docstring for the
-        # extent / crop_extent glossary and the Python<->Fortran name
-        # mapping. Convention recap: the ``_extent`` suffix is domain coords,
-        # ``_bounds`` is file coords, all ordered [x1, x2, y1, y2].
-        # PATH NOTE: 'path' already exists as an instance attribute set above;
-        # no topo_path alias is needed, callers should use self.path.
-        self.crop_extent: list[float] | None = None  # [x1,x2,y1,y2]; None=full domain
-        self.coarsen: int = 1
-        self.buffer: int = 0
-        self.align = None
-        self.x_shift: float = 0.0
-        self.y_shift: float = 0.0
-        self.z_shift: float = 0.0
-        self.negate_z: bool = False
-        self._netcdf_meta = None  # TopoMetadata set by _normalize_topofiles for topo_entries() format
+        # The preprocessing settings (crop_extent, coarsen, buffer, align,
+        # x/y/z_shift, negate_z) are not stored here: they are arguments to
+        # read(), and a file listed in setrun.py carries them on a TopoFile
+        # (clawpack/geoclaw#768, dev/design/topo_recipe.md).
 
         if path:
             self.read(path=path, topo_type=topo_type,
@@ -990,9 +986,10 @@ class Topography(object):
 
     def read(self, path=None, topo_type=None, unstructured=False,
              mask=False, crop_extent=None, force=False,
-             coarsen=None, align=_ALIGN_UNSET, buffer=None, stride=None,
+             coarsen=None, align=None, buffer=None, stride=None,
              assume_units=None, skip_sanity_check=None,
-             nc_params=None, filter_region=_CROP_EXTENT_UNSET):
+             nc_params=None, filter_region=_CROP_EXTENT_UNSET,
+             x_shift=0.0, y_shift=0.0, z_shift=0.0, negate_z=False):
         r"""Read in the data from the object's *path* attribute.
 
         Stores the resulting data in one of the sets of *x*, *y*, and *z* or
@@ -1006,15 +1003,12 @@ class Topography(object):
            values (default if False)
          - *crop_extent* ([x1, x2, y1, y2] or None) - requested crop region in
            domain coordinates (see the "Region terminology" section of the
-           class docstring). Passing it here is equivalent to setting the
-           ``crop_extent`` attribute before calling ``read()``; the crop is
-           applied (together with ``coarsen``/``buffer``/``align``) via
-           :meth:`crop`. Default ``None`` = no crop. The older ``filter_region``
+           class docstring). The crop is applied (together with
+           ``coarsen``/``buffer``/``align``) via :meth:`crop`. Default
+           ``None`` = no crop. The older ``filter_region``
            keyword is a deprecated alias.
          - *coarsen* (int) - subsampling factor (1 = no coarsening).  Applied
-           identically for ASCII and NetCDF reads.  Passing it here is
-           equivalent to setting the ``coarsen`` attribute before ``read()``.
-           See :meth:`crop`.
+           identically for ASCII and NetCDF reads.  See :meth:`crop`.
          - *align* ((xalign, yalign) or None) - desired alignment when
            coarsening; see :meth:`crop`.  ``None`` (the default) means **no
            phase snap** -- subsampling starts at the crop window, matching
@@ -1031,6 +1025,15 @@ class Topography(object):
            A NetCDF-only knob that silently did nothing for ASCII reads and used
            a different alignment convention.  A scalar (or equal-valued list) is
            mapped onto ``coarsen``; per-axis striding is no longer supported.
+         - *x_shift*, *y_shift* (float) - added to the file's x and y, so the
+           result is in domain coordinates.  ``crop_extent`` and ``align`` are
+           in domain coordinates too.
+         - *z_shift* (float) - added to the values, after *negate_z*.
+         - *negate_z* (bool) - flip the sign of the values.
+
+        These settings act on this read only; none is stored on the object.
+        A file listed in ``setrun.py`` carries them on a :class:`TopoFile`,
+        whose ``read()`` calls this with them.
          - *nc_params* (dict) - options for NetCDF (`topo_type=4`) reading:
 
              - `z_var` (str): name of the elevation variable, if it cannot be
@@ -1078,25 +1081,19 @@ class Topography(object):
             nc_params['assume_units'] = assume_units
         nc_params['skip_sanity_check'] = skip_sanity_check
 
-        # A crop_extent passed here is equivalent to setting the attribute first;
-        # fold the deprecated filter_region alias onto it, then store it so the
-        # single attribute-driven crop below (and the type-4 pushdown) apply it.
+        # The preprocessing settings act on this read only and are not stored
+        # on the object (clawpack/geoclaw#768).  Fold the deprecated
+        # filter_region alias onto crop_extent, then collect them in one
+        # namespace that the format readers and the post-read steps share.
         crop_extent = _resolve_crop_extent(crop_extent,
                                            {'filter_region': filter_region})
-        if crop_extent is not None:
-            self.crop_extent = crop_extent
-
-        # Fold coarsen/align/buffer args onto the attributes (mirrors crop_extent
-        # above): passing them to read() is equivalent to setting the attribute
-        # first.  Sentinels distinguish "not passed" from an explicit value so a
-        # caller that presets self.align/self.coarsen/self.buffer before read()
-        # (e.g. fetch_remote_topo) is not silently clobbered.
-        if coarsen is not None:
-            self.coarsen = int(coarsen)
-        if buffer is not None:
-            self.buffer = int(buffer)
-        if align is not _ALIGN_UNSET:
-            self.align = align
+        settings = types.SimpleNamespace(
+            crop_extent=crop_extent,
+            coarsen=1 if coarsen is None else int(coarsen),
+            buffer=0 if buffer is None else int(buffer),
+            align=align,
+            x_shift=float(x_shift), y_shift=float(y_shift),
+            z_shift=float(z_shift), negate_z=bool(negate_z))
 
         # `stride` is deprecated: a NetCDF-only knob that silently did nothing
         # for ASCII reads and used a different alignment convention than
@@ -1119,11 +1116,11 @@ class Topography(object):
                         "single scalar factor.  Got stride=%r." % (stride,))
                 _stride = int(_s[0])
             if _stride != 1:
-                if self.coarsen != 1 and self.coarsen != _stride:
+                if settings.coarsen != 1 and settings.coarsen != _stride:
                     raise ValueError(
                         "Pass either 'stride' or 'coarsen', not both "
-                        "(stride=%r, coarsen=%r)." % (stride, self.coarsen))
-                self.coarsen = _stride
+                        "(stride=%r, coarsen=%r)." % (stride, settings.coarsen))
+                settings.coarsen = _stride
 
         if (path is None) and (self.path is None):
             raise ValueError("*** Need to set path for file to read")
@@ -1160,10 +1157,10 @@ class Topography(object):
             # Python list as if it were an array, dying with an unrelated
             # TypeError far from the cause.  Refuse consistently and early.
             _unstructured_preprocessing = (
-                self.crop_extent is not None
-                or self.coarsen != 1
-                or self.buffer != 0
-                or self.align is not None
+                settings.crop_extent is not None
+                or settings.coarsen != 1
+                or settings.buffer != 0
+                or settings.align is not None
             )
             if _unstructured_preprocessing:
                 raise NotImplementedError(
@@ -1179,10 +1176,10 @@ class Topography(object):
             values = []
 
             # Filter region if requested (crop_extent, domain coords)
-            if self.crop_extent is not None:
+            if settings.crop_extent is not None:
                 for coordinate in data:
-                    if self.crop_extent[0] <= coordinate[0] <= self.crop_extent[1]:
-                        if self.crop_extent[2] <= coordinate[1] <= self.crop_extent[3]:
+                    if settings.crop_extent[0] <= coordinate[0] <= settings.crop_extent[1]:
+                        if settings.crop_extent[2] <= coordinate[1] <= settings.crop_extent[3]:
                             points.append(coordinate[0:2])
                             values.append(coordinate[2])
 
@@ -1206,7 +1203,7 @@ class Topography(object):
             # the shared post-read processing below is identical for every
             # format.  Adding a format = registering a new adapter there.
             reader = gridded_input.get_reader(self.topo_type)
-            _result = reader.read_window(self, nc_params=nc_params)
+            _result = reader.read_window(self, settings, nc_params=nc_params)
             self._x = _result.x
             self._y = _result.y
             self._Z = _result.Z
@@ -1261,8 +1258,8 @@ class Topography(object):
             self._resolve_units(_result, assume_units, skip_sanity_check)
 
             # ---------------------------------------------------------------
-            # Apply preprocessing attributes in-memory (original file unchanged).
-            # Fortran applies the same attributes independently in read_topo_file
+            # Apply the preprocessing settings in memory (file unchanged).
+            # Fortran applies the same settings independently in read_topo_file
             # and read_topo_settings so neither side needs to write a modified copy.
             # Order:
             #   1. negate_z
@@ -1274,33 +1271,34 @@ class Topography(object):
             #        declares applies_preprocessing (the NetCDF reader applies
             #        crop+coarsen+align+buffer via _crop_indices while reading
             #        the hyperslab, so running crop() again would double-coarsen).
-            # Steps are skipped when the attribute equals its default value.
+            # Steps are skipped when the setting equals its default value.
             # ---------------------------------------------------------------
-            if self.negate_z:
+            if settings.negate_z:
                 self._Z = -self._Z
-            if self.z_shift != 0.0:
+            if settings.z_shift != 0.0:
                 # Missing cells are NaN and remain NaN under the offset.
-                self._Z = self._Z + self.z_shift
-            if self.x_shift != 0.0:
-                self._x = self._x + self.x_shift
+                self._Z = self._Z + settings.z_shift
+            if settings.x_shift != 0.0:
+                self._x = self._x + settings.x_shift
                 self._extent = None
-            if self.y_shift != 0.0:
-                self._y = self._y + self.y_shift
+            if settings.y_shift != 0.0:
+                self._y = self._y + settings.y_shift
                 self._extent = None
             if not reader.applies_preprocessing \
-                    and (self.crop_extent is not None or self.coarsen > 1):
+                    and (settings.crop_extent is not None
+                         or settings.coarsen > 1):
                 _cropped = self.crop(
-                    crop_extent=self.crop_extent,
-                    coarsen=int(self.coarsen),
-                    buffer=int(self.buffer),
-                    align=self.align,
+                    crop_extent=settings.crop_extent,
+                    coarsen=int(settings.coarsen),
+                    buffer=int(settings.buffer),
+                    align=settings.align,
                 )
                 if _cropped is None:
                     # crop() already warned about the non-overlap; say what the
                     # consequence is here, because keeping the *full* file is
                     # surprising and the Fortran reader would instead abort.
                     warnings.warn(
-                        f"crop_extent {list(self.crop_extent)} did not overlap "
+                        f"crop_extent {list(settings.crop_extent)} did not overlap "
                         f"{self.path}; the full file was read uncropped. The "
                         f"Fortran reader treats this as fatal.")
                 if _cropped is not None:
@@ -2383,6 +2381,77 @@ class Topography(object):
 
 
 
+class TopoFile(coordinate_tools.InputRecipe):
+    r"""One topography file for ``rundata.topo_data.topofiles``: the file plus
+    the settings that turn it into what Fortran loads.
+
+    Build it with keywords::
+
+        topo_data.topofiles.append(
+            topotools.TopoFile('coast.nc', 4, crop_extent=[-124.1, -123.9,
+                                                           46.8, 46.9]))
+
+    or set attributes after creation::
+
+        entry = topotools.TopoFile()
+        entry.path = 'coast.nc'
+        entry.topo_type = 4
+        entry.crop_extent = [-124.1, -123.9, 46.8, 46.9]
+
+    The settings (``crop_extent``, ``coarsen``, ``buffer``, ``align``,
+    ``x_shift``, ``y_shift``, ``z_shift``, ``negate_z``) are described on
+    :class:`coordinate_tools.InputRecipe` and :meth:`Topography.read`.  A
+    misspelled name raises ``AttributeError`` and an invalid value raises
+    ``ValueError`` when it is set.
+
+    :meth:`read` returns the :class:`Topography` Fortran loads (domain
+    coordinates); :meth:`read_header` describes the file as stored.
+
+    The ``[topo_type, path]`` list form is still accepted in ``topofiles`` and
+    is the same as ``TopoFile(path, topo_type)``.
+    """
+
+    _type_field = 'topo_type'
+    __slots__ = ('topo_type', '_netcdf_meta')
+
+    def __init__(self, path=None, topo_type=None, datum=None, **settings):
+        # Private: the netCDF descriptor attached by TopoInspector.topo_entries()
+        # for one side of an antimeridian split.  Not a user setting.
+        object.__setattr__(self, '_netcdf_meta', None)
+        super().__init__(path, topo_type, datum=datum, **settings)
+
+    _check_topo_type = coordinate_tools.InputRecipe._check_type_value
+
+    def read(self, **kwargs):
+        r"""Read the file with this entry's settings applied.
+
+        Returns a new :class:`Topography` in domain coordinates: the points
+        and values Fortran loads.  Extra keywords (``mask``, ``nc_params``,
+        ``assume_units``, ...) are passed to :meth:`Topography.read`.
+        """
+        if self.path is None:
+            raise ValueError("TopoFile.path is not set")
+        topo = Topography()
+        topo.read(self.path, topo_type=self.topo_type, **self.settings(),
+                  **kwargs)
+        return topo
+
+    def read_header(self):
+        r"""Return a :class:`Topography` holding only the file's header.
+
+        Its ``extent`` and ``delta`` describe the file as stored: no crop and
+        no shift.  The data array is not read.
+        """
+        if self.path is None:
+            raise ValueError("TopoFile.path is not set")
+        topo = Topography()
+        topo.path = self.path
+        topo.topo_type = (self.topo_type if self.topo_type is not None
+                          else determine_topo_type(self.path))
+        topo.read_header()
+        return topo
+
+
 # Define convenience dictionary of URLs for some online DEMs in netCDF form:
 remote_topo_urls = {}
 
@@ -2459,17 +2528,11 @@ def fetch_remote_topo(name_or_url, crop_extent=None, coarsen=1, buffer=0,
     if verbose:
         print("Will read netCDF data from \n    %s" % url)
 
-    # Set the preprocessing attributes *before* reading: Topography.__init__
-    # reads immediately when constructed with a path, which would default these
-    # away, so construct empty and read explicitly.
     topo = Topography()
-    topo.crop_extent = crop_extent
-    topo.coarsen = coarsen
-    topo.buffer = buffer
-    topo.align = align
-
     try:
-        topo.read(path=url, topo_type=4, nc_params=nc_params)
+        topo.read(path=url, topo_type=4, nc_params=nc_params,
+                  crop_extent=crop_extent, coarsen=coarsen, buffer=buffer,
+                  align=align)
     except (OSError, RuntimeError):
         # Remote/OPeNDAP servers are flaky; let callers/tests decide to skip.
         raise

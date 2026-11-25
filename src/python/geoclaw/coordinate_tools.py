@@ -348,3 +348,172 @@ def axis_file_slice(coord_full, descending, lo, hi, step, n):
     f0 = n - 1 - (lo + (m - 1) * step)
     sl = slice(f0, f0 + m * step, step)
     return sl, coord_full[sl], True
+
+
+# ---------------------------------------------------------------------------
+# Per-file input recipes (clawpack/geoclaw#768, dev/design/topo_recipe.md)
+# ---------------------------------------------------------------------------
+
+def _as_int_count(name, value, minimum):
+    """Return *value* as an int >= *minimum*, refusing non-integral values."""
+    try:
+        as_float = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be an integer, got {value!r}") from None
+    if not numpy.isfinite(as_float) or as_float != int(as_float):
+        raise ValueError(f"{name} must be an integer, got {value!r}")
+    if int(as_float) < minimum:
+        raise ValueError(f"{name} must be >= {minimum}, got {value!r}")
+    return int(as_float)
+
+
+def _as_floats(name, value, n):
+    """Return *value* as a list of *n* finite floats."""
+    try:
+        vals = [float(v) for v in value]
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{name} must be {n} numbers, got {value!r}") from None
+    if len(vals) != n or not all(numpy.isfinite(vals)):
+        raise ValueError(f"{name} must be {n} finite numbers, got {value!r}")
+    return vals
+
+
+class InputRecipe:
+    r"""A file plus the settings ``setrun.py`` uses to turn it into what
+    Fortran loads.  Base class of ``topotools.TopoFile`` and
+    ``dtopotools.DTopoFile``; it holds no data arrays.
+
+    Build one with keywords, ``TopoFile(path, 4, crop_extent=[...])``, or by
+    setting attributes after ``TopoFile()``; the two give equal objects.
+    Every value is checked when it is set, and a name that is not a setting
+    (``crop_exent``) raises ``AttributeError`` instead of being stored.
+
+    Settings (all in domain coordinates, i.e. after ``x_shift``/``y_shift``):
+
+    - ``crop_extent`` -- ``[x1, x2, y1, y2]`` with ``x1 < x2`` and ``y1 < y2``,
+      or ``None`` for the whole file.
+    - ``coarsen`` -- integer subsampling factor, ``>= 1``.
+    - ``buffer`` -- grid points kept outside the crop on each side, ``>= 0``.
+    - ``align`` -- ``[x, y]`` the coarsened lattice passes through, or ``None``.
+    - ``x_shift``, ``y_shift``, ``z_shift`` -- added to the file's coordinates
+      and values.
+    - ``negate_z`` -- flip the sign of the values (applied before ``z_shift``).
+
+    ``datum`` (e.g. ``'NAVD88'``) is informational: the vertical datum of the
+    file's values.  It is not passed to ``read()`` and not written to the
+    ``.data`` file; ``TopographyData.write``/``DTopoData.write`` warn when the
+    listed files declare different datums.
+
+    See ``topotools.Topography`` ("Region terminology") for how the windows
+    fit together.
+    """
+
+    #: Name of the type field: ``topo_type`` or ``dtopo_type``.
+    _type_field = None
+
+    _settings = ('crop_extent', 'coarsen', 'buffer', 'align',
+                 'x_shift', 'y_shift', 'z_shift', 'negate_z')
+    _defaults = dict(crop_extent=None, coarsen=1, buffer=0, align=None,
+                     x_shift=0.0, y_shift=0.0, z_shift=0.0, negate_z=False)
+
+    __slots__ = ('path', 'datum') + _settings
+
+    def __init__(self, path=None, file_type=None, datum=None, **settings):
+        unknown = set(settings) - set(self._settings)
+        if unknown:
+            raise TypeError(
+                f"{type(self).__name__}() got unexpected keyword argument(s) "
+                f"{', '.join(sorted(unknown))}; the settings are "
+                f"{', '.join(self._settings)}")
+        self.path = path
+        self.datum = datum
+        setattr(self, self._type_field, file_type)
+        for name in self._settings:
+            setattr(self, name, settings.get(name, self._defaults[name]))
+
+    def _fields(self):
+        return ('path', self._type_field, 'datum') + self._settings
+
+    def __setattr__(self, name, value):
+        check = getattr(self, f'_check_{name}', None)
+        if check is not None:
+            value = check(value)
+        object.__setattr__(self, name, value)
+
+    @staticmethod
+    def _check_path(value):
+        if value is None:
+            return None
+        import os
+        return os.fspath(value)
+
+    def _check_type_value(self, value):
+        if value is None:
+            return None
+        return _as_int_count(self._type_field, value, minimum=-10**6)
+
+    def _check_crop_extent(self, value):
+        if value is None:
+            return None
+        vals = _as_floats('crop_extent', value, 4)
+        x1, x2, y1, y2 = vals
+        if x1 >= x2:
+            where = f" for {self.path}" if getattr(self, 'path', None) else ""
+            raise ValueError(
+                f"crop_extent {vals}{where} is descending in longitude. To "
+                f"cross the antimeridian, write the crop in continuous "
+                f"coordinates instead -- [{x1 - 360.0}, {x2}] for this one -- "
+                f"which is split across the seam automatically. A descending "
+                f"pair has no such reading and would produce an empty grid "
+                f"in Fortran with no error.")
+        if y1 >= y2:
+            raise ValueError(
+                f"crop_extent {vals}: y1 must be less than y2 (the crop must "
+                f"increase in both coordinates).")
+        return vals
+
+    @staticmethod
+    def _check_coarsen(value):
+        return _as_int_count('coarsen', value, minimum=1)
+
+    @staticmethod
+    def _check_buffer(value):
+        return _as_int_count('buffer', value, minimum=0)
+
+    @staticmethod
+    def _check_align(value):
+        if value is None:
+            return None
+        return _as_floats('align', value, 2)
+
+    @staticmethod
+    def _check_x_shift(value):
+        return float(value)
+
+    _check_y_shift = _check_x_shift
+    _check_z_shift = _check_x_shift
+
+    @staticmethod
+    def _check_negate_z(value):
+        return bool(value)
+
+    def settings(self):
+        """The settings as a dict, ready to pass as keywords to ``read()``."""
+        return {name: getattr(self, name) for name in self._settings}
+
+    def __eq__(self, other):
+        if type(other) is not type(self):
+            return NotImplemented
+        return all(getattr(self, f) == getattr(other, f)
+                   for f in self._fields())
+
+    __hash__ = None
+
+    def __repr__(self):
+        parts = [repr(self.path), repr(getattr(self, self._type_field))]
+        parts += [f"{n}={getattr(self, n)!r}" for n in self._settings
+                  if getattr(self, n) != self._defaults[n]]
+        if self.datum is not None:
+            parts.append(f"datum={self.datum!r}")
+        return f"{type(self).__name__}({', '.join(parts)})"

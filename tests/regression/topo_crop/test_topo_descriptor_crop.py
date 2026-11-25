@@ -149,10 +149,7 @@ def _write_topo_data(out_path, nc_path, buffer):
 
     topos = []
     for _topo_type, _path, meta in entries:
-        t = topotools.Topography()
-        t.path = str(nc_path)
-        t.topo_type = 4
-        t.buffer = buffer
+        t = topotools.TopoFile(str(nc_path), 4, buffer=buffer)
         t._netcdf_meta = meta
         topos.append(t)
 
@@ -353,7 +350,7 @@ def _run_wrapped(tmp_path, prebuilt, domain, buffer=0):
 
     # Written the way a user would: one Topography with a continuous
     # cross-seam crop.  The writer expands it into two descriptor entries.
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(nc_path)
     topo.topo_type = 4
     topo.crop_extent = list(WRAP_CROP)
@@ -461,7 +458,7 @@ def _run_empty_align(tmp_path, prebuilt, topo_type):
     cd.num_cells = [20, 12]
     runner.write_data()
 
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(topo_path)
     topo.topo_type = topo_type
     topo.crop_extent = list(EMPTY_ALIGN_CROP)
@@ -528,7 +525,7 @@ def _run_missing_crop(tmp_path, prebuilt, topo_type):
     cd.num_cells = [20, 12]
     runner.write_data()
 
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(topo_path)
     topo.topo_type = topo_type
     topo.crop_extent = list(CROP)
@@ -633,7 +630,7 @@ def test_shifted_crop_is_in_domain_coordinates(tmp_path, netcdf_xgeoclaw,
     cd.output_aux_onlyonce = True
     runner.write_data()
 
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(topo_path)
     topo.topo_type = topo_type
     topo.crop_extent = list(CROP)
@@ -699,7 +696,7 @@ def test_old_topo_data_with_crop_bounds_stops(tmp_path, netcdf_xgeoclaw):
     cd.num_cells = [20, 12]
     runner.write_data()
 
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(nc_path)
     topo.topo_type = 4
     topo.crop_extent = list(CROP)

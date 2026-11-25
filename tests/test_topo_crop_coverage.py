@@ -64,7 +64,7 @@ def _write_tile(tmp_path, topo_type, x_edges=X_EDGES, y_edges=Y_EDGES, dx=DX):
 
 def _write_topo_data(tmp_path, path, topo_type, crop_extent, **attrs):
     """Run TopographyData.write for one cropped file; return topo.data text."""
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(path)
     topo.topo_type = topo_type
     topo.crop_extent = list(crop_extent)

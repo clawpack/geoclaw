@@ -107,7 +107,7 @@ def _check(name, tmp_path, out_file):
 def test_golden_ascii_single(tmp_path):
     """One ASCII file, no preprocessing: the simplest possible topo.data."""
     path = _write_tt3(tmp_path / "a.tt3")
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(path)
     topo.topo_type = 3
 
@@ -126,7 +126,7 @@ def test_golden_ascii_all_preprocessing(tmp_path):
     change to %g would silently truncate them.
     """
     path = _write_tt3(tmp_path / "b.tt3")
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(path)
     topo.topo_type = 3
     topo.crop_extent = [-98.25, -92.75, 22.5, 27.5]
@@ -152,10 +152,7 @@ def test_golden_two_files_priority_order(tmp_path):
 
     topos = []
     for p in (fine, coarse):          # deliberately not in priority order
-        t = topotools.Topography()
-        t.path = str(p)
-        t.topo_type = 3
-        topos.append(t)
+        topos.append(topotools.TopoFile(str(p), 3))
 
     td = TopographyData()
     td.topofiles = topos
@@ -169,7 +166,7 @@ def test_golden_netcdf_no_crop(tmp_path):
     """type-4 with no crop: pins the whole CF descriptor block."""
     pytest.importorskip("xarray")
     path = _write_nc(tmp_path / "c.nc")
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(path)
     topo.topo_type = 4
 
@@ -191,7 +188,7 @@ def test_golden_netcdf_cropped(tmp_path):
     """
     pytest.importorskip("xarray")
     path = _write_nc(tmp_path / "d.nc")
-    topo = topotools.Topography()
+    topo = topotools.TopoFile()
     topo.path = str(path)
     topo.topo_type = 4
     topo.crop_extent = [-98.0, -92.0, 22.0, 28.0]

@@ -33,6 +33,7 @@ writing out dtopo files, and calculating Okada based deformations.
 import os
 import sys
 import re
+import types
 import warnings
 
 import numpy
@@ -329,6 +330,18 @@ class DTopography(object):
     """
 
 
+    def __setattr__(self, name, value):
+        # The preprocessing settings moved off this class (#768).  Refuse
+        # them by name: as plain attributes they would be stored and then
+        # silently ignored by read().
+        if name in coordinate_tools.InputRecipe._settings:
+            raise AttributeError(
+                f"DTopography has no setting {name!r}: pass {name}= to "
+                f"DTopography.read(), or list the file as a "
+                f"dtopotools.DTopoFile "
+                f"with {name}=... in setrun.py.")
+        object.__setattr__(self, name, value)
+
     def __init__(self, path=None, dtopo_type=None, time_reference=None):
         r"""DTopography initialization routine.
 
@@ -355,18 +368,10 @@ class DTopography(object):
         # Populated from the file on NetCDF read.
         self.time_reference = time_reference
 
-        # Preprocessing attributes — same set and defaults as Topography so
-        # that DTopoData.write() can emit the same per-file block.
-        # x_shift, y_shift, z_shift and negate_z are applied to dtopo; the
-        # others raise NotImplementedError if set (see read()).
-        self.crop_extent = None     # [x1,x2,y1,y2]; None = full domain
-        self.coarsen = 1
-        self.buffer = 0             # grid-point count (see Topography.crop)
-        self.align = None
-        self.x_shift = 0.0
-        self.y_shift = 0.0
-        self.z_shift = 0.0
-        self.negate_z = False
+        # The preprocessing settings (crop_extent, coarsen, buffer, align,
+        # x/y/z_shift, negate_z) are not stored here: they are arguments to
+        # read(), and a file listed in setrun.py carries them on a DTopoFile
+        # (clawpack/geoclaw#768, dev/design/topo_recipe.md).
 
         # Optional vertical datum / reference metadata (e.g. 'MSL', 'NAVD88').
         # Informational only; populated from NetCDF attributes on read and
@@ -445,7 +450,7 @@ class DTopography(object):
                        ylower, ylower + (my - 1) * dy]
         return mx, my, mt
 
-    def _apply_crop(self):
+    def _apply_crop(self, settings):
         r"""Crop / coarsen / buffer / align the in-memory deformation arrays.
 
         Reuses :func:`coordinate_tools.crop_indices` (the same index-window math
@@ -456,22 +461,22 @@ class DTopography(object):
         ``self.x``/``self.y`` (matching the Fortran read_dtopo ordering).  A
         no-op when no crop/coarsen/buffer/align is requested.
         """
-        coarsen = max(1, int(self.coarsen))
-        buffer = int(self.buffer)
-        if (self.crop_extent is None and coarsen == 1 and buffer == 0
-                and self.align is None):
+        coarsen = max(1, int(settings.coarsen))
+        buffer = int(settings.buffer)
+        if (settings.crop_extent is None and coarsen == 1 and buffer == 0
+                and settings.align is None):
             return
         if self.dZ is None or self.x is None or self.y is None:
             return
 
         # crop_extent is in domain coords; self.x/self.y are still file coords
         # here, so subtract the shift to compare in file coords.
-        if self.crop_extent is not None:
-            x1, x2, y1, y2 = [float(v) for v in self.crop_extent]
-            x1 -= self.x_shift
-            x2 -= self.x_shift
-            y1 -= self.y_shift
-            y2 -= self.y_shift
+        if settings.crop_extent is not None:
+            x1, x2, y1, y2 = [float(v) for v in settings.crop_extent]
+            x1 -= settings.x_shift
+            x2 -= settings.x_shift
+            y1 -= settings.y_shift
+            y2 -= settings.y_shift
         else:
             x1, x2 = float(self.x[0]), float(self.x[-1])
             y1, y2 = float(self.y[0]), float(self.y[-1])
@@ -481,14 +486,14 @@ class DTopography(object):
 
         xwin = coordinate_tools.crop_indices(
             self.x, x1, x2, dx, coarsen, buffer,
-            None if self.align is None else self.align[0])
+            None if settings.align is None else settings.align[0])
         ywin = coordinate_tools.crop_indices(
             self.y, y1, y2, dy, coarsen, buffer,
-            None if self.align is None else self.align[1])
+            None if settings.align is None else settings.align[1])
         if xwin is None or ywin is None:
             raise ValueError(
                 "crop_extent %s does not overlap dtopo file %s"
-                % (self.crop_extent, self.path))
+                % (settings.crop_extent, self.path))
         ilower, iupper = xwin
         jlower, jupper = ywin
 
@@ -500,7 +505,9 @@ class DTopography(object):
         self.X, self.Y = numpy.meshgrid(self.x, self.y)
 
     def read(self, path=None, dtopo_type=None, verbose=False,
-             time_reference=None, assume_units=None):
+             time_reference=None, assume_units=None, crop_extent=None,
+             coarsen=1, buffer=0, align=None, x_shift=0.0, y_shift=0.0,
+             z_shift=0.0, negate_z=False):
         r"""
         Read in a dtopo file and use to set attributes of this object.
 
@@ -520,7 +527,21 @@ class DTopography(object):
             warns.  For ``dtopo_type=4`` it is forwarded to the inspector and
             applies only when the file itself declares nothing.
             See ``dev/design/units_policy.md``.
+         - *crop_extent*, *coarsen*, *buffer*, *align* - crop and subsample
+            the grid (types 2/3/4), as for ``Topography.read``.  The crop and
+            ``align`` are in domain coordinates (after the shifts).
+         - *x_shift*, *y_shift*, *z_shift*, *negate_z* - added to the
+            coordinates, added to the deformation, flip its sign.
+
+        These settings act on this read only; none is stored on the object.
+        A file listed in ``setrun.py`` carries them on a :class:`DTopoFile`,
+        whose ``read()`` calls this with them.
         """
+
+        settings = types.SimpleNamespace(
+            crop_extent=crop_extent, coarsen=int(coarsen), buffer=int(buffer),
+            align=align, x_shift=float(x_shift), y_shift=float(y_shift),
+            z_shift=float(z_shift), negate_z=bool(negate_z))
 
         if path is not None:
             self.path = path
@@ -542,10 +563,10 @@ class DTopography(object):
         # ignoring them.  Types 2/3/4 support them via _apply_crop below.
         if abs(dtopo_type) == 1:
             unsupported = [name for name, is_set in (
-                ("crop_extent", self.crop_extent is not None),
-                ("coarsen", self.coarsen != 1),
-                ("buffer", self.buffer != 0),
-                ("align", self.align is not None),
+                ("crop_extent", settings.crop_extent is not None),
+                ("coarsen", settings.coarsen != 1),
+                ("buffer", settings.buffer != 0),
+                ("align", settings.align is not None),
             ) if is_set]
             if unsupported:
                 raise NotImplementedError(
@@ -653,7 +674,7 @@ class DTopography(object):
         # Crop / coarsen / buffer / align in file coordinates, before the
         # x/y_shift below adds the registration shift (matches Fortran
         # read_dtopo ordering).  No-op unless one of those is requested.
-        self._apply_crop()
+        self._apply_crop(settings)
 
         # Units.  ASCII dtopo has no header field in which to declare them, so
         # `assume_units` is the only way to say anything and meters is the
@@ -670,20 +691,20 @@ class DTopography(object):
         # read_dtopo_settings so neither side needs a modified copy.
         # Runs after the unit conversion above so z_shift is in meters.
         # No fill-cell guard: deformation grids have no no-data convention.
-        if self.negate_z:
+        if settings.negate_z:
             self.dZ = -self.dZ
-        if self.z_shift != 0.0:
-            self.dZ = self.dZ + self.z_shift
-        if self.x_shift != 0.0:
+        if settings.z_shift != 0.0:
+            self.dZ = self.dZ + settings.z_shift
+        if settings.x_shift != 0.0:
             if self.x is not None:
-                self.x = self.x + self.x_shift
+                self.x = self.x + settings.x_shift
             if self.X is not None:
-                self.X = self.X + self.x_shift
-        if self.y_shift != 0.0:
+                self.X = self.X + settings.x_shift
+        if settings.y_shift != 0.0:
             if self.y is not None:
-                self.y = self.y + self.y_shift
+                self.y = self.y + settings.y_shift
             if self.Y is not None:
-                self.Y = self.Y + self.y_shift
+                self.Y = self.Y + settings.y_shift
 
         # Bounds and spacing of what was loaded: after crop/coarsen and the
         # shift, so in domain coordinates, as for Topography.extent.
@@ -1132,6 +1153,61 @@ class DTopography(object):
         axes = plot_dZ_contours(self.X, self.Y, self.dZ_at_t(t), axes=axes,
                                 dZ_interval=dZ_interval)
         return axes
+
+
+
+
+class DTopoFile(coordinate_tools.InputRecipe):
+    r"""One moving-topography file for ``rundata.dtopo_data.dtopofiles``: the
+    file plus the settings that turn it into what Fortran loads.
+
+    The same fields, defaults and checks as :class:`topotools.TopoFile`, with
+    ``dtopo_type`` in place of ``topo_type``.  Build it with keywords,
+    ``DTopoFile('dtopo.dtt3', 3, x_shift=360.0)``, or by setting attributes
+    after ``DTopoFile()``.
+
+    ``crop_extent``, ``coarsen``, ``buffer`` and ``align`` are applied by
+    :meth:`read`, but the Fortran reader does not implement them for dtopo
+    yet (mandli/geoclaw#15), so ``DTopoData.write`` refuses an entry that sets
+    them.  ``x_shift``, ``y_shift``, ``z_shift`` and ``negate_z`` reach Fortran.
+
+    The ``[dtopo_type, path]`` list form is still accepted in ``dtopofiles``
+    and is the same as ``DTopoFile(path, dtopo_type)``.
+    """
+
+    _type_field = 'dtopo_type'
+    __slots__ = ('dtopo_type',)
+
+    def __init__(self, path=None, dtopo_type=None, datum=None, **settings):
+        super().__init__(path, dtopo_type, datum=datum, **settings)
+
+    _check_dtopo_type = coordinate_tools.InputRecipe._check_type_value
+
+    def read(self, **kwargs):
+        r"""Read the file with this entry's settings applied.
+
+        Returns a new :class:`DTopography` in domain coordinates.  Extra
+        keywords (``time_reference``, ``assume_units``, ...) are passed to
+        :meth:`DTopography.read`.
+        """
+        if self.path is None:
+            raise ValueError("DTopoFile.path is not set")
+        dtopo = DTopography()
+        dtopo.read(self.path, dtopo_type=self.dtopo_type, **self.settings(),
+                   **kwargs)
+        return dtopo
+
+    def read_header(self):
+        r"""Return a :class:`DTopography` holding only the file's header.
+
+        Its ``extent`` and ``delta`` describe the file as stored: no crop and
+        no shift.  The deformation array is not read.
+        """
+        if self.path is None:
+            raise ValueError("DTopoFile.path is not set")
+        dtopo = DTopography()
+        dtopo.read_header(self.path, self.dtopo_type)
+        return dtopo
 
 
 

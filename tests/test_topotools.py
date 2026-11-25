@@ -853,8 +853,7 @@ def test_read_crop_extent_and_filter_region_alias():
     a.read(path, topo_type=3, crop_extent=region)
 
     b = topotools.Topography()
-    b.crop_extent = region
-    b.read(path, topo_type=3)
+    b.read(path, topo_type=3, crop_extent=region)
 
     assert a.Z.shape == b.Z.shape
     assert np.allclose(a.Z, b.Z)

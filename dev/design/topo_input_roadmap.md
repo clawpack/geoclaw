@@ -11,6 +11,15 @@ the user docs, is still open); the supersession clean-up is done;
 §1 below the "Landed" table is kept as the record of the plan the merges
 followed.
 
+**Update (2026-11-25):** the crop stack from #760 landed on 2026-11-24
+(#765, carrying #762 and #763, merged as `5fc5e7cc`; #769 as `ea0f7df8`).
+v5.15 is to be cut before AGU (week of 2026-12-07). Still to land before it:
+the recipe split (#768, `dev/design/topo_recipe.md`) and then PR B (§2.8).
+The units decision (#782) and the shared input checks for met forcing (§2.9)
+should land before it too.
+Tile selection (#770) was deferred at the 2026-11-24 meeting, to be turned
+into an issue and redesigned.
+
 **Provenance.** Written 2026-09-07 from the branch and PR state at that date,
 and amended later the same day after test-merging the open PRs in order: §1
 (the stack forks at #741; #745 rebased onto it), §2.3 (layout guards, and the
@@ -40,6 +49,10 @@ meteorological side of the same input-handling effort.
 | `num_dim` passed to the data classes | clawpack/clawutil#208 | `3236167e` |
 | Input parity (order 3b) | clawpack/geoclaw#749 | `1687a021` |
 | Units policy, ASCII coverage (§2.6) | clawpack/geoclaw#755 | `58d0290c` |
+| coarsen + `align` with no aligned point: raise in Python, stop in Fortran (#761) | clawpack/geoclaw#762 | in `5fc5e7cc` |
+| One crop-coverage rule for every topo type (§2.7, #760) | clawpack/geoclaw#763 | in `5fc5e7cc` |
+| Type-4 crop in domain coordinates; `crop_bounds` dropped from `topo.data` (§2.8 PR A) | clawpack/geoclaw#765 | `5fc5e7cc` |
+| `DTopography.read_header()` for netCDF; `read()` sets `extent` | clawpack/geoclaw#769 | `ea0f7df8` |
 
 Merged 2026-10-08 in Randy LeVeque's order (#748, #739, #741, #742, #743,
 #745, then clawutil#208 after #745 as required below), followed by #749 and
@@ -54,8 +67,11 @@ update to §4's "not verified" note.
 
 | Change | Tracking | Status |
 |---|---|---|
-| coarsen + `align` with no aligned point in the crop: Python `crop_indices` raises `EmptyAlignedCropWindow`; Fortran `apply_align_buffer_coarsen` stops naming the file and axis | clawpack/geoclaw#761 | clawpack/geoclaw#762 (open, branch `crop-align-overshoot`, head `c1ac4691`). Verified 2026-10-19: the new Python tests and the `topo_crop` Fortran regression (types 3 and 4) fail on `0ba4db7b` and pass with the fix; the two sweeps comparing against the old code are unchanged |
-| One crop-coverage rule for every topo type (a crop the file doesn't cover is an error, with half a cell allowed at the edges), plus a tile-selection helper | clawpack/geoclaw#760 | coverage rule + Fortran backstop on branch `topo-crop-coverage` (stacked on #762), ahead of the `crop_bounds` PR; tile helper next. See §2.7 |
+| Per-file recipes: `TopoFile`/`DTopoFile` carry the settings; `Topography`/`DTopography` hold data only | clawpack/geoclaw#768 | branch `topo-recipe-768` off `5fc5e7cc`; design and verification in `dev/design/topo_recipe.md`. Must land before v5.15: none of the settings attributes are in v5.14.0, so they can move without deprecation now |
+| `topo.data`/`dtopo.data` to `value =: key` (§2.8 PR B) | §2.8 | not started; stacked on #768 |
+| Missing vertical units for topo/dtopo: assume meters (warn where the format could have declared them) | clawpack/geoclaw#782 | proposal posted for Randy's review (table in the issue); a v5.14 → v5.15 regression, so before v5.15 |
+| Met forcing uses the same input checks as `TopoFile`/`DTopoFile` | §2.9 | **should land before v5.15**; not started |
+| Tile selection from a predefined list; `crop_extent = 'all'`/`'none'` | clawpack/geoclaw#770 | deferred (2026-11-24 meeting): to become an issue and be redesigned, since it drops every file the crop misses, including coarse ones that should always be kept. A redesign works on `TopoFile` entries |
 
 ### Merge order as planned (historical)
 
@@ -349,6 +365,9 @@ so the ASCII case falls out of hoisting it instead of being added twice.
 topo type, checked in Python at `make data`.** "Covered" allows half a cell
 beyond the outermost grid points.
 
+**Merged 2026-11-24** as #763, in `5fc5e7cc` (with #765). The tile-selection
+helper (#770) is deferred; see §1.
+
 **Status (2026-10-19): implemented on branch `topo-crop-coverage`**, a PR of its
 own ahead of the `crop_bounds` PR rather than folded into it. Python: one check,
 `data._check_crop_covered`, for types 2/3 (in domain coordinates, after
@@ -424,8 +443,10 @@ Points to carry into the implementation:
 ### 2.8 Crop windows, `crop_bounds`, and the `topo.data` notation
 
 **Owner: Kyle Mandli; Randy LeVeque reviews every PR, and A is the important
-one. Planned 2026-10-15. PR A implemented 2026-10-21 on branch
-`topo-crop-frame`, stacked on #763; B, A2 and C not started.**
+one. Planned 2026-10-15. PR A merged 2026-11-24 (#765, `5fc5e7cc`). B is
+next, after #768 (2026-11-24 meeting: both before v5.15); A2 and C not
+started.** With #768 the per-file block in `topo.data` is written from a
+`TopoFile`, so PR B changes one writer, not the `Topography` attributes.
 
 Randy asked two questions about `topo.data`. First, what is the difference
 between the per-file `crop_extent` line and the netCDF descriptor's
@@ -578,6 +599,43 @@ The windows to document and diagram:
   180°.
 
 ---
+
+### 2.9 Met forcing: the same input checks as topo and dtopo
+
+*Status (2026-11-25): agreed (Kyle) as something that **should** land before
+v5.15; not started. Not a hard deadline: nothing is moved or renamed, so doing
+it after the release would only break code that is already wrong.*
+
+**Why.** #768 gave topo and dtopo one entry class each, with shared checks:
+a misspelled setting raises instead of being stored and ignored, and
+`crop_extent` and the shifts are validated when set. Met forcing already
+separates settings from data (`GriddedMetForcing` holds paths, format,
+`crop_extent`, `x_shift`/`y_shift`, `ramp_width`, `scaling`,
+`storm_time_scale` and the `met_*` netCDF names; the fields live in
+`OWIData` or are never loaded for netCDF), and the shared names match. But it
+has none of the checks: `storm.crop_exent = [...]` is stored and ignored
+(`Storm` forwards these settings to `GriddedMetForcing` through properties),
+and a descending or wrong-length crop is caught late or not at all. If the
+three input types drift apart now, the interface is harder to keep consistent
+later.
+
+**Plan.**
+
+- Split the checking part of `coordinate_tools.InputRecipe` into a mixin that
+  takes a field list: `__setattr__` validation, unknown names refused, and the
+  shared checks for `crop_extent` and the shifts.
+- `TopoFile`/`DTopoFile` keep using it unchanged. `GriddedMetForcing` uses it
+  with its own fields. `Storm`'s forwarding properties then get the checks
+  without changes.
+- Not included: `coarsen`/`buffer`/`align` for met (Fortran does not
+  support them), restructuring `Storm` (it still holds the track data and
+  forwards the gridded settings), and the met file format (§2.8 PR C).
+
+**Verification.** A refactor with the output held fixed: the met `.data`
+and storm files written by the isaac and ike examples and by the met tests
+are byte-identical before and after. New tests: a misspelled setting raises on
+`GriddedMetForcing` and on `Storm`, and invalid crops and shifts raise when
+set.
 
 ## 3. Correction on record: clawpack/geoclaw#740
 

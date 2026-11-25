@@ -68,23 +68,18 @@ def _write_file(tmp_path, topo_type):
 
 
 def _shifted_topo(path, topo_type, crop):
-    t = topotools.Topography()
-    t.path = str(path)
-    t.topo_type = topo_type
-    t.crop_extent = list(crop)
-    t.x_shift = X_SHIFT
-    t.y_shift = Y_SHIFT
-    return t
+    return topotools.TopoFile(str(path), topo_type, crop_extent=list(crop),
+                              x_shift=X_SHIFT, y_shift=Y_SHIFT)
 
 
 @pytest.mark.parametrize("topo_type", TOPO_TYPES)
 def test_read_crops_in_domain_coordinates(tmp_path, topo_type):
     """read() with a shift returns exactly CROP, holding the shifted field."""
     path = _write_file(tmp_path, topo_type)
-    t = _shifted_topo(path, topo_type, CROP)
+    entry = _shifted_topo(path, topo_type, CROP)
     with warnings.catch_warnings():
         warnings.simplefilter("error")      # no clipping warning either
-        t.read(path=str(path), topo_type=topo_type, crop_extent=list(CROP))
+        t = entry.read()
 
     assert (t.x[0], t.x[-1], t.y[0], t.y[-1]) == pytest.approx(CROP)
     X, Y = np.meshgrid(t.x, t.y)
