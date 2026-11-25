@@ -96,10 +96,8 @@ def setrun(claw_pkg="geoclaw", topo_paths=None, dtopo_path=None):
     geo_data.sea_level = 0.0
 
     for topo_path in topo_paths:
-        topo = topotools.Topography()
-        topo.path = str(topo_path)
-        topo.topo_type = 3
-        rundata.topo_data.topofiles.append(topo)
+        rundata.topo_data.topofiles.append(
+            topotools.TopoFile(str(topo_path), 3))
 
     rundata.dtopo_data.dtopofiles.append([3, str(dtopo_path)])
     rundata.dtopo_data.dt_max_dtopo = 1.0

@@ -73,12 +73,8 @@ def test_cross_reader_equivalence_under_crop(tmp_path):
     ref.write(p4, topo_type=4, z_dtype="float64")
 
     crop = [-1.0, 3.0, 11.0, 15.0]
-    a = topotools.Topography(str(p3), topo_type=3)
-    a.crop_extent = list(crop)
-    a.read()
-    b = topotools.Topography(str(p4), topo_type=4)
-    b.crop_extent = list(crop)
-    b.read()
+    a = topotools.Topography(str(p3), topo_type=3, crop_extent=list(crop))
+    b = topotools.Topography(str(p4), topo_type=4, crop_extent=list(crop))
 
     np.testing.assert_allclose(a.x, b.x, rtol=0, atol=1e-9)
     np.testing.assert_allclose(a.y, b.y, rtol=0, atol=1e-9)

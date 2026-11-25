@@ -66,8 +66,9 @@ class GriddedReader:
 
     Subclasses declare the ``topo_types`` they handle and implement
     :meth:`read_window`, which returns a :class:`GridData` for the *topo*
-    context (its ``path``, ``topo_type`` and preprocessing attributes such as
-    ``crop_extent``/``coarsen``/``buffer``/``align``).
+    context (its ``path`` and ``topo_type``) and the *settings* of this read
+    (``crop_extent``, ``coarsen``, ``buffer``, ``align``, ``x_shift``,
+    ``y_shift``, ``z_shift``, ``negate_z``; see ``Topography.read``).
     """
 
     #: ``abs(topo_type)`` values this reader handles.
@@ -78,7 +79,7 @@ class GriddedReader:
     #: own crop afterward (doing so would coarsen twice).
     applies_preprocessing: bool = False
 
-    def read_window(self, topo, *, nc_params=None) -> GridData:
+    def read_window(self, topo, settings, *, nc_params=None) -> GridData:
         raise NotImplementedError
 
 
@@ -91,12 +92,12 @@ class ASCIIReader(GriddedReader):
 
     topo_types = frozenset({1, 2, 3})
 
-    def read_window(self, topo, *, nc_params=None) -> GridData:
+    def read_window(self, topo, settings, *, nc_params=None) -> GridData:
         if abs(topo.topo_type) == 1:
-            return self._read_type1(topo)
+            return self._read_type1(topo, settings)
         return self._read_type23(topo)
 
-    def _read_type1(self, topo) -> GridData:
+    def _read_type1(self, topo, settings) -> GridData:
         import warnings
         warnings.warn(
             "topo_type=1 is deprecated. Convert to topo_type=2, 3, or 4:\n"
@@ -109,14 +110,14 @@ class ASCIIReader(GriddedReader):
             stacklevel=2,
         )
         _preprocessing_requested = (
-            topo.crop_extent is not None
-            or topo.coarsen != 1
-            or topo.buffer != 0
-            or topo.align is not None
-            or topo.x_shift != 0.0
-            or topo.y_shift != 0.0
-            or topo.z_shift != 0.0
-            or topo.negate_z
+            settings.crop_extent is not None
+            or settings.coarsen != 1
+            or settings.buffer != 0
+            or settings.align is not None
+            or settings.x_shift != 0.0
+            or settings.y_shift != 0.0
+            or settings.z_shift != 0.0
+            or settings.negate_z
         )
         if _preprocessing_requested:
             raise NotImplementedError(
@@ -169,7 +170,7 @@ class NetCDFReader(GriddedReader):
     topo_types = frozenset({4})
     applies_preprocessing = True
 
-    def read_window(self, topo, *, nc_params=None) -> GridData:
+    def read_window(self, topo, settings, *, nc_params=None) -> GridData:
         if nc_params is None:
             nc_params = {}
         import warnings
@@ -248,7 +249,7 @@ class NetCDFReader(GriddedReader):
             # crop() (applies_preprocessing is True).
             _nx = _lon_full.size
             _ny = _lat_full.size
-            _c = max(int(topo.coarsen), 1)
+            _c = max(int(settings.coarsen), 1)
 
             # _crop_indices requires ascending coords; build ascending views of
             # the file axes (lon is usually ascending, lat is often N->S).
@@ -262,19 +263,19 @@ class NetCDFReader(GriddedReader):
             # on the already-shifted arrays.  So choose the window on shifted
             # axes; the values read are still the file's, and Topography.read
             # applies the shift to them afterward.
-            _xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
-            _ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+            _xs = float(settings.x_shift)
+            _ys = float(settings.y_shift)
             _lon_dom = _lon_asc + _xs
             _lat_dom = _lat_asc + _ys
 
-            if topo.crop_extent is not None:
-                _ce = list(topo.crop_extent)
+            if settings.crop_extent is not None:
+                _ce = list(settings.crop_extent)
             else:
                 # whole file (mirrors crop()'s crop_extent=self.extent)
                 _ce = [_lon_dom[0], _lon_dom[-1], _lat_dom[0], _lat_dom[-1]]
 
             _idx = _topotools._crop_indices(_lon_dom, _lat_dom, _ce, _c,
-                                            int(topo.buffer), topo.align)
+                                            int(settings.buffer), settings.align)
             if _idx is None:
                 # crop_extent misses the file: fall back to the full grid at
                 # native resolution (mirrors crop() returning None -> no-op),
@@ -411,7 +412,7 @@ class GeoTIFFReader(GriddedReader):
 
     topo_types = frozenset({5})
 
-    def read_window(self, topo, *, nc_params=None) -> GridData:
+    def read_window(self, topo, settings, *, nc_params=None) -> GridData:
         x, y, Z, delta = read_geotiff(topo.path)
         return GridData(x=x, y=y, Z=Z, delta=delta)
 

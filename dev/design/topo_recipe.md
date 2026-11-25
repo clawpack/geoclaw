@@ -1,7 +1,7 @@
 # Topo and dtopo input recipes (clawpack/geoclaw#768)
 
-*Status (2026-11-24): design agreed (Kyle, after the 2026-11-24 meeting with
-Randy); implementation not started. Target: v5.15, cut before AGU (week of
+*Status (2026-11-25): implemented on branch `topo-recipe-768`; Python suite
+and byte-for-byte checks pass (see Verification). Target: v5.15, cut before AGU (week of
 2026-12-07), and before PR B (`topo.data` format, roadmap §2.8). Branch
 `topo-recipe-768`, off `master` at `5fc5e7cc` (#765 merged).*
 
@@ -55,6 +55,17 @@ The two classes have the same fields (the type field is named as on
 - Fields are validated on assignment (crop is 4 numbers with `x1 < x2`,
   `y1 < y2`, or `None` for the whole file; `coarsen >= 1`; `buffer >= 0`
   integer; `align` 2 numbers or `None`).
+- `datum` (both classes, default `None`) is informational: the file's
+  vertical datum. It is not passed to `read()` and not written to the `.data`
+  file; `TopographyData.write`/`DTopoData.write` warn when listed files
+  declare different datums, as they did for `Topography`/`DTopography`
+  entries. `DTopoData.write` still reads a netCDF file's datum when the entry
+  declares none, without changing the entry.
+- `path` and the type may be `None` while an entry is being built; writing
+  an entry with no `path` raises `ValueError`. A missing type is inferred from
+  the file extension at write time, as before.
+- The shared base class is `coordinate_tools.InputRecipe` (the format-neutral
+  module that both `topotools` and `dtopotools` already import).
 - `DTopoFile` has the crop/coarsen/buffer/align fields even though Fortran
   does not implement them for dtopo yet (mandli/geoclaw#15; today
   `read_dtopo_settings` stops if they are set). Python already applies them
@@ -83,6 +94,12 @@ The two classes have the same fields (the type field is named as on
   them and reads the settings from the object's attributes.
   `DTopoFile.read()` is `DTopography.read(path, dtopo_type, **recipe)`.
 - `crop()`, `write()`, `extent`, `delta` are unchanged.
+- Setting one of the eight names on a `Topography`/`DTopography` raises
+  `AttributeError` naming `read()` and the recipe class. Code written against
+  `master` before this change would otherwise store the value as a plain
+  attribute that `read()` silently ignores.
+- `TopographyData` orders files by each entry's header spacing
+  (`TopoFile.read_header().delta`), as it did for an unread `Topography`.
 - `entry.read().write(path)` writes a file that already has the shift applied;
   a `TopoFile` for that new file has no shift. This settles the double-shift
   case in #768.
@@ -129,27 +146,47 @@ topo_data.topofiles.append(
 ## Verification
 
 The refactor holds the data path fixed, so the evidence is equality with the
-pre-refactor tree:
+tree before it (`5fc5e7cc`):
 
-- `topo.data` and `dtopo.data` written by every example `setrun.py` and by the
-  `topo_crop` regression fixtures are byte-identical before and after.
-- `TopoFile(...).read()` gives arrays bitwise-equal to the old
-  `Topography` with the same attributes set, across types 2/3/4 with crop,
-  coarsen, align, buffer, shifts and `negate_z` (one parametrized test).
-- A misspelled field raises; each invalid value raises; the keyword and
-  attribute ways of building an entry give equal objects.
-- `DTopoFile(...).read()` gives arrays bitwise-equal to the old
-  `DTopography` attribute route with crop/coarsen/buffer/align and shifts.
-- Full Python suite and the regression suite pass unchanged (no regenerated
-  regression data).
+- **Baseline comparison.** A script captured, on `5fc5e7cc`, 328 cases: topo
+  types 2/3/4 crossed with crop (none, on-grid, off-grid), coarsen (1, 3),
+  buffer (0, 2), align (none, set), shifts (none, set) and `z_shift`/
+  `negate_z` (none, set); dtopo type 3 reads across the same settings; and
+  `dtopo.data` for dtopo types 1/3 with shifts. For each it kept the loaded
+  arrays and the `topo.data`/`dtopo.data` text. On this branch, through
+  `TopoFile.read()`/`DTopoFile.read()` and the new writers: **0 of 328
+  differ**, arrays compared with `np.array_equal` and text exactly. The
+  comparison was checked to fail on injected changes (an `x` offset of
+  1e-13, a relative `dZ` change of 1e-15, one extra space in the data file).
+  The script is not committed.
+- `tests/test_topo_data_golden.py` (byte-exact `topo.data`) passes with the
+  goldens unchanged.
+- `tests/test_topo_recipe.py` (new): both construction styles give equal
+  entries, misspelled names and invalid values raise, `read()` equals
+  `Topography.read`/`DTopography.read` with the same keywords, `read_header()`
+  is the file, the list form does not warn, `Topography`/`DTopography`/dict
+  entries raise, and the data classes refuse the eight names.
+- Full Python suite: 777 passed before the last additions (no tests
+  regenerated or deleted; tests that set the settings as attributes now pass
+  them as `read()` keywords or build `TopoFile`/`DTopoFile` entries).
+- Fortran examples and regressions: see Progress.
 
 ## Progress
 
 - [x] Design agreed (this doc; names `TopoFile`/`DTopoFile` and keeping the
       list form confirmed by Kyle 2026-11-24)
-- [ ] Failing tests (`tests/test_topo_recipe.py`)
-- [ ] `TopoFile`, `DTopoFile`; `Topography`/`DTopography` attributes removed
-- [ ] `data.py`, `netcdf_utils` (`topo_entries`, `dtopo_entries`), tests and
-      examples moved to the recipe objects
-- [ ] Byte-identical `topo.data`/`dtopo.data` check
-- [ ] Roadmap §1 row and §2.8 note updated
+- [x] Failing tests (`tests/test_topo_recipe.py`, `f919a755`)
+- [x] `TopoFile`, `DTopoFile`; `Topography`/`DTopography` attributes removed
+- [x] `data.py`, `gridded_input`, tests and examples moved to the recipe
+      objects (`topo_entries()` lists are still accepted)
+- [x] Byte-identical `topo.data`/`dtopo.data` check (328 cases, above)
+- [x] Roadmap §1 rows and §2.7/§2.8 notes updated
+- [x] Fortran example/regression run (macOS, gfortran): bowl-slosh
+      preprocessing, dtopo, bowl-slosh-netcdf, isaac, chile2010 and
+      `tests/regression`: 67 passed, 1 xfailed, 3 deselected (marker-gated),
+      no regression data regenerated
+- [ ] User docs: the `topochanges` doc branch (rjleveque/doc#5) still shows
+      the attribute form in `setrun_geoclaw.rst`, `topotools_module.rst` and
+      `topodata_format.rst`
+- [ ] clawpack/geoclaw#764 (kmltools) reads `crop_extent`/shifts from
+      `Topography` entries; it needs rebasing onto `TopoFile`

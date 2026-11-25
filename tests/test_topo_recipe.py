@@ -100,6 +100,7 @@ def test_recipe_defaults(which):
     assert e.align is None
     assert (e.x_shift, e.y_shift, e.z_shift) == (0.0, 0.0, 0.0)
     assert e.negate_z is False
+    assert e.datum is None
 
 
 @pytest.mark.parametrize("which", RECIPE_CLASSES)
@@ -177,6 +178,19 @@ def test_topography_has_no_recipe_attribute(name):
 @pytest.mark.parametrize("name", RECIPE)
 def test_dtopography_has_no_recipe_attribute(name):
     assert not hasattr(dtopotools.DTopography(), name)
+
+
+@pytest.mark.parametrize("cls, recipe", [
+    (topotools.Topography, "TopoFile"),
+    (dtopotools.DTopography, "DTopoFile"),
+])
+@pytest.mark.parametrize("name", RECIPE)
+def test_data_classes_refuse_setting_names(cls, recipe, name):
+    """Code written against master before #768 set the settings on the data
+    object.  As plain attributes they would be stored and silently ignored by
+    read(), so they are refused, and the message says where they went."""
+    with pytest.raises(AttributeError, match=recipe):
+        setattr(cls(), name, 1)
 
 
 # --------------------------------------------------------------------------
@@ -347,3 +361,13 @@ def test_dtopofiles_reject_dtopography(tmp_path):
     d.path, d.dtopo_type = str(path), 3
     with pytest.raises(TypeError, match="DTopoFile"):
         _write_dtopo_data(tmp_path, [d])
+
+
+def test_topofile_without_path_raises_at_write(tmp_path):
+    with pytest.raises(ValueError, match="no path"):
+        _write_topo_data(tmp_path, [topotools.TopoFile(topo_type=3)])
+
+
+def test_dtopofile_without_path_raises_at_write(tmp_path):
+    with pytest.raises(ValueError, match="no path"):
+        _write_dtopo_data(tmp_path, [dtopotools.DTopoFile(dtopo_type=3)])

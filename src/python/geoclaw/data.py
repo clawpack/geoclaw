@@ -298,7 +298,7 @@ def _write_preprocessing_block(f, t):
 
     Shared by TopographyData.write() (topo.data) and DTopoData.write()
     (dtopo.data); Fortran reads the same 8 lines in read_topo_settings and
-    read_dtopo_settings.  *t* is a Topography or DTopography object.
+    read_dtopo_settings.  *t* is a topotools.TopoFile or dtopotools.DTopoFile.
 
     Float values use repr (shortest round-trip representation) so coordinates
     reach Fortran at full precision; %g would truncate to 6 significant
@@ -372,16 +372,21 @@ class TopographyData(clawpack.clawutil.data.ClawData):
 
 
     def _normalize_topofiles(self):
-        """Return topofiles as a list of Topography objects.
+        """Return topofiles as a list of ``topotools.TopoFile`` entries.
 
-        Converts legacy list/tuple and dict entries with a DeprecationWarning.
-        Topography instances pass through unchanged.
+        Accepts ``TopoFile`` entries and the ``[topo_type, path]`` list form
+        (the v5.14 form, not deprecated), plus the internal
+        ``[topo_type, path, TopoMetadata]`` entries that
+        ``TopoInspector.topo_entries()`` returns.  The 6-element list form is
+        deprecated since v5.8.0.  Lists are converted to new entries; a
+        ``TopoFile`` is passed through (and may have its ``topo_type`` filled
+        in by write()).
         """
-        from clawpack.geoclaw.topotools import Topography
+        from clawpack.geoclaw.topotools import TopoFile, Topography
 
         result = []
         for entry in self.topofiles:
-            if isinstance(entry, Topography):
+            if isinstance(entry, TopoFile):
                 result.append(entry)
                 continue
 
@@ -390,68 +395,35 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 if len(entry) == 6:
                     warnings.warn(
                         "6-element topofile entries are deprecated since v5.8.0 "
-                        "(level/time info is ignored). Construct Topography "
-                        "objects directly instead.",
+                        "(level/time info is ignored). Use [topo_type, path] "
+                        "or topotools.TopoFile(path, topo_type) instead.",
                         DeprecationWarning, stacklevel=3,
                     )
                     entry = [entry[0], entry[-1]]
 
-                # [topo_type, path, TopoMetadata] — from topo_entries(); not deprecated
+                # [topo_type, path, TopoMetadata] -- from topo_entries()
                 if len(entry) == 3:
                     from clawpack.geoclaw.netcdf_utils import TopoMetadata
                     if isinstance(entry[2], TopoMetadata):
-                        topo = Topography()
-                        topo.topo_type = int(entry[0])
-                        topo.path = str(entry[1])
-                        topo._netcdf_meta = entry[2]
+                        topo = TopoFile(str(entry[1]), int(entry[0]))
+                        object.__setattr__(topo, '_netcdf_meta', entry[2])
                         result.append(topo)
                         continue
 
-                # [topo_type, path] — legacy deprecated format
-                if len(entry) >= 2:
-                    warnings.warn(
-                        "List/tuple topofile entries are deprecated. Construct "
-                        "Topography objects directly and append them to "
-                        "rundata.topo_data.topofiles instead.",
-                        DeprecationWarning, stacklevel=3,
-                    )
-                    topo = Topography()
-                    topo.topo_type = int(entry[0])
-                    topo.path = str(entry[1])
-                    result.append(topo)
+                if len(entry) == 2:
+                    result.append(TopoFile(str(entry[1]), int(entry[0])))
                     continue
 
-            if isinstance(entry, dict):
-                warnings.warn(
-                    "Dict topofile entries are deprecated. Construct Topography "
-                    "objects directly and set attributes on them instead. "
-                    "Note: dict key 'extent' maps to Topography.crop_extent.",
-                    DeprecationWarning, stacklevel=3,
-                )
-                topo = Topography()
-                topo.path = entry.get('topo_path', None)
-                raw_type = entry.get('topo_type', None)
-                if raw_type is not None:
-                    topo.topo_type = int(raw_type)
-                # The legacy dict key 'extent' is an alias for 'crop_extent'
-                # (the requested crop; see Topography "Region terminology").
-                # Note: if a spec supplies BOTH 'extent' and 'crop_extent', the
-                # 'crop_extent' key wins -- it is applied by the loop below,
-                # which runs after this alias assignment.
-                if 'extent' in entry:
-                    topo.crop_extent = entry['extent']
-                for attr in ('crop_extent', 'coarsen', 'buffer', 'align',
-                             'x_shift', 'y_shift', 'z_shift', 'negate_z'):
-                    if attr in entry:
-                        setattr(topo, attr, entry[attr])
-                result.append(topo)
-                continue
+            if isinstance(entry, Topography):
+                raise TypeError(
+                    f"topofiles holds a Topography ({entry.path!r}). List the "
+                    f"file with its settings as a topotools.TopoFile instead, "
+                    f"e.g. TopoFile(path, topo_type, crop_extent=[...]); a "
+                    f"Topography holds data, not the settings used to load it.")
 
-            raise ValueError(
-                f"Unrecognized topofile entry type {type(entry).__name__!r}: "
-                f"{entry!r}.  Expected a Topography object, a [topo_type, path] "
-                f"list, or a dict."
-            )
+            raise TypeError(
+                f"Unrecognized topofile entry {entry!r}. Expected a "
+                f"topotools.TopoFile or a [topo_type, path] list.")
         return result
 
     def _compute_priority_order(self, topos):
@@ -472,8 +444,8 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         last.  Files are written in the order provided; the last file has the
         highest priority in GeoClaw.
 
-        Header data is loaded via read_header() if coordinates are not yet
-        available; the Z array is never loaded here.
+        The spacing comes from each file's header; the Z array is never
+        loaded here.
         """
         if self.override_order:
             return list(topos)
@@ -481,13 +453,8 @@ class TopographyData(clawpack.clawutil.data.ClawData):
         def _cell_area(topo):
             if topo.path is None:
                 return float('inf')
-            if topo._x is None:
-                try:
-                    topo.read_header()
-                except Exception:
-                    return float('inf')
             try:
-                dx, dy = topo.delta
+                dx, dy = topo.read_header().delta
                 return float(dx) * float(dy)
             except Exception:
                 return float('inf')
@@ -516,12 +483,15 @@ class TopographyData(clawpack.clawutil.data.ClawData):
 
         records = []
         for topo in topos:
+            if topo.path is None:
+                raise ValueError(
+                    f"{topo!r} in topofiles has no path; set TopoFile.path.")
             _reject_remote_path(
                 topo.path, "Topography",
                 "    topo = topotools.fetch_remote_topo(\n"
                 "        url, crop_extent=[...], coarsen=..., buffer=...)\n"
                 "    topo.write('topo_cropped.tt3', topo_type=3)\n"
-                "    rundata.topo_data.topofiles.append(topo)\n"
+                "    rundata.topo_data.topofiles.append([3, 'topo_cropped.tt3'])\n"
                 "Only the requested hyperslab is read, so this does not "
                 "download the whole file.")
 
@@ -529,9 +499,9 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             fname = os.path.abspath(
                 os.path.join(os.path.dirname(out_file), topo.path))
 
-            # topo_type may still be None when a Topography was built by hand
-            # and never read; the :3d format would raise a TypeError naming
-            # neither the file nor the attribute.
+            # topo_type may still be None on a TopoFile built without one;
+            # the :3d format would raise a TypeError naming neither the file
+            # nor the setting.
             topo_type = topo.topo_type
             if topo_type is None:
                 topo_type = topotools.determine_topo_type(topo.path,
@@ -539,8 +509,8 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 if topo_type is None:
                     raise ValueError(
                         f"topo_type is not set for {topo.path} and cannot be "
-                        f"inferred from its extension. Set topo.topo_type "
-                        f"explicitly, or pass topo_type= to Topography().")
+                        f"inferred from its extension. Set topo_type on its "
+                        f"TopoFile.")
                 topo.topo_type = topo_type
 
             # Type 5 (GeoTIFF) is readable in Python but has no case(5) in the
@@ -553,22 +523,9 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     f"(Topography.write) before running.",
                     UserWarning, stacklevel=3)
 
-            # A descending crop_extent is not a rectangle in any frame.  The
-            # *continuous* spelling of a cross-seam crop ([-190, -120]) is
-            # handled below; the wrapped spelling ([170, -170]) cannot be, and
-            # written directly Fortran would resolve it to mx=0, my=0 -- an
-            # empty topo, silently.
-            if (topo.crop_extent is not None
-                    and topo.crop_extent[0] >= topo.crop_extent[1]
-                    and getattr(topo, '_netcdf_meta', None) is None):
-                raise ValueError(
-                    f"crop_extent {list(topo.crop_extent)} for {topo.path} is "
-                    f"descending in longitude. To cross the antimeridian, "
-                    f"write the crop in continuous coordinates instead -- "
-                    f"[{topo.crop_extent[0] - 360.0}, {topo.crop_extent[1]}] "
-                    f"for this one -- which is split across the seam "
-                    f"automatically. A descending pair has no such reading and "
-                    f"would produce an empty grid in Fortran with no error.")
+            # A descending crop_extent ([170, -170]) never gets here:
+            # TopoFile refuses it when it is set, pointing to the continuous
+            # spelling ([-190, -170]) that is split across the seam below.
 
             if abs(topo_type) != 4:
                 # ASCII crops are in domain coordinates (after x/y_shift) and
@@ -576,8 +533,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 # past the file used to lose the rest silently.
                 if topo.crop_extent is not None and abs(topo_type) in (2, 3):
                     edges, delta, _ = _file_cell_edges(fname, topo_type)
-                    xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
-                    ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+                    xs, ys = topo.x_shift, topo.y_shift
                     _check_crop_covered(
                         topo.crop_extent, topo.path,
                         (edges[0] + xs, edges[1] + xs,
@@ -586,7 +542,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 continue
 
             # --- type 4: build the CF descriptor block -------------------
-            if getattr(topo, '_netcdf_meta', None) is not None:
+            if topo._netcdf_meta is not None:
                 # Pre-computed by topo_entries(); already carries the right
                 # lon_wrap_offset.  topo.data has no crop_bounds line, so an
                 # entry whose crop exists only as the metadata's file-
@@ -596,8 +552,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 # same.  A copy, so the caller's object is left alone.
                 meta = topo._netcdf_meta
                 if topo.crop_extent is None and meta.crop_bounds is not None:
-                    xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
-                    ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+                    xs, ys = topo.x_shift, topo.y_shift
                     x0, x1, y0, y1 = (float(v) for v in meta.crop_bounds)
                     off = float(meta.lon_wrap_offset)
                     topo = copy.copy(topo)
@@ -613,8 +568,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
             # inspector; topo.data carries crop_extent itself, and Fortran
             # subtracts the shift (and each entry's lon_wrap_offset) the same
             # way.
-            xs = float(getattr(topo, 'x_shift', 0.0) or 0.0)
-            ys = float(getattr(topo, 'y_shift', 0.0) or 0.0)
+            xs, ys = topo.x_shift, topo.y_shift
             crop = ((float(topo.crop_extent[0]) - xs,
                      float(topo.crop_extent[1]) - xs,
                      float(topo.crop_extent[2]) - ys,
@@ -768,7 +722,7 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                     _warn_unsupported_1d_preprocessing(topo)
                     continue
 
-                # The originating Topography is reused for every entry it
+                # The originating TopoFile is reused for every entry it
                 # expanded into, so buffer/coarsen/align/shifts reach Fortran
                 # for each one.  crop_extent is written as the user gave it,
                 # in domain coordinates; for a wrapped pair only the entries'
@@ -967,16 +921,17 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         self.add_attribute('dt_max_dtopo', 1.e99)
 
     def _normalize_dtopofiles(self):
-        """Return dtopofiles as a list of DTopography objects.
+        """Return dtopofiles as a list of ``dtopotools.DTopoFile`` entries.
 
-        Converts legacy list/tuple entries with a warning.  DTopography
-        instances pass through unchanged.
+        Accepts ``DTopoFile`` entries and the ``[dtopo_type, path]`` list form
+        (the v5.14 form, not deprecated).  The 4-element list form has warned
+        since v5.8.0.
         """
-        from clawpack.geoclaw.dtopotools import DTopography
+        from clawpack.geoclaw.dtopotools import DTopoFile, DTopography
 
         result = []
         for entry in self.dtopofiles:
-            if isinstance(entry, DTopography):
+            if isinstance(entry, DTopoFile):
                 result.append(entry)
                 continue
 
@@ -987,18 +942,21 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                     warnings.warn(w, UserWarning)
                     entry = [entry[0], entry[-1]]  # drop minlevel,maxlevel
                 if len(entry) == 2:
-                    d = DTopography()
-                    d.dtopo_type = int(entry[0])
-                    d.path = str(entry[1])
-                    result.append(d)
+                    result.append(DTopoFile(str(entry[1]), int(entry[0])))
                     continue
                 raise ValueError('Unexpected len(tfile) = %i' % len(entry))
 
-            raise ValueError(
-                f"Unrecognized dtopofile entry type {type(entry).__name__!r}: "
-                f"{entry!r}.  Expected a DTopography object or a "
-                f"[dtopo_type, path] list."
-            )
+            if isinstance(entry, DTopography):
+                raise TypeError(
+                    f"dtopofiles holds a DTopography ({entry.path!r}). List "
+                    f"the file with its settings as a dtopotools.DTopoFile "
+                    f"instead, e.g. DTopoFile(path, dtopo_type, x_shift=...); "
+                    f"a DTopography holds data, not the settings used to "
+                    f"load it.")
+
+            raise TypeError(
+                f"Unrecognized dtopofile entry {entry!r}. Expected a "
+                f"dtopotools.DTopoFile or a [dtopo_type, path] list.")
         return result
 
     def write(self, data_source='setrun.py', out_file='dtopo.data'):
@@ -1006,13 +964,19 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         # Moving topography settings
         self.open_data_file(out_file, data_source)
         dtopos = self._normalize_dtopofiles()
+        # Vertical datum per file: declared on the entry, else read from a
+        # netCDF file below.  Kept here so the entries are not modified.
+        datums_found = [d.datum for d in dtopos]
         self.data_write(value=len(dtopos), alt_name='mdtopofiles')
         self.data_write()
-        for d in dtopos:
-            # Unsupported preprocessing attributes fail loudly at write time
-            # (mirrors DTopography.read() and the Fortran guard in
-            # read_dtopo_settings): only z_shift and negate_z are implemented
-            # for dtopography.
+        for k, d in enumerate(dtopos):
+            if d.path is None:
+                raise ValueError(
+                    f"{d!r} in dtopofiles has no path; set DTopoFile.path.")
+            # DTopoFile has the same settings as TopoFile, and Python applies
+            # all of them, but the Fortran reader does not crop or coarsen
+            # dtopo yet (mandli/geoclaw#15; read_dtopo_settings stops).  Fail
+            # here, at make data, rather than in the run.
             unsupported = [name for name, is_set in (
                 ("crop_extent", d.crop_extent is not None),
                 ("coarsen", d.coarsen != 1),
@@ -1021,16 +985,19 @@ class DTopoData(clawpack.clawutil.data.ClawData):
             ) if is_set]
             if unsupported:
                 raise NotImplementedError(
-                    "Preprocessing attributes %s are not implemented for "
-                    "dtopography (file %s). Only x_shift, y_shift, z_shift and "
-                    "negate_z are supported." % (", ".join(unsupported), d.path))
+                    "%s set for dtopo file %s, but GeoClaw's Fortran reader "
+                    "does not crop or coarsen dtopo yet "
+                    "(mandli/geoclaw#15). Only x_shift, y_shift, z_shift and "
+                    "negate_z reach a run; to crop now, read it with "
+                    "DTopoFile.read() and write the result to a new file."
+                    % (", ".join(unsupported), d.path))
 
             _reject_remote_path(
                 d.path, "DTopography",
                 "    dtopo = dtopotools.DTopography()\n"
                 "    dtopo.read(url, dtopo_type=4)\n"
                 "    dtopo.write('dtopo_local.tt3', dtopo_type=3)\n"
-                "    rundata.dtopo_data.dtopofiles.append(dtopo)")
+                "    rundata.dtopo_data.dtopofiles.append([3, 'dtopo_local.tt3'])")
 
             # if path is relative in setrun, assume it's relative to the
             # same directory that out_file comes from
@@ -1067,9 +1034,9 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                     # scale_factor Fortran applies on read.
                     _meta = _insp.inspect_dtopo()
                     # Record an optional vertical datum (informational) for the
-                    # consistency check below, if not already set on the object.
-                    if d.datum is None:
-                        d.datum = extract_datum(
+                    # consistency check below, if the entry declares none.
+                    if datums_found[k] is None:
+                        datums_found[k] = extract_datum(
                             *[_insp.ds[v].attrs for v in _insp.ds.data_vars],
                             _insp.ds.attrs)
                 _ncutils.DescriptorWriter.write_dtopo_descriptor(
@@ -1078,8 +1045,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
         # Warn if the dtopo files carry mismatched vertical datums: GeoClaw
         # applies no vertical-datum transformation, so mixing references is a
         # likely error.  Only datums that are actually available are compared.
-        datums = sorted({str(d.datum) for d in dtopos
-                         if getattr(d, 'datum', None) is not None})
+        datums = sorted({str(v) for v in datums_found if v is not None})
         if len(datums) > 1:
             warnings.warn(
                 "dtopo files have mismatched vertical datums (%s). GeoClaw "
@@ -1096,10 +1062,10 @@ class DTopoData(clawpack.clawutil.data.ClawData):
     def read(self, path="dtopo.data", force=False):
         r"""Read a dtopography data file written by write().
 
-        Populates *dtopofiles* with DTopography objects carrying the path,
-        dtopo_type, and preprocessing attributes of each 10-line file block.
+        Populates *dtopofiles* with ``dtopotools.DTopoFile`` entries carrying
+        the path, dtopo_type, and settings of each 10-line file block.
         """
-        from clawpack.geoclaw.dtopotools import DTopography
+        from clawpack.geoclaw.dtopotools import DTopoFile
 
         def _data(line):
             # Strip trailing comments and whitespace
@@ -1124,7 +1090,7 @@ class DTopoData(clawpack.clawutil.data.ClawData):
             elif _data(line).startswith("'"):
                 # 10-line file block: path, dtopo_type, crop_extent, coarsen,
                 # buffer, align, x_shift, y_shift, z_shift, negate_z
-                d = DTopography()
+                d = DTopoFile()
                 d.path = _data(line).strip("'")
                 d.dtopo_type = int(_data(lines[i + 1]).split()[0])
                 crop = [float(v) for v in _data(lines[i + 2]).split()]
