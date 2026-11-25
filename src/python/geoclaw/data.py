@@ -290,43 +290,148 @@ def _check_crop_covered(crop, path, edges, delta, wrap_lon=False):
         f"y = [{_fmt(ey1, ey2)}]: {overlap}.")
 
 
-def _write_preprocessing_block(f, t):
-    """Write the 8 preprocessing-attribute lines for one topo/dtopo file.
+# ---------------------------------------------------------------------------
+# topo.data / dtopo.data notation (dev/design/topo_input_roadmap.md §2.8 PR B)
+#
+# Every value line is ``value =: key``, optionally followed by ``# comment``,
+# in the column layout clawutil's data_write uses.  Fortran reads the lines in
+# a fixed order and checks each key (read_keyed_line in utility_module.f90).
+# Unset values are ``None``; strings are quoted Fortran strings; logicals are
+# T/F.
+# ---------------------------------------------------------------------------
+
+def _fortran_str(value):
+    """*value* as a quoted Fortran string; an embedded quote is doubled."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _fortran_bool(value):
+    return 'T' if value else 'F'
+
+
+def _fortran_floats(values):
+    """Space-separated reprs (shortest round trip), or None."""
+    if values is None:
+        return 'None'
+    return ' '.join(repr(float(v)) for v in values)
+
+
+def _write_keyed(f, value, key, comment=None):
+    """Write one ``value =: key  # comment`` line."""
+    line = f"{str(value).ljust(20)} =: {key.ljust(20)}"
+    if comment:
+        line += f" # {comment}"
+    f.write(line.rstrip() + "\n")
+
+
+def _write_preprocessing_block(f, t, lon_wrap_offset=0.0):
+    """Write the per-file settings lines for one topo/dtopo entry.
 
     The lines are, in order: crop_extent, coarsen, buffer, align, x_shift,
-    y_shift, z_shift, negate_z.
-
-    Shared by TopographyData.write() (topo.data) and DTopoData.write()
-    (dtopo.data); Fortran reads the same 8 lines in read_topo_settings and
+    y_shift, z_shift, negate_z, lon_wrap_offset.  Shared by
+    TopographyData.write() (topo.data) and DTopoData.write() (dtopo.data);
+    Fortran reads the same lines in read_topo_settings and
     read_dtopo_settings.  *t* is a topotools.TopoFile or dtopotools.DTopoFile.
 
     Float values use repr (shortest round-trip representation) so coordinates
     reach Fortran at full precision; %g would truncate to 6 significant
-    digits.
+    digits.  An unset crop_extent or align is written as None: the old
+    all-zero sentinel could not tell "no align" from align = [0, 0].
+
+    *lon_wrap_offset* is what Fortran adds to the file's longitudes: nonzero
+    only for one side of a netCDF crop split at the antimeridian.
     """
-    # crop_extent: write all-zero sentinel or 4 space-separated floats
-    # All-zero is safe: a valid extent requires x1<x2 and y1<y2.
-    if t.crop_extent is None:
-        f.write("0. 0. 0. 0.   # crop_extent [x1 x2 y1 y2]\n")
-    else:
-        vals = ' '.join(repr(float(v)) for v in t.crop_extent)
-        f.write(f"{vals}   # crop_extent [x1 x2 y1 y2]\n")
-
-    f.write(f"{int(t.coarsen):d}   # coarsen\n")
+    _write_keyed(f, _fortran_floats(t.crop_extent), 'crop_extent',
+                 '[x1 x2 y1 y2], domain coordinates')
+    _write_keyed(f, f"{int(t.coarsen):d}", 'coarsen')
     # buffer is a count of grid points; Fortran reads an integer.
-    f.write(f"{int(t.buffer):d}   # buffer\n")
+    _write_keyed(f, f"{int(t.buffer):d}", 'buffer', 'grid points')
+    _write_keyed(f, _fortran_floats(t.align), 'align', '[x y]')
+    _write_keyed(f, repr(float(t.x_shift)), 'x_shift')
+    _write_keyed(f, repr(float(t.y_shift)), 'y_shift')
+    _write_keyed(f, repr(float(t.z_shift)), 'z_shift')
+    _write_keyed(f, _fortran_bool(t.negate_z), 'negate_z')
+    _write_keyed(f, repr(float(lon_wrap_offset)), 'lon_wrap_offset')
 
-    # align: write all-zero sentinel or 2 space-separated floats
-    if t.align is None:
-        f.write("0. 0.   # align [x y]\n")
-    else:
-        vals = ' '.join(repr(float(v)) for v in t.align)
-        f.write(f"{vals}   # align [x y]\n")
 
-    f.write(f"{float(t.x_shift)!r}   # x_shift\n")
-    f.write(f"{float(t.y_shift)!r}   # y_shift\n")
-    f.write(f"{float(t.z_shift)!r}   # z_shift\n")
-    f.write(f"{'T' if t.negate_z else 'F'}   # negate_z\n")
+def _read_keyed_lines(path):
+    """[(key, value)] for every ``value =: key`` line of a .data file.
+
+    Blank lines and ``#`` lines are skipped; anything else without ``=:``
+    is an error (a file from an older GeoClaw).
+    """
+    out = []
+    with open(os.path.abspath(path), 'r') as data_file:
+        for lineno, line in enumerate(data_file, 1):
+            s = line.strip()
+            if not s or s.startswith('#'):
+                continue
+            if '=:' not in s:
+                raise ValueError(
+                    f"{path}, line {lineno}: {line.rstrip()!r} is not a "
+                    f"'value =: key' line. The file was written by an older "
+                    f"GeoClaw; regenerate it with 'make data'.")
+            value, tail = s.rsplit('=:', 1)
+            out.append((tail.split('#', 1)[0].split()[0], value.strip()))
+    return out
+
+
+class _KeyedReader:
+    """Consume (key, value) pairs in order, checking each key."""
+
+    def __init__(self, pairs, path):
+        self._pairs = list(pairs)
+        self._path = path
+        self._k = 0
+
+    def peek(self):
+        return self._pairs[self._k][0] if self._k < len(self._pairs) else None
+
+    def take(self, key):
+        found = self.peek()
+        if found != key:
+            raise ValueError(
+                f"{self._path}: expected key {key!r}, found {found!r}. "
+                f"Regenerate it with 'make data'.")
+        value = self._pairs[self._k][1]
+        self._k += 1
+        return value
+
+    def rest(self):
+        pairs = self._pairs[self._k:]
+        self._k = len(self._pairs)
+        return pairs
+
+
+def _parse_str(value):
+    """A quoted Fortran string back to Python."""
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+        v = v[1:-1].replace(v[0] * 2, v[0])
+    return v
+
+
+def _parse_floats(value):
+    return None if value.strip() == 'None' else [float(v) for v in
+                                                 value.split()]
+
+
+def _parse_bool(value):
+    return value.strip().upper().lstrip('.').startswith('T')
+
+
+def _read_settings(reader, entry):
+    """Read the per-file settings lines onto *entry*; return the
+    lon_wrap_offset."""
+    entry.crop_extent = _parse_floats(reader.take('crop_extent'))
+    entry.coarsen = int(reader.take('coarsen'))
+    entry.buffer = int(reader.take('buffer'))
+    entry.align = _parse_floats(reader.take('align'))
+    entry.x_shift = float(reader.take('x_shift'))
+    entry.y_shift = float(reader.take('y_shift'))
+    entry.z_shift = float(reader.take('z_shift'))
+    entry.negate_z = _parse_bool(reader.take('negate_z'))
+    return float(reader.take('lon_wrap_offset'))
 
 
 class TopographyData(clawpack.clawutil.data.ClawData):
@@ -713,8 +818,9 @@ class TopographyData(clawpack.clawutil.data.ClawData):
 
             f = self._out_file
             for fname, topo_type, topo, meta in records:
-                f.write(f"\n'{fname}'   # topo_path\n")
-                f.write(f"{topo_type:3d}   # topo_type\n")
+                f.write("\n")
+                _write_keyed(f, _fortran_str(fname), 'topo_path')
+                _write_keyed(f, f"{topo_type:d}", 'topo_type')
 
                 if self.num_dim == 1:
                     # No preprocessing block and no NetCDF descriptor: 1D reads
@@ -729,7 +835,8 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                 # lon_wrap_offset differ, and Fortran derives each entry's
                 # window in the file from crop_extent, the offset and the
                 # shift.
-                _write_preprocessing_block(f, topo)
+                _write_preprocessing_block(
+                    f, topo, 0.0 if meta is None else meta.lon_wrap_offset)
                 if meta is not None:
                     from clawpack.geoclaw import netcdf_utils as _ncutils
                     _ncutils.DescriptorWriter.write_topo_descriptor(f, meta)
@@ -750,6 +857,53 @@ class TopographyData(clawpack.clawutil.data.ClawData):
                                         " implemented." % self.test_topography)
 
         self.close_data_file()
+
+
+    def read(self, path='topo.data', force=False):
+        r"""Read a topo.data file written by write().
+
+        Sets *topo_missing* and *test_topography*, and fills *topofiles* with
+        ``topotools.TopoFile`` entries (or reads the test-topography
+        parameters).  The entries are the ones written, in the order written
+        (finest last unless *override_order*).  Adjacent entries that differ
+        only in their lon_wrap_offset are the two sides of one crop split at
+        the antimeridian and are read back as the one entry they came from.
+        Each key is checked, so a file from an older GeoClaw raises.
+        """
+        from clawpack.geoclaw.topotools import TopoFile
+
+        reader = _KeyedReader(_read_keyed_lines(path), path)
+        self.topo_missing = float(reader.take('topo_missing'))
+        self.test_topography = int(reader.take('test_topography'))
+        self.topofiles = []
+        if self.test_topography != 0:
+            for key, value in reader.rest():
+                setattr(self, key, float(value))
+            return
+
+        ntopofiles = int(reader.take('ntopofiles'))
+        if reader.peek() == 'override_order':
+            self.override_order = _parse_bool(reader.take('override_order'))
+        previous = None
+        for _ in range(ntopofiles):
+            entry = TopoFile(_parse_str(reader.take('topo_path')),
+                             int(reader.take('topo_type')))
+            offset = 0.0
+            if reader.peek() == 'crop_extent':        # 2D: settings lines
+                offset = _read_settings(reader, entry)
+            if abs(entry.topo_type) == 4 and reader.peek() == 'var_name':
+                for key in ('var_name', 'x_name', 'y_name', 'y_increasing',
+                            'dim_order', 'scale_factor', 'fill_value',
+                            'fill_action'):
+                    reader.take(key)
+            if (previous is not None and entry == previous[0]
+                    and offset != previous[1]):
+                continue                       # other side of one split
+            self.topofiles.append(entry)
+            previous = (entry, offset)
+        if reader.peek() is not None:
+            raise ValueError(f"{path}: unexpected line for {reader.peek()!r} "
+                             f"after the last topo file.")
 
 
 class FixedGridData(clawpack.clawutil.data.ClawData):
@@ -1005,27 +1159,26 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                 os.path.join(os.path.dirname(out_file), d.path))
 
             if self.num_dim == 1:
-                # 1D reads the path and type with a single list-directed
-                # statement, `read(iunit,*) dtopofname, dtopotype`, which spans
-                # records -- so the type may sit on the next line, but a
-                # trailing comment on the *path* line is consumed as item 2 and
-                # fails with "Bad integer for item 2 in list input".  Leave the
-                # path line bare, and omit the preprocessing block so the
-                # dt_max_dtopo read below lands on the right value rather than
-                # silently picking up a crop_extent field.
-                self._out_file.write("\n'%s' \n" % fname)
-                self._out_file.write("%3i   # dtopo_type\n" % d.dtopo_type)
+                # 1D reads the path, the type and dt_max_dtopo with one
+                # list-directed read each, which ignores the `=: key` rest of
+                # the line.  Omit the settings lines: 1D implements none of
+                # them, and dt_max_dtopo must be the next value it reads.
+                self._out_file.write("\n")
+                _write_keyed(self._out_file, _fortran_str(fname), 'dtopo_path')
+                _write_keyed(self._out_file, f"{int(d.dtopo_type):d}",
+                             'dtopo_type')
                 _warn_unsupported_1d_preprocessing(d)
                 continue
 
-            self._out_file.write("\n'%s'   # dtopo_path\n" % fname)
-            self._out_file.write("%3i   # dtopo_type\n" % d.dtopo_type)
-            _write_preprocessing_block(self._out_file, d)
+            self._out_file.write("\n")
+            _write_keyed(self._out_file, _fortran_str(fname), 'dtopo_path')
+            _write_keyed(self._out_file, f"{int(d.dtopo_type):d}",
+                         'dtopo_type')
 
-            # For NetCDF (type 4): write the descriptor block that Fortran's
-            # read_dtopo_netcdf_descriptor parses (key=value lines terminated
-            # by a blank line), carrying the time axis as (t0, dt) in
-            # simulation seconds.
+            # For NetCDF (type 4), inspect first: the entry's lon_wrap_offset
+            # line comes from the file, and the descriptor lines that follow
+            # carry the time axis as (t0, dt) in simulation seconds.
+            _meta = None
             if abs(d.dtopo_type) == 4:
                 from clawpack.geoclaw import netcdf_utils as _ncutils
                 from clawpack.geoclaw.topotools import extract_datum
@@ -1039,6 +1192,11 @@ class DTopoData(clawpack.clawutil.data.ClawData):
                         datums_found[k] = extract_datum(
                             *[_insp.ds[v].attrs for v in _insp.ds.data_vars],
                             _insp.ds.attrs)
+
+            _write_preprocessing_block(
+                self._out_file, d,
+                0.0 if _meta is None else _meta.lon_wrap_offset)
+            if _meta is not None:
                 _ncutils.DescriptorWriter.write_dtopo_descriptor(
                     self._out_file, _meta)
 
@@ -1062,56 +1220,27 @@ class DTopoData(clawpack.clawutil.data.ClawData):
     def read(self, path="dtopo.data", force=False):
         r"""Read a dtopography data file written by write().
 
-        Populates *dtopofiles* with ``dtopotools.DTopoFile`` entries carrying
-        the path, dtopo_type, and settings of each 10-line file block.
+        Fills *dtopofiles* with ``dtopotools.DTopoFile`` entries carrying the
+        path, dtopo_type and settings of each file, and sets *dt_max_dtopo*.
+        Each key is checked, so a file from an older GeoClaw raises.
         """
         from clawpack.geoclaw.dtopotools import DTopoFile
 
-        def _data(line):
-            # Strip trailing comments and whitespace
-            return line.split('#')[0].strip()
-
-        with open(os.path.abspath(path), 'r') as data_file:
-            lines = data_file.readlines()
-
-        num_dtopo_files = None
+        reader = _KeyedReader(_read_keyed_lines(path), path)
+        num_dtopo_files = int(reader.take('mdtopofiles'))
         self.dtopofiles = []
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            if "=:" in line:
-                value, tail = line.split("=:")
-                varname = tail.split()[0]
-                if varname == "mdtopofiles":
-                    num_dtopo_files = int(value)
-                elif varname == "dt_max_dtopo":
-                    self.dt_max_dtopo = float(value)
-                i += 1
-            elif _data(line).startswith("'"):
-                # 10-line file block: path, dtopo_type, crop_extent, coarsen,
-                # buffer, align, x_shift, y_shift, z_shift, negate_z
-                d = DTopoFile()
-                d.path = _data(line).strip("'")
-                d.dtopo_type = int(_data(lines[i + 1]).split()[0])
-                crop = [float(v) for v in _data(lines[i + 2]).split()]
-                d.crop_extent = None if all(v == 0. for v in crop) else crop
-                d.coarsen = int(_data(lines[i + 3]))
-                d.buffer = int(_data(lines[i + 4]))  # grid-point count
-                align = [float(v) for v in _data(lines[i + 5]).split()]
-                d.align = None if all(v == 0. for v in align) else align
-                d.x_shift = float(_data(lines[i + 6]))
-                d.y_shift = float(_data(lines[i + 7]))
-                d.z_shift = float(_data(lines[i + 8]))
-                d.negate_z = _data(lines[i + 9]).upper().startswith("T")
-                self.dtopofiles.append(d)
-                i += 10
-            else:
-                i += 1
-
-        # Check to make sure we have all the dtopofiles
-        if len(self.dtopofiles) != num_dtopo_files:
-            raise IOError("The number of dtopo files specified does not equal "
-                          "the number found.")
+        for _ in range(num_dtopo_files):
+            d = DTopoFile(_parse_str(reader.take('dtopo_path')),
+                          int(reader.take('dtopo_type')))
+            if reader.peek() == 'crop_extent':        # 2D: settings lines
+                _read_settings(reader, d)
+            if abs(d.dtopo_type) == 4 and reader.peek() == 'var_name':
+                for key in ('var_name', 'x_name', 'y_name', 'time_name',
+                            'y_increasing', 'dim_order', 'scale_factor',
+                            't0', 'dt'):
+                    reader.take(key)
+            self.dtopofiles.append(d)
+        self.dt_max_dtopo = float(reader.take('dt_max_dtopo'))
 
 
 

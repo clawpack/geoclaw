@@ -29,19 +29,25 @@ _VAR_MAP = {"wind_u": "u10", "wind_v": "v10", "pressure": "msl"}
 # Helpers
 # ============================================================
 
+TOPO_DESCRIPTOR_KEYS = ["var_name", "x_name", "y_name", "y_increasing",
+                        "dim_order", "scale_factor", "fill_value",
+                        "fill_action"]
+
+
 def _parse_topo_descriptor(text: str) -> dict:
     """
-    Parse a topo descriptor block (key = value lines) into a dict.
-    Stops at the first blank line.
+    Parse topo descriptor lines (``value =: key``, dev/design/
+    topo_input_roadmap.md §2.8) into {key: value}, in order, with quoted
+    Fortran strings unquoted.
     """
+    from clawpack.geoclaw.data import _parse_str
     result = {}
     for line in text.splitlines():
         line = line.strip()
         if not line:
-            break
-        if "=" in line:
-            key, _, value = line.partition("=")
-            result[key.strip()] = value.strip()
+            continue
+        value, _, tail = line.rpartition("=:")
+        result[tail.split("#")[0].split()[0]] = _parse_str(value.strip())
     return result
 
 
@@ -123,18 +129,16 @@ def _get_met_meta(met_file_factory, **kwargs) -> MetMetadata:
 
 def test_topo_descriptor_required_keys_present(topo_file_factory):
     """
-    write_topo_descriptor emits all mandatory keys: var_name, x_name,
-    y_name, lon_wrap_offset, scale_factor, y_increasing, dim_order,
-    fill_action.
+    write_topo_descriptor emits exactly the fixed keys, in the order Fortran
+    reads them: var_name, x_name, y_name, y_increasing, dim_order,
+    scale_factor, fill_value, fill_action.
     """
     meta = _get_topo_meta(topo_file_factory)
     buf = io.StringIO()
     DescriptorWriter.write_topo_descriptor(buf, meta)
     parsed = _parse_topo_descriptor(buf.getvalue())
 
-    for key in ("var_name", "x_name", "y_name", "lon_wrap_offset",
-                "scale_factor", "y_increasing", "dim_order", "fill_action"):
-        assert key in parsed, f"Missing required key '{key}' in topo descriptor"
+    assert list(parsed) == TOPO_DESCRIPTOR_KEYS
     assert float(parsed["scale_factor"]) == pytest.approx(meta.scale_factor)
 
 
@@ -153,14 +157,14 @@ def test_topo_descriptor_values_match_metadata(topo_file_factory):
     assert parsed["var_name"] == meta.var_name
     assert parsed["x_name"] == meta.x_name
     assert parsed["y_name"] == meta.y_name
-    assert float(parsed["lon_wrap_offset"]) == pytest.approx(meta.lon_wrap_offset)
-    assert parsed["y_increasing"] == str(meta.y_increasing)
+    assert parsed["y_increasing"] == ("T" if meta.y_increasing else "F")
     assert parsed["dim_order"] == ",".join(meta.dim_order)
     assert parsed["fill_action"] == meta.fill_action
 
 
-def test_topo_descriptor_fill_value_omitted_when_none(topo_file_factory):
-    """fill_value line is absent from descriptor when TopoMetadata.fill_value is None."""
+def test_topo_descriptor_fill_value_none_when_absent(topo_file_factory):
+    """The fill_value line is always written (fixed set of lines); it is None
+    when TopoMetadata.fill_value is None."""
     meta = _get_topo_meta(topo_file_factory)
     # Force fill_value to None in the metadata
     import dataclasses
@@ -170,7 +174,7 @@ def test_topo_descriptor_fill_value_omitted_when_none(topo_file_factory):
     DescriptorWriter.write_topo_descriptor(buf, meta)
     parsed = _parse_topo_descriptor(buf.getvalue())
 
-    assert "fill_value" not in parsed
+    assert parsed["fill_value"] == "None"
 
 
 def test_topo_descriptor_fill_value_present_when_set(topo_file_factory):
@@ -218,41 +222,43 @@ def test_topo_descriptor_crop_bounds_not_written_when_set(topo_file_factory):
     assert "crop_bounds" not in parsed
 
 
-def test_descriptor_writes_lon_offset_not_convention(topo_file_factory):
+def test_lon_wrap_offset_is_an_entry_line_not_descriptor(topo_file_factory):
     """
-    Topo descriptor must contain 'lon_wrap_offset' as a parseable float and
-    must NOT contain 'lon_wrap'.  This verifies the format-version-2 change.
+    lon_wrap_offset is written with the entry's settings lines, for every
+    file type, not in the netCDF descriptor (§2.8 PR B).  A nonzero value
+    round-trips, and the old 'lon_wrap' convention key appears nowhere.
     """
     import dataclasses
+    from clawpack.geoclaw import topotools
+    from clawpack.geoclaw.data import _write_preprocessing_block
     meta = _get_topo_meta(topo_file_factory)
-    # Exercise a non-zero offset to confirm the value round-trips.
     meta = dataclasses.replace(meta, lon_wrap_offset=-360.0)
 
     buf = io.StringIO()
     DescriptorWriter.write_topo_descriptor(buf, meta)
-    text = buf.getvalue()
-    parsed = _parse_topo_descriptor(text)
+    parsed = _parse_topo_descriptor(buf.getvalue())
+    assert "lon_wrap_offset" not in parsed
+    assert "lon_wrap" not in parsed
 
-    assert "lon_wrap_offset" in parsed, "Descriptor must contain 'lon_wrap_offset'"
-    assert "lon_wrap" not in parsed, (
-        "Descriptor must NOT contain 'lon_wrap' (superseded by lon_wrap_offset)"
-    )
-    assert float(parsed["lon_wrap_offset"]) == pytest.approx(-360.0)
+    buf = io.StringIO()
+    _write_preprocessing_block(buf, topotools.TopoFile("f.nc", 4),
+                               meta.lon_wrap_offset)
+    entry = _parse_topo_descriptor(buf.getvalue())
+    assert float(entry["lon_wrap_offset"]) == pytest.approx(-360.0)
+    assert list(entry)[-1] == "lon_wrap_offset"
 
 
-def test_topo_descriptor_ends_with_blank_line(topo_file_factory):
+def test_topo_descriptor_every_line_is_keyed(topo_file_factory):
     """
-    Descriptor block ends with a blank line so the Fortran parser can detect
-    the end of the block.
+    Every descriptor line is ``value =: key``; there is no blank-line
+    terminator (Fortran reads a fixed number of lines and checks each key).
     """
     meta = _get_topo_meta(topo_file_factory)
     buf = io.StringIO()
     DescriptorWriter.write_topo_descriptor(buf, meta)
-    text = buf.getvalue()
-    assert text.endswith("\n\n"), (
-        "Topo descriptor must end with a blank line (two consecutive newlines) "
-        "for the Fortran read loop to terminate correctly"
-    )
+    lines = buf.getvalue().splitlines()
+    assert len(lines) == len(TOPO_DESCRIPTOR_KEYS)
+    assert all("=:" in line for line in lines)
 
 
 # ============================================================

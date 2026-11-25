@@ -68,7 +68,7 @@ update to §4's "not verified" note.
 | Change | Tracking | Status |
 |---|---|---|
 | Per-file recipes: `TopoFile`/`DTopoFile` carry the settings; `Topography`/`DTopography` hold data only | clawpack/geoclaw#768 | branch `topo-recipe-768` off `5fc5e7cc`; design and verification in `dev/design/topo_recipe.md`. Must land before v5.15: none of the settings attributes are in v5.14.0, so they can move without deprecation now |
-| `topo.data`/`dtopo.data` to `value =: key` (§2.8 PR B) | §2.8 | not started; stacked on #768 |
+| `topo.data`/`dtopo.data` to `value =: key` (§2.8 PR B) | §2.8 | implemented on branch `topo-data-format`, stacked on #768 (PR #786); end-to-end results bitwise identical (§2.8) |
 | Missing vertical units for topo/dtopo: assume meters (warn where the format could have declared them) | clawpack/geoclaw#782 | proposal posted for Randy's review (table in the issue); a v5.14 → v5.15 regression, so before v5.15 |
 | Met forcing uses the same input checks as `TopoFile`/`DTopoFile` | §2.9 | **should land before v5.15**; not started |
 | Tile selection from a predefined list; `crop_extent = 'all'`/`'none'` | clawpack/geoclaw#770 | deferred (2026-11-24 meeting): to become an issue and be redesigned, since it drops every file the crop misses, including coarse ones that should always be kept. A redesign works on `TopoFile` entries |
@@ -503,7 +503,8 @@ hand-built entries with a −360 offset). The windows are documented, with a
 diagram, in `topo_crop_windows.md`. Not yet done from the PR A row: the user
 docs.
 
-**PR B design (2026-11-25, branch `topo-data-format`, stacked on #768; failing tests first, implementation next).**
+**PR B as built (2026-11-25, branch `topo-data-format`, stacked on #768;
+failing tests `adb69346`).**
 
 - **One notation.** Every value line in `topo.data` and `dtopo.data` is
   `value =: key`, optionally followed by `# comment`, in the column layout
@@ -546,13 +547,28 @@ docs.
 - **Not in PR B:** a user-facing crop tolerance or Randy's 0.5 dx snap (needs
   his input), `crop_extent = 'all'`/`'none'` (#770, deferred), and the met
   storm file (PR C).
-- **Verification:** Python writes and Fortran reads together must hold
-  results fixed. 11 end-to-end cases (ASCII and netCDF topo with crop,
-  coarsen, buffer, align, shifts and `negate_z`; two files by priority; a
-  cross-seam split; dtopo types 1, 3 and 4 with shifts) were run on
-  `e3bd0ec5` with a netCDF build, and their `fort.q`, `fort.a` and `fort.t`
-  files must be bitwise identical after PR B. The `align = [0, 0]` case is
-  expected to change and has its own test.
+- **Verification:** Python writes and Fortran reads together hold results
+  fixed.
+  - *End to end, 2D:* 11 cases (ASCII and netCDF topo with crop, coarsen,
+    buffer, align, shifts and `negate_z`; two files by priority; a
+    cross-seam split, written with offsets 0 and 360; dtopo types 1, 3 and 4
+    with shifts) run on `e3bd0ec5` and on this branch, each with its own
+    Python writer and netCDF build: the `fort.q`, `fort.a` and `fort.t` files
+    are **bitwise identical in all 11**.
+  - *End to end, 1D:* `examples/1d_classic/okada_dtopo` run with the new
+    `dtopo.data` and with the same file in the old layout, on the new
+    executable: all 122 output files bitwise identical.
+  - *Goldens:* the five byte-exact `topo.data` goldens were regenerated
+    deliberately; parsing the old goldens in the old layout and the new ones
+    with `TopographyData.read`'s parser gives the same value for every key.
+    The only additions are `lon_wrap_offset` (0) and an explicit `None` for
+    an absent netCDF fill value.
+  - *The one intended change:* `align = [0, 0]` for netCDF topo now reaches
+    Fortran (`test_align_through_the_origin_reaches_fortran`: Fortran's
+    window starts at Python's -95.0, not -95.125).
+  - *Old files:* a pre-PR-B `topo.data` (with the old `crop_bounds` line) and
+    `dtopo.data` stop, naming the expected key and asking for
+    `make data`; so does a file with two lines swapped.
 
 **ASCII and netCDF (Kyle, 2026-10-22).** The windowing logic and the names
 apply to both formats wherever it makes sense, and any difference has to be

@@ -268,7 +268,7 @@ def test_path_with_quote_and_space_round_trips(tmp_path):
     d.mkdir()
     tt3, _ = _topo_files(d)
     out = _write_topo(tmp_path, [[3, str(tt3)]])
-    assert "'it''s a dir/" in out.read_text()
+    assert "/it''s a dir/" in out.read_text()
     back = TopographyData()
     back.read(str(out))
     assert back.topofiles[0].path == str(tt3)

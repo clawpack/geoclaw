@@ -841,7 +841,7 @@ def test_write_global_header_three_lines(tmp_path, tt2_path):
     assert "override" not in parsed["raw"].lower()
 
 
-def test_write_per_file_block_10_lines_ascii(tmp_path, tt2_path):
+def test_write_per_file_block_11_lines_ascii(tmp_path, tt2_path):
     t = TopoFile()
     t.path = str(tt2_path)
     t.topo_type = 2
@@ -851,24 +851,19 @@ def test_write_per_file_block_10_lines_ascii(tmp_path, tt2_path):
     out = tmp_path / "topo.data"
     td.write(out_file=str(out))
 
-    raw = out.read_text()
-    # Collect lines from the first per-file block (after the global header)
-    # Using the inline comment markers to find per-file lines
-    per_file_lines = [l for l in raw.splitlines()
-                      if "topo_path" in l or "topo_type" in l
-                      or "crop_extent" in l or "coarsen" in l
-                      or "buffer" in l or "align" in l
-                      or "x_shift" in l or "y_shift" in l or "z_shift" in l
-                      or "negate_z" in l]
-    assert len(per_file_lines) == 10
+    # Every per-file line is `value =: key` (§2.8 PR B); collect them by key.
+    keys = ["topo_path", "topo_type", "crop_extent", "coarsen", "buffer",
+            "align", "x_shift", "y_shift", "z_shift", "negate_z",
+            "lon_wrap_offset"]
+    values = {m.group(2): m.group(1).strip() for m in re.finditer(
+        r"^(.*?)\s+=:\s+(\w+)", out.read_text(), flags=re.M)}
+    assert all(k in values for k in keys), values
 
-    # Sentinel values
-    assert any("0. 0. 0. 0." in l for l in per_file_lines), \
-        "crop_extent sentinel should be '0. 0. 0. 0.'"
-    assert any("0. 0." in l and "align" in l for l in per_file_lines), \
-        "align sentinel should be '0. 0.'"
-    assert any("F" in l and "negate_z" in l for l in per_file_lines), \
-        "negate_z default should be 'F'"
+    # Unset values are None; defaults otherwise.
+    assert values["crop_extent"] == "None"
+    assert values["align"] == "None"
+    assert values["negate_z"] == "F"
+    assert float(values["lon_wrap_offset"]) == 0.0
 
 
 def test_write_per_file_block_non_default_values(tmp_path, tt2_path):
@@ -890,7 +885,7 @@ def test_write_per_file_block_non_default_values(tmp_path, tt2_path):
     assert "3" in raw   # coarsen
     assert "2.5" in raw  # z_shift
     crop_line = next(l for l in raw.splitlines() if "crop_extent" in l)
-    assert "0. 0. 0. 0." not in crop_line  # not the sentinel
+    assert crop_line.startswith("1.0 5.0 2.0 6.0")  # not None
     negate_line = next(l for l in raw.splitlines() if "negate_z" in l)
     assert "T" in negate_line
 
@@ -1427,7 +1422,7 @@ def test_topo_type_none_inferred_from_suffix(global_tt3_path, tmp_path):
     out = tmp_path / "topo.data"
     td.write(out_file=str(out))
     assert t.topo_type == 3
-    assert "  3   # topo_type" in out.read_text()
+    assert re.search(r"^3\s+=:\s+topo_type\b", out.read_text(), flags=re.M)
 
 
 def test_topo_type_none_unknown_suffix_raises(tmp_path):
@@ -1538,12 +1533,14 @@ def _make_global_nc(path, delta=0.5, lon0=-180.0, lon1=180.0,
 
 def _entry_blocks(text):
     """Split a written topo.data into its per-file blocks."""
-    return [b for b in text.split("# topo_path") if "topo_type" in b]
+    return [b for b in re.split(r"^.*=:\s+topo_path\b.*$", text,
+                                flags=re.MULTILINE) if "topo_type" in b]
 
 
 def _descriptor_values(text, key):
-    """Every value written for descriptor *key*, in file order."""
-    return re.findall(rf"^{re.escape(key)}\s*=\s*(.+)$", text, re.MULTILINE)
+    """Every value written for *key* (`value =: key` lines), in file order."""
+    return [v.strip() for v in re.findall(
+        rf"^(.*?)\s+=:\s+{re.escape(key)}\b", text, re.MULTILINE)]
 
 
 def _file_windows(text, file_lon=(-180.0, 180.0)):
@@ -1553,8 +1550,8 @@ def _file_windows(text, file_lon=(-180.0, 180.0)):
     subtracts its lon_wrap_offset and clips to the file.  Returns
     ``[(lon0, lon1, lat0, lat1), ...]`` in entry order.
     """
-    crops = [[float(v) for v in line.split("#")[0].split()]
-             for line in text.splitlines() if "# crop_extent" in line]
+    crops = [[float(v) for v in c.split()]
+             for c in _descriptor_values(text, "crop_extent")]
     offsets = [float(v) for v in _descriptor_values(text, "lon_wrap_offset")]
     return [(max(c[0] - off, file_lon[0]), min(c[1] - off, file_lon[1]),
              c[2], c[3]) for c, off in zip(crops, offsets)]
@@ -1674,8 +1671,8 @@ def test_cross_seam_entries_keep_buffer_and_coarsen(tmp_path):
     blocks = _entry_blocks(out.read_text())
     assert len(blocks) == 2
     for block in blocks:
-        assert "1   # buffer" in block
-        assert "20   # coarsen" in block
+        assert re.search(r"^1\s+=:\s+buffer\b", block, flags=re.M)
+        assert re.search(r"^20\s+=:\s+coarsen\b", block, flags=re.M)
 
 
 @pytest.mark.netcdf

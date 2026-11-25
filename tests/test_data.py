@@ -4,6 +4,7 @@
 """Tests for reading and writing GeoClaw data files."""
 
 
+import re
 from pathlib import Path
 import numpy as np
 import pytest
@@ -241,11 +242,15 @@ def test_dtopo_data_netcdf_descriptor(tmp_path):
     dtopo_data.write(out_file=data_file)
 
     text = _read_text(data_file)
-    assert "var_name       = dz" in text
-    assert "x_name         = lon" in text
-    assert "y_name         = lat" in text
-    assert "t0             = 0.0" in text
-    assert "dt             = 0.5" in text
+    def value(key):
+        m = re.search(r"^(.*?)\s+=:\s+%s\b" % key, text, flags=re.M)
+        assert m, key
+        return m.group(1).strip()
+    assert value("var_name") == "'dz'"
+    assert value("x_name") == "'lon'"
+    assert value("y_name") == "'lat'"
+    assert float(value("t0")) == 0.0
+    assert float(value("dt")) == 0.5
 
     # The reader still parses the file (descriptor lines are skipped).
     read_back = clawpack.geoclaw.data.DTopoData()
@@ -488,12 +493,15 @@ def test_topo_data_2d_layout_unchanged_by_1d_support(tmp_path):
 
 
 @pytest.mark.python
-def test_dtopo_data_1d_path_line_has_no_trailing_comment(tmp_path):
-    r"""1D dtopo.data path line must be bare, and carry no preprocessing block.
+def test_dtopo_data_1d_path_line_is_keyed_and_has_no_settings(tmp_path):
+    r"""1D dtopo.data: path, type and dt_max_dtopo as ``value =: key`` lines,
+    and no settings block.
 
-    ``read(iunit,*) dtopofname, dtopotype`` spans records, so the type may sit
-    on the following line -- but a trailing comment on the path line is
-    consumed as item 2 and aborts with "Bad integer for item 2 in list input".
+    The 1D reader reads the path, the type and dt_max_dtopo with one
+    list-directed read each, which takes the value and ignores ``=: key``.
+    (It used to read path and type with one statement spanning both lines,
+    which would read "=:" as the type.)  dt_max_dtopo must be the next value
+    after the type, so no settings lines may sit in between.
     """
     import clawpack.geoclaw.dtopotools as dtopotools
 
@@ -510,8 +518,8 @@ def test_dtopo_data_1d_path_line_has_no_trailing_comment(tmp_path):
     lines = _payload(out)
     # mdtopofiles, path, dtopo_type, dt_max_dtopo
     assert len(lines) == 4, lines
-    assert lines[1].rstrip().endswith("'"), (
-        "path line must not carry a trailing comment: %r" % lines[1])
+    assert re.match(r"^'[^']*dtopo_okada\.dtt1'\s+=:\s+dtopo_path\b",
+                    lines[1].strip()), lines[1]
     assert "dtopo_type" in lines[2]
     assert "dt_max_dtopo" in lines[3]
     assert "crop_extent" not in Path(out).read_text()

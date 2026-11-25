@@ -223,13 +223,15 @@ def test_descriptor_writer_output(tmp_path):
     DescriptorWriter.write_dtopo_descriptor(buf, meta)
     text = buf.getvalue()
 
-    for key in ("var_name", "x_name", "y_name", "time_name",
-                "lon_wrap_offset", "y_increasing", "dim_order", "t0", "dt"):
-        assert key in text, f"missing descriptor key {key}"
-    assert "dim_order      = time,y,x" in text
-    assert "dt             = 0.5" in text
-    # Blank line terminates the block for the Fortran parser.
-    assert text.endswith("\n\n")
+    # Fixed keyed lines, in the order Fortran reads them (§2.8 PR B); the
+    # entry's lon_wrap_offset is a settings line, not part of the descriptor.
+    keys = [line.rpartition("=:")[2].split()[0] for line in text.splitlines()]
+    assert keys == ["var_name", "x_name", "y_name", "time_name",
+                    "y_increasing", "dim_order", "scale_factor", "t0", "dt"]
+    values = {line.rpartition("=:")[2].split()[0]:
+              line.rpartition("=:")[0].strip() for line in text.splitlines()}
+    assert values["dim_order"] == "'time,y,x'"
+    assert float(values["dt"]) == 0.5
 
 
 if __name__ == "__main__":
@@ -291,7 +293,8 @@ def test_dtopo_entries_no_crop_single_entry(tmp_path):
 def test_write_dtopo_descriptor_omits_crop_bounds(tmp_path):
     """write_dtopo_descriptor does not write crop_bounds, as for topo: a dtopo
     crop belongs on the crop_extent line (dev/design/topo_input_roadmap.md
-    §2.8).  The entry still carries its lon_wrap_offset."""
+    §2.8).  The entry still carries its lon_wrap_offset, which is written
+    with the entry's settings lines rather than in the descriptor."""
     from clawpack.geoclaw.netcdf_utils import DescriptorWriter
     path = write_dataset(_geographic_dtopo(-180.0, 180.0), tmp_path / "dt.nc")
     with DTopoInspector(path, crop_bounds=(-170.0, -150.0, -3.0, 3.0)) as insp:
@@ -301,4 +304,5 @@ def test_write_dtopo_descriptor_omits_crop_bounds(tmp_path):
     text = buf.getvalue()
     assert entries[0][2].crop_bounds is not None
     assert "crop_bounds" not in text
-    assert "lon_wrap_offset" in text
+    assert "lon_wrap_offset" not in text
+    assert entries[0][2].lon_wrap_offset is not None

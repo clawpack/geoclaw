@@ -227,8 +227,8 @@ def test_netcdf_crop_at_the_points_keeps_the_outermost_points(tmp_path):
 
     text = _write_topo_data(tmp_path, path, 4, [-3.1, 3.1, -3.5, 2.5])
     assert "crop_bounds" not in text
-    line = next(l for l in text.splitlines() if "# crop_extent" in l)
-    bounds = [float(v) for v in line.split("#")[0].split()]
+    line = next(l for l in text.splitlines() if "=: crop_extent" in l)
+    bounds = [float(v) for v in line.split("=:")[0].split()]
     assert bounds[0] <= x[0] and bounds[1] >= x[-1], bounds
     assert bounds[2] <= y[0] and bounds[3] >= y[-1], bounds
 

@@ -2006,10 +2006,13 @@ class DescriptorWriter:
     """
     Write NetCDF descriptor metadata for GeoClaw input files.
 
-    For topo (type 4) entries the descriptor is a block of ``key = value``
-    lines written immediately after the ``topo_type`` line in *topo.data*.
-    Fortran's ``read_netcdf_descriptor`` parses these lines until it
-    encounters a blank line.
+    For topo and dtopo (type 4) entries the descriptor is a fixed set of
+    ``value =: key`` lines written after the entry's settings lines in
+    *topo.data* / *dtopo.data*.  Fortran reads them in this order and checks
+    each key (``read_netcdf_descriptor`` / ``read_dtopo_netcdf_descriptor``);
+    see dev/design/topo_input_roadmap.md §2.8 (PR B).  The entry's
+    ``lon_wrap_offset`` is not part of the descriptor: it is an entry line for
+    every file type, written by ``data._write_preprocessing_block``.
 
     Usage — topo::
 
@@ -2028,11 +2031,14 @@ class DescriptorWriter:
     @staticmethod
     def write_topo_descriptor(f, meta: 'TopoMetadata') -> None:
         """
-        Write the key=value descriptor block for one topo file.
+        Write the descriptor lines for one topo file.
 
-        *f* should be positioned immediately after the ``topo_type`` line
-        has been written.  A trailing blank line is written to terminate
-        the block for the Fortran parser.
+        The lines are, in order: var_name, x_name, y_name, y_increasing,
+        dim_order, scale_factor, fill_value, fill_action.  An absent fill
+        value is written as ``None``.  meta.crop_bounds is not written: the
+        crop reaches Fortran once, as the entry's crop_extent line (domain
+        coordinates), and Fortran gets this entry's window in the file from
+        crop_extent minus lon_wrap_offset and the shift.
 
         Parameters
         ----------
@@ -2041,35 +2047,28 @@ class DescriptorWriter:
         meta : TopoMetadata
             Output of ``TopoInspector.inspect_topo()``.
         """
-        # Fortran adds lon_wrap_offset to all file coordinate values after
-        # reading:
-        #   x_domain = x_file + lon_wrap_offset
-        # meta.crop_bounds is deliberately not written.  The crop reaches
-        # Fortran once, as the entry's crop_extent line (domain coordinates);
-        # Fortran gets this entry's window in the file from crop_extent minus
-        # lon_wrap_offset and the shift (dev/design/topo_input_roadmap.md
-        # §2.8).
-        f.write(f"var_name       = {meta.var_name}\n")
-        f.write(f"x_name         = {meta.x_name}\n")
-        f.write(f"y_name         = {meta.y_name}\n")
-        f.write(f"lon_wrap_offset = {meta.lon_wrap_offset!r}\n")
-        f.write(f"y_increasing   = {meta.y_increasing}\n")
-        f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
-        f.write(f"scale_factor   = {meta.scale_factor!r}\n")
-        if meta.fill_value is not None:
-            f.write(f"fill_value     = {meta.fill_value!r}\n")
-        f.write(f"fill_action    = {meta.fill_action}\n")
-        f.write("\n")  # blank line terminates block for Fortran parser
+        from clawpack.geoclaw.data import (_fortran_bool, _fortran_str,
+                                           _write_keyed)
+        _write_keyed(f, _fortran_str(meta.var_name), 'var_name')
+        _write_keyed(f, _fortran_str(meta.x_name), 'x_name')
+        _write_keyed(f, _fortran_str(meta.y_name), 'y_name')
+        _write_keyed(f, _fortran_bool(meta.y_increasing), 'y_increasing')
+        _write_keyed(f, _fortran_str(','.join(meta.dim_order)), 'dim_order')
+        _write_keyed(f, repr(float(meta.scale_factor)), 'scale_factor')
+        _write_keyed(f, 'None' if meta.fill_value is None
+                     else repr(float(meta.fill_value)), 'fill_value')
+        _write_keyed(f, _fortran_str(meta.fill_action), 'fill_action')
 
     @staticmethod
     def write_dtopo_descriptor(f, meta: 'DTopoMetadata') -> None:
         """
-        Write the key=value descriptor block for one dtopo file.
+        Write the descriptor lines for one dtopo file.
 
-        Same format and parser contract as the topo descriptor (a blank
-        line terminates the block), written immediately after the 9-line
-        per-file block in *dtopo.data*.  The time axis is carried as
-        (t0, dt) in simulation seconds so Fortran never parses CF time.
+        The lines are, in order: var_name, x_name, y_name, time_name,
+        y_increasing, dim_order, scale_factor, t0, dt.  The time axis is
+        carried as (t0, dt) in simulation seconds so Fortran never parses CF
+        time.  meta.crop_bounds is not written, as for topo (Fortran has no
+        dtopo crop yet; see mandli/geoclaw#15).
 
         Parameters
         ----------
@@ -2078,20 +2077,17 @@ class DescriptorWriter:
         meta : DTopoMetadata
             Output of ``DTopoInspector.inspect_dtopo()``.
         """
-        f.write(f"var_name       = {meta.var_name}\n")
-        f.write(f"x_name         = {meta.x_name}\n")
-        f.write(f"y_name         = {meta.y_name}\n")
-        f.write(f"time_name      = {meta.time_name}\n")
-        f.write(f"lon_wrap_offset = {meta.lon_wrap_offset!r}\n")
-        f.write(f"scale_factor   = {meta.scale_factor!r}\n")
-        f.write(f"y_increasing   = {meta.y_increasing}\n")
-        f.write(f"dim_order      = {','.join(meta.dim_order)}\n")
-        f.write(f"t0             = {meta.t0!r}\n")
-        f.write(f"dt             = {meta.dt!r}\n")
-        # meta.crop_bounds is not written, as for topo: a dtopo crop belongs
-        # on the crop_extent line.  (Fortran has no dtopo crop yet; see
-        # mandli/geoclaw#15.)
-        f.write("\n")  # blank line terminates block for Fortran parser
+        from clawpack.geoclaw.data import (_fortran_bool, _fortran_str,
+                                           _write_keyed)
+        _write_keyed(f, _fortran_str(meta.var_name), 'var_name')
+        _write_keyed(f, _fortran_str(meta.x_name), 'x_name')
+        _write_keyed(f, _fortran_str(meta.y_name), 'y_name')
+        _write_keyed(f, _fortran_str(meta.time_name), 'time_name')
+        _write_keyed(f, _fortran_bool(meta.y_increasing), 'y_increasing')
+        _write_keyed(f, _fortran_str(','.join(meta.dim_order)), 'dim_order')
+        _write_keyed(f, repr(float(meta.scale_factor)), 'scale_factor')
+        _write_keyed(f, repr(float(meta.t0)), 't0')
+        _write_keyed(f, repr(float(meta.dt)), 'dt')
 
     @staticmethod
     def write_met_descriptor(f, meta: 'MetMetadata') -> None:

@@ -305,4 +305,74 @@ contains
     end function to_lower
 
 
+    ! ==========================================================================
+    ! read_keyed_line: read the next ``value =: key`` line of a .data file
+    !
+    ! Blank lines and lines whose first non-blank character is '#' are
+    ! skipped.  The text before the last '=:' is returned in *value*; the
+    ! first word after it must be *key*.  A line without '=:', a different
+    ! key, or the end of the file stops the run with a message naming the
+    ! file, the expected key and the line found, and asking for the file to be
+    ! regenerated: that is what a .data file written by an older (or newer)
+    ! GeoClaw looks like when read in a fixed order.
+    !
+    ! Self-contained (no GeoClaw modules) so it can be used by any Clawpack
+    ! reader; see dev/design/topo_input_roadmap.md sections 2.8 and 2.10.
+    ! ==========================================================================
+    subroutine read_keyed_line(iunit, file_name, key, value)
+
+        implicit none
+
+        integer, intent(in) :: iunit
+        character(len=*), intent(in) :: file_name, key
+        character(len=*), intent(out) :: value
+
+        character(len=4096) :: line, rest, found
+        integer :: ios, pos, word_end
+
+        do
+            read(iunit, '(a)', iostat=ios) line
+            if (ios /= 0) then
+                print *, "ERROR reading ", trim(file_name), ": the file ended ", &
+                    "before the line for '", trim(key), "'."
+                print *, "  Regenerate ", trim(file_name), " with 'make data'."
+                stop 1
+            end if
+            if (len_trim(line) == 0) cycle
+            if (index(adjustl(line), '#') == 1) cycle
+            exit
+        end do
+
+        pos = index(line, '=:', back=.true.)
+        found = ''
+        if (pos > 0) then
+            rest = adjustl(line(pos+2:))
+            word_end = scan(rest, ' #')
+            if (word_end == 0) then
+                found = rest
+            else
+                found = rest(1:word_end-1)
+            end if
+        end if
+
+        if (pos == 0 .or. trim(found) /= trim(key)) then
+            print *, "ERROR reading ", trim(file_name), ": expected the line for '", &
+                trim(key), "', found:"
+            print *, "  ", trim(line)
+            print *, "  The file was written by a different version of GeoClaw."
+            print *, "  Regenerate ", trim(file_name), " with 'make data'."
+            stop 1
+        end if
+
+        value = adjustl(line(1:pos-1))
+
+    end subroutine read_keyed_line
+
+    ! True if a value read by read_keyed_line is the text None (unset).
+    logical function is_none(value)
+        implicit none
+        character(len=*), intent(in) :: value
+        is_none = (trim(adjustl(value)) == 'None')
+    end function is_none
+
 end module utility_module

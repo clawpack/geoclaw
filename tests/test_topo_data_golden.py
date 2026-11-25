@@ -16,9 +16,15 @@ was not supposed to touch.
 Regenerate deliberately with ``GEOCLAW_REGEN=1`` and review the diff -- never
 because a test failed.
 
+Regenerated once, deliberately, for PR B (dev/design/topo_input_roadmap.md
+§2.8), which moved every line to ``value =: key``.  Every value in the new
+goldens was checked against the old ones: none changed.  The only additions
+are the per-entry ``lon_wrap_offset`` line (0 for these files) and an
+explicit ``None`` for an absent netCDF fill value.
+
 The absolute path GeoClaw writes into ``topo.data`` depends on ``tmp_path``, so
 paths are replaced with ``<PATH>`` before comparison.  Everything else,
-including the exact spacing around ``# topo_type`` and the ``repr`` of every
+including the exact spacing around ``=: topo_type`` and the ``repr`` of every
 float, is compared verbatim.
 """
 

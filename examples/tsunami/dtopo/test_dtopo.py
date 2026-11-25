@@ -343,11 +343,12 @@ def test_dtopo_unsupported_preprocessing_guard(tmp_path: Path) -> None:
     runner.rundata.dtopo_data.dtopofiles = [entry]
     runner.write_data()
 
+    import re
     data_path = run_path / "dtopo.data"
     text = data_path.read_text()
-    assert "0   # buffer" in text
-    data_path.write_text(text.replace("0   # buffer",
-                                      "2   # buffer"))
+    text, n = re.subn(r"^0(\s+=:\s+buffer\b)", r"2\1", text, flags=re.M)
+    assert n == 1, text
+    data_path.write_text(text)
 
     # Full rebuild: a preceding test may have left objects compiled with
     # different preprocessor flags (e.g. -DNETCDF), which "exe" would link.

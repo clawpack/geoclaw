@@ -215,7 +215,13 @@ contains
         dt_max_dtopo = 999d9
 
     else if (ndtopofiles == 1) then
-        read(iunit,*) dtopofname, dtopotype
+        ! dtopo.data lines are `value =: key` (dev/design/
+        ! topo_input_roadmap.md §2.8).  A list-directed read takes the value
+        ! and ignores the rest of the line, so the path and the type are read
+        ! separately: one statement spanning both lines would read "=:" as
+        ! the type.
+        read(iunit,*) dtopofname
+        read(iunit,*) dtopotype
         read(iunit,*) dt_max_dtopo
         close(iunit)
         call read_dtopo_file(trim(dtopofname),dtopotype)
