@@ -503,6 +503,55 @@ hand-built entries with a −360 offset). The windows are documented, with a
 diagram, in `topo_crop_windows.md`. Not yet done from the PR A row: the user
 docs.
 
+**PR B design (2026-11-25, branch `topo-data-format`, stacked on #768; failing tests first, implementation next).**
+
+- **One notation.** Every value line in `topo.data` and `dtopo.data` is
+  `value =: key`, optionally followed by `# comment`, in the column layout
+  clawutil's `data_write` uses. The netCDF descriptor is no longer a
+  `key = value` block ended by a blank line; it is a fixed set of keyed lines
+  after the entry's settings. Topo: `var_name`, `x_name`, `y_name`,
+  `y_increasing`, `dim_order`, `scale_factor`, `fill_value`, `fill_action`.
+  Dtopo: `var_name`, `x_name`, `y_name`, `time_name`, `y_increasing`,
+  `dim_order`, `scale_factor`, `t0`, `dt`.
+- **Fortran checks every key.** One helper reads the next keyed line,
+  skipping blank and `#` lines, and stops if the line has no `=:` or a
+  different key: "Regenerate topo.data with 'make data'". A file from an older
+  GeoClaw stops at its first old-style line, which also retires the separate
+  `crop_bounds` check from #765.
+- **Unset values are `None`,** the convention `surge.data` already uses
+  (`get_value_count` treats `None` as no values), for `crop_extent`, `align`
+  and an absent netCDF `fill_value`. This fixes a real bug: the old all-zero
+  sentinel could not tell "no align" from `align = [0, 0]`, so for a netCDF
+  file Fortran dropped an align through the origin that Python applied
+  (window start -95.125 in Fortran, -95.0 in Python, reproduced on
+  `e3bd0ec5`). Fortran now keeps a separate "align set" flag per entry.
+- **Strings are quoted, logicals are `T`/`F`.** A quoted string survives a
+  list-directed read, so `dim_order = 'y,x'` keeps its comma; a quote inside a
+  path is doubled.
+- **`lon_wrap_offset` is a per-entry line for every type,** after
+  `negate_z`, instead of a descriptor key: 0 for ASCII (Fortran stops on a
+  nonzero value for ASCII, which is not implemented yet) and the split
+  entry's offset for netCDF. ASCII wrap can then be added without changing
+  the format again.
+- **1D** keeps its own layout (no per-file settings), in the same notation.
+  Its reader reads list-directed, which ignores the trailing `=: key`. The
+  dtopo path and type, read with one statement before, are read separately.
+  1D does not check keys: it reads one file with no settings, so an old 1D
+  file is read the same either way.
+- **Python reads both files back:** `TopographyData.read` (new) and
+  `DTopoData.read` return the entries, and a write -> read round trip gives
+  equal `TopoFile`/`DTopoFile` entries.
+- **Not in PR B:** a user-facing crop tolerance or Randy's 0.5 dx snap (needs
+  his input), `crop_extent = 'all'`/`'none'` (#770, deferred), and the met
+  storm file (PR C).
+- **Verification:** Python writes and Fortran reads together must hold
+  results fixed. 11 end-to-end cases (ASCII and netCDF topo with crop,
+  coarsen, buffer, align, shifts and `negate_z`; two files by priority; a
+  cross-seam split; dtopo types 1, 3 and 4 with shifts) were run on
+  `e3bd0ec5` with a netCDF build, and their `fort.q`, `fort.a` and `fort.t`
+  files must be bitwise identical after PR B. The `align = [0, 0]` case is
+  expected to change and has its own test.
+
 **ASCII and netCDF (Kyle, 2026-10-22).** The windowing logic and the names
 apply to both formats wherever it makes sense, and any difference has to be
 justified. `topo_crop_windows.md` lists the differences that remain. Three are
