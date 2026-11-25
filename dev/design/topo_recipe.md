@@ -117,7 +117,10 @@ The two classes have the same fields (the type field is named as on
 ### Out of scope
 
 - Met forcing: `GriddedMetForcing` (`met/gridded.py`) is already a recipe
-  (path, `crop_extent`, shifts) and holds no arrays. Unchanged.
+  (path, `crop_extent`, shifts) and holds no arrays. Unchanged here. It gets
+  the same checks in a follow-up that should land before v5.15, by sharing
+  the checking part of `InputRecipe` as a mixin rather than becoming an entry
+  class (`topo_input_roadmap.md` §2.9).
 - Tile selection (#770). The 2026-11-24 meeting deferred it: the PR is to be
   converted to an issue and redesigned, because it loops over every topo file,
   including the coarse ones that should always be kept. A redesign should work
@@ -166,7 +169,7 @@ tree before it (`5fc5e7cc`):
   `Topography.read`/`DTopography.read` with the same keywords, `read_header()`
   is the file, the list form does not warn, `Topography`/`DTopography`/dict
   entries raise, and the data classes refuse the eight names.
-- Full Python suite: 777 passed before the last additions (no tests
+- Full Python suite: 795 passed, 1 xfailed, on `443da050` (no tests
   regenerated or deleted; tests that set the settings as attributes now pass
   them as `read()` keywords or build `TopoFile`/`DTopoFile` entries).
 - Fortran examples and regressions: see Progress.

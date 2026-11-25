@@ -659,6 +659,13 @@ Delivered on branch `met-deprefix-gridded`.
   with at least the field-shape invariants S6 introduces, or it will simply pin
   whatever is there.
 
+- **S9. Same input checks as topo/dtopo — OPEN, should land before v5.15.**
+  `GriddedMetForcing` (and `Storm`, which forwards to it) accepts misspelled
+  settings silently and does not validate `crop_extent` or the shifts when set.
+  #768 added these checks for `TopoFile`/`DTopoFile`; the plan is to share them
+  through a mixin split out of `coordinate_tools.InputRecipe`, with no names
+  moved or renamed. Plan and verification: `topo_input_roadmap.md` §2.9.
+
 ### MEDIUM TERM
 
 - **M1. Parametric-family offline wind-field generator (Python).** Turn a
