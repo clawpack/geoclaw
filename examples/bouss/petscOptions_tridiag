@@ -1,0 +1,32 @@
+# PETSc options for the DIRECTIONAL block Gauss-Seidel PCSHELL preconditioner
+# (item 4: exact OpenMP-threaded tridiagonal line solves for the u and v fields).
+#
+# IMPORTANT run model -- this path does NOT use the MPI linear solver server:
+#   * run with a SINGLE MPI rank:   BOUSS_MPI_PROCS = 1   (i.e. mpiexec -n 1)
+#   * parallelism is OpenMP over the tridiagonal lines: set OMP_NUM_THREADS
+#     to the core count you want (e.g. setenv OMP_NUM_THREADS 6).
+# Running with >1 rank here would launch independent duplicate simulations.
+#
+# point PETSC_OPTIONS at this file:
+#   setenv PETSC_OPTIONS '-options_file /path/to/petscOptions_tridiag'
+
+# enable the shell PC (read via PetscOptionsHasName in petsc_driver.f90).
+# pc_type is forced to 'shell' in the code, so no -pc_type is needed here.
+-use_tridiag_pc
+
+# Krylov solver: GMRES on PETSC_COMM_SELF.  GMRES does the A*x matvec on the
+# assembled CRS matrix; the shell PC supplies M^-1 (block Gauss-Seidel with
+# exact Thomas line solves).
+-ksp_type gmres
+-ksp_max_it 200
+-ksp_rtol 1.e-9
+
+# print options at end of run:
+-options_view
+
+# diagnostics: -log_view crashes at finalize in this build even without the
+# server, so leave it OFF.  The code's own end-of-run timing summary
+# (Linear solve / Prep-Build / Total, in amr2.f90) gives what we need.
+#-log_view
+#-ksp_monitor_true_residual
+#-options_left

@@ -20,6 +20,7 @@ subroutine prepBuildSparseMatrixSGNcrs(soln,rhs,nvar,naux,levelBouss,numBoussCel
     integer :: numColsTot
 
     integer(kind=8) :: clock_start, clock_finish, clock_rate
+    integer(kind=8) :: cc0, cc1
     real(kind=8) :: cpu_start, cpu_finish
     
     real(kind=8), allocatable, dimension(:) :: uv,Auv,rowsum
@@ -102,7 +103,11 @@ subroutine prepBuildSparseMatrixSGNcrs(soln,rhs,nvar,naux,levelBouss,numBoussCel
     ! put last line in CRS row pointers to signify end
     minfo%rowPtr(2*numBoussCells) = minfo%rowPtr(2*numBoussCells-1)+12
 
+    ! time compressOut separately (serial pass) to see its share of Prep/Build
+    call system_clock(cc0,clock_rate)
     call compressOut(minfo%vals,minfo%rowPtr,minfo%cols,numBoussCells,numColsTot)
+    call system_clock(cc1,clock_rate)
+    timeCompress = timeCompress + (cc1 - cc0)
     minfo%numColsTot = numColsTot
     minfo%rowPtr(2*numBoussCells) = numColsTot
 

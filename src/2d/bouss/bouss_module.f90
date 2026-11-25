@@ -229,8 +229,8 @@ contains
       write(outunit,*)"==> Use Bouss. in water deeper than ",boussMinDepth
 
       if (isolver .eq. 1) then
-         write(*,*)" No longer supporting GMRES solver"
-         stop
+         write(*,*)"Using OpenMP GMRES solver (block Gauss-Seidel preconditioner)"
+         write(outunit,*)"Using OpenMP GMRES solver (block Gauss-Seidel preconditioner)"
       else if (isolver .eq. 2) then
 #ifdef HAVE_PARDISO
          !write(*,*)" Using Pardiso solver"
